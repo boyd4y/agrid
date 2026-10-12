@@ -9,7 +9,7 @@ export function TablesPage() {
     useOutletContext<AppOutletContext>();
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10 md:px-10">
+    <div className="mx-auto h-full min-h-0 max-w-4xl overflow-auto px-6 py-10 md:px-10">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">表格</h1>

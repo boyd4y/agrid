@@ -11,7 +11,7 @@ export function AutomationsPage() {
 
   return (
     <div
-      className="mx-auto max-w-4xl px-6 py-10 md:px-10"
+      className="mx-auto h-full min-h-0 max-w-4xl overflow-auto px-6 py-10 md:px-10"
       data-testid="automations-hub"
     >
       <div className="mb-6">

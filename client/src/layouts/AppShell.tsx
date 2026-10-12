@@ -88,9 +88,9 @@ function AppShellInner() {
         onCreateTable={() => void createTable()}
         tablesLoading={tablesLoading}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <main className="min-h-0 flex-1 overflow-auto">
-          <Outlet context={outletCtx} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col"><Outlet context={outletCtx} /></div>
         </main>
       </div>
       <AiDrawer onMutated={notifyTableMutated} />

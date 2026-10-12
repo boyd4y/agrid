@@ -16,7 +16,7 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10 md:px-10">
+    <div className="mx-auto h-full min-h-0 max-w-2xl overflow-auto px-6 py-10 md:px-10">
       <h1 className="text-2xl font-semibold tracking-tight">设置</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         工作区偏好 · shadcn 语义主题

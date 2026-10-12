@@ -122,7 +122,7 @@ export function AgentsPage() {
   const isEmpty = !loading && agents.length === 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10 md:px-10" data-testid="agents-page">
+    <div className="mx-auto h-full min-h-0 max-w-3xl overflow-auto px-6 py-10 md:px-10" data-testid="agents-page">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">智能体</h1>

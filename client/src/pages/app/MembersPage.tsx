@@ -55,7 +55,7 @@ export function MembersPage() {
   const isEmpty = !loading && members.length === 0;
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10 md:px-10" data-testid="members-page">
+    <div className="mx-auto h-full min-h-0 max-w-3xl overflow-auto px-6 py-10 md:px-10" data-testid="members-page">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">成员</h1>
