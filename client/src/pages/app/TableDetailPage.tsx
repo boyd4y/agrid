@@ -6,8 +6,10 @@ import {
   FileInput,
   LayoutGrid,
   Loader2,
+  MoreHorizontal,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +51,7 @@ export function TableDetailPage() {
   const [formView, setFormView] = useState<ResolvedFormView | null>(null);
   const [viewsLoading, setViewsLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [menuViewId, setMenuViewId] = useState<string | null>(null);
 
   const activeView = useMemo(
     () => views.find((v) => v.id === activeViewId) ?? null,
@@ -164,6 +167,28 @@ export function TableDetailPage() {
     }
   };
 
+
+  const removeView = async (view: TableView) => {
+    if (views.length <= 1) {
+      setError("至少保留一个视图");
+      return;
+    }
+    const label = viewLabel(view.type, view.name);
+    if (!confirm(`确定删除视图「${label}」？`)) return;
+    setMenuViewId(null);
+    try {
+      await api.deleteView(view.id);
+      const remaining = views.filter((v) => v.id !== view.id);
+      setViews(remaining);
+      if (activeViewId === view.id) {
+        const sameType = remaining.find((v) => v.type === view.type);
+        setActiveViewId(sameType?.id ?? remaining[0]?.id ?? null);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "删除视图失败");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
@@ -227,23 +252,73 @@ export function TableDetailPage() {
               {views.map((v) => {
                 const Icon = viewIcon(v.type);
                 const active = v.id === activeViewId;
+                const canDelete = views.length > 1;
                 return (
-                  <button
+                  <div
                     key={v.id}
-                    type="button"
-                    data-testid={`view-${v.type}`}
-                    data-view-id={v.id}
-                    onClick={() => setActiveViewId(v.id)}
                     className={cn(
-                      "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium",
+                      "group flex shrink-0 items-center rounded-md",
                       active
                         ? "bg-background text-foreground shadow-[0_4px_12px_rgba(55,53,47,0.06)]"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    {viewLabel(v.type, v.name)}
-                  </button>
+                    <button
+                      type="button"
+                      data-testid={`view-${v.type}`}
+                      data-view-id={v.id}
+                      onClick={() => setActiveViewId(v.id)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setActiveViewId(v.id);
+                        setMenuViewId(v.id);
+                      }}
+                      className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {viewLabel(v.type, v.name)}
+                    </button>
+                    <Popover
+                      open={menuViewId === v.id}
+                      onOpenChange={(open) => setMenuViewId(open ? v.id : null)}
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          data-testid={`view-menu-${v.id}`}
+                          className={cn(
+                            "mr-0.5 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                            active || menuViewId === v.id
+                              ? "opacity-100"
+                              : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          )}
+                          title="视图选项"
+                          aria-label="视图选项"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-36 p-1" align="start">
+                        <button
+                          type="button"
+                          data-testid={`delete-view-${v.id}`}
+                          disabled={!canDelete}
+                          title={canDelete ? "删除视图" : "至少保留一个视图"}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                            canDelete
+                              ? "text-red-600 hover:bg-red-50"
+                              : "cursor-not-allowed text-muted-foreground opacity-60"
+                          )}
+                          onClick={() => void removeView(v)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          删除视图
+                        </button>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 );
               })}
               <Popover open={addOpen} onOpenChange={setAddOpen}>
@@ -303,12 +378,7 @@ export function TableDetailPage() {
         )}
       </div>
 
-      <div
-        className={cn(
-          "min-h-0 flex-1",
-          isForm ? "overflow-hidden" : "overflow-auto p-4 md:px-8 md:py-5"
-        )}
-      >
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:px-8 md:py-5">
         {viewsLoading && !activeView ? (
           <div className="flex h-40 items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -316,24 +386,31 @@ export function TableDetailPage() {
           </div>
         ) : isForm ? (
           formView ? (
-            <FormDesigner
-              table={table}
-              view={formView}
-              onChange={setFormView}
-              onSubmitted={() => {
-                notifyTableMutated();
-                void load();
-              }}
-            />
+            <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <FormDesigner
+                  table={table}
+                  view={formView}
+                  onChange={setFormView}
+                  onSubmitted={() => {
+                    notifyTableMutated();
+                    void load();
+                  }}
+                />
+              </div>
+              <p className="mt-3 shrink-0 text-xs text-muted-foreground">
+                视图按需添加 · 表单 / 看板 / 表格同一数据集
+              </p>
+            </div>
           ) : (
             <div className="flex h-40 items-center justify-center gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
               加载表单…
             </div>
           )
-        ) : (
-          <div className="mx-auto max-w-[1400px]">
-            {isBoard ? (
+        ) : isBoard ? (
+          <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">
               <KanbanBoard
                 table={table}
                 onChange={setTable}
@@ -342,10 +419,17 @@ export function TableDetailPage() {
                   void load();
                 }}
               />
-            ) : (
+            </div>
+            <p className="mt-3 shrink-0 text-xs text-muted-foreground">
+              视图按需添加 · 表单 / 看板 / 表格同一数据集
+            </p>
+          </div>
+        ) : (
+          <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">
               <DataTable table={table} onChange={setTable} />
-            )}
-            <p className="mt-4 text-xs text-muted-foreground">
+            </div>
+            <p className="mt-3 shrink-0 text-xs text-muted-foreground">
               视图按需添加 · 表单 / 看板 / 表格同一数据集
             </p>
           </div>

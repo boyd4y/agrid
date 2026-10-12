@@ -1,3 +1,4 @@
+import "../load-env.js";
 import { db, client } from "./index.js";
 import { tables, columns, rows } from "./schema.js";
 import { ensureDemoFormView } from "../commands/views.js";

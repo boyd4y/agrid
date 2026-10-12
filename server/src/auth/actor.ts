@@ -43,8 +43,15 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
       .where(eq(member.id, profile.memberId))
       .limit(1);
     if (!mem) return null;
+    if (
+      mem.organizationId !== profile.organizationId ||
+      mem.userId !== profile.userId
+    ) {
+      return null;
+    }
 
     const [u] = await db.select().from(user).where(eq(user.id, profile.userId)).limit(1);
+    if (!u) return null;
     return {
       kind: "agent",
       userId: profile.userId,
@@ -52,7 +59,7 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
       organizationId: profile.organizationId,
       role: mem.role,
       name: profile.displayName,
-      email: u?.email ?? "",
+      email: u.email,
     };
   }
 
@@ -104,12 +111,15 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
     .where(and(eq(member.userId, session.user.id), eq(member.organizationId, orgId)))
     .limit(1);
 
+  // Active org set but no membership → deny (do not invent member access)
+  if (!mem) return null;
+
   return {
     kind: (session.user as { kind?: string }).kind === "agent" ? "agent" : "human",
     userId: session.user.id,
-    memberId: mem?.id ?? "",
+    memberId: mem.id,
     organizationId: orgId,
-    role: mem?.role ?? "member",
+    role: mem.role,
     name: session.user.name,
     email: session.user.email,
   };

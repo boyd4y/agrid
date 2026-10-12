@@ -537,6 +537,12 @@ export function createTableTools(
         }),
     }),
 
+
+    delete_view: tool({
+      description: "删除视图。同一表格至少保留一个视图。",
+      inputSchema: zodSchema(z.object({ viewId: z.string().uuid() })),
+      execute: async ({ viewId }) => cmds.deleteView({ viewId, ...org }),
+    }),
     create_grid_view: tool({
       description: "按需创建表格（grid）视图",
       inputSchema: zodSchema(

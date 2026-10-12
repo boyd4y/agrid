@@ -12,6 +12,7 @@ import type {
   FormThemePresetId,
   FormViewConfig,
   GetViewInput,
+  DeleteViewInput,
   ListViewsInput,
   RemoveFormFieldInput,
   ReorderFormFieldsInput,
@@ -119,16 +120,16 @@ async function resolveFormView(
   view: typeof tableViews.$inferSelect
 ): Promise<ResolvedFormView> {
   const cols = await loadColumns(view.tableId);
-  const byId = Object.fromEntries(cols.map((c) => [c.id, c]));
+  const byId = new Map(cols.map((c) => [c.id, c]));
   const config = asFormConfig(view.config);
   let fields = config.fields ?? [];
   if (!fields.length) {
     fields = defaultFieldsFromColumns(cols);
   }
   const resolvedFields = fields
-    .filter((f) => byId[f.columnId])
+    .filter((f) => byId.has(f.columnId))
     .map((f) => {
-      const col = byId[f.columnId];
+      const col = byId.get(f.columnId)!;
       const isFormula = col.type === "formula";
       return {
         ...f,
@@ -166,6 +167,23 @@ export async function getView({
   const view = await requireViewInOrg(viewId, organizationId);
   if (view.type === "form") return resolveFormView(view);
   return toTableView(view);
+}
+
+
+export async function deleteView({
+  viewId,
+  organizationId,
+}: DeleteViewInput & OrgScoped): Promise<{ ok: true }> {
+  const view = await requireViewInOrg(viewId, organizationId);
+  const siblings = await db
+    .select({ id: tableViews.id })
+    .from(tableViews)
+    .where(eq(tableViews.tableId, view.tableId));
+  if (siblings.length <= 1) {
+    throw new Error("至少保留一个视图");
+  }
+  await db.delete(tableViews).where(eq(tableViews.id, viewId));
+  return { ok: true };
 }
 
 export async function createGridView({
@@ -372,10 +390,11 @@ export async function reorderFormFields({
   const view = await requireViewInOrg(viewId, organizationId);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const byId = Object.fromEntries((prev.fields ?? []).map((f) => [f.columnId, f]));
+  const byId = new Map((prev.fields ?? []).map((f) => [f.columnId, f]));
   const ordered: FormFieldConfig[] = [];
   for (const id of columnIds) {
-    if (byId[id]) ordered.push(byId[id]);
+    const hit = byId.get(id);
+    if (hit) ordered.push(hit);
   }
   for (const f of prev.fields ?? []) {
     if (!columnIds.includes(f.columnId)) ordered.push(f);

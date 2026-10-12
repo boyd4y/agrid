@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   recomputeRowFormulas,
   validateFormula,
@@ -37,17 +37,26 @@ export async function persistRowWithFormulas(
   cols?: ColumnDef[]
 ) {
   const columnDefs = cols ?? (await loadTableColumns(tableId));
-  const nextCells = recomputeRowFormulas(columnDefs, cells);
-  const [updated] = await db
-    .update(rows)
-    .set({
-      cells: nextCells,
-      version: sql`${rows.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(rows.id, rowId))
-    .returning();
-  return updated;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const [existing] = await db.select().from(rows).where(eq(rows.id, rowId));
+    if (!existing) return undefined;
+    // Prefer caller cells on first attempt; on CAS miss recompute from latest row cells
+    const base =
+      attempt === 0 ? cells : ((existing.cells ?? {}) as Record<string, CellValue>);
+    const nextCells = recomputeRowFormulas(columnDefs, base);
+    const [updated] = await db
+      .update(rows)
+      .set({
+        cells: nextCells,
+        version: sql`${rows.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(rows.id, rowId), eq(rows.version, existing.version)))
+      .returning();
+    if (updated) return updated;
+  }
+  // Skip after one retry — caller (batch) can continue
+  return undefined;
 }
 
 /** Recompute formulas for every row in a table (batched for 10w+). */
@@ -65,20 +74,35 @@ export async function recomputeAllFormulasForTable(tableId: string) {
       limit: batchSize,
     });
     for (const r of page.rows) {
-      const nextCells = recomputeRowFormulas(cols, (r.cells ?? {}) as Record<string, CellValue>);
-      // cheap equality check
-      const prev = JSON.stringify(r.cells ?? {});
-      const next = JSON.stringify(nextCells);
-      if (prev === next) continue;
-      await db
-        .update(rows)
-        .set({
-          cells: nextCells,
-          version: sql`${rows.version} + 1`,
-          updatedAt: new Date(),
-        })
-        .where(eq(rows.id, r.id));
-      updated++;
+      let current = r;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) {
+          const [fresh] = await db.select().from(rows).where(eq(rows.id, r.id));
+          if (!fresh) break;
+          current = fresh;
+        }
+        const nextCells = recomputeRowFormulas(
+          cols,
+          (current.cells ?? {}) as Record<string, CellValue>
+        );
+        const prev = JSON.stringify(current.cells ?? {});
+        const next = JSON.stringify(nextCells);
+        if (prev === next) break;
+        const [u] = await db
+          .update(rows)
+          .set({
+            cells: nextCells,
+            version: sql`${rows.version} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(rows.id, current.id), eq(rows.version, current.version ?? 0)))
+          .returning();
+        if (u) {
+          updated++;
+          break;
+        }
+        // CAS miss — retry once from latest; then skip
+      }
     }
     if (!page.hasMore) break;
     cursor = page.nextCursor;

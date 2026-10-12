@@ -299,6 +299,16 @@ server.registerTool(
   async ({ viewId }) => textResult(await callCommand("getView", { viewId }))
 );
 
+
+server.registerTool(
+  "delete_view",
+  {
+    description: "删除视图；同表至少保留一个（→ deleteView）",
+    inputSchema: { viewId: z.string() },
+  },
+  async ({ viewId }) => textResult(await callCommand("deleteView", { viewId }))
+);
+
 server.registerTool(
   "create_form_view",
   {

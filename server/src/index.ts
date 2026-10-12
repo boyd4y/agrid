@@ -1,10 +1,8 @@
+import "./load-env.js";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { config as loadEnv } from "dotenv";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { tablesRoute } from "./routes/tables.js";
 import { rowsRoute } from "./routes/rows.js";
 import { columnsRoute } from "./routes/columns.js";
@@ -14,17 +12,6 @@ import { commandsRoute } from "./routes/commands.js";
 import { automationsRoute } from "./routes/automations.js";
 import { auth } from "./auth/index.js";
 import { listHarnesses } from "./ai/model.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const envCandidates = [
-  resolve(__dirname, "../../.env"),
-  resolve(process.cwd(), "../.env"),
-  resolve(process.cwd(), ".env"),
-];
-for (const envPath of envCandidates) {
-  const result = loadEnv({ path: envPath, override: false });
-  if (result.parsed && Object.keys(result.parsed).length > 0) break;
-}
 
 const app = new Hono();
 const appUrl = process.env.APP_URL || "http://localhost:5173";
@@ -66,7 +53,11 @@ app.onError((err, c) => {
   if (err.name === "ZodError") {
     return c.json({ error: "参数错误", details: err }, 400);
   }
-  return c.json({ error: err.message || "服务器错误" }, 500);
+  const msg = err.message || "服务器错误";
+  if (msg.includes("版本冲突")) {
+    return c.json({ error: msg }, 409);
+  }
+  return c.json({ error: msg }, 500);
 });
 
 const port = Number(process.env.PORT ?? 3001);

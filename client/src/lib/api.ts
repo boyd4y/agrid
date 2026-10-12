@@ -277,6 +277,13 @@ export const api = {
     );
     return r.result;
   },
+  deleteView: async (viewId: string) => {
+    const r = await request<{ ok: boolean; result: { ok: true } }>("/api/commands", {
+      method: "POST",
+      body: JSON.stringify({ command: "deleteView", input: { viewId } }),
+    });
+    return r.result;
+  },
   createFormView: async (
     tableId: string,
     data?: {

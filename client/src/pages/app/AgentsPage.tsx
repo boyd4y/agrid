@@ -297,11 +297,30 @@ export function AgentsPage() {
                 <SelectContent>
                   {(harnesses.length
                     ? harnesses
-                    : [
-                        { id: "pi" as const, label: "Pi / OpenRouter" },
-                        { id: "codex" as const, label: "Codex" },
-                        { id: "claude" as const, label: "Claude" },
-                      ]
+                    : ([
+                        {
+                          id: "pi",
+                          label: "Pi / OpenRouter",
+                          available: true,
+                          models: [],
+                          defaultModel: "openrouter/free",
+                          provider: "openrouter",
+                        },
+                        {
+                          id: "codex",
+                          label: "Codex",
+                          available: false,
+                          models: [],
+                          defaultModel: "gpt-5",
+                        },
+                        {
+                          id: "claude",
+                          label: "Claude",
+                          available: false,
+                          models: [],
+                          defaultModel: "claude-sonnet-4",
+                        },
+                      ] satisfies HarnessStatus[])
                   ).map((h) => (
                     <SelectItem key={h.id} value={h.id}>
                       <span className="flex items-center gap-2">

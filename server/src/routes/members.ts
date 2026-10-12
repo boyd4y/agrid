@@ -261,9 +261,29 @@ membersRoute.delete("/:memberId", async (c) => {
   if (mem.userId === actor.userId) {
     return c.json({ error: "不能移除自己" }, 400);
   }
+  if (mem.role === "owner") {
+    return c.json({ error: "不能移除 owner" }, 400);
+  }
 
-  // cascade: deleting user removes agent_profile & membership
-  await db.delete(user).where(eq(user.id, mem.userId));
+  // Agent: clear this org's profile/key only (memberId FK also cascades)
+  const [u] = await db.select().from(user).where(eq(user.id, mem.userId)).limit(1);
+  if (u?.kind === "agent") {
+    await db
+      .delete(agentProfile)
+      .where(
+        and(
+          eq(agentProfile.userId, mem.userId),
+          eq(agentProfile.organizationId, actor.organizationId)
+        )
+      );
+  }
+
+  // Remove org membership only — never delete the global user row
+  await db
+    .delete(member)
+    .where(
+      and(eq(member.id, memberId), eq(member.organizationId, actor.organizationId))
+    );
   return c.json({ ok: true });
 });
 

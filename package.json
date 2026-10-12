@@ -3,10 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "pnpm --parallel -r dev",
+    "dev": "pnpm --filter @table/shared build && pnpm --parallel -r --filter server --filter client --filter @table/mcp dev",
     "dev:client": "pnpm --filter client dev",
-    "dev:server": "pnpm --filter server dev",
-    "build": "pnpm -r build",
+    "dev:server": "pnpm --filter @table/shared build && pnpm --filter server dev",
+    "build": "pnpm --filter @table/shared build && pnpm -r --filter '!@table/shared' build",
     "db:generate": "pnpm --filter server db:generate",
     "db:migrate": "pnpm --filter server db:migrate",
     "db:seed": "pnpm --filter server db:seed",
@@ -16,7 +16,8 @@
     "db:seed:demo": "pnpm --filter server db:seed:demo",
     "db:seed:formula": "pnpm --filter server exec tsx src/db/seed-formula.ts",
     "db:smoke:formula": "pnpm --filter server exec tsx src/db/smoke-formula.ts",
-    "mcp": "pnpm --filter @table/mcp start"
+    "mcp": "pnpm --filter @table/mcp start",
+    "typecheck": "pnpm --filter @table/shared typecheck && pnpm --filter server exec tsc --noEmit && pnpm --filter client exec tsc -b --pretty false && pnpm --filter @table/mcp exec tsc --noEmit"
   },
   "packageManager": "pnpm@9.15.0"
 }

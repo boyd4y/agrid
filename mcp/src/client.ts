@@ -13,7 +13,27 @@ export type CommandName =
   | "updateColumn"
   | "reorderColumns"
   | "setStatus"
-  | "moveCard";
+  | "moveCard"
+  | "listViews"
+  | "getView"
+  | "createFormView"
+  | "updateFormView"
+  | "setFormFields"
+  | "addFormField"
+  | "removeFormField"
+  | "reorderFormFields"
+  | "setFormSections"
+  | "createGridView"
+  | "createBoardView"
+  | "setFormTheme"
+  | "setFormLayout"
+  | "setFormFieldSettings"
+  | "setFormChrome"
+  | "listAutomations"
+  | "createAutomation"
+  | "updateAutomation"
+  | "deleteAutomation"
+  | "listAutomationRuns";
 
 const API_URL = (process.env.TABLE_API_URL || "http://localhost:3001").replace(
   /\/$/,

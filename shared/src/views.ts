@@ -113,6 +113,7 @@ export type ResolvedFormView = TableView & {
 
 export type ListViewsInput = { tableId: string };
 export type GetViewInput = { viewId: string };
+export type DeleteViewInput = { viewId: string };
 export type CreateFormViewInput = {
   tableId: string;
   name?: string;

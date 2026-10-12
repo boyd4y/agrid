@@ -43,6 +43,7 @@ commandsRoute.post("/", async (c) => {
         "listAutomationRuns",
         "listViews",
         "getView",
+        "deleteView",
         "createFormView",
         "updateFormView",
         "setFormFields",
@@ -88,9 +89,8 @@ commandsRoute.post("/", async (c) => {
         : null,
     });
   } catch (e) {
-    return c.json(
-      { error: e instanceof Error ? e.message : "命令执行失败" },
-      400
-    );
+    const msg = e instanceof Error ? e.message : "命令执行失败";
+    const status = msg.includes("版本冲突") ? 409 : 400;
+    return c.json({ error: msg }, status);
   }
 });

@@ -209,8 +209,9 @@ export function validateCell(
       }
       return null;
     case "text":
-    default:
       if (typeof value !== "string" && typeof value !== "number") return "类型不匹配";
       return null;
+    default:
+      return `未知列类型: ${type}`;
   }
 }

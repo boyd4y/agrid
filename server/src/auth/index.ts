@@ -6,9 +6,50 @@ import * as schema from "../db/schema.js";
 import { sendInviteEmail } from "./email.js";
 
 const appUrl = process.env.APP_URL || "http://localhost:5173";
-const secret =
-  process.env.BETTER_AUTH_SECRET ||
-  "dev-only-secret-change-me-32chars-min!!";
+/** Dev-only fallback — never valid in production. */
+const DEV_SECRET = "dev-only-secret-change-me-32chars-min!!";
+/** Known placeholder / example values that must not be used in production. */
+const KNOWN_INSECURE_SECRETS = new Set([
+  DEV_SECRET,
+  "replace-with-32+-char-secret",
+]);
+
+/**
+ * Production: require BETTER_AUTH_SECRET to be a random secret ≥32 chars.
+ * Rejects missing, known defaults/examples, short, whitespace-only, and
+ * all-same-character strings. This is a basic hygiene check — not a
+ * cryptographic entropy proof; generate a real random secret for deploy.
+ */
+function assertProductionAuthSecret(raw: string | undefined): string {
+  const secret = raw ?? "";
+  const trimmed = secret.trim();
+  if (!trimmed) {
+    throw new Error(
+      "BETTER_AUTH_SECRET must be set to a random secret (≥32 chars) in production"
+    );
+  }
+  if (trimmed.length < 32) {
+    throw new Error(
+      "BETTER_AUTH_SECRET must be a random secret ≥32 chars in production"
+    );
+  }
+  if (KNOWN_INSECURE_SECRETS.has(secret) || KNOWN_INSECURE_SECRETS.has(trimmed)) {
+    throw new Error(
+      "BETTER_AUTH_SECRET must not use a known default or example value in production"
+    );
+  }
+  if (/^(.)\1+$/.test(trimmed)) {
+    throw new Error(
+      "BETTER_AUTH_SECRET must not be a repeated single character in production"
+    );
+  }
+  return secret;
+}
+
+const isProd = process.env.NODE_ENV === "production";
+const secret = isProd
+  ? assertProductionAuthSecret(process.env.BETTER_AUTH_SECRET)
+  : process.env.BETTER_AUTH_SECRET || DEV_SECRET;
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",

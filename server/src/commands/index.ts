@@ -1,4 +1,4 @@
-import { eq, asc, max, sql } from "drizzle-orm";
+import { eq, and, asc, max, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { tables, columns, rows, COLUMN_TYPES } from "../db/schema.js";
 import {
@@ -36,6 +36,22 @@ import { scheduleAutomationEvent } from "../automation/engine.js";
 import * as automationCrud from "../automation/crud.js";
 
 export type OrgScoped = { organizationId?: string };
+
+/** Own-property column lookup — never resolve prototype keys (constructor, toString, __proto__). */
+function columnByIdMap<T extends { id: string; type: string }>(cols: T[]): Map<string, T> {
+  return new Map(cols.map((c) => [c.id, c]));
+}
+
+function requireColumnFromMap<T extends { id: string; type: string; name?: string }>(
+  colMap: Map<string, T>,
+  columnId: string
+): T {
+  const col = colMap.get(columnId);
+  if (!col || typeof col !== "object" || typeof col.type !== "string") {
+    throw new Error(`列不属于该表: ${columnId}`);
+  }
+  return col;
+}
 
 export async function listTables(input: OrgScoped = {}) {
   const organizationId = requireOrgId(input.organizationId);
@@ -125,6 +141,7 @@ export async function updateCell({
     if (!r) throw new Error(`行不存在: ${rowId}`);
     existing = r;
   }
+  const casVersion = expectedVersion ?? existing.version;
   if (
     expectedVersion !== undefined &&
     existing.version !== undefined &&
@@ -132,7 +149,10 @@ export async function updateCell({
   ) {
     throw new Error(`版本冲突: expected ${expectedVersion}, got ${existing.version}`);
   }
-  const col = await getColumnOrThrow(columnId, organizationId);
+
+  const cols = await loadTableColumns(existing.tableId);
+  const col = cols.find((c) => c.id === columnId);
+  if (!col) throw new Error(`列不属于该表: ${columnId}`);
   if (col.type === "formula") {
     throw new Error(`公式列「${col.name}」只读，由表达式自动计算`);
   }
@@ -140,7 +160,6 @@ export async function updateCell({
   if (err) throw new Error(`校验失败 (${col.name}): ${err}`);
 
   const before = { ...(existing.cells ?? {}) } as Record<string, CellValue>;
-  const cols = await loadTableColumns(existing.tableId);
   const nextCells = applyFormulasToCells(cols, {
     ...before,
     [columnId]: value as CellValue,
@@ -152,8 +171,11 @@ export async function updateCell({
       version: sql`${rows.version} + 1`,
       updatedAt: new Date(),
     })
-    .where(eq(rows.id, rowId))
+    .where(and(eq(rows.id, rowId), eq(rows.version, casVersion)))
     .returning();
+  if (!updated) {
+    throw new Error(`版本冲突: expected ${casVersion}`);
+  }
 
   if (!skipAutomation) {
     const after = (updated.cells ?? {}) as Record<string, CellValue>;
@@ -184,6 +206,7 @@ export async function updateCells({
     if (!r) throw new Error(`行不存在: ${rowId}`);
     existing = r;
   }
+  const casVersion = expectedVersion ?? existing.version;
   if (
     expectedVersion !== undefined &&
     existing.version !== undefined &&
@@ -193,9 +216,9 @@ export async function updateCells({
   }
 
   const cols = await loadTableColumns(existing.tableId);
-  const colMap = Object.fromEntries(cols.map((c) => [c.id, c]));
+  const colMap = columnByIdMap(cols);
   for (const [columnId, value] of Object.entries(cells)) {
-    const col = colMap[columnId] ?? (await getColumnOrThrow(columnId));
+    const col = requireColumnFromMap(colMap, columnId);
     if (col.type === "formula") {
       throw new Error(`公式列「${col.name}」只读，由表达式自动计算`);
     }
@@ -212,8 +235,11 @@ export async function updateCells({
       version: sql`${rows.version} + 1`,
       updatedAt: new Date(),
     })
-    .where(eq(rows.id, rowId))
+    .where(and(eq(rows.id, rowId), eq(rows.version, casVersion)))
     .returning();
+  if (!updated) {
+    throw new Error(`版本冲突: expected ${casVersion}`);
+  }
 
   if (!skipAutomation) {
     const after = (updated.cells ?? {}) as Record<string, CellValue>;
@@ -238,10 +264,10 @@ export async function addRow({
   await requireTableInOrg(tableId, organizationId);
 
   const cols = await loadTableColumns(tableId);
-  const colMap = Object.fromEntries(cols.map((c) => [c.id, c]));
+  const colMap = columnByIdMap(cols);
   if (cells) {
     for (const [columnId, value] of Object.entries(cells)) {
-      const col = colMap[columnId] ?? (await getColumnOrThrow(columnId));
+      const col = requireColumnFromMap(colMap, columnId);
       if (col.type === "formula") {
         throw new Error(`公式列「${col.name}」只读，由表达式自动计算`);
       }
@@ -339,6 +365,51 @@ export async function deleteColumn({ columnId, organizationId }: DeleteColumnInp
   return { ok: true as const };
 }
 
+
+/**
+ * Clear one cell when it fails validation for a new column type.
+ * Uses version CAS; on conflict re-reads once and recomputes from latest cells.
+ */
+async function clearIncompatibleCellCas(args: {
+  rowId: string;
+  columnId: string;
+  nextType: string;
+  options?: { id: string }[];
+  initialRow?: {
+    id: string;
+    cells?: Record<string, CellValue> | null;
+    version?: number;
+  };
+}) {
+  const { rowId, columnId, nextType, options } = args;
+  let current = args.initialRow;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!current || attempt > 0) {
+      const [fresh] = await db.select().from(rows).where(eq(rows.id, rowId));
+      if (!fresh) return;
+      current = fresh;
+    }
+    const v = current.cells?.[columnId];
+    if (v === undefined || v === null || v === "") return;
+    const err = validateCell(nextType, v as CellValue, options);
+    if (!err) return;
+    const nextCells = { ...(current.cells ?? {}), [columnId]: null };
+    const casVersion = current.version ?? 0;
+    const [updated] = await db
+      .update(rows)
+      .set({
+        cells: nextCells,
+        version: sql`${rows.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(rows.id, rowId), eq(rows.version, casVersion)))
+      .returning();
+    if (updated) return;
+    // conflict — loop retries with fresh read
+  }
+  throw new Error(`版本冲突: 列类型转换写回行 ${rowId} 失败`);
+}
+
 export async function updateColumn(input: UpdateColumnInput & OrgScoped) {
   const col = await getColumnOrThrow(input.columnId, input.organizationId);
   const nextConfig = {
@@ -359,7 +430,7 @@ export async function updateColumn(input: UpdateColumnInput & OrgScoped) {
     nextConfig.formulaResultType = nextConfig.formulaResultType ?? "auto";
   }
 
-  // Type change: clear incompatible cells in batches
+  // Type change: clear incompatible cells in batches (CAS — never overwrite concurrent cell edits)
   if (input.type && input.type !== col.type && input.type !== "formula") {
     const batchSize = 500;
     let cursor: string | null = null;
@@ -370,16 +441,13 @@ export async function updateColumn(input: UpdateColumnInput & OrgScoped) {
         limit: batchSize,
       });
       for (const r of page.rows) {
-        const v = r.cells?.[input.columnId];
-        if (v === undefined || v === null || v === "") continue;
-        const err = validateCell(input.type, v as CellValue, nextConfig.options);
-        if (err) {
-          const nextCells = { ...r.cells, [input.columnId]: null };
-          await db
-            .update(rows)
-            .set({ cells: nextCells, version: sql`${rows.version} + 1`, updatedAt: new Date() })
-            .where(eq(rows.id, r.id));
-        }
+        await clearIncompatibleCellCas({
+          rowId: r.id,
+          columnId: input.columnId,
+          nextType: input.type,
+          options: nextConfig.options,
+          initialRow: r,
+        });
       }
       if (!page.hasMore) break;
       cursor = page.nextCursor;
@@ -467,6 +535,7 @@ export const listAutomationRuns = automationCrud.listAutomationRuns;
 export {
   listViews,
   getView,
+  deleteView,
   createFormView,
   createGridView,
   createBoardView,
@@ -506,6 +575,7 @@ export const commands = {
   listAutomationRuns,
   listViews: viewCmds.listViews,
   getView: viewCmds.getView,
+  deleteView: viewCmds.deleteView,
   createFormView: viewCmds.createFormView,
   createGridView: viewCmds.createGridView,
   createBoardView: viewCmds.createBoardView,

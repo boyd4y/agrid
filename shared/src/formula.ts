@@ -285,10 +285,12 @@ type Ctx = {
 
 class Parser {
   private i = 0;
-  constructor(
-    private tokens: Tok[],
-    private ctx: Ctx
-  ) {}
+  private tokens: Tok[];
+  private ctx: Ctx;
+  constructor(tokens: Tok[], ctx: Ctx) {
+    this.tokens = tokens;
+    this.ctx = ctx;
+  }
 
   private peek(): Tok {
     return this.tokens[this.i] ?? { k: "eof" };

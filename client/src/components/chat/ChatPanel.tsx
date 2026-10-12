@@ -9,12 +9,8 @@ import {
   AssistantChatTransport,
   useChatRuntime,
 } from "@assistant-ui/ai-sdk";
-import { Bot, Lock, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { Bot, Lock, Plus } from "lucide-react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
-import {
-  ThreadList,
-  ThreadListNew,
-} from "@/components/assistant-ui/elements/thread-list.aui";
 import {
   ModelSelector,
   type ModelOption,
@@ -24,7 +20,9 @@ import { cn } from "@/lib/utils";
 import { api, type MemberOption } from "@/lib/api";
 import { HARNESS_LABELS, type HarnessId } from "@/lib/harness";
 import { HarnessLogo } from "@/components/icons/HarnessLogos";
-import { usePersistedBool } from "@/lib/persist";
+import { chatResourceKey } from "@/lib/chat-resource";
+import { ResourceScopedThreads } from "@/components/chat/ResourceScopedThreads";
+import { SessionSwitcher } from "@/components/chat/SessionSwitcher";
 
 export type { HarnessId } from "@/lib/harness";
 
@@ -57,6 +55,11 @@ type Props = {
   variant?: "drawer" | "home";
   /** Open/close the right UI Slot plugin panel (tool-driven). */
   onOpenPreview?: (payload: OpenPreviewPayload) => void;
+  /**
+   * Override session pool key. Default: `table:{tableId}` or `workspace`.
+   * Example: `automations` for a future dedicated page.
+   */
+  resourceKey?: string | null;
 };
 
 type RequestBody = {
@@ -145,14 +148,21 @@ function agentModel(a: MemberOption): string {
   return a.agent?.persona?.defaultModel || "openrouter/free";
 }
 
-export function ChatPanel({ tableId, onMutated, variant = "drawer", onOpenPreview }: Props) {
+export function ChatPanel({
+  tableId,
+  onMutated,
+  variant = "drawer",
+  onOpenPreview,
+  resourceKey: resourceKeyProp,
+}: Props) {
   const [status, setStatus] = useState<ChatStatus | null>(null);
   const [agents, setAgents] = useState<MemberOption[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentId, setAgentId] = useState<string | null>(null);
-  const [threadListOpen, setThreadListOpen] = usePersistedBool(
-    "agrid.chat.threadListOpen",
-    true
+
+  const resourceKey = useMemo(
+    () => chatResourceKey({ tableId, resourceKey: resourceKeyProp }),
+    [tableId, resourceKeyProp]
   );
 
   const requestRef = useRef<RequestBody>({
@@ -273,12 +283,14 @@ export function ChatPanel({ tableId, onMutated, variant = "drawer", onOpenPrevie
 
   return (
     <AssistantRuntimeProvider runtime={runtime} config={auiConfig}>
+      <ResourceScopedThreads resourceKey={resourceKey} />
       <div
         className={cn(
           "flex h-full min-h-0 flex-col bg-background",
           !isHome && "border-l border-border"
         )}
         data-testid="chat-panel"
+        data-resource-key={resourceKey}
       >
         <div
           className={cn(
@@ -286,25 +298,9 @@ export function ChatPanel({ tableId, onMutated, variant = "drawer", onOpenPrevie
             isHome ? "h-10" : "h-11"
           )}
         >
-          <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1">
             {!noAgents && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8 shrink-0"
-                aria-label={threadListOpen ? "收起对话列表" : "展开对话列表"}
-                aria-pressed={threadListOpen}
-                title={threadListOpen ? "收起对话列表" : "展开对话列表"}
-                data-testid="chat-thread-list-toggle"
-                onClick={() => setThreadListOpen(!threadListOpen)}
-              >
-                {threadListOpen ? (
-                  <PanelLeftClose className="size-4" />
-                ) : (
-                  <PanelLeftOpen className="size-4" />
-                )}
-              </Button>
+              <SessionSwitcher resourceKey={resourceKey} className="min-w-0" />
             )}
 
             {agentsLoading ? (
@@ -320,7 +316,7 @@ export function ChatPanel({ tableId, onMutated, variant = "drawer", onOpenPrevie
                 size="sm"
                 variant="ghost"
                 searchable={agentOptions.length > 4}
-                className="h-8 w-[240px] shrink-0 justify-start border-0 px-1.5 text-[12px] shadow-none"
+                className="h-8 w-[160px] shrink-0 justify-start border-0 px-1.5 text-[12px] shadow-none"
                 contentClassName="w-[240px] min-w-[200px] max-w-[280px]"
               />
             ) : null}
@@ -370,29 +366,7 @@ export function ChatPanel({ tableId, onMutated, variant = "drawer", onOpenPrevie
             </Button>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1">
-            {threadListOpen ? (
-              <aside
-                className="flex w-[168px] shrink-0 flex-col overflow-y-auto border-r border-border px-1.5 py-2"
-                data-testid="chat-thread-list"
-                data-collapsed="false"
-              >
-                <ThreadList />
-              </aside>
-            ) : (
-              <aside
-                className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-border py-2"
-                data-testid="chat-thread-list"
-                data-collapsed="true"
-              >
-                <ThreadListNew
-                  className="size-8 justify-center px-0"
-                  labelClassName="sr-only"
-                  title="新对话"
-                  aria-label="新对话"
-                />
-              </aside>
-            )}
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 min-w-0 flex-1">
               <Thread components={THREAD_COMPONENTS} autoFocus={isHome} />
             </div>

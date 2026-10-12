@@ -223,7 +223,7 @@ function SurfaceCard({
       </div>
       <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-      <Button asChild variant="link" className="mt-3 h-auto px-0 text-primary">
+      <Button asChild variant="ghost" className="mt-3 h-auto px-0 text-primary underline-offset-4 hover:underline">
         <Link to={cta.to}>
           {cta.label} <NiArrowRight className="h-4 w-4" />
         </Link>
@@ -259,7 +259,7 @@ function DeepDive({
         </div>
         <h3 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h3>
         <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">{body}</p>
-        <Button asChild variant="link" className="mt-4 h-auto px-0">
+        <Button asChild variant="ghost" className="mt-4 h-auto px-0 underline-offset-4 hover:underline">
           <Link to={cta.to}>
             {cta.label} <NiArrowRight className="h-4 w-4" />
           </Link>

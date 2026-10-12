@@ -43,10 +43,10 @@ function isEmptySql(columnId: string, type: string): SQL {
 
 function conditionSql(
   f: FilterCondition,
-  colMap: Record<string, ColumnDef>
+  colMap: Map<string, ColumnDef>
 ): SQL | null {
   if (!isFilterConditionComplete(f)) return null;
-  const col = colMap[f.columnId];
+  const col = colMap.get(f.columnId);
   if (!col) return null;
   const type = col.type;
   const t = cellTextExpr(f.columnId);
@@ -124,7 +124,7 @@ function statusFilterSql(
 
 function buildWhere(
   tableId: string,
-  colMap: Record<string, ColumnDef>,
+  colMap: Map<string, ColumnDef>,
   input: QueryRowsInput
 ): SQL {
   const parts: SQL[] = [eq(rows.tableId, tableId)];
@@ -227,7 +227,7 @@ export async function queryRowsWindowed(
     .from(columns)
     .where(eq(columns.tableId, input.tableId))
     .orderBy(asc(columns.sortOrder));
-  const colMap = Object.fromEntries(cols.map((c) => [c.id, c as ColumnDef]));
+  const colMap = new Map(cols.map((c) => [c.id, c as ColumnDef]));
 
   const direction = input.sort?.direction ?? "asc";
   const baseWhere = buildWhere(input.tableId, colMap, input);

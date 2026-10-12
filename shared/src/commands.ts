@@ -12,6 +12,7 @@ import type {
 import type {
   ListViewsInput,
   GetViewInput,
+  DeleteViewInput,
   CreateFormViewInput,
   CreateGridViewInput,
   CreateBoardViewInput,
@@ -51,6 +52,7 @@ export const COMMANDS = [
   "listAutomationRuns",
   "listViews",
   "getView",
+  "deleteView",
   "createFormView",
   "updateFormView",
   "setFormFields",
@@ -146,6 +148,7 @@ export type CommandInputMap = {
   listAutomationRuns: ListAutomationRunsInput;
   listViews: ListViewsInput;
   getView: GetViewInput;
+  deleteView: DeleteViewInput;
   createFormView: CreateFormViewInput;
   updateFormView: UpdateFormViewInput;
   setFormFields: SetFormFieldsInput;
@@ -182,6 +185,7 @@ export type CommandResultMap = {
   listAutomationRuns: AutomationRun[];
   listViews: TableView[];
   getView: TableView | ResolvedFormView;
+  deleteView: { ok: true };
   createFormView: ResolvedFormView;
   updateFormView: ResolvedFormView;
   setFormFields: ResolvedFormView;
@@ -202,6 +206,7 @@ export type { QueryRowsInput, QueryRowsResult };
 export type {
   ListViewsInput,
   GetViewInput,
+  DeleteViewInput,
   CreateFormViewInput,
   CreateGridViewInput,
   CreateBoardViewInput,

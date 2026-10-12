@@ -184,16 +184,16 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
           <button type="button" className="ml-2 underline" onClick={() => setError(null)}>
             关闭
           </button>
         </div>
       )}
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto">
         {columns.map((col) => {
           const state = cols[col.id];
           const cards = state?.rows ?? [];
@@ -201,7 +201,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
             <div
               key={col.id}
               className={cn(
-                "flex w-72 shrink-0 flex-col rounded-xl border bg-muted/80",
+                "flex h-full min-h-0 w-72 shrink-0 flex-col rounded-xl border bg-muted/80",
                 overCol === col.id && dragging
                   ? "border-[var(--color-primary)] ring-2 ring-blue-200"
                   : "border-border"
@@ -220,7 +220,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
                 if (rowId && fromCol) void moveCard(rowId, fromCol, col.id);
               }}
             >
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+              <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
                 <span
                   className="h-2.5 w-2.5 rounded-full"
                   style={{ background: selectOptionSwatch(col.color) }}
@@ -232,7 +232,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
                 </span>
                 {state?.loading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
               </div>
-              <div className="flex max-h-[420px] flex-1 flex-col gap-2 overflow-y-auto p-2 min-h-[120px]">
+              <div className="flex min-h-[120px] flex-1 flex-col gap-2 overflow-y-auto p-2">
                 {cards.map((row) => {
                   const title = titleCol
                     ? String(row.cells[titleCol.id] ?? "无标题")
@@ -282,7 +282,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
                   </Button>
                 )}
               </div>
-              <div className="p-2 pt-0">
+              <div className="shrink-0 p-2 pt-0">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -297,7 +297,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="shrink-0 text-xs text-muted-foreground">
         拖拽卡片切换状态 · 每列窗口加载（{PAGE}/次）· 分组列：{statusCol.name}
         <button type="button" className="ml-2 underline" onClick={onRefresh}>
           刷新元数据

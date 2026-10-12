@@ -310,9 +310,9 @@ export function DataTable({ table, onChange }: Props) {
   const displayError = error || windowed.error;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {displayError && (
-        <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="flex shrink-0 items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span>{displayError}</span>
           <button
             type="button"
@@ -327,17 +327,19 @@ export function DataTable({ table, onChange }: Props) {
         </div>
       )}
 
-      <FilterBar
-        columns={sortedCols}
-        filters={filters}
-        filterLogic={filterLogic}
-        onChange={(f, logic) => {
-          setFilters(f);
-          setFilterLogic(logic);
-        }}
-      />
+      <div className="shrink-0">
+        <FilterBar
+          columns={sortedCols}
+          filters={filters}
+          filterLogic={filterLogic}
+          onChange={(f, logic) => {
+            setFilters(f);
+            setFilterLogic(logic);
+          }}
+        />
+      </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <ArrowUpDown className="h-3.5 w-3.5" />
         {windowed.loading ? (
           <span className="inline-flex items-center gap-1">
@@ -376,9 +378,9 @@ export function DataTable({ table, onChange }: Props) {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-sm">
         {/* sticky header */}
-        <div className="overflow-x-auto border-b border-border bg-muted/90">
+        <div className="shrink-0 overflow-x-auto border-b border-border bg-muted/90">
           <div className="flex h-9 min-w-max text-sm font-medium text-muted-foreground" style={{ width: totalWidth }}>
             <div className="flex w-12 shrink-0 items-center justify-center text-muted-foreground">#</div>
             {visibleCols.map((col) => (
@@ -437,8 +439,7 @@ export function DataTable({ table, onChange }: Props) {
         {/* virtual body */}
         <div
           ref={parentRef}
-          className="overflow-auto"
-          style={{ height: "min(60vh, 560px)" }}
+          className="min-h-0 flex-1 overflow-auto"
         >
           <div
             className="relative"
@@ -533,7 +534,7 @@ export function DataTable({ table, onChange }: Props) {
         <button
           type="button"
           onClick={() => void addRow()}
-          className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+          className="flex w-full shrink-0 items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
         >
           <Plus className="h-4 w-4" />
           新行
