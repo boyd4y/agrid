@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /docs
+Allow: /blog
+Allow: /llms.txt
+Allow: /docs/llms.txt
+Disallow: /app
+Sitemap: https://agrid.app/sitemap.xml

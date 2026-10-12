@@ -1,0 +1,18 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+client/dist
+server/dist
+
+# impeccable-ignore-start
+**/.impeccable/config.local.json
+**/.impeccable/hook.cache.json
+**/.impeccable/hook.pending.json
+**/.impeccable/*.png
+**/.impeccable/review/
+**/.impeccable/live/sessions/
+**/.impeccable/live/previews/
+**/.impeccable/live/cache/
+# impeccable-ignore-end

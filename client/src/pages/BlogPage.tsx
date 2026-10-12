@@ -1,0 +1,104 @@
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  blogCategories,
+  blogPosts,
+  type BlogCategory,
+} from "@/data/blog";
+import { BlogCover } from "@/components/illustrations/BlogCover";
+import { SeoHead } from "@/components/seo/SeoHead";
+import { cn } from "@/lib/utils";
+
+export function BlogPage() {
+  const [cat, setCat] = useState<BlogCategory | "All">("All");
+  const posts = useMemo(
+    () =>
+      cat === "All" ? blogPosts : blogPosts.filter((p) => p.category === cat),
+    [cat]
+  );
+
+  return (
+    <main className="relative">
+      <SeoHead
+        title="Blog"
+        description="Agrid blog — product, engineering, and how-to notes on AI-native tables."
+        path="/blog"
+      />
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 80% at 70% 0%, var(--agrid-green-soft) 0%, transparent 60%), radial-gradient(ellipse 50% 60% at 20% 20%, var(--agrid-yellow-soft) 0%, transparent 55%)",
+        }}
+      />
+      <div className="mx-auto max-w-5xl px-4 py-14">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Agrid Blog
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          How we build agent-equal tables — measured notes, not vapor.
+        </p>
+
+        <div className="mt-8 flex flex-wrap gap-2">
+          {(["All", ...blogCategories] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCat(c)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition",
+                cat === c
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+
+        <ul className="mt-10 grid gap-6 sm:grid-cols-2">
+          {posts.map((p) => (
+            <li key={p.slug}>
+              <Link
+                to={`/blog/${p.slug}`}
+                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/90 shadow-sm transition hover:border-foreground/20 hover:shadow-md"
+              >
+                <div className="aspect-[16/9] w-full overflow-hidden border-b border-border bg-[#F7F6F3]">
+                  <BlogCover
+                    id={p.cover}
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-2 p-5">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-primary">{p.category}</span>
+                    <span>·</span>
+                    <time dateTime={p.date}>{p.date}</time>
+                  </div>
+                  <h2 className="text-lg font-semibold tracking-tight group-hover:text-primary">
+                    {p.title}
+                  </h2>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {p.excerpt}
+                  </p>
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-10 text-xs text-muted-foreground">
+          Machine-readable index:{" "}
+          <a className="underline hover:text-foreground" href="/llms.txt">
+            /llms.txt
+          </a>{" "}
+          ·{" "}
+          <a className="underline hover:text-foreground" href="/sitemap.xml">
+            sitemap.xml
+          </a>
+        </p>
+      </div>
+    </main>
+  );
+}

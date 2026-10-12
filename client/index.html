@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/agrid-mark.svg" />
+    <title>Agrid · AI-native 多维表</title>
+    <meta name="description" content="Agrid — AI-native multidimensional tables. Humans and agents share one command layer." />
+    <meta property="og:site_name" content="Agrid" />
+    <meta property="og:title" content="Agrid · AI-native multidimensional tables" />
+    <meta property="og:description" content="Feishu/Notion-style tables with MCP, Skill, and a same-origin command API." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/agrid-mark.svg" />
+    <meta name="twitter:image" content="/agrid-mark.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("table-theme") || "system";
+          var dark =
+            t === "dark" ||
+            (t === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.add(dark ? "dark" : "light");
+          document.documentElement.setAttribute(
+            "data-theme",
+            dark ? "dark" : "light"
+          );
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

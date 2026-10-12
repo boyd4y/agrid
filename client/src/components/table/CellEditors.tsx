@@ -1,0 +1,533 @@
+import { useState } from "react";
+import { Check, Bot, User } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
+import { formatDateDisplay } from "@/lib/date-format";
+import { cn } from "@/lib/utils";
+import { SelectChip } from "./SelectChip";
+import type { CellValue, ColumnDef, SelectOption } from "@/types/table";
+import type { MemberOption } from "@/lib/api";
+
+type EditorProps = {
+  column: ColumnDef;
+  value: CellValue;
+  onCommit: (value: CellValue) => void;
+  onCancel: () => void;
+  members?: MemberOption[];
+};
+
+export function CellDisplay({
+  column,
+  value,
+  members = [],
+}: {
+  column: ColumnDef;
+  value: CellValue;
+  members?: MemberOption[];
+}) {
+  const options = column.config?.options ?? [];
+
+  switch (column.type) {
+    case "checkbox":
+      return (
+        <div className="flex items-center justify-center">
+          <Checkbox checked={Boolean(value)} disabled />
+        </div>
+      );
+    case "select": {
+      const opt = options.find((o) => o.id === value);
+      return opt ? <SelectChip option={opt} /> : <span className="text-muted-foreground/50">—</span>;
+    }
+    case "multi_select": {
+      const ids = Array.isArray(value) ? value : [];
+      const selected = options.filter((o) => ids.includes(o.id));
+      if (!selected.length) return <span className="text-muted-foreground/50">—</span>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {selected.map((o) => (
+            <SelectChip key={o.id} option={o} />
+          ))}
+        </div>
+      );
+    }
+    case "person": {
+      if (!value) return <span className="text-muted-foreground/50">空</span>;
+      const m = members.find((x) => x.userId === value || x.name === value);
+      const label = m?.name ?? String(value);
+      return (
+        <span className="inline-flex h-[22px] max-w-full items-center gap-1 truncate rounded-[3px] bg-muted px-[6px] text-[12px] font-medium leading-none text-foreground">
+          {m?.kind === "agent" ? (
+            <Bot className="h-3 w-3 text-violet-500" />
+          ) : (
+            <User className="h-3 w-3 text-muted-foreground" />
+          )}
+          {label}
+        </span>
+      );
+    }
+    case "formula": {
+      const err =
+        typeof value === "string" && value.startsWith("#ERR:") ? value.slice(5) : null;
+      if (err) {
+        return (
+          <span className="truncate text-xs text-red-500" title={err}>
+            #ERR
+          </span>
+        );
+      }
+      return (
+        <span className="truncate font-mono text-[13px] tabular-nums text-muted-foreground">
+          {value === null || value === undefined || value === "" ? (
+            <span className="font-sans text-muted-foreground/50">—</span>
+          ) : (
+            String(value)
+          )}
+        </span>
+      );
+    }
+    case "number":
+      return (
+        <span className="w-full text-right tabular-nums">
+          {value === null || value === undefined || value === "" ? (
+            <span className="text-muted-foreground/50">—</span>
+          ) : (
+            String(value)
+          )}
+        </span>
+      );
+    case "date": {
+      if (value === null || value === undefined || value === "") {
+        return <span className="text-muted-foreground/50">空</span>;
+      }
+      const fmt = column.config?.dateFormat ?? "YYYY-MM-DD";
+      return (
+        <span className="truncate text-[13px]">
+          {formatDateDisplay(String(value), fmt)}
+        </span>
+      );
+    }
+    case "text":
+    default:
+      return (
+        <span className="truncate">
+          {value === null || value === undefined || value === "" ? (
+            <span className="text-muted-foreground/50">空</span>
+          ) : (
+            String(value)
+          )}
+        </span>
+      );
+  }
+}
+
+export function CellEditor({
+  column,
+  value,
+  onCommit,
+  onCancel,
+  members = [],
+}: EditorProps) {
+  if (column.type === "formula") {
+    return (
+      <div className="flex h-full w-full items-center px-1 text-xs text-muted-foreground">
+        公式列只读
+      </div>
+    );
+  }
+
+  if (column.type === "checkbox") {
+    return (
+      <div className="flex h-full items-center justify-center px-2">
+        <Checkbox
+          checked={Boolean(value)}
+          onCheckedChange={(checked) => onCommit(Boolean(checked))}
+          autoFocus
+        />
+      </div>
+    );
+  }
+
+  if (column.type === "select") {
+    return (
+      <SelectEditor
+        options={column.config?.options ?? []}
+        value={typeof value === "string" ? value : null}
+        onCommit={onCommit}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  if (column.type === "multi_select") {
+    return (
+      <MultiSelectEditor
+        options={column.config?.options ?? []}
+        value={Array.isArray(value) ? value : []}
+        onCommit={onCommit}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  if (column.type === "person") {
+    return (
+      <PersonEditor
+        members={members}
+        value={typeof value === "string" ? value : null}
+        onCommit={onCommit}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  if (column.type === "date") {
+    return (
+      <DatePicker
+        embedded
+        autoOpen
+        value={typeof value === "string" ? value : null}
+        dateFormat={column.config?.dateFormat ?? "YYYY-MM-DD"}
+        onChange={(v) => onCommit(v)}
+        onCancel={onCancel}
+      />
+    );
+  }
+
+  if (column.type === "number") {
+    return (
+      <Input
+        inputMode="decimal"
+        className="h-full border-0 bg-transparent text-right shadow-none tabular-nums focus-visible:ring-0"
+        defaultValue={typeof value === "number" ? String(value) : ""}
+        autoFocus
+        onBlur={(e) => {
+          const v = e.target.value;
+          if (v === "") return onCommit(null);
+          const n = Number(v);
+          onCommit(Number.isNaN(n) ? null : n);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            const v = (e.target as HTMLInputElement).value;
+            if (v === "") return onCommit(null);
+            const n = Number(v);
+            onCommit(Number.isNaN(n) ? null : n);
+          }
+          if (e.key === "Escape") onCancel();
+        }}
+      />
+    );
+  }
+
+  return (
+    <Input
+      className="h-full border-0 bg-transparent shadow-none focus-visible:ring-0"
+      defaultValue={typeof value === "string" ? value : ""}
+      autoFocus
+      onBlur={(e) => onCommit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") onCommit((e.target as HTMLInputElement).value);
+        if (e.key === "Escape") onCancel();
+      }}
+    />
+  );
+}
+
+function PersonEditor({
+  members,
+  value,
+  onCommit,
+  onCancel,
+}: {
+  members: MemberOption[];
+  value: string | null;
+  onCommit: (v: CellValue) => void;
+  onCancel: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [q, setQ] = useState("");
+
+  const list = members.filter(
+    (m) =>
+      !q ||
+      m.name.toLowerCase().includes(q.toLowerCase()) ||
+      m.email.toLowerCase().includes(q.toLowerCase())
+  );
+
+  const current = members.find((x) => x.userId === value || x.name === value);
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) onCancel();
+      }}
+    >
+      <PopoverAnchor asChild>
+        <div className="flex h-full w-full items-center">
+          {current ? (
+            <span className="inline-flex h-[22px] max-w-full items-center gap-1 truncate rounded-[3px] bg-muted px-[6px] text-[12px] font-medium leading-none text-foreground">
+              {current.kind === "agent" ? (
+                <Bot className="h-3 w-3 text-violet-500" />
+              ) : (
+                <User className="h-3 w-3 text-muted-foreground" />
+              )}
+              {current.name}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/50">空</span>
+          )}
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={4}
+        className="w-56 p-1"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <Input
+          size="sm"
+          className="mb-1 h-8 border-0 bg-muted shadow-none focus-visible:ring-1 focus-visible:ring-ring"
+          placeholder="搜索成员 / Agent…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          autoFocus
+        />
+        <button
+          type="button"
+          className="flex w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
+          onClick={() => onCommit(null)}
+        >
+          清除
+        </button>
+        {list.length === 0 && (
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            暂无成员
+          </div>
+        )}
+        <div className="max-h-56 overflow-y-auto">
+          {list.map((m) => (
+            <button
+              key={m.userId}
+              type="button"
+              className={cn(
+                "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted",
+                value === m.userId && "bg-muted"
+              )}
+              onClick={() => onCommit(m.userId)}
+            >
+              {m.kind === "agent" ? (
+                <Bot className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+              ) : (
+                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="truncate">{m.name}</span>
+              {value === m.userId && (
+                <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+            </button>
+          ))}
+        </div>
+        {members.length === 0 && (
+          <Input
+            size="sm"
+            className="mt-1 h-8"
+            placeholder="或输入人名后回车"
+            onKeyDown={(e) => {
+              if (e.key === "Enter")
+                onCommit((e.target as HTMLInputElement).value || null);
+              if (e.key === "Escape") onCancel();
+            }}
+          />
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Single-select: chip in cell matches chip in list.
+ * Item padding (p-1 + px-1) ≈ cell px-2 so chips line up under the display chip.
+ */
+function SelectEditor({
+  options,
+  value,
+  onCommit,
+  onCancel,
+}: {
+  options: SelectOption[];
+  value: string | null;
+  onCommit: (v: CellValue) => void;
+  onCancel: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const current = options.find((o) => o.id === value) ?? null;
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) onCancel();
+      }}
+    >
+      <PopoverAnchor asChild>
+        <div className="flex h-full w-full items-center">
+          {current ? <SelectChip option={current} /> : <span className="text-muted-foreground/50">—</span>}
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={4}
+        /* px-0 so option chips line up with the chip in the cell (cell already has px-2) */
+        className="w-auto min-w-[160px] px-0 py-1"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <button
+          type="button"
+          className="flex w-full items-center rounded-sm py-1 pl-0 pr-2 text-left text-[12px] text-muted-foreground hover:bg-muted"
+          onClick={() => onCommit(null)}
+        >
+          清除
+        </button>
+        <div className="my-0.5 h-px bg-[var(--color-border)]" />
+        {options.map((o) => {
+          const selected = value === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              className={cn(
+                "flex w-full items-center gap-2 rounded-sm py-1 pl-0 pr-2 text-left hover:bg-muted",
+                selected && "bg-muted"
+              )}
+              onClick={() => onCommit(o.id)}
+            >
+              <SelectChip option={o} />
+              {selected && (
+                <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * Multi-select like Notion: click toggles immediately, no confirm/cancel footer.
+ * Closing the popover commits the current selection.
+ */
+function MultiSelectEditor({
+  options,
+  value,
+  onCommit,
+  onCancel,
+}: {
+  options: SelectOption[];
+  value: string[];
+  onCommit: (v: CellValue) => void;
+  onCancel: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [selected, setSelected] = useState<string[]>(value);
+  const [dirty, setDirty] = useState(false);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      setDirty(true);
+      return next;
+    });
+  };
+
+  const selectedOpts = options.filter((o) => selected.includes(o.id));
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          if (dirty) onCommit(selected);
+          else onCancel();
+        }
+      }}
+    >
+      <PopoverAnchor asChild>
+        <div className="flex h-full w-full items-center gap-1 overflow-hidden">
+          {selectedOpts.length === 0 ? (
+            <span className="text-muted-foreground/50">—</span>
+          ) : (
+            selectedOpts.map((o) => <SelectChip key={o.id} option={o} />)
+          )}
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        side="bottom"
+        sideOffset={4}
+        className="w-auto min-w-[200px] px-0 py-1"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            setOpen(false);
+            if (dirty) onCommit(selected);
+            else onCancel();
+          }
+        }}
+      >
+        <div className="mb-1 flex min-h-[22px] flex-wrap gap-1 pl-0 pr-2 pt-0.5">
+          {selectedOpts.length === 0 ? (
+            <span className="text-[12px] text-muted-foreground">点击选择标签</span>
+          ) : (
+            selectedOpts.map((o) => (
+              <SelectChip key={o.id} option={o} onRemove={() => toggle(o.id)} />
+            ))
+          )}
+        </div>
+        <div className="my-0.5 h-px bg-[var(--color-border)]" />
+        <div className="max-h-56 overflow-y-auto">
+          {options.map((o) => {
+            const on = selected.includes(o.id);
+            return (
+              <button
+                key={o.id}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-muted",
+                  on && "bg-muted"
+                )}
+                onClick={() => toggle(o.id)}
+              >
+                <span
+                  className={cn(
+                    "inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border",
+                    on
+                      ? "border-[var(--notion-fg)] bg-[var(--notion-fg)] text-[var(--notion-bg)]"
+                      : "border-border bg-transparent"
+                  )}
+                  aria-hidden
+                >
+                  {on && <Check className="h-2.5 w-2.5" />}
+                </span>
+                <SelectChip option={o} />
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

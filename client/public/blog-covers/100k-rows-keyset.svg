@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="1280" height="720" fill="none">
+  <rect width="640" height="360" fill="#F7F6F3"/>
+  
+  <ellipse cx="90" cy="70" rx="110" ry="78" fill="#D3EAD9"/>
+  <ellipse cx="540" cy="300" rx="130" ry="90" fill="#D3E5EF" opacity=".85"/>
+  <ellipse cx="580" cy="60" rx="80" ry="55" fill="#F1E3B7" opacity=".75"/>
+  <rect x="100" y="48" width="440" height="264" rx="18" fill="#FFFEF9" stroke="#E3E2DE" stroke-width="1.4"/>
+  <line x1="120" y1="72" x2="520" y2="72" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="88" x2="520" y2="88" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="104" x2="520" y2="104" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="120" x2="520" y2="120" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="136" x2="520" y2="136" stroke="#E3E2DE" stroke-width="1" opacity="1"/><line x1="120" y1="152" x2="520" y2="152" stroke="#E3E2DE" stroke-width="1" opacity="1"/><line x1="120" y1="168" x2="520" y2="168" stroke="#E3E2DE" stroke-width="1" opacity="1"/><line x1="120" y1="184" x2="520" y2="184" stroke="#E3E2DE" stroke-width="1" opacity="1"/><line x1="120" y1="200" x2="520" y2="200" stroke="#E3E2DE" stroke-width="1" opacity="1"/><line x1="120" y1="216" x2="520" y2="216" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="232" x2="520" y2="232" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="248" x2="520" y2="248" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="264" x2="520" y2="264" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/><line x1="120" y1="280" x2="520" y2="280" stroke="#E3E2DE" stroke-width="1" opacity="0.22"/>
+  <rect x="112" y="128" width="416" height="88" rx="10" fill="#F1E3B7" opacity=".45" stroke="#C4A35A" stroke-width="1.2"/>
+  
+</svg>

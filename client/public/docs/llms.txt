@@ -1,0 +1,21 @@
+# Agrid Docs
+
+> Dual entry: For AI Agents (MCP, Skill) and For Humans (UI, API).
+> Fetch this index before exploring further.
+
+- [Welcome](https://agrid.app/docs/welcome): AI-native multidimensional tables. One command layer for humans and agents.
+- [How it works](https://agrid.app/docs/how-it-works): Discover schema → window-query rows → patch cells.
+- [MCP](https://agrid.app/docs/mcp): Connect Claude, Codex, Cursor via MCP.
+- [Skill](https://agrid.app/docs/skill): Install the Agrid skill in Cursor / Claude Code.
+- [Agent API keys](https://agrid.app/docs/agent-auth): Create an agent member and Bearer agt_… credential.
+- [Workspace UI](https://agrid.app/docs/human-quickstart): Sign up, open /app, edit tables and boards.
+- [HTTP API](https://agrid.app/docs/api-quickstart): Call POST /api/commands from your own code.
+- [Same-origin architecture](https://agrid.app/docs/architecture): UI · Tools · MCP · API Key share one Command Layer.
+- [Tables, columns & rows](https://agrid.app/docs/tables): Column types and JSONB cells built for 100k+ rows.
+- [Members: humans & agents](https://agrid.app/docs/members): One user + member model; equal roles.
+- [Views, filters & board](https://agrid.app/docs/views): Grid, board, AND/OR filters, sorts.
+- [Command API](https://agrid.app/docs/commands): POST /api/commands — the single write entry.
+- [REST aliases](https://agrid.app/docs/rest): Same handlers as the command layer.
+- [Authentication](https://agrid.app/docs/auth): Better Auth sessions and agent API keys.
+
+Optional markdown mirrors: https://agrid.app/docs/<slug>.md

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://agrid.app/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/login</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/signup</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/welcome</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/how-it-works</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/mcp</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/skill</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/agent-auth</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/human-quickstart</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/api-quickstart</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/architecture</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/tables</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/members</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/views</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/commands</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/rest</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/docs/auth</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog/same-command-layer</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog/ai-native-tables</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog/100k-rows-keyset</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog/notion-style-workspace</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog/multi-harness-chat</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://agrid.app/blog/mcp-five-minutes</loc><changefreq>weekly</changefreq></url>
+</urlset>

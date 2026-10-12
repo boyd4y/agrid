@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="1280" height="720" fill="none">
+  <rect width="640" height="360" fill="#F7F6F3"/>
+  
+  <ellipse cx="90" cy="70" rx="110" ry="78" fill="#D3E5EF"/>
+  <ellipse cx="540" cy="300" rx="130" ry="90" fill="#D3EAD9" opacity=".85"/>
+  <ellipse cx="580" cy="60" rx="80" ry="55" fill="#E8DEEE" opacity=".75"/>
+  <rect x="100" y="60" width="440" height="240" rx="20" fill="#FFFEF9" stroke="#E3E2DE" stroke-width="1.4"/>
+  <rect x="130" y="88" width="110" height="36" rx="18" fill="#D3EAD9" stroke="#E3E2DE"/>
+  <rect x="260" y="88" width="110" height="36" rx="18" fill="#E8DEEE" stroke="#E3E2DE"/>
+  <rect x="390" y="88" width="110" height="36" rx="18" fill="#F1E3B7" stroke="#E3E2DE"/>
+  <rect x="140" y="150" width="220" height="48" rx="16" fill="#D3E5EF" opacity=".7"/>
+  <rect x="280" y="214" width="200" height="48" rx="16" fill="#D3EAD9" opacity=".65"/>
+  <circle cx="160" cy="174" r="12" fill="#FFFEF9" stroke="#E3E2DE"/>
+  <circle cx="460" cy="238" r="12" fill="#E8DEEE" stroke="#E3E2DE"/>
+  
+</svg>

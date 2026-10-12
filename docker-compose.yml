@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: feishu-notion-table-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tableapp
+      POSTGRES_PASSWORD: tableapp
+      POSTGRES_DB: tableapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
