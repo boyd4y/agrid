@@ -6,18 +6,12 @@ import {
   readThreadResourceKey,
   setLastThreadId,
   setStoredThreadResource,
+  threadResourceCustomUpdate,
 } from "@/lib/chat-resource";
 
 type Props = {
   resourceKey: ChatResourceKey;
 };
-
-function mergeResourceCustom(
-  custom: Record<string, unknown> | undefined,
-  resourceKey: ChatResourceKey
-): Record<string, unknown> {
-  return { ...(custom ?? {}), resourceKey };
-}
 
 function isEmptyUnboundTitle(title: string | undefined): boolean {
   return !title || title === "新对话" || title === "New Chat";
@@ -42,12 +36,12 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
       const methods = aui.threads.item({ id: threadId });
       const state = methods.getState();
       const existing = readThreadResourceKey(state);
-      // Never overwrite a different resource binding
-      if (existing && existing !== resourceKey) return;
+      // An unsaved draft can be reused by switchToNewThread across resources.
+      // Persisted conversations retain their original binding.
+      if (state.status !== "new" && existing && existing !== resourceKey) return;
 
-      if (existing !== resourceKey) {
-        methods.updateCustom(mergeResourceCustom(state.custom, resourceKey));
-      }
+      const custom = threadResourceCustomUpdate(state, resourceKey);
+      if (custom) methods.updateCustom(custom);
       setStoredThreadResource(threadId, resourceKey);
       setLastThreadId(resourceKey, threadId);
     } catch (e) {
@@ -122,18 +116,7 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
   useAuiEvent("threads.selectionChanged", ({ threadId }) => {
     if (appliedKeyRef.current !== resourceKey) return;
     if (!threadId) return;
-    try {
-      const item = aui.threads.item({ id: threadId }).getState();
-      const key = readThreadResourceKey(item);
-      if (key && key !== resourceKey) return;
-      aui.threads
-        .item({ id: threadId })
-        .updateCustom(mergeResourceCustom(item.custom, resourceKey));
-      setStoredThreadResource(threadId, resourceKey);
-      setLastThreadId(resourceKey, threadId);
-    } catch (e) {
-      console.warn("selection stamp resourceKey", e);
-    }
+    stampThread(threadId);
   });
 
   return null;

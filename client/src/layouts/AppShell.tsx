@@ -4,7 +4,6 @@ import type { Dispatch, SetStateAction } from "react";
 import { AppShellProvider, useAppShell } from "@/context/AppShellContext";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { AiDrawer } from "@/components/shell/AiDrawer";
-import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import type { TableMeta } from "@/types/table";
 
@@ -13,13 +12,13 @@ export type AppOutletContext = {
   setTables: Dispatch<SetStateAction<TableMeta[]>>;
   refreshTables: () => Promise<void>;
   createTable: () => Promise<void>;
+  deleteTable: (tableId: string) => Promise<void>;
   tablesLoading: boolean;
   notifyTableMutated: () => void;
   tableRefreshToken: number;
 };
 
 function AppShellInner() {
-  const { ensureOrganization } = useAuth();
   const { setActiveTableId } = useAppShell();
   const tableDetailMatch = useMatch("/app/tables/:tableId");
   const tableAutomationsMatch = useMatch(
@@ -30,10 +29,6 @@ function AppShellInner() {
   const [tables, setTables] = useState<TableMeta[]>([]);
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tableRefreshToken, setTableRefreshToken] = useState(0);
-
-  useEffect(() => {
-    void ensureOrganization();
-  }, [ensureOrganization]);
 
   const refreshTables = useCallback(async () => {
     try {
@@ -71,11 +66,19 @@ function AppShellInner() {
     setTableRefreshToken((n) => n + 1);
   }, []);
 
+  const deleteTable = useCallback(async (tableId: string) => {
+    await api.deleteTable(tableId);
+    setTables((prev) => prev.filter((t) => t.id !== tableId));
+    notifyTableMutated();
+    if (tableMatch?.params.tableId === tableId) navigate("/app/tables", { replace: true });
+  }, [navigate, notifyTableMutated, tableMatch?.params.tableId]);
+
   const outletCtx: AppOutletContext = {
     tables,
     setTables,
     refreshTables,
     createTable,
+    deleteTable,
     tablesLoading,
     notifyTableMutated,
     tableRefreshToken,
@@ -89,8 +92,8 @@ function AppShellInner() {
         tablesLoading={tablesLoading}
       />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex h-full min-h-0 flex-col"><Outlet context={outletCtx} /></div>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex h-full min-h-0 min-w-0 w-full flex-col"><Outlet context={outletCtx} /></div>
         </main>
       </div>
       <AiDrawer onMutated={notifyTableMutated} />

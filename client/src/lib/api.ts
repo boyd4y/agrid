@@ -63,6 +63,7 @@ export type MemberOption = {
 
 export const api = {
   listTables: () => request<TableMeta[]>("/api/tables"),
+  deleteTable: (id: string) => request<{ ok: boolean }>(`/api/tables/${id}`, { method: "DELETE" }),
   getTable: (id: string) => request<FullTable>(`/api/tables/${id}`),
   createTable: (name: string, description?: string) =>
     request<TableMeta>("/api/tables", {

@@ -111,7 +111,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
 
   if (!statusCol) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-6 text-sm text-amber-800">
+      <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-6 text-sm text-warning">
         看板需要至少一列「单选」类型（建议命名为「状态」）才能分组。请先在表格视图添加列。
       </div>
     );
@@ -186,7 +186,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {error && (
-        <div className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="shrink-0 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
           <button type="button" className="ml-2 underline" onClick={() => setError(null)}>
             关闭
@@ -203,7 +203,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
               className={cn(
                 "flex h-full min-h-0 w-72 shrink-0 flex-col rounded-xl border bg-muted/80",
                 overCol === col.id && dragging
-                  ? "border-[var(--color-primary)] ring-2 ring-blue-200"
+                  ? "border-[var(--color-primary)] ring-2 ring-primary/30"
                   : "border-border"
               )}
               onDragOver={(e) => {

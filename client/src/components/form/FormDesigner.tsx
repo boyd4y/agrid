@@ -307,7 +307,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
       </div>
 
       {error && (
-        <div className="border-b border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+        <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
           {error}
         </div>
       )}
@@ -601,7 +601,7 @@ function FieldInspector({
       )}
 
       {type === "formula" && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning">
           公式列 — 计算字段，不会随表单提交
         </div>
       )}

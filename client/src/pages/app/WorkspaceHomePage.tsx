@@ -12,6 +12,7 @@ import type { AppOutletContext } from "@/layouts/AppShell";
 import { useAppShell } from "@/context/AppShellContext";
 import { api } from "@/lib/api";
 import type { FullTable } from "@/types/table";
+import { AppPageHeader } from "@/components/shell/AppPage";
 
 /**
  * Harness / Codex style workspace home:
@@ -135,10 +136,15 @@ export function WorkspaceHomePage() {
 
   return (
     <div
-      className="flex h-full min-h-0 w-full bg-background"
+      className="flex h-full min-h-0 min-w-0 w-full flex-col bg-background"
       data-testid="workspace-home-split"
       data-preview-open={previewOpen ? "true" : "false"}
     >
+      <AppPageHeader
+        page="ai"
+        description="与智能体对话，创建表格、整理数据和配置自动化。"
+      />
+      <div className="min-h-0 min-w-0 flex-1">
       {previewOpen ? (
         <ResizablePanelGroup
           orientation="horizontal"
@@ -176,6 +182,7 @@ export function WorkspaceHomePage() {
           <div className="min-h-0 min-w-0 flex-1">{chatPane}</div>
         </div>
       )}
+      </div>
     </div>
   );
 }

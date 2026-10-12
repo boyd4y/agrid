@@ -25,7 +25,8 @@ export function SelectChip({
       {onRemove && (
         <button
           type="button"
-          className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm opacity-60 hover:bg-black/5 hover:opacity-100"
+          aria-label={`移除${option.label}`}
+          className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm opacity-60 hover:bg-current/10 hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onRemove();

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
+import { createOrganizationInitializer } from "@/lib/ensure-organization";
 
 export type SessionUser = {
   id: string;
@@ -9,34 +10,24 @@ export type SessionUser = {
   kind?: string;
 };
 
+const initializeOrganization = createOrganizationInitializer(authClient);
+
 export function useAuth() {
   const { data, isPending, error, refetch } = authClient.useSession();
   const user = (data?.user as SessionUser | undefined) ?? null;
   const session = data?.session ?? null;
+  const userId = user?.id;
+  const userName = user?.name;
+  const activeOrganizationId = session?.activeOrganizationId;
 
   const ensureOrganization = useCallback(async () => {
-    if (!user) return null;
     try {
-      const orgs = await authClient.organization.list();
-      const list = (orgs.data ?? []) as { id: string; name: string; slug: string }[];
-      if (list.length > 0) {
-        await authClient.organization.setActive({ organizationId: list[0].id });
-        return list[0];
-      }
-      const slug = `ws-${user.id.slice(0, 8)}`;
-      const created = await authClient.organization.create({
-        name: `${user.name || "我"}的工作区`,
-        slug,
-      });
-      if (created.data?.id) {
-        await authClient.organization.setActive({ organizationId: created.data.id });
-        return created.data;
-      }
+      return await initializeOrganization(userId ? { id: userId, name: userName } : null, activeOrganizationId);
     } catch (e) {
       console.warn("ensureOrganization", e);
+      return null;
     }
-    return null;
-  }, [user]);
+  }, [userId, userName, activeOrganizationId]);
 
   return {
     user,

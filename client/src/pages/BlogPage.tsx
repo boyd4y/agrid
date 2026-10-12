@@ -64,7 +64,7 @@ export function BlogPage() {
                 to={`/blog/${p.slug}`}
                 className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/90 shadow-sm transition hover:border-foreground/20 hover:shadow-md"
               >
-                <div className="aspect-[16/9] w-full overflow-hidden border-b border-border bg-[#F7F6F3]">
+                <div className="aspect-[16/9] w-full overflow-hidden border-b border-border bg-muted">
                   <BlogCover
                     id={p.cover}
                     className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"

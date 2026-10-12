@@ -76,7 +76,7 @@ function DocsSearch({ className }: { className?: string }) {
                 key={p.slug}
                 to={`/docs/${p.slug}`}
                 onClick={() => setQ("")}
-                className="block px-3 py-2 hover:bg-black/5"
+                className="block px-3 py-2 hover:bg-accent"
               >
                 <div className="text-sm font-medium text-foreground">{p.title}</div>
                 <div className="truncate text-[11px] text-muted-foreground">
@@ -104,8 +104,8 @@ export function DocsSidebar() {
           className={cn(
             "block rounded-md px-2 py-1.5 font-medium",
             pathname === "/docs"
-              ? "bg-black/5 text-foreground"
-              : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground"
           )}
         >
           文档首页
@@ -126,8 +126,8 @@ export function DocsSidebar() {
                       className={cn(
                         "block rounded-md px-2 py-1.5",
                         active
-                          ? "bg-black/5 font-medium text-foreground"
-                          : "text-muted-foreground hover:bg-black/5 hover:text-foreground"
+                          ? "bg-accent font-medium text-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       )}
                     >
                       {p.title}

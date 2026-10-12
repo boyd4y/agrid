@@ -107,7 +107,7 @@ export function ColumnSettings({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl border border-border bg-background p-4 shadow-xl">
         <h3 className="mb-3 text-base font-semibold text-foreground">列设置</h3>
 
@@ -235,7 +235,7 @@ export function ColumnSettings({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8 text-xs text-red-500"
+                    className="h-8 text-xs text-destructive"
                     onClick={() => setOptions((opts) => opts.filter((_, j) => j !== i))}
                   >
                     删

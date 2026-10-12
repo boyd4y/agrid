@@ -25,9 +25,8 @@ function getSystem(): "light" | "dark" {
     : "light";
 }
 
-function applyTheme(theme: Theme) {
+function applyTheme(resolved: "light" | "dark") {
   const root = document.documentElement;
-  const resolved = theme === "system" ? getSystem() : theme;
   root.classList.remove("light", "dark");
   root.classList.add(resolved);
   root.setAttribute("data-theme", resolved);
@@ -37,29 +36,40 @@ function applyTheme(theme: Theme) {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === "undefined") return "system";
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    return stored === "light" || stored === "dark" || stored === "system"
-      ? stored
-      : "system";
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      return stored === "light" || stored === "dark" || stored === "system"
+        ? stored
+        : "system";
+    } catch {
+      return "system";
+    }
   });
 
-  const resolved = useMemo<"light" | "dark">(() => {
-    if (typeof window === "undefined") return "light";
-    return theme === "system" ? getSystem() : theme;
+  const [systemTheme, setSystemTheme] = useState<"light" | "dark">(() =>
+    typeof window === "undefined" ? "light" : getSystem()
+  );
+  const resolved = theme === "system" ? systemTheme : theme;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      // The current session can still switch themes when storage is unavailable.
+    }
   }, [theme]);
 
   useEffect(() => {
-    applyTheme(theme);
-    localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+    applyTheme(resolved);
+  }, [resolved]);
 
   useEffect(() => {
-    if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyTheme("system");
+    const onChange = () => setSystemTheme(mq.matches ? "dark" : "light");
+    onChange();
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [theme]);
+  }, []);
 
   const setTheme = useCallback((next: Theme) => {
     setThemeState(next);

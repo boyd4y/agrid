@@ -3,6 +3,7 @@ import { AgridLogo } from "@/components/brand/AgridLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function MarketingLayout() {
   const { pathname } = useLocation();
@@ -27,8 +28,8 @@ export function MarketingLayout() {
                 key={n.to}
                 to={n.to}
                 className={cn(
-                  "rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-black/5 hover:text-foreground",
-                  (n.to === "/" ? pathname === "/" : pathname === n.to || pathname.startsWith(n.to + "/")) && "bg-black/5 font-medium text-foreground"
+                  "rounded-md px-2.5 py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground",
+                  (n.to === "/" ? pathname === "/" : pathname === n.to || pathname.startsWith(n.to + "/")) && "bg-accent font-medium text-foreground"
                 )}
               >
                 {n.label}
@@ -36,6 +37,7 @@ export function MarketingLayout() {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             {!isPending && isAuthenticated ? (
               <Button asChild size="sm">
                 <Link to="/app">进入工作台</Link>

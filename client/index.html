@@ -17,19 +17,21 @@
     <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
     <script>
       (function () {
+        var t = "system";
         try {
-          var t = localStorage.getItem("table-theme") || "system";
-          var dark =
-            t === "dark" ||
-            (t === "system" &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.add(dark ? "dark" : "light");
-          document.documentElement.setAttribute(
-            "data-theme",
-            dark ? "dark" : "light"
-          );
-          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+          var stored = localStorage.getItem("table-theme");
+          if (stored === "light" || stored === "dark" || stored === "system") t = stored;
         } catch (e) {}
+        var dark =
+          t === "dark" ||
+          (t === "system" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.add(dark ? "dark" : "light");
+        document.documentElement.setAttribute(
+          "data-theme",
+          dark ? "dark" : "light"
+        );
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
       })();
     </script>
   </head>

@@ -110,7 +110,30 @@ export function resolveFormTheme(theme?: FormThemeConfig | null): ResolvedFormTh
 
 export function formThemeStyle(theme?: FormThemeConfig | null): CSSProperties {
   const t = resolveFormTheme(theme);
+  // Published form presets are independent of the workspace theme. Scope the
+  // same semantic tokens so shadcn controls match the selected form palette.
+  const hex = t.background.replace("#", "");
+  const rgb = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+  const dark = /^[0-9a-f]{6}$/i.test(rgb) &&
+    (parseInt(rgb.slice(0, 2), 16) * 0.2126 +
+      parseInt(rgb.slice(2, 4), 16) * 0.7152 +
+      parseInt(rgb.slice(4, 6), 16) * 0.0722) < 128;
   return {
+    ["--background" as string]: t.background,
+    ["--foreground" as string]: t.answer,
+    ["--card" as string]: t.background,
+    ["--card-foreground" as string]: t.question,
+    ["--primary" as string]: t.button,
+    ["--primary-foreground" as string]: t.buttonText,
+    ["--muted" as string]: `color-mix(in srgb, ${t.background} 94%, ${t.answer})`,
+    ["--muted-foreground" as string]: `color-mix(in srgb, ${t.answer} 75%, ${t.background})`,
+    ["--accent" as string]: `color-mix(in srgb, ${t.background} 90%, ${t.answer})`,
+    ["--accent-foreground" as string]: t.answer,
+    ["--border" as string]: `color-mix(in srgb, ${t.answer} 20%, ${t.background})`,
+    ["--input" as string]: `color-mix(in srgb, ${t.answer} 25%, ${t.background})`,
+    ["--ring" as string]: t.accent,
+    ["--destructive" as string]: dark ? "#ff8a80" : "#bf2b2b",
+    colorScheme: dark ? "dark" : "light",
     ["--form-bg" as string]: t.background,
     ["--form-question" as string]: t.question,
     ["--form-answer" as string]: t.answer,

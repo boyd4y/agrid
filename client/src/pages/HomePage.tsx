@@ -24,15 +24,8 @@ export function HomePage() {
   return (
     <main>
       <section className="relative overflow-hidden border-b border-border">
-        <div
-          className="pointer-events-none absolute inset-0 -z-10"
-          style={{
-            background:
-              "radial-gradient(ellipse 65% 40% at 12% 0%, #F0EAD8 0%, transparent 55%), radial-gradient(ellipse 50% 35% at 90% 5%, #E3EDF3 0%, transparent 50%)",
-          }}
-        />
-        <div className="mx-auto max-w-6xl px-4 pb-8 pt-10 lg:pb-12 lg:pt-12">
-          <div className="mx-auto max-w-3xl text-center">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-[1.2fr_1fr] lg:py-20">
+          <div className="min-w-0">
             <Badge variant="outline" className="mb-4 h-7 rounded-full px-3 text-xs font-normal">
               Agrid · Agent-first · Talk-to-Build
             </Badge>
@@ -40,11 +33,11 @@ export function HomePage() {
               用对话构建数据系统，
               <span className="text-primary">用表格落盘</span>
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl">
+            <p className="mt-5 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl">
               Agrid 不是「多维表格再套一层 AI」。底层是 Postgres 表格与看板——这是核心数据展示；
               默认路径是 Talk-to-Build：说需求，Agent 建表、列、自动化与公式。人看网格，Agent 写命令。
             </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild size="lg">
                 <Link to="/signup">
                   免费开始 <NiArrowRight className="h-4 w-4" />
@@ -54,7 +47,7 @@ export function HomePage() {
                 <Link to="/docs">文档 · For Agents / Humans</Link>
               </Button>
             </div>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+            <div className="mt-8 flex flex-wrap items-center gap-2">
               {surfaces.map((s) => (
                 <Badge
                   key={s.label}
@@ -68,12 +61,11 @@ export function HomePage() {
             </div>
           </div>
 
-          <div className="relative mx-auto mt-10 max-w-4xl">
-            <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-br from-[#F0EAD8]/35 via-transparent to-[#E3EDF3]/30 blur-xl" />
+          <div className="mx-auto w-full max-w-sm md:max-w-md">
             <NotiolyImage
-              src={NOTIOLY.collaborate}
-              alt="对话构建与表格协作"
-              className="shadow-sm ring-1 ring-border/60"
+              src={NOTIOLY.fastInternet}
+              alt="坐在火箭上使用电脑的人物"
+              loading="eager"
             />
           </div>
         </div>
@@ -118,7 +110,7 @@ export function HomePage() {
             title="表格仍是核心底层与主展示"
             body="Agent 优先的是「怎么建、怎么改」，不是取代网格。对话建完后默认落到 Grid / Board；10 万行级虚拟滚动与游标分页撑住检查与审计。"
             cta={{ to: "/docs/tables", label: "字段与性能" }}
-            art={<NotiolyImage src={NOTIOLY.checklist} alt="表格与清单" />}
+            art={<NotiolyImage src={NOTIOLY.painting} alt="在画布上开始创作" />}
           />
           <DeepDive
             reverse
@@ -126,7 +118,7 @@ export function HomePage() {
             title="Talk-to-Build：一句话出系统"
             body="「做个 CRM，跟进自动化」→ 建表、关联列、自动化、公式。登录后 /app 默认就是对话构建 + 实时表格，不用先拖拽低代码。"
             cta={{ to: "/signup", label: "打开工作台" }}
-            art={<NotiolyImage src={NOTIOLY.kanban} alt="看板工作台" />}
+            art={<NotiolyImage src={NOTIOLY.planning} alt="规划与构建" />}
           />
           <DeepDive
             icon={<NiKanban className="h-5 w-5" />}
@@ -142,7 +134,7 @@ export function HomePage() {
         <div className="mx-auto max-w-6xl px-4">
           <div className="rounded-3xl border border-border bg-background p-8 shadow-sm sm:p-12 lg:flex lg:items-center lg:justify-between lg:gap-12">
             <div className="max-w-xl">
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--notion-blue)]/15 text-primary">
+              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
                 <NiUsers className="h-5 w-5" />
               </div>
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -169,7 +161,7 @@ export function HomePage() {
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
             background:
-              "radial-gradient(ellipse 45% 50% at 50% 100%, #E3EDF3 0%, transparent 65%)",
+              "radial-gradient(ellipse 45% 50% at 50% 100%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 65%)",
           }}
         />
         <div className="mx-auto max-w-3xl px-4 text-center">

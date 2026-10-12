@@ -73,9 +73,11 @@ export function DatePicker({
   const content = (
     <PopoverContent
       align="start"
+      alignOffset={embedded ? -8 : 0}
       side="bottom"
       sideOffset={6}
       className="w-auto p-2"
+      aria-label="选择日期"
       onOpenAutoFocus={(e) => {
         if (embedded) e.preventDefault();
       }}

@@ -80,7 +80,7 @@ export function AiDrawer({ onMutated }: Props) {
       {/* Backdrop on smaller screens */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-[rgba(55,53,47,0.18)] transition-opacity lg:hidden",
+          "fixed inset-0 z-40 bg-overlay transition-opacity lg:hidden",
           aiOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={() => setAiOpen(false)}

@@ -49,7 +49,7 @@ export function DocsArticlePage() {
             {prev ? (
               <Link
                 to={`/docs/${prev.slug}`}
-                className="group flex flex-1 flex-col rounded-xl border border-border bg-background p-4 transition hover:border-[var(--notion-blue)]/30"
+                className="group flex flex-1 flex-col rounded-xl border border-border bg-background p-4 transition hover:border-primary/30"
               >
                 <span className="text-xs text-muted-foreground">上一篇</span>
                 <span className="mt-1 inline-flex items-center gap-1 font-medium group-hover:text-primary">
@@ -63,7 +63,7 @@ export function DocsArticlePage() {
             {next ? (
               <Link
                 to={`/docs/${next.slug}`}
-                className="group flex flex-1 flex-col items-end rounded-xl border border-border bg-background p-4 text-right transition hover:border-[var(--notion-blue)]/30"
+                className="group flex flex-1 flex-col items-end rounded-xl border border-border bg-background p-4 text-right transition hover:border-primary/30"
               >
                 <span className="text-xs text-muted-foreground">下一篇</span>
                 <span className="mt-1 inline-flex items-center gap-1 font-medium group-hover:text-primary">

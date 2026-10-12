@@ -1,3 +1,4 @@
+import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bot, Copy, Loader2, Lock, Plus } from "lucide-react";
@@ -5,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -13,8 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, type MemberOption } from "@/lib/api";
-import { cn } from "@/lib/utils";
-import { MembersEmpty } from "@/components/illustrations";
+import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
+import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { HARNESS_LABELS, type HarnessId } from "@/lib/harness";
 import { HarnessLogo, OpenRouterLogo } from "@/components/icons/HarnessLogos";
 
@@ -39,7 +41,8 @@ type ProviderStatus = {
 export function AgentsPage() {
   const [agents, setAgents] = useState<MemberOption[]>([]);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"list" | "create">("list");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [agentName, setAgentName] = useState("");
   const [persona, setPersona] = useState(
     "你是一名严谨的产品助理，用简洁中文操作表格。"
@@ -95,8 +98,7 @@ export function AgentsPage() {
   const createAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setMsg(null);
-    setApiKeyOnce(null);
+    setCreateError(null);
     try {
       const r = await api.createAgent({
         name: agentName.trim(),
@@ -110,10 +112,10 @@ export function AgentsPage() {
       setApiKeyOnce(r.apiKey);
       setMsg("智能体已创建。请立刻复制 API Key，之后无法再看。");
       setAgentName("");
-      setTab("list");
-      await refresh();
+      setCreateOpen(false);
+      await refresh().catch(() => setMsg("智能体已创建。请复制 API Key；列表刷新失败，请稍后刷新页面。"));
     } catch (err) {
-      setMsg(err instanceof Error ? err.message : "创建失败");
+      setCreateError(err instanceof Error ? err.message : "创建失败");
     } finally {
       setBusy(false);
     }
@@ -122,47 +124,30 @@ export function AgentsPage() {
   const isEmpty = !loading && agents.length === 0;
 
   return (
-    <div className="mx-auto h-full min-h-0 max-w-3xl overflow-auto px-6 py-10 md:px-10" data-testid="agents-page">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">智能体</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+    <Dialog
+      open={createOpen}
+      onOpenChange={(open) => {
+        if (busy) return;
+        setCreateOpen(open);
+        if (open) setCreateError(null);
+      }}
+    >
+    <AppPage data-testid="agents-page" header={
+      <AppPageHeader page="agents" description={<>
             配置人设 + Harness + 模型。Harness 创建后不可更换。权限与{" "}
             <Link to="/app/members" className="underline underline-offset-2 hover:text-foreground">
               成员
             </Link>{" "}
             对齐，走同一命令层。
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setTab("create")}>
-          <Plus className="h-3.5 w-3.5" />
-          创建智能体
-        </Button>
-      </div>
-
-      <div className="mb-4 flex gap-1 rounded-lg border border-border bg-muted p-0.5 w-fit">
-        {(
-          [
-            ["list", "智能体列表", Bot],
-            ["create", "新建配置", Plus],
-          ] as const
-        ).map(([id, label, Icon]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium",
-              tab === id
-                ? "bg-background text-foreground shadow-[0_4px_12px_rgba(55,53,47,0.06)]"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
+      </>}>
+        <DialogTrigger asChild>
+          <Button>
+            <Plus className="h-4 w-4" />
+            创建智能体
+          </Button>
+        </DialogTrigger>
+      </AppPageHeader>
+    }>
 
       {providers.some((p) => p.id === "openrouter") && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -184,7 +169,7 @@ export function AgentsPage() {
       )}
 
       {apiKeyOnce && (
-        <div className="mb-4 rounded-md border border-[#F1E3B7] bg-[#FFF9E8] px-3 py-2 text-sm dark:border-border dark:bg-muted">
+        <div className="mb-4 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm">
           <div className="mb-1 font-medium">API Key（仅显示一次）</div>
           <div className="flex items-center gap-2">
             <code className="flex-1 break-all text-xs">{apiKeyOnce}</code>
@@ -200,25 +185,27 @@ export function AgentsPage() {
         </div>
       )}
 
-      {tab === "list" && (
-        <div className="rounded-xl border border-border bg-background shadow-[0_8px_24px_rgba(55,53,47,0.04)]">
+        <div className={isEmpty ? "flex min-h-0 flex-1 flex-col" : "rounded-xl border border-border bg-background shadow-[0_8px_24px_rgba(55,53,47,0.04)]"}>
           {loading ? (
             <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               加载中…
             </div>
           ) : isEmpty ? (
-            <div className="flex flex-col items-center px-6 py-10 text-center">
-              <MembersEmpty className="mb-4 w-full max-w-sm" />
-              <h2 className="text-base font-semibold tracking-tight">还没有智能体</h2>
-              <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                创建时选择 Harness（如 Pi + OpenRouter）与模型；API Key 用于外部 MCP / Skill。
-              </p>
-              <Button size="sm" className="mt-6" onClick={() => setTab("create")}>
-                <Plus className="h-3.5 w-3.5" />
-                创建智能体
-              </Button>
-            </div>
+            <AppEmptyState
+              className="flex-1"
+              illustration={NOTIOLY.fastInternet}
+              title="还没有智能体"
+              description="创建智能体，选择人设与模型，开始对话和处理数据。"
+              action={
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-3.5 w-3.5" />
+                  创建智能体
+                </Button>
+              </DialogTrigger>
+              }
+            />
           ) : (
             <ul className="divide-y divide-border">
               {agents.map((m) => {
@@ -226,7 +213,7 @@ export function AgentsPage() {
                 const model = m.agent?.persona?.defaultModel ?? "openrouter/free";
                 return (
                 <li key={m.id} className="flex items-center gap-3 px-4 py-3">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#E8DEEE]">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-agent/10 text-agent">
                     <Bot className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -249,14 +236,30 @@ export function AgentsPage() {
             </ul>
           )}
         </div>
-      )}
 
-      {tab === "create" && (
+      <DialogContent
+        className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-xl p-0 sm:rounded-xl"
+        aria-describedby="agent-create-description"
+        onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (busy) e.preventDefault(); }}
+      >
+        <DialogHeader className="px-6 pb-4 pt-6 text-left">
+          <DialogTitle className="pr-8">创建智能体</DialogTitle>
+          <p id="agent-create-description" className="text-sm text-muted-foreground">
+            设置名称、人设、Harness 与模型。
+          </p>
+        </DialogHeader>
         <form
           onSubmit={createAgent}
-          className="space-y-4 rounded-xl border border-border bg-background p-6 shadow-[0_8px_24px_rgba(55,53,47,0.04)]"
+          className="min-h-0 space-y-4 overflow-y-auto px-6 pb-6"
           data-testid="agent-create-form"
         >
+          {createError && (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {createError}
+            </p>
+          )}
+          <fieldset disabled={busy} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="agentName">名称</Label>
             <Input
@@ -359,12 +362,19 @@ export function AgentsPage() {
               </Select>
             </div>
           </div>
-          <Button type="submit" disabled={busy || !agentName.trim()}>
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            创建智能体
-          </Button>
+          </fieldset>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button type="button" variant="outline" disabled={busy} onClick={() => setCreateOpen(false)}>
+              取消
+            </Button>
+            <Button type="submit" disabled={busy || !agentName.trim()}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              {busy ? "创建中…" : "创建智能体"}
+            </Button>
+          </div>
         </form>
-      )}
-    </div>
+      </DialogContent>
+    </AppPage>
+    </Dialog>
   );
 }

@@ -77,6 +77,19 @@ export function readThreadResourceKey(thread: {
   return getStoredThreadResource(thread.id);
 }
 
+/** Drafts cannot update assistant-ui metadata; initialized threads may backfill it. */
+export function threadResourceCustomUpdate(thread: {
+  id: string;
+  status: string;
+  custom?: Record<string, unknown>;
+}, resourceKey: ChatResourceKey): Record<string, unknown> | null {
+  if (thread.status === "new") return null;
+  const existing = readThreadResourceKey(thread);
+  if (existing && existing !== resourceKey) return null;
+  if (thread.custom?.resourceKey === resourceKey) return null;
+  return { ...(thread.custom ?? {}), resourceKey };
+}
+
 export function formatRelativeTime(date: Date | undefined, now = Date.now()): string {
   if (!date) return "";
   const diffMs = now - date.getTime();

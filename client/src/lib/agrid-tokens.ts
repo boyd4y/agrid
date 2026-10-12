@@ -1,4 +1,4 @@
-/** Agrid Design Tokens — mirror of CSS variables in index.css */
+/** Fixed brand/illustration palette; runtime UI colors use index.css semantic tokens. */
 export const agridColors = {
   blue: "#2383e2",
   blueSoft: "#d3e5ef",

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, Bot, User } from "lucide-react";
+import { useState, type KeyboardEvent } from "react";
+import { Check, Bot, User, Search, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,6 +22,54 @@ type EditorProps = {
   members?: MemberOption[];
 };
 
+const OPTION_CLASS = "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-primary";
+const CELL_POPOVER_CLASS = "w-64 p-1";
+
+function CellOptionSearch({ value, onChange, placeholder, onClear, canClear }: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  onClear: () => void;
+  canClear: boolean;
+}) {
+  return (
+    <div className="mb-1 flex items-center gap-1 border-b border-border px-2 py-1.5">
+      <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <Input
+        size="sm"
+        className="h-7 min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+        placeholder={placeholder}
+        aria-label={placeholder.replace(/…$/, "")}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoFocus
+      />
+      <button
+        type="button"
+        aria-label="清除所选值"
+        title="清除所选值"
+        disabled={!canClear}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30"
+        onClick={onClear}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function navigateOptions(e: KeyboardEvent<HTMLDivElement>) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-cell-option]:not(:disabled)"));
+  if (!buttons.length) return;
+  e.preventDefault();
+  const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  const next = index < 0
+    ? e.key === "ArrowDown" ? 0 : buttons.length - 1
+    : (index + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+  buttons[next].focus();
+}
+
 export function CellDisplay({
   column,
   value,
@@ -36,8 +84,13 @@ export function CellDisplay({
   switch (column.type) {
     case "checkbox":
       return (
-        <div className="flex items-center justify-center">
-          <Checkbox checked={Boolean(value)} disabled />
+        <div className="flex w-full items-center justify-center" aria-hidden>
+          <span className={cn(
+            "flex h-4 w-4 items-center justify-center rounded border",
+            value ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/60 bg-background"
+          )}>
+            {Boolean(value) && <Check className="h-3 w-3" />}
+          </span>
         </div>
       );
     case "select": {
@@ -63,7 +116,7 @@ export function CellDisplay({
       return (
         <span className="inline-flex h-[22px] max-w-full items-center gap-1 truncate rounded-[3px] bg-muted px-[6px] text-[12px] font-medium leading-none text-foreground">
           {m?.kind === "agent" ? (
-            <Bot className="h-3 w-3 text-violet-500" />
+            <Bot className="h-3 w-3 text-agent" />
           ) : (
             <User className="h-3 w-3 text-muted-foreground" />
           )}
@@ -76,7 +129,7 @@ export function CellDisplay({
         typeof value === "string" && value.startsWith("#ERR:") ? value.slice(5) : null;
       if (err) {
         return (
-          <span className="truncate text-xs text-red-500" title={err}>
+          <span className="truncate text-xs text-destructive" title={err}>
             #ERR
           </span>
         );
@@ -275,7 +328,7 @@ function PersonEditor({
           {current ? (
             <span className="inline-flex h-[22px] max-w-full items-center gap-1 truncate rounded-[3px] bg-muted px-[6px] text-[12px] font-medium leading-none text-foreground">
               {current.kind === "agent" ? (
-                <Bot className="h-3 w-3 text-violet-500" />
+                <Bot className="h-3 w-3 text-agent" />
               ) : (
                 <User className="h-3 w-3 text-muted-foreground" />
               )}
@@ -288,26 +341,21 @@ function PersonEditor({
       </PopoverAnchor>
       <PopoverContent
         align="start"
+        alignOffset={-8}
         side="bottom"
-        sideOffset={4}
-        className="w-56 p-1"
+        sideOffset={6}
+        className={CELL_POPOVER_CLASS}
+        aria-label="选择人员"
+        onKeyDown={navigateOptions}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <Input
-          size="sm"
-          className="mb-1 h-8 border-0 bg-muted shadow-none focus-visible:ring-1 focus-visible:ring-ring"
-          placeholder="搜索成员 / Agent…"
+        <CellOptionSearch
+          placeholder="搜索人员…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
-          autoFocus
+          onChange={setQ}
+          onClear={() => onCommit(null)}
+          canClear={Boolean(value)}
         />
-        <button
-          type="button"
-          className="flex w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
-          onClick={() => onCommit(null)}
-        >
-          清除
-        </button>
         {list.length === 0 && (
           <div className="px-2 py-2 text-xs text-muted-foreground">
             暂无成员
@@ -318,19 +366,21 @@ function PersonEditor({
             <button
               key={m.userId}
               type="button"
+              data-cell-option
+              aria-pressed={value === m.userId || value === m.name}
               className={cn(
-                "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-muted",
-                value === m.userId && "bg-muted"
+                OPTION_CLASS,
+                (value === m.userId || value === m.name) && "bg-accent"
               )}
               onClick={() => onCommit(m.userId)}
             >
               {m.kind === "agent" ? (
-                <Bot className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                <Bot className="h-3.5 w-3.5 shrink-0 text-agent" />
               ) : (
                 <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               )}
               <span className="truncate">{m.name}</span>
-              {value === m.userId && (
+              {(value === m.userId || value === m.name) && (
                 <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               )}
             </button>
@@ -353,10 +403,7 @@ function PersonEditor({
   );
 }
 
-/**
- * Single-select: chip in cell matches chip in list.
- * Item padding (p-1 + px-1) ≈ cell px-2 so chips line up under the display chip.
- */
+/** Single-select commits and closes when an option is picked. */
 function SelectEditor({
   options,
   value,
@@ -369,7 +416,9 @@ function SelectEditor({
   onCancel: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [q, setQ] = useState("");
   const current = options.find((o) => o.id === value) ?? null;
+  const filtered = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
     <Popover
@@ -386,39 +435,42 @@ function SelectEditor({
       </PopoverAnchor>
       <PopoverContent
         align="start"
+        alignOffset={-8}
         side="bottom"
-        sideOffset={4}
-        /* px-0 so option chips line up with the chip in the cell (cell already has px-2) */
-        className="w-auto min-w-[160px] px-0 py-1"
+        sideOffset={6}
+        className={CELL_POPOVER_CLASS}
+        aria-label="选择选项"
+        onKeyDown={navigateOptions}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <button
-          type="button"
-          className="flex w-full items-center rounded-sm py-1 pl-0 pr-2 text-left text-[12px] text-muted-foreground hover:bg-muted"
-          onClick={() => onCommit(null)}
-        >
-          清除
-        </button>
-        <div className="my-0.5 h-px bg-[var(--color-border)]" />
-        {options.map((o) => {
-          const selected = value === o.id;
-          return (
-            <button
-              key={o.id}
-              type="button"
-              className={cn(
-                "flex w-full items-center gap-2 rounded-sm py-1 pl-0 pr-2 text-left hover:bg-muted",
-                selected && "bg-muted"
-              )}
-              onClick={() => onCommit(o.id)}
-            >
-              <SelectChip option={o} />
-              {selected && (
-                <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              )}
-            </button>
-          );
-        })}
+        <CellOptionSearch
+          placeholder="搜索选项…"
+          value={q}
+          onChange={setQ}
+          onClear={() => onCommit(null)}
+          canClear={Boolean(value)}
+        />
+        <div className="max-h-56 overflow-y-auto">
+          {filtered.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">没有匹配的选项</p>}
+          {filtered.map((o) => {
+            const selected = value === o.id;
+            return (
+              <button
+                key={o.id}
+                type="button"
+                data-cell-option
+                aria-pressed={selected}
+                className={cn(OPTION_CLASS, selected && "bg-accent")}
+                onClick={() => onCommit(o.id)}
+              >
+                <SelectChip option={o} />
+                {selected && (
+                  <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -442,6 +494,8 @@ function MultiSelectEditor({
   const [open, setOpen] = useState(true);
   const [selected, setSelected] = useState<string[]>(value);
   const [dirty, setDirty] = useState(false);
+  const [q, setQ] = useState("");
+  const filtered = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()));
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -475,11 +529,14 @@ function MultiSelectEditor({
       </PopoverAnchor>
       <PopoverContent
         align="start"
+        alignOffset={-8}
         side="bottom"
-        sideOffset={4}
-        className="w-auto min-w-[200px] px-0 py-1"
+        sideOffset={6}
+        className={CELL_POPOVER_CLASS}
+        aria-label="选择多个选项"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onKeyDown={(e) => {
+          navigateOptions(e);
           if (e.key === "Escape") {
             e.preventDefault();
             setOpen(false);
@@ -488,7 +545,17 @@ function MultiSelectEditor({
           }
         }}
       >
-        <div className="mb-1 flex min-h-[22px] flex-wrap gap-1 pl-0 pr-2 pt-0.5">
+        <CellOptionSearch
+          placeholder="搜索选项…"
+          value={q}
+          onChange={setQ}
+          onClear={() => {
+            setSelected([]);
+            setDirty(true);
+          }}
+          canClear={selected.length > 0}
+        />
+        <div className="flex min-h-8 flex-wrap items-center gap-1 px-2 py-1.5">
           {selectedOpts.length === 0 ? (
             <span className="text-[12px] text-muted-foreground">点击选择标签</span>
           ) : (
@@ -497,17 +564,20 @@ function MultiSelectEditor({
             ))
           )}
         </div>
-        <div className="my-0.5 h-px bg-[var(--color-border)]" />
+        <div className="my-1 h-px bg-border" />
         <div className="max-h-56 overflow-y-auto">
-          {options.map((o) => {
+          {filtered.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">没有匹配的选项</p>}
+          {filtered.map((o) => {
             const on = selected.includes(o.id);
             return (
               <button
                 key={o.id}
                 type="button"
+                data-cell-option
+                aria-pressed={on}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left hover:bg-muted",
-                  on && "bg-muted"
+                  OPTION_CLASS,
+                  on && "bg-accent"
                 )}
                 onClick={() => toggle(o.id)}
               >
@@ -515,7 +585,7 @@ function MultiSelectEditor({
                   className={cn(
                     "inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border",
                     on
-                      ? "border-[var(--notion-fg)] bg-[var(--notion-fg)] text-[var(--notion-bg)]"
+                      ? "border-foreground bg-foreground text-background"
                       : "border-border bg-transparent"
                   )}
                   aria-hidden

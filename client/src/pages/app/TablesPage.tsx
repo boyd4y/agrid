@@ -1,7 +1,10 @@
+import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
+import { TableActions } from "@/components/table/TableActions";
 import { Link, useOutletContext } from "react-router-dom";
 import { NiPlus, NiTable, NiZap } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import { EmptyTable } from "@/components/illustrations";
+import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
+import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import type { AppOutletContext } from "@/layouts/AppShell";
 
 export function TablesPage() {
@@ -9,42 +12,41 @@ export function TablesPage() {
     useOutletContext<AppOutletContext>();
 
   return (
-    <div className="mx-auto h-full min-h-0 max-w-4xl overflow-auto px-6 py-10 md:px-10">
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">表格</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            所有多维表 · 表格 / 看板视图 · 自动化设置
-          </p>
-        </div>
+    <AppPage header={
+      <AppPageHeader page="tables" description="所有多维表 · 表格 / 看板视图 · 自动化设置">
         <Button onClick={() => void createTable()}>
           <NiPlus className="h-4 w-4" />
           新建
         </Button>
-      </div>
+      </AppPageHeader>
+    }>
 
       {tablesLoading ? (
         <p className="text-sm text-muted-foreground">加载中…</p>
       ) : tables.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-muted px-6 py-12 text-center">
-          <EmptyTable className="w-48" />
-          <Button onClick={() => void createTable()}>
+        <AppEmptyState
+          className="flex-1"
+          illustration={NOTIOLY.painting}
+          title="还没有表格"
+          description="创建第一张表格，开始整理你的数据。"
+          action={<Button size="sm" onClick={() => void createTable()}>
             <NiPlus className="h-4 w-4" />
             新建表格
-          </Button>
-        </div>
+          </Button>}
+        />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-3">
           {tables.map((t) => (
             <div
               key={t.id}
               className="rounded-xl border border-border bg-background p-4 shadow-[0_8px_24px_rgba(55,53,47,0.04)] transition hover:bg-muted/40"
             >
+              <div className="flex items-start gap-1">
               <Link
                 to={`/app/tables/${t.id}`}
-                className="flex items-start gap-3"
+                className="flex min-w-0 flex-1 items-start gap-3"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#D3E5EF]">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <NiTable className="h-4 w-4 text-primary" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -54,13 +56,15 @@ export function TablesPage() {
                   </div>
                 </div>
               </Link>
+              <TableActions table={t} />
+              </div>
               <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                 <Link
                   to={`/app/tables/${t.id}/automations`}
                   className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   data-testid={`table-automations-${t.id}`}
                 >
-                  <NiZap className="h-3.5 w-3.5 text-[#D9730D]" />
+                  <NiZap className="h-3.5 w-3.5 text-warning" />
                   自动化
                 </Link>
                 <span className="text-[10px] text-muted-foreground">
@@ -71,6 +75,6 @@ export function TablesPage() {
           ))}
         </div>
       )}
-    </div>
+    </AppPage>
   );
 }

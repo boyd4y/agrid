@@ -46,7 +46,7 @@ export function BlogPostPage() {
           <ArrowLeft className="h-3.5 w-3.5" /> Blog
         </Link>
 
-        <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-[#F7F6F3] shadow-sm">
+        <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-muted shadow-sm">
           <BlogCover id={post.cover} className="aspect-[16/9] w-full" />
         </div>
 

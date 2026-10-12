@@ -446,7 +446,7 @@ function PersonControl({
           {current ? (
             <span className="inline-flex items-center gap-1.5">
               {current.kind === "agent" ? (
-                <Bot className="h-3.5 w-3.5 text-violet-500" />
+                <Bot className="h-3.5 w-3.5 text-agent" />
               ) : (
                 <User className="h-3.5 w-3.5 opacity-60" />
               )}
@@ -486,7 +486,7 @@ function PersonControl({
             }}
           >
             {m.kind === "agent" ? (
-              <Bot className="h-3.5 w-3.5 text-violet-500" />
+              <Bot className="h-3.5 w-3.5 text-agent" />
             ) : (
               <User className="h-3.5 w-3.5 text-muted-foreground" />
             )}

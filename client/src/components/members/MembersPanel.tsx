@@ -79,7 +79,7 @@ export function MembersPanel({ open, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/20" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end bg-overlay" onClick={onClose}>
       <aside
         className="flex h-full w-full max-w-md flex-col border-l border-border bg-background shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -88,7 +88,7 @@ export function MembersPanel({ open, onClose }: Props) {
           <Users className="h-4 w-4 text-primary" />
           <h2 className="font-semibold">成员</h2>
           <span className="text-xs text-muted-foreground">人 + Agent 同权</span>
-          <button type="button" className="ml-auto rounded p-1 hover:bg-black/5" onClick={onClose}>
+          <button type="button" className="ml-auto rounded p-1 hover:bg-accent" onClick={onClose}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -108,8 +108,8 @@ export function MembersPanel({ open, onClose }: Props) {
               className={cn(
                 "rounded-md px-2.5 py-1.5 text-xs font-medium",
                 tab === id
-                  ? "bg-[var(--notion-fg)] text-white"
-                  : "text-muted-foreground hover:bg-black/5"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-accent"
               )}
             >
               {label}
@@ -119,7 +119,7 @@ export function MembersPanel({ open, onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto p-4">
           {msg && (
-            <p className="mb-3 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">{msg}</p>
+            <p className="mb-3 rounded-md bg-warning/10 px-2.5 py-2 text-xs text-warning">{msg}</p>
           )}
           {apiKeyOnce && (
             <div className="mb-3 rounded-md border border-border bg-background p-3">
@@ -162,8 +162,8 @@ export function MembersPanel({ open, onClose }: Props) {
                     >
                       <div
                         className={cn(
-                          "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white",
-                          m.kind === "agent" ? "bg-violet-500" : "bg-[var(--notion-blue)]"
+                          "flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold",
+                          m.kind === "agent" ? "bg-agent/10 text-agent" : "bg-primary/10 text-primary"
                         )}
                       >
                         {m.kind === "agent" ? <Bot className="h-4 w-4" /> : m.name.slice(0, 1)}

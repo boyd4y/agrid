@@ -32,7 +32,7 @@ export function ColorPicker({ value, onChange, className }: Props) {
                 key={c}
                 type="button"
                 className={cn(
-                  "h-6 w-6 rounded-md border border-black/10",
+                  "h-6 w-6 rounded-md border border-foreground/20",
                   value === c && "ring-1 ring-[rgba(55,53,47,0.25)] ring-offset-1"
                 )}
                 style={{ background: s.background }}

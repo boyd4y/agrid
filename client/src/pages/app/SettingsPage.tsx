@@ -1,3 +1,4 @@
+import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Keyboard, Moon, Sun, Monitor } from "lucide-react";
 import { useAppShell } from "@/context/AppShellContext";
 import { Button } from "@/components/ui/button";
@@ -16,13 +17,8 @@ export function SettingsPage() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="mx-auto h-full min-h-0 max-w-2xl overflow-auto px-6 py-10 md:px-10">
-      <h1 className="text-2xl font-semibold tracking-tight">设置</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        工作区偏好 · shadcn 语义主题
-      </p>
-
-      <section className="mt-8 space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <AppPage header={<AppPageHeader page="settings" description="工作区外观与布局偏好" />}>
+      <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-sm font-semibold">外观</h2>
         <div className="flex flex-wrap gap-2">
           {THEME_OPTIONS.map(({ id, label, icon: Icon }) => (
@@ -32,6 +28,7 @@ export function SettingsPage() {
               variant="outline"
               size="sm"
               onClick={() => setTheme(id)}
+              aria-pressed={theme === id}
               className={cn(
                 "gap-1.5",
                 theme === id && "border-primary bg-accent ring-1 ring-ring"
@@ -84,6 +81,6 @@ export function SettingsPage() {
           </li>
         </ul>
       </section>
-    </div>
+    </AppPage>
   );
 }

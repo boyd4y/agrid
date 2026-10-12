@@ -88,7 +88,7 @@ export function FilterBar({
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
           筛选
           {filters.length > 0 && (
-            <span className="rounded-full bg-[var(--notion-blue)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
               {activeCount > 0 ? activeCount : filters.length}
             </span>
           )}
@@ -216,7 +216,7 @@ export function FilterBar({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-red-500"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
                       onClick={() =>
                         onChange(
                           filters.filter((x) => x.id !== f.id),

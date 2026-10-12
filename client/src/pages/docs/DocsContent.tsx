@@ -51,8 +51,8 @@ export function DocsContent({ blocks }: { blocks: DocsBlock[] }) {
                 className={cn(
                   "rounded-xl border px-4 py-3 text-sm",
                   b.tone === "warn"
-                    ? "border-[#F4C7C3] bg-[#FDEEEC] text-foreground"
-                    : "border-[#D3E5EF] bg-[#EEF5FA] text-foreground"
+                    ? "border-warning/30 bg-warning/10 text-foreground"
+                    : "border-primary/30 bg-primary/10 text-foreground"
                 )}
               >
                 {b.text}
@@ -112,7 +112,7 @@ export function DocsContent({ blocks }: { blocks: DocsBlock[] }) {
                   </thead>
                   <tbody>
                     {b.rows.map((row, ri) => (
-                      <tr key={ri} className="odd:bg-background even:bg-[#FFFEF9]">
+                      <tr key={ri} className="odd:bg-background even:bg-muted/40">
                         {row.map((cell, ci) => (
                           <td
                             key={ci}

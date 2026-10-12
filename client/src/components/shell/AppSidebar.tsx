@@ -2,15 +2,9 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   NiChevronLeft,
   NiChevronRight,
-  NiHome,
-  NiGrid,
   NiLogout,
   NiPlus,
-  NiSettings,
-  NiSparkles,
   NiTable,
-  NiUsers,
-  NiZap,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { authClient } from "@/lib/auth-client";
 import type { TableMeta } from "@/types/table";
 import { AgridLogo } from "@/components/brand/AgridLogo";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { APP_NAVIGATION } from "./app-navigation";
 
 type Props = {
   tables: TableMeta[];
@@ -49,7 +45,7 @@ function NavItem({
   const location = useLocation();
   const inner = (
     <>
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-5 w-5 shrink-0" />
       {!collapsed && <span className="truncate">{label}</span>}
     </>
   );
@@ -99,7 +95,7 @@ function NavItem({
 /**
  * Upper: workspace / tables / table list
  * Lower: 成员 · 智能体 · 设置 (+ user)
- * No left AI entry — chat lives in workspace split / ⌘J drawer only.
+ * Menu names and icons match their page headers through APP_NAVIGATION.
  */
 export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
   const { sidebarCollapsed, toggleSidebar, activeTableId } = useAppShell();
@@ -163,16 +159,12 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
             </div>
           )}
           <NavItem
-            to="/app"
+            {...APP_NAVIGATION.ai}
             end
-            icon={NiHome}
-            label="对话建系统"
             collapsed={sidebarCollapsed}
           />
           <NavItem
-            to="/app/tables"
-            icon={NiGrid}
-            label="表格"
+            {...APP_NAVIGATION.tables}
             collapsed={sidebarCollapsed}
             activeMatch={(pathname) =>
               pathname === "/app/tables" ||
@@ -180,9 +172,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
             }
           />
           <NavItem
-            to="/app/automations"
-            icon={NiZap}
-            label="自动化"
+            {...APP_NAVIGATION.automations}
             collapsed={sidebarCollapsed}
             titleHint="按表格配置当 / 如果 / 就规则"
             activeMatch={(pathname) => pathname.includes("/automations")}
@@ -247,25 +237,22 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
             </div>
           )}
           <NavItem
-            to="/app/members"
-            icon={NiUsers}
-            label="成员"
+            {...APP_NAVIGATION.members}
             collapsed={sidebarCollapsed}
             titleHint="员工（人类成员）"
           />
           <NavItem
-            to="/app/agents"
-            icon={NiSparkles}
-            label="智能体"
+            {...APP_NAVIGATION.agents}
             collapsed={sidebarCollapsed}
             titleHint="Agent（与人对齐权限）"
           />
           <NavItem
-            to="/app/settings"
-            icon={NiSettings}
-            label="设置"
+            {...APP_NAVIGATION.settings}
             collapsed={sidebarCollapsed}
           />
+          <div className={cn(sidebarCollapsed && "flex justify-center")}>
+            <ThemeToggle expanded={!sidebarCollapsed} />
+          </div>
         </div>
 
         {sidebarCollapsed ? (
@@ -287,7 +274,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
               sidebarCollapsed && "justify-center px-0"
             )}
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F1E3B7] text-[11px] font-semibold text-foreground">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning/10 text-[11px] font-semibold text-warning">
               {(user.name || user.email || "?").slice(0, 1).toUpperCase()}
             </span>
             {!sidebarCollapsed && (

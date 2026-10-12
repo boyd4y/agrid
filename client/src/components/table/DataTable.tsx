@@ -15,6 +15,8 @@ import {
   ArrowUpDown,
   EyeOff,
   Loader2,
+  ChevronDown,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -312,7 +314,7 @@ export function DataTable({ table, onChange }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {displayError && (
-        <div className="flex shrink-0 items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="flex shrink-0 items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <span>{displayError}</span>
           <button
             type="button"
@@ -388,7 +390,7 @@ export function DataTable({ table, onChange }: Props) {
                 key={col.id}
                 data-col-header={col.name}
                 data-col-type={col.type}
-                className="relative flex h-9 shrink-0 items-center gap-1 px-1"
+                className="group/column-header relative flex h-9 shrink-0 items-center gap-1 px-1"
                 style={{ width: col.width, minWidth: col.width }}
               >
                 <span className="text-muted-foreground">{TYPE_ICONS[col.type as ColumnType]}</span>
@@ -400,14 +402,21 @@ export function DataTable({ table, onChange }: Props) {
                 >
                   {col.name}
                   {sort?.columnId === col.id && (
-                    <span className="ml-1 text-[10px] text-blue-600">
+                    <span className="ml-1 text-[10px] text-primary">
                       {sort.direction === "asc" ? "↑" : "↓"}
                     </span>
                   )}
                 </button>
                 <button
                   type="button"
-                  className="rounded p-0.5 text-muted-foreground hover:bg-accent"
+                  className={cn(
+                    "shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent",
+                    "pointer-events-none opacity-0 group-hover/column-header:pointer-events-auto group-hover/column-header:opacity-100 group-focus-within/column-header:pointer-events-auto group-focus-within/column-header:opacity-100",
+                    "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
+                    settingsCol?.id === col.id && "pointer-events-auto opacity-100"
+                  )}
+                  aria-label={`${col.name}列设置`}
+                  title="列设置"
                   onClick={() => setSettingsCol(col)}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
@@ -463,7 +472,7 @@ export function DataTable({ table, onChange }: Props) {
                         <span className="group-hover:hidden">{vi.index + 1}</span>
                         <button
                           type="button"
-                          className="hidden rounded p-0.5 text-muted-foreground hover:bg-red-50 hover:text-red-500 group-hover:inline-flex"
+                          className="hidden rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:inline-flex"
                           title="删除行"
                           onClick={() => void deleteRow(row)}
                         >
@@ -495,19 +504,38 @@ export function DataTable({ table, onChange }: Props) {
                         data-col-type={col.type}
                         data-row-id={row.id}
                         className={cn(
-                          "relative flex h-9 shrink-0 items-center px-2",
-                          col.type === "formula" ? "cursor-default bg-muted/40" : "cursor-pointer",
+                          "group/cell relative flex h-9 shrink-0 items-center border-r border-border/50 px-2",
+                          col.type === "formula"
+                            ? "cursor-default bg-muted/40"
+                            : "cursor-pointer hover:bg-accent hover:shadow-[inset_0_0_0_1px_var(--primary)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+                          col.type !== "formula" && col.type !== "checkbox" && "pr-7",
                           isEditing && "cell-editing"
                         )}
+                        role={col.type === "formula" || isEditing ? undefined : "button"}
+                        aria-pressed={col.type === "checkbox" ? Boolean(value) : undefined}
+                        tabIndex={col.type === "formula" || isEditing ? undefined : 0}
+                        aria-label={`${col.name}：${col.type === "formula" ? "只读" : "点击编辑"}`}
                         style={{ width: col.width, minWidth: col.width }}
                         onClick={() => {
                           if (col.type === "formula") return;
+                          if (col.type === "checkbox") {
+                            void commitCell(row, col.id, !Boolean(value));
+                            return;
+                          }
                           if (!isEditing) setEditing({ rowId: row.id, colId: col.id });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget || col.type === "formula") return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            if (col.type === "checkbox") void commitCell(row, col.id, !Boolean(value));
+                            else setEditing({ rowId: row.id, colId: col.id });
+                          }
                         }}
                         title={
                           col.type === "formula"
                             ? `公式: ${col.config?.formula ?? ""}`
-                            : undefined
+                            : col.type === "checkbox" ? "点击切换勾选" : "点击编辑 · Enter 打开"
                         }
                       >
                         {isEditing ? (
@@ -519,7 +547,18 @@ export function DataTable({ table, onChange }: Props) {
                             onCancel={() => setEditing(null)}
                           />
                         ) : (
-                          <CellDisplay column={col} value={value} members={members} />
+                          <>
+                            <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+                              <CellDisplay column={col} value={value} members={members} />
+                            </div>
+                            {col.type !== "formula" && col.type !== "checkbox" && (
+                              <span className="pointer-events-none absolute right-1.5 text-muted-foreground opacity-0 group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100" aria-hidden>
+                                {["select", "multi_select", "person", "date"].includes(col.type)
+                                  ? <ChevronDown className="h-3.5 w-3.5" />
+                                  : <Pencil className="h-3 w-3" />}
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     );
@@ -542,7 +581,7 @@ export function DataTable({ table, onChange }: Props) {
       </div>
 
       {addingCol && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
           <div className="w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-xl">
             <h3 className="mb-3 text-base font-semibold">添加列</h3>
             <Label className="mb-1 block">列名</Label>

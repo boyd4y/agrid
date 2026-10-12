@@ -1,3 +1,5 @@
+import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
+import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
@@ -7,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -102,6 +105,7 @@ export function AutomationPanel({ table }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<AutomationRule | "new" | null>(null);
   const [showRuns, setShowRuns] = useState(false);
+  const [deleteRule, setDeleteRule] = useState<AutomationRule | null>(null);
 
   const columns = useMemo(
     () => table.columns.filter((c) => !c.config?.hidden),
@@ -148,14 +152,10 @@ export function AutomationPanel({ table }: Props) {
   };
 
   const remove = async (id: string) => {
-    if (!confirm("确定删除这条自动化？")) return;
-    try {
-      await api.deleteAutomation(id);
-      setRules((prev) => prev.filter((r) => r.id !== id));
-      if (editing !== "new" && editing?.id === id) setEditing(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "删除失败");
-    }
+    await api.deleteAutomation(id);
+    setRules((prev) => prev.filter((r) => r.id !== id));
+    setRuns((prev) => prev.filter((r) => r.automationId !== id));
+    if (editing !== "new" && editing?.id === id) setEditing(null);
   };
 
   return (
@@ -186,7 +186,7 @@ export function AutomationPanel({ table }: Props) {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
           {error}
         </div>
       )}
@@ -194,22 +194,19 @@ export function AutomationPanel({ table }: Props) {
         <p className="text-xs text-muted-foreground">加载中…</p>
       )}
       {!loading && rules.length === 0 && !editing && (
-        <div className="rounded-xl border border-dashed border-border bg-[#FBFBFA] px-4 py-10 text-center">
-          <Zap className="mx-auto mb-2 h-7 w-7 text-[#D9730D]/80" />
-          <p className="text-sm font-medium text-foreground">还没有自动化</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            用「当 / 如果 / 就」让字段回写或智能体跟进。
-          </p>
-          <Button
+        <AppEmptyState
+          illustration={NOTIOLY.chill}
+          title="还没有自动化"
+          description="用「当 / 如果 / 就」让字段回写或智能体跟进。"
+          action={<Button
             type="button"
             size="sm"
-            className="mt-4 h-8 gap-1 text-xs"
             onClick={() => setEditing("new")}
           >
             <Plus className="h-3.5 w-3.5" />
             新建规则
-          </Button>
-        </div>
+          </Button>}
+        />
       )}
 
       <ul className="space-y-2">
@@ -241,15 +238,24 @@ export function AutomationPanel({ table }: Props) {
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0 text-muted-foreground"
-              onClick={() => void remove(rule.id)}
-              aria-label="删除"
+              className="h-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDeleteRule(rule)}
+              aria-label={`删除规则${rule.name}`}
             >
               <Trash2 className="h-3.5 w-3.5" />
+              删除规则
             </Button>
           </li>
         ))}
       </ul>
+
+      <DeleteConfirmation
+        open={deleteRule !== null}
+        onOpenChange={(open) => { if (!open) setDeleteRule(null); }}
+        title="删除自动化规则？"
+        description={`将永久删除「${deleteRule?.name ?? ""}」及其运行记录，此规则将不再执行。表格数据会保留。`}
+        onConfirm={async () => { if (deleteRule) await remove(deleteRule.id); }}
+      />
 
       {showRuns && (
         <div className="rounded-lg border border-border bg-muted p-3">
@@ -376,7 +382,7 @@ function AutomationEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/20 p-4 sm:items-center">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-overlay p-4 sm:items-center">
       <div
         className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-[0_12px_40px_rgba(55,53,47,0.16)]"
         role="dialog"
@@ -385,7 +391,7 @@ function AutomationEditor({
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-[#D9730D]" />
+            <Zap className="h-4 w-4 text-warning" />
             <span className="text-sm font-semibold">当 / 如果 / 就</span>
           </div>
           <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
@@ -395,7 +401,7 @@ function AutomationEditor({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 py-4">
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
               {error}
             </div>
           )}
@@ -414,8 +420,8 @@ function AutomationEditor({
           </div>
 
           {/* WHEN */}
-          <section className="rounded-lg border border-border bg-[#FBFBFA] p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#D9730D]">
+          <section className="rounded-lg border border-border bg-muted/40 p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-warning">
               当
             </div>
             <Select
@@ -537,7 +543,7 @@ function AutomationEditor({
           </section>
 
           {/* IF */}
-          <section className="rounded-lg border border-border bg-[#FBFBFA] p-3">
+          <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs font-semibold uppercase tracking-wide text-primary">
                 如果
@@ -688,9 +694,9 @@ function AutomationEditor({
           </section>
 
           {/* THEN */}
-          <section className="rounded-lg border border-border bg-[#FBFBFA] p-3">
+          <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-xs font-semibold uppercase tracking-wide text-[#0F7B6C]">
+              <div className="text-xs font-semibold uppercase tracking-wide text-success">
                 就
               </div>
               <Button

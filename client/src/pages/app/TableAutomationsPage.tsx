@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2, Zap } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { AutomationPanel } from "@/components/automation/AutomationPanel";
 import { api } from "@/lib/api";
 import type { FullTable } from "@/types/table";
 import { useAppShell } from "@/context/AppShellContext";
+import { APP_NAVIGATION } from "@/components/shell/app-navigation";
+
+const AutomationIcon = APP_NAVIGATION.automations.icon;
 
 export function TableAutomationsPage() {
   const { tableId } = useParams<{ tableId: string }>();
@@ -63,18 +66,18 @@ export function TableAutomationsPage() {
             <ArrowLeft className="h-3.5 w-3.5" />
             表格
           </Link>
-          <span className="text-[var(--notion-border)]">/</span>
+          <span className="text-border">/</span>
           <Link
             to={`/app/tables/${table.id}`}
             className="truncate rounded-md px-1 py-0.5 transition-colors hover:bg-muted hover:text-foreground"
           >
             {table.name}
           </Link>
-          <span className="text-[var(--notion-border)]">/</span>
+          <span className="text-border">/</span>
           <span className="text-foreground">自动化</span>
         </nav>
         <div className="flex items-center gap-2">
-          <Zap className="h-5 w-5 text-[#D9730D]" />
+          <AutomationIcon className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-2xl font-semibold tracking-tight">自动化</h1>
         </div>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -83,9 +86,9 @@ export function TableAutomationsPage() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4 md:px-8 md:py-6">
-        <div className="mx-auto max-w-3xl">
+        <div className="min-w-0 w-full">
           {error && (
-            <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}

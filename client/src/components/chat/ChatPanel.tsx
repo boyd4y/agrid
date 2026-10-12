@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FC } from "react";
+import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
+import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { Link } from "react-router-dom";
 import {
   AssistantRuntimeProvider,
@@ -269,7 +271,7 @@ export function ChatPanel({
           description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m.replace(/^openrouter\//, "")}`,
           keywords: [h, m, a.email],
           icon: (
-            <span className="flex size-5 items-center justify-center rounded-full bg-[#E8DEEE] text-[#5B3A6B]">
+            <span className="flex size-5 items-center justify-center rounded-full bg-agent/10 text-agent">
               <Bot className="size-3" />
             </span>
           ),
@@ -292,10 +294,10 @@ export function ChatPanel({
         data-testid="chat-panel"
         data-resource-key={resourceKey}
       >
-        <div
+        {(!isHome || !noAgents) && <div
           className={cn(
-            "flex shrink-0 items-center justify-between gap-2 border-b border-border px-2",
-            isHome ? "h-10" : "h-11"
+            "flex shrink-0 items-center justify-between gap-2 border-b border-border",
+            isHome ? "h-11 px-6 md:px-10" : "h-11 px-2"
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-1">
@@ -335,35 +337,29 @@ export function ChatPanel({
                 {lockedModel ? ` · ${lockedModel.replace(/^openrouter\//, "")}` : ""}
               </span>
               {!harnessOnline && (
-                <span className="text-amber-600 dark:text-amber-400">off</span>
+                <span className="text-warning">off</span>
               )}
             </span>
           ) : (
             <span className="shrink-0" aria-hidden />
           )}
-        </div>
+        </div>}
 
         {noAgents ? (
-          <div
-            className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center"
-            data-testid="chat-no-agents"
-          >
-            <span className="flex size-12 items-center justify-center rounded-full bg-[#E8DEEE]">
-              <Bot className="size-6 text-[#5B3A6B]" />
-            </span>
-            <div>
-              <p className="text-sm font-medium tracking-tight">先创建智能体</p>
-              <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
-                对话模式通过智能体运行。创建时选择 Harness（如 Pi + OpenRouter
-                Free），之后不可更换。
-              </p>
-            </div>
-            <Button asChild size="sm">
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+            <AppEmptyState
+              className="flex-1"
+              data-testid="chat-no-agents"
+              illustration={NOTIOLY.fastInternet}
+              title="还没有智能体"
+              description="创建一个智能体，开始对话、整理数据和配置自动化。"
+              action={<Button asChild size="sm">
               <Link to="/app/agents">
                 <Plus className="size-3.5" />
                 去创建智能体
               </Link>
-            </Button>
+            </Button>}
+            />
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">

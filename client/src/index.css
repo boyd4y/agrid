@@ -2,6 +2,9 @@
 @import "tw-shimmer";
 @import "react-day-picker/style.css";
 
+/* Tailwind v4 dark utilities use the same class as ThemeProvider. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Map Tailwind color tokens to runtime CSS variables (shadcn pattern) */
 @theme inline {
   --color-background: var(--background);
@@ -23,6 +26,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-agent: var(--agent);
+  --color-overlay: var(--overlay);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -30,6 +37,7 @@
 
 /* Light (default) — Notion-warm shadcn tokens */
 :root {
+  color-scheme: light;
   --radius: 0.5rem;
 
   --background: #ffffff;
@@ -38,19 +46,23 @@
   --card-foreground: #37352f;
   --popover: #ffffff;
   --popover-foreground: #37352f;
-  --primary: #2383e2;
+  --primary: #1769b7;
   --primary-foreground: #ffffff;
   --secondary: #f7f6f3;
   --secondary-foreground: #37352f;
   --muted: #f7f6f3;
-  --muted-foreground: #787774;
+  --muted-foreground: #706f6c;
   --accent: #f1f1ef;
   --accent-foreground: #37352f;
-  --destructive: #eb5757;
+  --destructive: #bf2b2b;
   --destructive-foreground: #ffffff;
   --border: #e3e2de;
   --input: #e3e2de;
-  --ring: rgba(55, 53, 47, 0.16);
+  --ring: #1769b7;
+  --warning: #9a4e0d;
+  --success: #167064;
+  --agent: #795096;
+  --overlay: rgb(0 0 0 / 0.4);
 
   /* Legacy aliases → same tokens */
   --notion-bg: var(--background);
@@ -60,28 +72,19 @@
   --notion-blue: var(--primary);
   --notion-paper: #fffef9;
   --notion-cream: var(--muted);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
-  --color-ring: var(--ring);
-  --color-destructive: var(--destructive);
+
 }
 
-/* Dark — explicit class / data-theme (no reliance on prefers alone) */
-.dark,
-[data-theme="dark"] {
+/* Dark — class is the single theme selector (shadcn pattern). */
+.dark {
+  color-scheme: dark;
   --background: #191919;
   --foreground: rgba(255, 255, 255, 0.81);
   --card: #202020;
   --card-foreground: rgba(255, 255, 255, 0.81);
   --popover: #202020;
   --popover-foreground: rgba(255, 255, 255, 0.81);
-  --primary: #529cca;
+  --primary: #5ba5d3;
   --primary-foreground: #191919;
   --secondary: #2f2f2f;
   --secondary-foreground: rgba(255, 255, 255, 0.81);
@@ -89,48 +92,19 @@
   --muted-foreground: #9b9a97;
   --accent: #2f2f2f;
   --accent-foreground: rgba(255, 255, 255, 0.81);
-  --destructive: #e03e3e;
-  --destructive-foreground: #ffffff;
+  --destructive: #ff8a80;
+  --destructive-foreground: #191919;
   --border: #404040;
   --input: #404040;
-  --ring: rgba(255, 255, 255, 0.18);
+  --ring: #5ba5d3;
+  --warning: #f2b16e;
+  --success: #76c9b7;
+  --agent: #c6a2df;
+  --overlay: rgb(0 0 0 / 0.6);
 
   --notion-paper: #202020;
 }
 
-[data-theme="light"] {
-  color-scheme: light;
-}
-
-.dark,
-[data-theme="dark"] {
-  color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not(.light) {
-    --background: #191919;
-    --foreground: rgba(255, 255, 255, 0.81);
-    --card: #202020;
-    --card-foreground: rgba(255, 255, 255, 0.81);
-    --popover: #202020;
-    --popover-foreground: rgba(255, 255, 255, 0.81);
-    --primary: #529cca;
-    --primary-foreground: #191919;
-    --secondary: #2f2f2f;
-    --secondary-foreground: rgba(255, 255, 255, 0.81);
-    --muted: #2f2f2f;
-    --muted-foreground: #9b9a97;
-    --accent: #2f2f2f;
-    --accent-foreground: rgba(255, 255, 255, 0.81);
-    --destructive: #e03e3e;
-    --destructive-foreground: #ffffff;
-    --border: #404040;
-    --input: #404040;
-    --ring: rgba(255, 255, 255, 0.18);
-    --notion-paper: #202020;
-  }
-}
 
 * {
   box-sizing: border-box;
@@ -242,8 +216,14 @@ body {
 .cell-editing:focus,
 .cell-editing:focus-within {
   outline: none;
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 28%, transparent);
+  box-shadow: inset 0 0 0 2px var(--primary);
   background: var(--background);
+}
+
+/* Shared floating surface for menus, cell editors and date pickers. */
+.popover-surface {
+  border-color: color-mix(in srgb, var(--foreground) 24%, var(--popover));
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12), 0 16px 40px rgb(0 0 0 / 0.2);
 }
 
 /* === Agrid Design Tokens === */

@@ -19,6 +19,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { DataTable } from "@/components/table/DataTable";
+import { TableActions } from "@/components/table/TableActions";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { FormDesigner } from "@/components/form/FormDesigner";
 import { api } from "@/lib/api";
@@ -226,7 +227,7 @@ export function TableDetailPage() {
                 <ArrowLeft className="h-3.5 w-3.5" />
                 表格
               </Link>
-              <span className="text-[var(--notion-border)]">/</span>
+              <span className="text-border">/</span>
               <span className="truncate text-foreground">{table.name}</span>
             </nav>
             <Input
@@ -308,7 +309,7 @@ export function TableDetailPage() {
                           className={cn(
                             "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm",
                             canDelete
-                              ? "text-red-600 hover:bg-red-50"
+                              ? "text-destructive hover:bg-destructive/10"
                               : "cursor-not-allowed text-muted-foreground opacity-60"
                           )}
                           onClick={() => void removeView(v)}
@@ -366,13 +367,14 @@ export function TableDetailPage() {
               onClick={() => setAiOpen(true)}
               title="打开 AI 助手 ⌘J"
             >
-              <Sparkles className="h-3.5 w-3.5 text-[#9B6B9E]" />
+              <Sparkles className="h-3.5 w-3.5 text-agent" />
               AI
             </Button>
+            <TableActions table={table} />
           </div>
         </div>
         {error && (
-          <div className="mx-auto mt-3 max-w-[1400px] rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
           </div>
         )}
@@ -386,7 +388,7 @@ export function TableDetailPage() {
           </div>
         ) : isForm ? (
           formView ? (
-            <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col">
+            <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
               <div className="flex min-h-0 flex-1 flex-col">
                 <FormDesigner
                   table={table}
@@ -409,7 +411,7 @@ export function TableDetailPage() {
             </div>
           )
         ) : isBoard ? (
-          <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col">
+          <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col">
               <KanbanBoard
                 table={table}
@@ -425,7 +427,7 @@ export function TableDetailPage() {
             </p>
           </div>
         ) : (
-          <div className="mx-auto flex h-full min-h-0 w-full max-w-[1400px] flex-1 flex-col">
+          <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col">
               <DataTable table={table} onChange={setTable} />
             </div>

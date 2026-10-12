@@ -374,7 +374,7 @@ export function TableForm({
         data-testid="table-form"
         data-layout="focus"
       >
-        <div className="absolute inset-x-0 top-0 h-1 bg-black/5">
+        <div className="absolute inset-x-0 top-0 h-1 bg-accent">
           <div
             className="h-full transition-all"
             style={{ width: `${progress}%`, background: "var(--form-accent)" }}
@@ -421,7 +421,7 @@ export function TableForm({
                 >
                   {current && renderField(current, { large: true })}
                   {error && (
-                    <div className="rounded-md border border-red-300/50 bg-red-500/10 px-3 py-2 text-sm text-red-700">
+                    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                       {error}
                     </div>
                   )}
@@ -476,7 +476,7 @@ export function TableForm({
       data-layout="classic"
     >
       <div
-        className="mx-auto max-w-lg rounded-2xl border border-black/5 bg-white/40 p-6 shadow-sm backdrop-blur-sm md:p-8 dark:bg-black/20"
+        className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-6 shadow-sm md:p-8"
         style={{ borderRadius: "var(--form-radius)" }}
       >
         <div className="mb-6">
@@ -498,7 +498,7 @@ export function TableForm({
             {fields.map((f) => renderField(f, { large: false }))}
 
             {error && (
-              <div className="rounded-md border border-red-300/50 bg-red-500/10 px-3 py-2 text-sm text-red-700">
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </div>
             )}
