@@ -1,19 +1,21 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { TabdoLogo } from "@/components/brand/TabdoLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { BRAND, BRAND_COPY } from "@/lib/brand";
+import { BRAND } from "@/lib/brand";
 
 export function MarketingLayout() {
+  const { t } = useTranslation("marketing");
   const { pathname } = useLocation();
   const { isAuthenticated, isPending } = useAuth();
 
   const nav = [
-    { to: "/", label: "首页" },
-    { to: "/docs", label: "文档" },
-    { to: "/blog", label: "博客" },
+    { to: "/", label: t("nav.home") },
+    { to: "/docs", label: t("nav.docs") },
+    { to: "/blog", label: t("nav.blog") },
   ];
 
   return (
@@ -41,15 +43,15 @@ export function MarketingLayout() {
             <ThemeToggle />
             {!isPending && isAuthenticated ? (
               <Button asChild size="sm">
-                <Link to="/app">进入工作台</Link>
+                <Link to="/app">{t("enterWorkspace")}</Link>
               </Button>
             ) : (
               <>
                 <Button asChild variant="ghost" size="sm">
-                  <Link to="/login">登录</Link>
+                  <Link to="/login">{t("login")}</Link>
                 </Button>
                 <Button asChild size="sm">
-                  <Link to="/signup">注册</Link>
+                  <Link to="/signup">{t("signup")}</Link>
                 </Button>
               </>
             )}
@@ -68,9 +70,9 @@ export function MarketingLayout() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-end">
-            <Link to="/docs" className="hover:text-foreground">文档</Link>
-            <Link to="/blog" className="hover:text-foreground">博客</Link>
-            <p>{BRAND_COPY.category}</p>
+            <Link to="/docs" className="hover:text-foreground">{t("nav.docs")}</Link>
+            <Link to="/blog" className="hover:text-foreground">{t("nav.blog")}</Link>
+            <p>{t("brand.category")}</p>
           </div>
         </div>
       </footer>

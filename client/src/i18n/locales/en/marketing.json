@@ -1,0 +1,65 @@
+{
+  "nav": { "home": "Home", "docs": "Docs", "blog": "Blog" },
+  "enterWorkspace": "Open workspace",
+  "login": "Log in",
+  "signup": "Sign up",
+  "brand": {
+    "category": "AI-native workspace",
+    "slogan": "Make ideas move.",
+    "description": "Tell tabdo what you want to do. Let AI organize information, plan steps, and get things done — while you review and steer anytime."
+  },
+  "hero": {
+    "getStarted": "Get started",
+    "viewGuide": "Read the guide",
+    "rocketAlt": "Person on a rocket using a laptop"
+  },
+  "surfaces": {
+    "speak": { "label": "Say the idea", "hint": "Tell AI what you want to do" },
+    "organize": { "label": "Organize", "hint": "Bring existing information together" },
+    "plan": { "label": "Plan steps", "hint": "Clarify what comes next together" },
+    "act": { "label": "Take action", "hint": "Let AI work while you review and adjust" }
+  },
+  "ideas": {
+    "title": "Have an idea? Let AI help you act",
+    "body": "Planning a trip or a small team project? Tell tabdo what you want and what you already know. Let AI clarify the content, plan steps, then update records and set rules.",
+    "card1Title": "Say what you want, then clarify the next step",
+    "card1Body": "Drop scattered ideas and notes into the workspace. Let AI organize information and plan steps. When you need new rows, edits, or status changes, keep chatting and it will act.",
+    "card1Cta": "Learn about the AI assistant",
+    "card1Badge": "AI acts",
+    "card2Title": "Review anytime, change anytime",
+    "card2Body": "Whatever AI does lands in the workspace. Inspect records, edit directly, pause and change direction, then tell it what to do next.",
+    "card2Cta": "Read the guide",
+    "card2Badge": "You decide"
+  },
+  "examples": {
+    "travelTitle": "Trip planning from scattered notes",
+    "travelBody": "Capture places, dates, and budget. Let AI organize what you already have and what’s left to do. When plans change, update records or adjust in chat.",
+    "travelCta": "Start a plan",
+    "travelAlt": "Starting on a canvas",
+    "projectTitle": "Team projects with a clear next step",
+    "projectBody": "Organize tasks, owners, and progress. Let AI help plan steps and update status. Review and edit with teammates as the project moves forward.",
+    "projectCta": "See how it works",
+    "projectAlt": "Planning and building",
+    "toolsTitle": "The right tools for the idea",
+    "toolsBody": "Collect input with forms, track progress on boards, summarize with reports. Turn repeat updates into automations — or let AI run them — while you stay in control.",
+    "toolsCta": "Explore workspace features",
+    "toolsAlt": "Collaboration"
+  },
+  "team": {
+    "title": "Solo or with a small team",
+    "body": "Organize ideas in your own workspace, or invite teammates. Configure AI assistants with the methods and tools that fit how you work.",
+    "createWorkspace": "Create a workspace",
+    "viewGuide": "Read the guide"
+  },
+  "cta": {
+    "title": "Start with one thing you want to do",
+    "body": "Tell tabdo your idea, bring in what you already have, and let AI help with the next step.",
+    "getStarted": "Get started",
+    "readBlog": "Read the blog",
+    "footnote": "Ideas start with you. Direction stays yours."
+  },
+  "authAside": {
+    "pipeline": "From idea to action",
+    "homeAria": "tabdo home"
+  }
+}
