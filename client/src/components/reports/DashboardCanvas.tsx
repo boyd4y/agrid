@@ -12,6 +12,7 @@ import {
   type ReportPageConfig,
   type ReportWidget,
 } from "@tabdo/shared";
+import { useTranslation } from "react-i18next";
 
 /** Responsive rendering never writes the narrow-screen arrangement back to storage. */
 export function DashboardCanvas({
@@ -25,6 +26,7 @@ export function DashboardCanvas({
   onChange: (page: ReportPageConfig) => void;
   render: (widget: ReportWidget, index: number) => ReactNode;
 }) {
+  const { t } = useTranslation("reports");
   const { width, containerRef, mounted } = useContainerWidth();
   const activeId = useRef<string | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
@@ -107,7 +109,7 @@ export function DashboardCanvas({
     >
       {editable && narrow && (
         <p className="mb-3 text-xs text-muted-foreground">
-          窄屏自动纵向排列，请在宽屏拖拽调整尺寸。
+          {t("narrowHint")}
         </p>
       )}
       {mounted && width > 0 && (

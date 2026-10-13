@@ -16,6 +16,7 @@ import {
   toStorageDate,
 } from "@/lib/date-format";
 import type { DateFormat } from "@/types/table";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   value: string | null;
@@ -44,6 +45,7 @@ export function DatePicker({
   className,
   placeholder,
 }: Props) {
+  const { t } = useTranslation("common");
   const [open, setOpen] = useState(autoOpen);
   const [draft, setDraft] = useState(
     value ? formatDateDisplay(value, dateFormat) : ""
@@ -78,7 +80,7 @@ export function DatePicker({
       side="bottom"
       sideOffset={6}
       className="w-auto p-2"
-      aria-label="选择日期"
+      aria-label={t("pickDate")}
       onOpenAutoFocus={(e) => {
         if (embedded) e.preventDefault();
       }}
@@ -115,7 +117,7 @@ export function DatePicker({
               setDraft("");
               onChange(null);
             }}
-            title="清除"
+            title={t("clear")}
           >
             <X className="h-3.5 w-3.5" />
           </Button>
@@ -157,7 +159,7 @@ export function DatePicker({
                   {formatDateDisplay(value, dateFormat)}
                 </span>
               ) : (
-                <span className="text-muted-foreground">空</span>
+                <span className="text-muted-foreground">{t("empty")}</span>
               )}
             </div>
           </PopoverAnchor>
@@ -177,7 +179,7 @@ export function DatePicker({
               )}
             >
               <CalendarIcon className="h-3.5 w-3.5 opacity-60" />
-              {value ? formatDateDisplay(value, dateFormat) : placeholder ?? "选择日期"}
+              {value ? formatDateDisplay(value, dateFormat) : placeholder ?? t("pickDate")}
             </Button>
           </PopoverTrigger>
           {content}

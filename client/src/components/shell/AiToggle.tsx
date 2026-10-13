@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useAppShell } from "@/context/AppShellContext";
 import { APP_NAVIGATION } from "./app-navigation";
 import { useMatch } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 export function AiToggle() {
+  const { t } = useTranslation("common");
   const { aiOpen, toggleAi, recordSheetOpen } = useAppShell();
   const Icon = APP_NAVIGATION.ai.icon;
   const isAiPage = useMatch({ path: "/app", end: true });
@@ -15,17 +17,18 @@ export function AiToggle() {
       variant={aiOpen ? "secondary" : "default"}
       onClick={toggleAi}
       className={cn(
-        "fixed bottom-6 right-6 z-50 h-11 gap-2 rounded-full border border-border px-4 shadow-md",
+        "fixed bottom-6 right-6 z-50 h-11 gap-2 rounded-xl border border-border px-4 shadow-md",
+        !aiOpen && "border-agent/50 bg-agent text-background hover:bg-agent/90",
         recordSheetOpen && "left-6 right-auto lg:left-auto lg:right-[calc(480px+1.5rem)]"
       )}
-      aria-label={aiOpen ? "收起 AI 助手" : "打开 AI 助手"}
+      aria-label={aiOpen ? t("collapseChat") : t("openChat")}
       aria-expanded={aiOpen}
       aria-controls="global-ai-panel"
-      title={aiOpen ? "收起 AI 助手 ⌘J" : "打开 AI 助手 ⌘J"}
+      title={aiOpen ? t("collapseChatMod", { mod: "⌘" }) : t("openChatMod", { mod: "⌘" })}
       data-testid="global-ai-toggle"
     >
       {aiOpen ? <ChevronDown className="size-4" /> : <Icon className="size-4" />}
-      AI
+      {t("chat")}
     </Button>
   );
 }

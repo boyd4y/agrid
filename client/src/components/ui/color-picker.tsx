@@ -6,11 +6,14 @@ import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/c
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { SELECT_COLORS, SELECT_COLOR_NAMES, SELECT_COLOR_PRESETS, normalizeColorHex, selectOptionStyle, type SelectColorToken } from "@/lib/select-colors";
+import { useTranslation } from "react-i18next";
 
 type Props = { value: string; onChange: (color: string) => void; className?: string; label?: string };
 
 /** Presets and HEX input; values stay in the parent draft until its form is saved. */
-export function ColorPicker({ value, onChange, className, label = "选择颜色" }: Props) {
+export function ColorPicker({ value, onChange, className, label }: Props) {
+  const { t } = useTranslation("common");
+  const resolvedLabel = label ?? t("pickColor");
   const id = useId();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -26,14 +29,14 @@ export function ColorPicker({ value, onChange, className, label = "选择颜色"
     setOpen(next); if (next) { setDraft(selected.background.toUpperCase()); setInvalid(false); }
   }}>
     <PopoverTrigger asChild>
-      <Button type="button" variant="outline" size="icon" className={cn("size-8 shrink-0 p-1", className)} aria-label={label}>
+      <Button type="button" variant="outline" size="icon" className={cn("size-8 shrink-0 p-1", className)} aria-label={resolvedLabel}>
         <span className="size-full rounded-sm border border-foreground/10" style={{ background: selected.background }} />
       </Button>
     </PopoverTrigger>
-    <PopoverContent className="w-64 p-4" align="start" aria-label="颜色选择器" data-testid="color-picker">
+    <PopoverContent className="w-64 p-4" align="start" aria-label={t("colorPicker")} data-testid="color-picker">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">预设颜色</p>
+          <p className="text-sm font-medium">{t("presetColors")}</p>
           <div className="grid grid-cols-5 gap-2">
             {SELECT_COLOR_PRESETS.map((color) => {
               const token = (Object.keys(SELECT_COLORS) as SelectColorToken[]).find((name) => SELECT_COLORS[name].background === color)!;
@@ -47,15 +50,15 @@ export function ColorPicker({ value, onChange, className, label = "选择颜色"
         </div>
         <FieldGroup className="gap-2">
           <Field data-invalid={invalid} className="gap-2">
-            <FieldLabel htmlFor={id}>HEX 颜色</FieldLabel>
+            <FieldLabel htmlFor={id}>{t("hexColor")}</FieldLabel>
             <Input id={id} value={draft} maxLength={7} spellCheck={false} aria-invalid={invalid} placeholder="#D3E5EF" onChange={(event) => { setDraft(event.target.value); setInvalid(false); }}
               onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); apply(); } }} />
-            {invalid ? <FieldError>请输入有效的 3 位或 6 位 HEX。</FieldError> : <FieldDescription>支持 #RGB 或 #RRGGBB。</FieldDescription>}
+            {invalid ? <FieldError>{t("hexInvalid")}</FieldError> : <FieldDescription>{t("hexHint")}</FieldDescription>}
           </Field>
         </FieldGroup>
         <div className="flex items-center justify-between gap-3">
-          <span className="rounded-md px-2 py-1 text-xs" style={{ background: preview.background, color: preview.color }}>颜色预览</span>
-          <Button type="button" size="sm" onClick={apply}><Check data-icon="inline-start" />应用</Button>
+          <span className="rounded-md px-2 py-1 text-xs" style={{ background: preview.background, color: preview.color }}>{t("colorPreview")}</span>
+          <Button type="button" size="sm" onClick={apply}><Check data-icon="inline-start" />{t("apply")}</Button>
         </div>
       </div>
     </PopoverContent>

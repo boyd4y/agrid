@@ -5,9 +5,10 @@ import { EXPRESSION_BY_ID } from "@/lib/bloub/expressions";
 import { COLOR_BY_ID, SHAPE_BY_ID } from "@/lib/bloub/skins";
 import { RAYON } from "@/lib/bloub/repere";
 import { selectOptionStyle } from "@/lib/select-colors";
+import i18n from "@/i18n";
 
 /** React renderer for bloub's upstream engine; static avatars do not run animation clocks. */
-export function BotAvatar({ config = defaultBotAvatar, label = "智能体头像", className }: { config?: BotAvatarConfig; label?: string; className?: string }) {
+export function BotAvatar({ config = defaultBotAvatar, label = i18n.t("agents:avatarLabel"), className }: { config?: BotAvatarConfig; label?: string; className?: string }) {
   const mask = `bloub-${useId().replace(/:/g, "")}`;
   const frame = useMemo(() => new BotEngine(RAYON, "idle", SHAPE_BY_ID.get(config.shape)?.radii, EXPRESSION_BY_ID.get(config.expression)).sample(0), [config.shape, config.expression]);
   const ink = config.color === "auto" ? "currentColor" : COLOR_BY_ID.get(config.color)?.hex ?? "currentColor";

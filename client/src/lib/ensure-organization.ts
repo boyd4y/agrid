@@ -1,4 +1,5 @@
 import type { authClient } from "./auth-client";
+import i18n from "@/i18n";
 
 type Organization = { id: string; name: string; slug: string };
 type User = { id: string; name?: string };
@@ -14,20 +15,20 @@ export function createOrganizationInitializer(client: Pick<typeof authClient, "o
 
     const task = (async () => {
       const response = await client.organization.list();
-      if (response.error) throw new Error(response.error.message || "加载工作区失败");
+      if (response.error) throw new Error(response.error.message || i18n.t("common:orgLoadFailed"));
       const organizations = response.data ?? [];
       let organization: Organization | null = organizations[0] ?? null;
       if (!organization) {
         const created = await client.organization.create({
-          name: `${user.name || "我"}的工作区`,
+          name: i18n.t("common:myWorkspace", { name: user.name || i18n.t("common:me") }),
           slug: `ws-${user.id.slice(0, 8)}`,
         });
-        if (created.error) throw new Error(created.error.message || "创建工作区失败");
+        if (created.error) throw new Error(created.error.message || i18n.t("common:orgCreateFailed"));
         organization = created.data;
       }
       if (organization) {
         const result = await client.organization.setActive({ organizationId: organization.id });
-        if (result.error) throw new Error(result.error.message || "选择工作区失败");
+        if (result.error) throw new Error(result.error.message || i18n.t("common:orgSelectFailed"));
       }
       return organization;
     })();

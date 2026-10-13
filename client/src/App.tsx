@@ -25,6 +25,7 @@ import { MembersPage } from "@/pages/app/MembersPage";
 import { AgentEditorPage } from "@/pages/app/AgentEditorPage";
 import { AgentsPage } from "@/pages/app/AgentsPage";
 import { SettingsPage } from "@/pages/app/SettingsPage";
+import i18n from "@/i18n";
 const SkillsPage = lazy(() => import("@/pages/app/SkillsPage").then((module) => ({ default: module.SkillsPage })));
 const SkillDetailPage = lazy(() => import("@/pages/app/SkillDetailPage").then((module) => ({ default: module.SkillDetailPage })));
 
@@ -61,9 +62,9 @@ export default function App() {
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="automations/new" element={<AutomationDetailPage />} />
           <Route path="automations/:automationId" element={<AutomationDetailPage />} />
-          <Route path="reports" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载报告…</p>}><ReportsPage /></Suspense>} />
-          <Route path="reports/new" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载报告编辑器…</p>}><ReportDetailPage /></Suspense>} />
-          <Route path="reports/:reportId" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载报告编辑器…</p>}><ReportDetailPage /></Suspense>} />
+          <Route path="reports" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{i18n.t("reports:loadingReport")}</p>}><ReportsPage /></Suspense>} />
+          <Route path="reports/new" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{i18n.t("reports:loadingReportEditor")}</p>}><ReportDetailPage /></Suspense>} />
+          <Route path="reports/:reportId" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{i18n.t("reports:loadingReportEditor")}</p>}><ReportDetailPage /></Suspense>} />
           <Route path="tables/:tableId" element={<TableDetailPage />} />
           <Route path="tables/:tableId/automations" element={<TableAutomationsPage />} />
           <Route path="members" element={<MembersPage />} />
@@ -71,8 +72,8 @@ export default function App() {
           <Route path="agents/new" element={<AgentEditorPage />} />
           <Route path="agents/:agentId/edit" element={<AgentEditorPage />} />
           <Route path="settings" element={<SettingsPage />} />
-          <Route path="skills" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载技能…</p>}><SkillsPage /></Suspense>} />
-          <Route path="skills/:skillId" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载技能详情…</p>}><SkillDetailPage /></Suspense>} />
+          <Route path="skills" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{i18n.t("common:loadingSkills")}</p>}><SkillsPage /></Suspense>} />
+          <Route path="skills/:skillId" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{i18n.t("common:loadingSkillDetail")}</p>}><SkillDetailPage /></Suspense>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

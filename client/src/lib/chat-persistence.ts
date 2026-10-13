@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useAui, type RemoteThreadListAdapter, type ThreadHistoryAdapter } from "@assistant-ui/react";
 import { createAssistantStream } from "assistant-stream";
+import i18n from "@/i18n";
 
 export type ChatPageContext = {
   page: "ai" | "tables" | "table" | "automations" | "reports" | "skills" | "agents" | "members" | "settings";
@@ -11,7 +12,7 @@ type ThreadRow = { id: string; title: string | null; status: "regular"; custom: 
 type StoredMessage = { id: string; parentId: string | null; format: string; content: unknown };
 async function request<T>(url: string, body?: unknown, method = "POST"): Promise<T> {
   const response = await fetch(url, body === undefined && method === "POST" ? undefined : { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  if (!response.ok) throw new Error(`无法保存或读取对话 (${response.status})：${await response.text()}`);
+  if (!response.ok) throw new Error(i18n.t("common:chatPersistFailed", { status: response.status, body: await response.text() }));
   return response.json();
 }
 const metadata = (thread: ThreadRow) => ({
@@ -67,12 +68,12 @@ export function createThreadAdapter(getContext: () => { context: ChatPageContext
     rename: async (id, title) => { await request(`/api/threads/${id}`, { title }, "PATCH"); },
     updateCustom: async (id, custom) => { await request(`/api/threads/${id}`, { custom }, "PATCH"); },
     // Required by assistant-ui's adapter interface; the product only supports deletion.
-    archive: async () => { throw new Error("不支持归档对话"); },
-    unarchive: async () => { throw new Error("不支持归档对话"); },
+    archive: async () => { throw new Error(i18n.t("common:archiveUnsupported")); },
+    unarchive: async () => { throw new Error(i18n.t("common:archiveUnsupported")); },
     delete: async (id) => { await request(`/api/threads/${id}`, undefined, "DELETE"); },
     generateTitle: async (id, messages) => createAssistantStream(async (controller) => {
       const first = messages.find((m) => m.role === "user");
-      const title = first?.content.filter((p) => p.type === "text").map((p) => p.type === "text" ? p.text : "").join(" ").replace(/\s+/g, " ").trim().slice(0, 32) || "新对话";
+      const title = first?.content.filter((p) => p.type === "text").map((p) => p.type === "text" ? p.text : "").join(" ").replace(/\s+/g, " ").trim().slice(0, 32) || i18n.t("common:newChatTitle");
       const result = await request<{ title: string }>(`/api/threads/${id}/title`, { title });
       controller.appendText(result.title);
     }),

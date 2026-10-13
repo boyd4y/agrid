@@ -2,6 +2,7 @@ import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/table/DataTable";
 import type { PreviewSlotContext } from "./preview-slot";
+import { useTranslation } from "react-i18next";
 
 /**
  * Default preview slot body — same DataTable component + same API data
@@ -16,6 +17,7 @@ export function TablePreviewContent({
   onCreateTable,
   refreshToken,
 }: PreviewSlotContext) {
+  const { t } = useTranslation("common");
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="preview-slot-table">
 
@@ -23,7 +25,7 @@ export function TablePreviewContent({
         {loading && !table ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            加载中…
+            {t("loading")}
           </div>
         ) : error ? (
           <div className="flex h-full items-center justify-center p-8 text-sm text-destructive">
@@ -31,13 +33,13 @@ export function TablePreviewContent({
           </div>
         ) : !tableId || !table ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="text-sm font-medium text-foreground">选择表格开始工作</p>
+            <p className="text-sm font-medium text-foreground">{t("pickTableStart")}</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              从上方选择已有表格，或创建一张新表格。
+              {t("pickTableHint")}
             </p>
             <Button size="sm" onClick={() => onCreateTable()}>
               <Plus className="h-3.5 w-3.5" />
-              新建空表
+              {t("newEmptyTable")}
             </Button>
           </div>
         ) : (

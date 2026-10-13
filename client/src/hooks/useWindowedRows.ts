@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import type { RowData } from "@/types/table";
 import type { FilterCondition, FilterLogic } from "@tabdo/shared";
 import { DEFAULT_PAGE_SIZE, isFilterConditionComplete } from "@tabdo/shared";
+import i18n from "@/i18n";
 
 type Sort = { columnId: string; direction: "asc" | "desc" } | null;
 
@@ -74,7 +75,7 @@ export function useWindowedRows({
       force();
     } catch (e) {
       if (queryKey.current === key) {
-        setError(e instanceof Error ? e.message : "加载失败");
+        setError(e instanceof Error ? e.message : i18n.t("common:loadFailed"));
       }
     } finally {
       if (queryKey.current === key) setLoading(false);
@@ -147,7 +148,7 @@ export function useWindowedRows({
       force();
     } catch (e) {
       if (queryKey.current === key) {
-        setError(e instanceof Error ? e.message : "分页加载失败");
+        setError(e instanceof Error ? e.message : i18n.t("common:pageLoadFailed"));
       }
     } finally {
       if (queryKey.current === key) inFlight.current.delete(pageIndex);

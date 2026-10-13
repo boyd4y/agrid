@@ -14,13 +14,16 @@ import { type HarnessId } from "@/lib/harness";
 import { AgentBasicFields, AgentSkillFields, type AgentBasicValues, type HarnessStatus } from "@/components/agents/AgentConfigurationFields";
 import { AgentToolFields } from "@/components/agents/AgentToolFields";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 /** Shared create/edit form; deep links restore configuration from the server. */
 export function AgentEditorPage() {
+  const { t } = useTranslation(["agents", "common"]);
   const { agentId } = useParams(), navigate = useNavigate();
   const [editing, setEditing] = useState<MemberOption | null>(null), [loading, setLoading] = useState(true), [ready, setReady] = useState(false), [canManage, setCanManage] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
-  const [agentName, setAgentName] = useState(""), [persona, setPersona] = useState("你是 tabdo 的 AI 助手，用简洁中文帮助用户处理数据。");
+  const [agentName, setAgentName] = useState(""), [persona, setPersona] = useState(t("defaultPersona"));
   const [harness, setHarness] = useState<HarnessId>("pi"), [model, setModel] = useState("openrouter/free"), [harnesses, setHarnesses] = useState<HarnessStatus[]>([]);
   const [runtime, setRuntime] = useState<"local" | "sandbox">("local");
   const [skills, setSkills] = useState<SkillSummary[]>([]), [skillNames, setSkillNames] = useState<string[]>([]);
@@ -45,19 +48,19 @@ export function AgentEditorPage() {
   const basicValid = Boolean(agentName.trim() && persona.trim() && model.trim());
   useEffect(() => {
     let cancelled = false;setSection("basic");setLoading(true);setReady(false);setCreateError(null);setEditing(null);
-    void Promise.all([api.listSkills(), agentId ? api.listMembers() : Promise.resolve(null), fetch("/api/chat/status").then((r) => { if (!r.ok) throw new Error("运行配置加载失败");return r.json(); })]).then(([library, members, status]) => {
+    void Promise.all([api.listSkills(), agentId ? api.listMembers() : Promise.resolve(null), fetch("/api/chat/status").then((r) => { if (!r.ok) throw new Error(t("statusLoadFailed"));return r.json(); })]).then(([library, members, status]) => {
       if (cancelled) return;
       setSkills(library.skills);setCanManage(library.canManage);setHarnesses(status.harnesses ?? []);
       const agent = agentId ? members?.members.find((m) => m.id === agentId && m.kind === "agent") : null;
-      if (agentId && !agent) throw new Error("智能体不存在或不属于当前工作区");
+      if (agentId && !agent) throw new Error(t("notFound"));
       const selected = agent?.agent?.persona?.defaultHarness ?? "pi";
-      setImage(agent?.image ?? null);setEditing(agent ?? null);setAgentName(agent?.name ?? "");setPersona(agent?.agent?.persona?.systemPrompt ?? "你是 tabdo 的 AI 助手，用简洁中文帮助用户处理数据。");
+      setImage(agent?.image ?? null);setEditing(agent ?? null);setAgentName(agent?.name ?? "");setPersona(agent?.agent?.persona?.systemPrompt ?? t("defaultPersona"));
       setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "openrouter/free");
       setRuntime(agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"));
       const selectedNames = library.skills.filter((s) => s.enabled && (!agent?.agent?.persona?.skillNames || agent.agent.persona.skillNames.includes(s.name))).map((s) => s.name);
       setSkillNames(selectedNames); setDisabledTools(agent?.agent?.persona?.disabledTools ?? []);
       setInitialConfiguration(JSON.stringify({ name: (agent?.name ?? "").trim(), image: agent?.image ?? null, persona: {
-        systemPrompt: (agent?.agent?.persona?.systemPrompt ?? "你是 tabdo 的 AI 助手，用简洁中文帮助用户处理数据。").trim(),
+        systemPrompt: (agent?.agent?.persona?.systemPrompt ?? t("defaultPersona")).trim(),
         defaultHarness: selected,
         defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "openrouter/free").trim(),
         runtime: agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"),
@@ -68,25 +71,25 @@ export function AgentEditorPage() {
   }, [agentId, retry]);
   const createAgent = async (e: React.FormEvent) => {
     e.preventDefault();if (avatarProcessing || savingRef.current || !ready || !canManage || (agentId && !editing)) return;
-    if (!basicValid) { setSection("basic"); setCreateError("请填写名称、人设和模型。"); return; }
+    if (!basicValid) { setSection("basic"); setCreateError(t("fillRequired")); return; }
     if (agentId && !dirty) return;
     if (!agentId && section !== "tools") { if (formRef.current?.reportValidity()) setSection(section === "basic" ? "skills" : "tools"); return; }
     savingRef.current = true;setBusy(true);setCreateError(null);
     try {
       if (editing) await api.updateAgent(editing.id, { ...configuration, image: image === (editing.image ?? null) ? undefined : image });else await api.createAgent({ ...configuration, role: "member" });
-      toast.success(editing ? "智能体配置已保存" : "智能体已创建");navigate("/app/agents");
-    } catch (e) { setCreateError(e instanceof Error ? e.message : "保存失败"); } finally { savingRef.current = false;setBusy(false); }
+      toast.success(editing ? t("saved") : t("created"));navigate("/app/agents");
+    } catch (e) { setCreateError(e instanceof Error ? e.message : t("saveFailed")); } finally { savingRef.current = false;setBusy(false); }
   };
-  const steps = [{ id: "basic", label: "基础信息", icon: Settings2 }, { id: "skills", label: "选择 Skill", icon: BookOpen }, { id: "tools", label: "配置工具", icon: Wrench }];
+  const steps = [{ id: "basic", label: t("stepBasic"), icon: Settings2 }, { id: "skills", label: t("stepSkills"), icon: BookOpen }, { id: "tools", label: t("stepTools"), icon: Wrench }];
   const stepIndex = steps.findIndex((step) => step.id === section);
-  const sectionTitle = section === "basic" ? "基础信息" : section === "skills" ? "Skill" : "工具";
-  const sectionDescription = section === "basic" ? "设置名称、人设和运行方式。" : section === "skills" ? "选择智能体按需学习的工作方法，只列出已选择且启用的 Skill。" : "查看智能体可调用的工具，按需要开启或关闭。";
-  return <AppPage className="items-center" header={<AppPageHeader page="agents" title={agentId ? editing?.name ?? "编辑智能体" : "创建智能体"} description={agentId ? "编辑智能体配置" : "设置基础信息、Skill 和工具"}>
-    <Button variant="ghost" size="sm" disabled={busy || avatarProcessing} onClick={() => navigate("/app/agents")}><ArrowLeft data-icon="inline-start" />返回列表</Button>
+  const sectionTitle = section === "basic" ? t("basic") : section === "skills" ? t("skills") : t("tools");
+  const sectionDescription = section === "basic" ? t("basicDesc") : section === "skills" ? t("skillsDesc") : t("toolsDesc");
+  return <AppPage className="items-center" header={<AppPageHeader page="agents" title={agentId ? editing?.name ?? t("editAgent") : t("createAgent")} description={agentId ? t("editConfig") : t("createHint")}>
+    <Button variant="ghost" size="sm" disabled={busy || avatarProcessing} onClick={() => navigate("/app/agents")}><ArrowLeft data-icon="inline-start" />{t("backToList")}</Button>
   </AppPageHeader>}>
-    {loading ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />读取智能体配置…</p>
-      : !ready ? <div className="flex flex-col items-center gap-3"><FieldError>{createError}</FieldError><Button variant="outline" onClick={() => setRetry((n) => n + 1)}><RefreshCw data-icon="inline-start" />重试</Button></div>
-      : !canManage ? <p className="text-sm text-muted-foreground">只有工作区管理员可以配置智能体。</p>
+    {loading ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t("loadingConfig")}</p>
+      : !ready ? <div className="flex flex-col items-center gap-3"><FieldError>{createError}</FieldError><Button variant="outline" onClick={() => setRetry((n) => n + 1)}><RefreshCw data-icon="inline-start" />{t("common:retry")}</Button></div>
+      : !canManage ? <p className="text-sm text-muted-foreground">{t("adminOnly")}</p>
       : <Card padding="none" className="@container/agent-editor w-full max-w-6xl shrink-0 overflow-hidden">
         <CardContent>
           <form ref={formRef} onSubmit={createAgent} data-testid="agent-create-form">
@@ -94,28 +97,28 @@ export function AgentEditorPage() {
               {agentId ? (
                 <Tabs value={section} onValueChange={(value) => { setSection(value); setCreateError(null); }} orientation="vertical" className="flex-col gap-0 @3xl/agent-editor:flex-row">
                   <div className="shrink-0 border-b p-4 @3xl/agent-editor:w-52 @3xl/agent-editor:border-b-0 @3xl/agent-editor:border-r @5xl/agent-editor:w-60">
-                    <TabsList aria-label="智能体配置" className="h-auto w-full flex-row items-stretch gap-1 @3xl/agent-editor:flex-col">
-                      <TabsTrigger value="basic" disabled={busy || avatarProcessing} className="min-h-11 flex-1 justify-start px-3"><Settings2 />基础信息</TabsTrigger>
+                    <TabsList aria-label={t("configAria")} className="h-auto w-full flex-row items-stretch gap-1 @3xl/agent-editor:flex-col">
+                      <TabsTrigger value="basic" disabled={busy || avatarProcessing} className="min-h-11 flex-1 justify-start px-3"><Settings2 />{t("basic")}</TabsTrigger>
                       <TabsTrigger value="skills" disabled={busy || avatarProcessing} className="min-h-11 flex-1 justify-start px-3"><BookOpen />Skill</TabsTrigger>
-                      <TabsTrigger value="tools" disabled={busy || avatarProcessing} className="min-h-11 flex-1 justify-start px-3"><Wrench />工具</TabsTrigger>
+                      <TabsTrigger value="tools" disabled={busy || avatarProcessing} className="min-h-11 flex-1 justify-start px-3"><Wrench />{t("tools")}</TabsTrigger>
                     </TabsList>
                   </div>
                   <TabsContent value="basic" className="min-w-0 p-6 @5xl/agent-editor:p-8">
-                    <div className="mb-6 flex flex-col gap-1"><h2 className="font-semibold">基础信息</h2><p className="text-sm text-muted-foreground">设置名称、人设和运行方式。</p></div>
+                    <div className="mb-6 flex flex-col gap-1"><h2 className="font-semibold">{t("basic")}</h2><p className="text-sm text-muted-foreground">{t("basicDesc")}</p></div>
                     <AgentBasicFields value={values} onChange={updateValues} harnesses={harnesses} disabled={busy} onAvatarProcessingChange={setAvatarProcessing} harnessLocked />
                   </TabsContent>
                   <TabsContent value="skills" className="min-w-0 p-6 @5xl/agent-editor:p-8">
-                    <div className="mb-6 flex flex-col gap-1"><h2 className="font-semibold">Skill</h2><p className="text-sm text-muted-foreground">选择智能体按需学习的工作方法。</p></div>
+                    <div className="mb-6 flex flex-col gap-1"><h2 className="font-semibold">{t("skills")}</h2><p className="text-sm text-muted-foreground">{t("skillsDescShort")}</p></div>
                     <AgentSkillFields skills={skills} selected={skillNames} onChange={setSkillNames} disabled={busy} />
                   </TabsContent>
                   <TabsContent value="tools" className="min-w-0 p-6 @5xl/agent-editor:p-8">
-                    <div className="mb-6 flex flex-col gap-1"><h2 className="font-semibold">工具</h2><p className="text-sm text-muted-foreground">查看智能体可调用的工具，按需要开启或关闭。</p></div>
+                    <div className="mb-6 flex flex-col gap-1"><h2 className="font-semibold">{t("tools")}</h2><p className="text-sm text-muted-foreground">{t("toolsDesc")}</p></div>
                     <AgentToolFields harness={harness} disabledTools={disabledTools} onChange={setDisabledTools} disabled={busy} />
                   </TabsContent>
                 </Tabs>
               ) : (
                 <div className="flex flex-col @3xl/agent-editor:flex-row">
-                  <nav aria-label="创建智能体步骤" className="shrink-0 border-b p-4 @3xl/agent-editor:w-52 @3xl/agent-editor:border-b-0 @3xl/agent-editor:border-r @5xl/agent-editor:w-60">
+                  <nav aria-label={t("createStepsAria")} className="shrink-0 border-b p-4 @3xl/agent-editor:w-52 @3xl/agent-editor:border-b-0 @3xl/agent-editor:border-r @5xl/agent-editor:w-60">
                     <ol className="flex gap-2 @3xl/agent-editor:flex-col">
                       {steps.map((step, index) => <li key={step.id} className="min-w-0 flex-1">
                         <Button type="button" variant={section === step.id ? "secondary" : "ghost"} className="h-11 w-full justify-start" disabled={busy || avatarProcessing || (index > 0 && !basicValid)} aria-current={section === step.id ? "step" : undefined}
@@ -135,13 +138,13 @@ export function AgentEditorPage() {
               )}
               <Separator />
               <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-                <div role="status" className="min-w-0 text-sm text-muted-foreground">{createError ? <FieldError role="alert">{createError}</FieldError> : agentId ? !basicValid ? "请完善基础信息后保存" : dirty ? "有未保存的修改" : "所有修改已保存" : `第 ${stepIndex + 1} 步，共 ${steps.length} 步`}</div>
+                <div role="status" className="min-w-0 text-sm text-muted-foreground">{createError ? <FieldError role="alert">{createError}</FieldError> : agentId ? !basicValid ? t("fixBasic") : dirty ? t("unsaved") : t("allSaved") : t("stepOf", { n: stepIndex + 1, total: steps.length })}</div>
                 <Field orientation="horizontal" className="w-auto flex-wrap justify-end">
-                  <Button type="button" variant="outline" disabled={busy || avatarProcessing} onClick={() => navigate("/app/agents")}><X data-icon="inline-start" />取消</Button>
-                  {!agentId && stepIndex > 0 && <Button type="button" variant="outline" onClick={() => setSection(steps[stepIndex - 1].id)}><ArrowLeft data-icon="inline-start" />上一步</Button>}
+                  <Button type="button" variant="outline" disabled={busy || avatarProcessing} onClick={() => navigate("/app/agents")}><X data-icon="inline-start" />{t("cancel")}</Button>
+                  {!agentId && stepIndex > 0 && <Button type="button" variant="outline" onClick={() => setSection(steps[stepIndex - 1].id)}><ArrowLeft data-icon="inline-start" />{t("prev")}</Button>}
                   <Button type="submit" disabled={busy || avatarProcessing || !basicValid || (Boolean(agentId) && !dirty)}>
                     {busy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : agentId ? <Save data-icon="inline-start" /> : section !== "tools" ? <ArrowRight data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
-                    {busy ? "保存中…" : agentId ? "保存修改" : section !== "tools" ? "下一步" : "创建智能体"}
+                    {busy ? t("saving") : agentId ? t("saveChanges") : section !== "tools" ? t("next") : t("createAgent")}
                   </Button>
                 </Field>
               </div>

@@ -2,8 +2,10 @@ import { Navigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation("common");
   const { isAuthenticated, isPending, ensureOrganization } = useAuth();
   const location = useLocation();
 
@@ -15,7 +17,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
-        检查登录状态…
+        {t("checkingAuth")}
       </div>
     );
   }

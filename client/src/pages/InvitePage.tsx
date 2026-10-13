@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "react-i18next";
 
 export function InvitePage() {
+  const { t } = useTranslation("common");
   const { invitationId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, isPending, ensureOrganization } = useAuth();
@@ -14,7 +16,7 @@ export function InvitePage() {
   useEffect(() => {
     if (isPending || !invitationId) return;
     if (!isAuthenticated) {
-      setMsg("请先登录或注册后再接受邀请");
+      setMsg(t("inviteLoginFirst"));
       return;
     }
     (async () => {
@@ -22,37 +24,37 @@ export function InvitePage() {
         const res = await authClient.organization.acceptInvitation({
           invitationId,
         });
-        if (res.error) throw new Error(res.error.message || "接受失败");
+        if (res.error) throw new Error(res.error.message || t("inviteAcceptFailed"));
         await ensureOrganization();
         setStatus("ok");
-        setMsg("已加入工作区");
+        setMsg(t("inviteJoined"));
         setTimeout(() => navigate("/app"), 800);
       } catch (e) {
         setStatus("err");
-        setMsg(e instanceof Error ? e.message : "接受邀请失败");
+        setMsg(e instanceof Error ? e.message : t("inviteAcceptError"));
       }
     })();
-  }, [invitationId, isAuthenticated, isPending, ensureOrganization, navigate]);
+  }, [invitationId, isAuthenticated, isPending, ensureOrganization, navigate, t]);
 
   return (
     <div className="mx-auto max-w-sm px-4 py-20 text-center">
-      <h1 className="text-xl font-semibold">工作区邀请</h1>
-      <p className="mt-3 text-sm text-muted-foreground">{msg || "处理中…"}</p>
+      <h1 className="text-xl font-semibold">{t("inviteTitle")}</h1>
+      <p className="mt-3 text-sm text-muted-foreground">{msg || t("processing")}</p>
       {!isAuthenticated && !isPending && (
         <div className="mt-6 flex justify-center gap-2">
           <Button asChild size="sm">
             <Link to="/login" state={{ from: `/invite/${invitationId}` }}>
-              登录
+              {t("login")}
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link to="/signup">注册</Link>
+            <Link to="/signup">{t("signup")}</Link>
           </Button>
         </div>
       )}
       {status === "ok" && (
         <Button asChild className="mt-6" size="sm">
-          <Link to="/app">进入工作台</Link>
+          <Link to="/app">{t("enterWorkspace")}</Link>
         </Button>
       )}
     </div>

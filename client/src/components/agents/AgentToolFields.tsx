@@ -8,6 +8,7 @@ import { Field, FieldGroup, FieldContent, FieldLabel, FieldDescription, FieldErr
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 export function AgentToolFields({ harness, disabledTools, onChange, disabled }: {
   harness: HarnessId;
@@ -15,6 +16,7 @@ export function AgentToolFields({ harness, disabledTools, onChange, disabled }: 
   onChange: (names: string[]) => void;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation("agents");
   const [catalog, setCatalog] = useState<AgentToolCatalogItem[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(""), [retry, setRetry] = useState(0);
@@ -25,28 +27,28 @@ export function AgentToolFields({ harness, disabledTools, onChange, disabled }: 
     void api.getAgentTools(harness, controller.signal).then((result) => {
       if (!controller.signal.aborted) { setCatalog(result.tools); setSupportsFiltering(result.supportsFiltering); }
     }).catch((failure: unknown) => {
-      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "工具加载失败");
+      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : t("toolsLoadFailed"));
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [harness, retry]);
+  }, [harness, retry, t]);
   const filtered = catalog.filter((tool) => `${tool.name} ${tool.id} ${tool.description} ${tool.group}`.toLowerCase().includes(search.trim().toLowerCase()));
   return <FieldGroup data-testid="agent-tool-fields">
     <Field>
-      <FieldLabel htmlFor="agent-tool-search"><Search className="size-4" />搜索工具</FieldLabel>
-      <Input id="agent-tool-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="按名称或用途搜索" disabled={disabled || loading} />
-      <FieldDescription>默认全部开启。修改在下一轮执行时生效，已运行的操作不会撤销。</FieldDescription>
+      <FieldLabel htmlFor="agent-tool-search"><Search className="size-4" />{t("searchTools")}</FieldLabel>
+      <Input id="agent-tool-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("searchToolsPlaceholder")} disabled={disabled || loading} />
+      <FieldDescription>{t("toolsHint")}</FieldDescription>
     </Field>
-    {loading ? <FieldDescription role="status" className="flex items-center gap-2"><Loader2 className="size-4 animate-spin" />读取工具…</FieldDescription>
-      : error ? <Field><FieldError>{error}</FieldError><Button type="button" variant="outline" disabled={disabled} onClick={() => setRetry((value) => value + 1)}><RefreshCw data-icon="inline-start" />重试</Button></Field>
-      : filtered.length === 0 ? <FieldDescription>没有匹配的工具。</FieldDescription>
+    {loading ? <FieldDescription role="status" className="flex items-center gap-2"><Loader2 className="size-4 animate-spin" />{t("loadingTools")}</FieldDescription>
+      : error ? <Field><FieldError>{error}</FieldError><Button type="button" variant="outline" disabled={disabled} onClick={() => setRetry((value) => value + 1)}><RefreshCw data-icon="inline-start" />{t("retry")}</Button></Field>
+      : filtered.length === 0 ? <FieldDescription>{t("noMatchingTools")}</FieldDescription>
       : <div className="flex max-h-[min(65vh,42rem)] flex-col gap-4 overflow-y-auto p-1">{(["builtin", "platform"] as const).map((source) => {
         const tools = filtered.filter((tool) => tool.source === source);
         if (!tools.length) return null;
         const enabled = tools.filter((tool) => !disabledTools.includes(tool.id)).length;
         return <Card key={source} padding="sm" data-tool-source={source}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">{source === "builtin" ? <Cpu className="size-4" /> : <Wrench className="size-4" />}{source === "builtin" ? "Harness 内置工具" : "平台工具"}<span className="ml-auto text-xs font-normal text-muted-foreground">已开启 {enabled}/{tools.length}</span></CardTitle>
-            <CardDescription>{source === "builtin" ? "由所选 Harness 执行文件、命令等操作。" : "访问工作区的表格、表单、报告与自动化，遵循当前成员权限。"}</CardDescription>
+            <CardTitle className="flex items-center gap-2">{source === "builtin" ? <Cpu className="size-4" /> : <Wrench className="size-4" />}{source === "builtin" ? t("harnessBuiltin") : t("platformTools")}<span className="ml-auto text-xs font-normal text-muted-foreground">{t("enabledCount", { enabled, total: tools.length })}</span></CardTitle>
+            <CardDescription>{source === "builtin" ? t("builtinDesc") : t("workspaceDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <FieldGroup className="gap-0 divide-y divide-border">

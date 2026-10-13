@@ -42,19 +42,28 @@ import type {
   ReportWidget,
   ReportWidgetResult,
 } from "@tabdo/shared";
+import i18n from "@/i18n";
+import { useTranslation } from "react-i18next";
 
-const TYPES = {
-  chart: { label: "图表", icon: BarChart3 },
-  metric: { label: "数字汇总", icon: Hash },
-  text: { label: "说明文字", icon: Type },
-};
+function widgetTypes() {
+  return {
+    chart: { label: i18n.t("reports:widgetTypes.chart"), icon: BarChart3 },
+    metric: { label: i18n.t("reports:widgetTypes.metric"), icon: Hash },
+    text: { label: i18n.t("reports:widgetTypes.text"), icon: Type },
+  } as const;
+}
+const TYPES = new Proxy({} as ReturnType<typeof widgetTypes>, {
+  get: (_t, prop: string) => widgetTypes()[prop as keyof ReturnType<typeof widgetTypes>],
+  ownKeys: () => Object.keys(widgetTypes()),
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});
 function Choice({
   id,
   label,
   value,
   options,
   onChange,
-  placeholder = "请选择",
+  placeholder = i18n.t("reports:pleaseSelect"),
   disabled = false,
 }: {
   id: string;
@@ -105,7 +114,7 @@ function WidgetContent({
   if (widget.type === "text")
     return (
       <p className="min-h-12 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-        {widget.content || "添加说明文字…"}
+        {widget.content || i18n.t("reports:addTextPlaceholder")}
       </p>
     );
   if (result?.error)
@@ -117,13 +126,13 @@ function WidgetContent({
   if (loading && !result?.data)
     return (
       <p className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
-        正在汇总…
+        {i18n.t("reports:aggregating")}
       </p>
     );
   if (!result?.data)
     return (
       <p className="flex min-h-28 items-center justify-center text-sm text-muted-foreground">
-        {widget.type === "chart" ? "选择来源和分组字段" : "选择来源和汇总方式"}
+        {widget.type === "chart" ? i18n.t("reports:pickSourceGroup") : i18n.t("reports:pickSourceMetric")}
       </p>
     );
   if (widget.type === "metric") {
@@ -148,22 +157,22 @@ function WidgetContent({
     ...widget.query,
     tableId: widget.query.tableId!,
     groupColumnId: widget.query.groupColumnId!,
-    name: widget.title || "图表",
+    name: widget.title || i18n.t("reports:chart"),
   } as ReportConfig;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <p className="mb-2 text-xs text-muted-foreground">
-        {data.sourceName} · {data.totalRows} 条记录 · {data.metricLabel}
+        {i18n.t("reports:recordsMetric", { source: data.sourceName, total: data.totalRows, metric: data.metricLabel })}
       </p>
       <div className="min-h-0 flex-1">
         <ReportChart config={query} data={data} />
       </div>
       {data.truncated && (
         <p className="mt-2 text-xs text-warning">
-          分组超过 200 个，显示前 200 个。
+          {i18n.t("reports:groupTruncated")}
         </p>
       )}
-      {!!data.points.length && <ReportDataPopover data={data} title={widget.title || "图表"} />}
+      {!!data.points.length && <ReportDataPopover data={data} title={widget.title || i18n.t("reports:chart")} />}
     </div>
   );
 }
@@ -201,7 +210,7 @@ function DashboardWidget({
         <Button
           variant="ghost"
           size="icon"
-          aria-label={`拖拽组件：${widget.title || TYPES[widget.type].label}`}
+          aria-label={i18n.t("reports:dragWidget", { title: widget.title || TYPES[widget.type].label })}
           className="report-drag-handle size-7 touch-none cursor-grab"
         >
           <GripVertical />
@@ -224,7 +233,7 @@ function DashboardWidget({
             variant="ghost"
             size="icon"
             className="size-7"
-            aria-label="上移组件"
+            aria-label={i18n.t("reports:moveWidgetUp")}
             disabled={first}
             onClick={(e) => {
               e.stopPropagation();
@@ -237,7 +246,7 @@ function DashboardWidget({
             variant="ghost"
             size="icon"
             className="size-7"
-            aria-label="下移组件"
+            aria-label={i18n.t("reports:moveWidgetDown")}
             disabled={last}
             onClick={(e) => {
               e.stopPropagation();
@@ -250,7 +259,7 @@ function DashboardWidget({
             variant="destructive-ghost"
             size="icon"
             className="size-7"
-            aria-label="删除组件"
+            aria-label={i18n.t("reports:deleteWidget")}
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
@@ -281,6 +290,7 @@ export function ReportBuilder({
   refreshToken: number;
   onError: (error: Error) => void;
 }) {
+  const { t } = useTranslation("reports");
   const [selectedId, setSelectedId] = useState<string | null>(null),
     [columns, setColumns] = useState<ColumnDef[]>([]),
     [data, setData] = useState<ReportPageData>({ widgets: [] }),
@@ -292,7 +302,7 @@ export function ReportBuilder({
     selected && selected.type !== "text" ? selected.query.tableId : null;
   // Page labels/layout do not trigger aggregate queries; only widget queries do.
   const queryKey = JSON.stringify({
-    name: "报告",
+    name: i18n.t("reports:report"),
     description: "",
     columns: 2,
     widgets: config.widgets
@@ -338,11 +348,11 @@ export function ReportBuilder({
   }, [sourceId, refreshToken, onError]);
   const columnPlaceholder = (empty: string) =>
     !sourceId
-      ? "请先选择来源表格"
+      ? i18n.t("reports:pickSourceFirst")
       : columnsLoading
-        ? "正在加载字段…"
+        ? i18n.t("reports:loadingFields")
         : columnsError
-          ? "字段加载失败，请刷新"
+          ? i18n.t("reports:fieldsLoadFailed")
           : empty;
 
   useEffect(() => {
@@ -432,11 +442,11 @@ export function ReportBuilder({
     });
   };
   const canvas = (
-    <div className="min-h-full bg-muted/30 p-5 md:p-7" aria-label="报告画布">
+    <div className="min-h-full bg-muted/30 p-5 md:p-7" aria-label={t("canvasAria")}>
       <div className="mx-auto w-full max-w-[1600px]">
         <div className="mb-6">
           <h2 className="text-2xl font-semibold tracking-tight">
-            {config.name || "未命名报告"}
+            {config.name || t("unnamedReport")}
           </h2>
           {config.description && (
             <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
@@ -448,12 +458,12 @@ export function ReportBuilder({
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-background text-center">
             <BarChart3 className="size-7 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              添加组件，开始制作 Dashboard
+              {t("addWidgetHint")}
             </p>
             {mode === "design" && (
               <Button variant="outline" size="sm" onClick={() => add("chart")}>
                 <Plus data-icon="inline-start" />
-                添加图表
+                {t("addChart")}
               </Button>
             )}
           </div>
@@ -506,10 +516,10 @@ export function ReportBuilder({
         sidebar={
           <>
             <Button variant="ghost" size="sm" className="mb-4 w-full justify-start" onClick={() => setSelectedId(null)}>
-              <Settings2 data-icon="inline-start" />页面设置
+              <Settings2 data-icon="inline-start" />{t("pageSettings")}
             </Button>
             <p className="mb-3 text-xs font-medium text-muted-foreground">
-              添加组件
+              {t("addWidget")}
             </p>
             <div className="flex flex-col gap-1">
               {(Object.keys(TYPES) as ReportWidget["type"][]).map((type) => {
@@ -532,7 +542,7 @@ export function ReportBuilder({
             </div>
             <Separator className="my-4" />
             <p className="mb-2 text-xs font-medium text-muted-foreground">
-              页面组件 · {config.widgets.length}/40
+              {t("pageWidgets", { count: config.widgets.length })}
             </p>
             <div className="flex flex-col gap-1">
               {config.widgets.map((w) => {
@@ -560,12 +570,12 @@ export function ReportBuilder({
         inspector={
           <FieldGroup>
             <p className="text-xs font-medium text-muted-foreground">
-              {selected ? "组件设置" : "页面设置"}
+              {selected ? t("widgetSettings") : t("pageSettings")}
             </p>
             {!selected ? (
               <>
                 <Field>
-                  <FieldLabel htmlFor="report-name">报告名称</FieldLabel>
+                  <FieldLabel htmlFor="report-name">{t("reportName")}</FieldLabel>
                   <Input
                     id="report-name"
                     value={config.name}
@@ -576,7 +586,7 @@ export function ReportBuilder({
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="report-description">页面说明</FieldLabel>
+                  <FieldLabel htmlFor="report-description">{t("pageDescription")}</FieldLabel>
                   <Textarea
                     id="report-description"
                     value={config.description}
@@ -588,11 +598,11 @@ export function ReportBuilder({
                 </Field>
                 <Choice
                   id="report-columns"
-                  label="新增组件默认布局"
+                  label={t("defaultLayout")}
                   value={String(config.columns)}
                   options={[
-                    { id: "1", name: "单列" },
-                    { id: "2", name: "双列" },
+                    { id: "1", name: t("layoutOneCol") },
+                    { id: "2", name: t("layoutTwoCol") },
                   ]}
                   onChange={(id) =>
                     onChange({ ...config, columns: id === "1" ? 1 : 2 })
@@ -602,7 +612,7 @@ export function ReportBuilder({
             ) : (
               <>
                 <Field>
-                  <FieldLabel htmlFor="widget-title">组件标题</FieldLabel>
+                  <FieldLabel htmlFor="widget-title">{t("widgetTitle")}</FieldLabel>
                   <Input
                     id="widget-title"
                     value={selected.title}
@@ -614,7 +624,7 @@ export function ReportBuilder({
                 </Field>
                 {selected.type === "text" ? (
                   <Field>
-                    <FieldLabel htmlFor="widget-content">说明文字</FieldLabel>
+                    <FieldLabel htmlFor="widget-content">{t("textContent")}</FieldLabel>
                     <Textarea
                       id="widget-content"
                       value={selected.content}
@@ -629,10 +639,10 @@ export function ReportBuilder({
                   <>
                     <Choice
                       id="report-source"
-                      label="来源表格"
+                      label={t("sourceTable")}
                       value={selected.query.tableId ?? ""}
                       options={tables}
-                      placeholder={tables.length ? "选择来源表格" : "暂无表格"}
+                      placeholder={tables.length ? t("pickSourceTable") : t("noTables")}
                       onChange={(tableId) =>
                         patch(
                           selected.type === "chart"
@@ -659,7 +669,7 @@ export function ReportBuilder({
                     {selected.type === "chart" && (
                       <Choice
                         id="report-group"
-                        label="分组字段"
+                        label={t("groupField")}
                         value={selected.query.groupColumnId ?? ""}
                         options={columns.filter((c) =>
                           ["text", "select", "date", "checkbox"].includes(
@@ -673,8 +683,8 @@ export function ReportBuilder({
                               c.type,
                             ),
                           )
-                            ? "选择分组字段"
-                            : "没有可用于分组的字段",
+                            ? t("pickGroupField")
+                            : t("noGroupField"),
                         )}
                         onChange={(groupColumnId) =>
                           patch({
@@ -686,12 +696,12 @@ export function ReportBuilder({
                     )}
                     <Choice
                       id="report-metric"
-                      label="汇总方式"
+                      label={t("metric")}
                       value={selected.query.metric}
                       options={[
-                        { id: "count", name: "记录计数" },
-                        { id: "sum", name: "数字求和" },
-                        { id: "average", name: "数字平均值" },
+                        { id: "count", name: t("metricCount") },
+                        { id: "sum", name: t("metricSum") },
+                        { id: "average", name: t("metricAvg") },
                       ]}
                       onChange={(metric) =>
                         patchQuery(selected, {
@@ -702,14 +712,14 @@ export function ReportBuilder({
                     {selected.query.metric !== "count" && (
                       <Choice
                         id="report-value"
-                        label="数字字段"
+                        label={t("numberField")}
                         value={selected.query.valueColumnId ?? ""}
                         options={columns.filter((c) => c.type === "number")}
                         disabled={!sourceId || columnsLoading || columnsError}
                         placeholder={columnPlaceholder(
                           columns.some((c) => c.type === "number")
-                            ? "选择数字字段"
-                            : "没有数字字段",
+                            ? t("pickNumberField")
+                            : t("noNumberField"),
                         )}
                         onChange={(valueColumnId) =>
                           patchQuery(selected, { valueColumnId })
@@ -720,7 +730,7 @@ export function ReportBuilder({
                       <>
                         <Choice
                           id="report-chart"
-                          label="图表类型"
+                          label={t("chartType")}
                           value={selected.query.chartType}
                           options={REPORT_CHART_OPTIONS.map(
                             ({ icon: glyph, ...option }) => ({
@@ -744,11 +754,11 @@ export function ReportBuilder({
                         )?.type === "date" && (
                           <Choice
                             id="report-date"
-                            label="日期分组"
+                            label={t("dateBucket")}
                             value={selected.query.dateBucket}
                             options={[
-                              { id: "month", name: "按月" },
-                              { id: "day", name: "按日" },
+                              { id: "month", name: t("byMonth") },
+                              { id: "day", name: t("byDay") },
                             ]}
                             onChange={(dateBucket) =>
                               patch({
@@ -772,7 +782,7 @@ export function ReportBuilder({
                   onClick={() => remove(selected.id)}
                 >
                   <Trash2 data-icon="inline-start" />
-                  删除组件
+                  {t("deleteWidget")}
                 </Button>
               </>
             )}

@@ -2,28 +2,30 @@ import { Table2 } from "lucide-react";
 import type { ReportData } from "@tabdo/shared";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTranslation } from "react-i18next";
 
 export function ReportDataPopover({ data, title }: { data: ReportData; title: string }) {
+  const { t } = useTranslation("reports");
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" className="mt-2 w-fit shrink-0" data-testid="report-summary-trigger"
-          aria-label={`查看汇总数据：${title}`} onClick={(event) => event.stopPropagation()}>
-          <Table2 data-icon="inline-start" />查看汇总数据
+          aria-label={t("viewSummaryNamed", { title })} onClick={(event) => event.stopPropagation()}>
+          <Table2 data-icon="inline-start" />{t("viewSummaryData")}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[480px]" side="top" align="start" aria-label={`${title}的汇总数据`}
+      <PopoverContent className="w-[480px]" side="top" align="start" aria-label={t("summaryOf", { title })}
         data-testid="report-summary-popover" onClick={(event) => event.stopPropagation()}>
         <div className="flex flex-col gap-3">
-          <h3 className="font-medium">{title} · 汇总数据</h3>
+          <h3 className="font-medium">{t("summaryTitle", { title })}</h3>
           <div className="max-h-[50vh] overflow-auto">
             <table className="w-full text-left text-sm">
-              <caption className="sr-only">{data.sourceName}，{data.metricLabel}，共 {data.totalRows} 条记录</caption>
+              <caption className="sr-only">{t("summaryCaption", { source: data.sourceName, metric: data.metricLabel, total: data.totalRows })}</caption>
               <thead className="sticky top-0 bg-popover">
                 <tr>
-                  <th scope="col" className="p-2">分组</th>
+                  <th scope="col" className="p-2">{t("group")}</th>
                   <th scope="col" className="p-2 text-right">{data.metricLabel}</th>
-                  <th scope="col" className="p-2 text-right">记录数</th>
+                  <th scope="col" className="p-2 text-right">{t("recordCount")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -37,7 +39,7 @@ export function ReportDataPopover({ data, title }: { data: ReportData; title: st
               </tbody>
             </table>
           </div>
-          {data.truncated && <p className="text-xs text-muted-foreground">分组超过 200 个，仅显示前 200 个。</p>}
+          {data.truncated && <p className="text-xs text-muted-foreground">{t("groupTruncatedShort")}</p>}
         </div>
       </PopoverContent>
     </Popover>

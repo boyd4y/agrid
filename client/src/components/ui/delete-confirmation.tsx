@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertDialog } from "radix-ui";
 import { Loader2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   open: boolean;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function DeleteConfirmation({ open, onOpenChange, title, description, onConfirm }: Props) {
+  const { t } = useTranslation("common");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +27,7 @@ export function DeleteConfirmation({ open, onOpenChange, title, description, onC
       await onConfirm();
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "删除失败，请重试。");
+      setError(e instanceof Error ? e.message : t("deleteFailedRetry"));
     } finally {
       setBusy(false);
     }
@@ -43,11 +45,11 @@ export function DeleteConfirmation({ open, onOpenChange, title, description, onC
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <AlertDialog.Cancel asChild>
-              <Button variant="outline" disabled={busy}><X data-icon="inline-start" />取消</Button>
+              <Button variant="outline" disabled={busy}><X data-icon="inline-start" />{t("cancel")}</Button>
             </AlertDialog.Cancel>
             <Button variant="destructive" disabled={busy} onClick={() => void performDelete()}>
               {busy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Trash2 data-icon="inline-start" />}
-              {busy ? "删除中…" : "确认删除"}
+              {busy ? t("deleting") : t("confirmDelete")}
             </Button>
           </div>
         </AlertDialog.Content>
