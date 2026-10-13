@@ -229,3 +229,5 @@
 2026-10-13 pnpm工作区目录规范化：应用移动为apps/{client,server,mcp}，公共契约为packages/shared；workspace globs、lock importers/link、Vite/Storybook/tsconfig、开发watch、根.env定位、浏览器fixture/产物忽略、Docker和当前文档均同步。包名/workspace:*依赖保持，锁定版本无升级。根build使用pnpm依赖图，shared先构建一次，MCP加入编译脚本；Docker选择server及其workspace依赖构建。原启动命令保持，开发server不重复删除shared产物。全工作区源码/测试类型检查、client11项/shared公式、迁移后4项真实原生聊天回归通过，MCP通过真实stdio initialize和tools/list（30项）。目录变化后原开发进程需要按新路径重新启动，未代用户重启API/Vite，未修改用户DB或调用真实模型。
 
 开发协作规则：按用户要求，每个独立feature完成并检查通过就单独提交，避免积攒无关改动；持续任务按功能提交。
+
+2026-10-13 表格横向滚动和关联单元格：表头与虚拟行共用滚动容器，保持纵向sticky并计入37px表头偏移；多关联显示首项与剩余数量，长标题收缩且计数完整，首项打开记录、数量打开原关联编辑器。客户端类型检查及独立数据库真实Chrome回归通过：18列80行、六组横纵位置、末行、25条关联仅预览20时仍准确显示+24，解除/恢复后关联完整。无截图、用户数据修改或用户服务重启。

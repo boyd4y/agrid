@@ -64,6 +64,7 @@ function defaultSelectOptions(t: (k: string) => string) {
 }
 
 const ROW_H = 36;
+const HEADER_H = ROW_H + 1; // Header row and its bottom border.
 
 type Props = {
   table: FullTable;
@@ -140,6 +141,8 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
     count: windowed.totalMatched,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_H,
+    scrollMargin: HEADER_H,
+    scrollPaddingStart: HEADER_H,
     overscan: 24,
   });
 
@@ -403,8 +406,10 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
 
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-sm">
-        {/* sticky header */}
-        <div className="shrink-0 overflow-x-auto border-b border-border bg-muted/90">
+        <div ref={parentRef} className="min-h-0 flex-1 overflow-auto" data-testid="table-scroll">
+          <div style={{ width: totalWidth, minWidth: "100%" }}>
+        {/* Header and rows share one scroll surface on both axes. */}
+        <div className="sticky top-0 z-10 border-b border-border bg-muted">
           <div
             className="flex h-9 min-w-max text-sm font-medium text-muted-foreground"
             style={{ width: totalWidth }}
@@ -586,7 +591,6 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
         </div>
 
         {/* virtual body */}
-        <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
           <div
             className="relative"
             style={{ height: rowVirtualizer.getTotalSize(), width: totalWidth }}
@@ -599,7 +603,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                   className="absolute left-0 flex border-b border-border hover:bg-muted/60"
                   style={{
                     height: vi.size,
-                    transform: `translateY(${vi.start}px)`,
+                    transform: `translateY(${vi.start - HEADER_H}px)`,
                     width: totalWidth,
                   }}
                 >
@@ -752,6 +756,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
 

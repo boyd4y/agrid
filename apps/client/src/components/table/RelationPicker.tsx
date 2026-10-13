@@ -3,6 +3,7 @@ import { Check, ChevronDown, Link2, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -27,14 +28,16 @@ export function RelationTags({
   records: RelatedRecord[];
   total?: number;
 }) {
+  const visibleRecords = records.slice(0, 1);
+  const remaining = Math.max(0, total - visibleRecords.length);
   return (
-    <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+    <div className="flex min-w-0 max-w-full items-center gap-1 overflow-hidden">
       {records.length ? (
-        records.map((record) => (
+        visibleRecords.map((record) => (
           <button
             key={record.id}
             type="button"
-            className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            className="inline-flex min-w-0 max-w-40 items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             title={i18n.t("table:openRelated", { title: record.title })}
             onClick={(e) => {
               e.stopPropagation();
@@ -48,10 +51,10 @@ export function RelationTags({
       ) : (
         <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>
       )}
-      {total > records.length && (
-        <span className="shrink-0 text-xs text-muted-foreground">
-          +{total - records.length}
-        </span>
+      {remaining > 0 && (
+        <Badge variant="outline" className="shrink-0" data-relation-more>
+          +{remaining}
+        </Badge>
       )}
     </div>
   );
