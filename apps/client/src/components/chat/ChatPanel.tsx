@@ -53,7 +53,8 @@ import {
   createThreadAdapter,
   type ChatPageContext,
 } from "@/lib/chat-persistence";
-import { prepareNativeChatRequest } from "@/lib/native-chat-transport";
+import { AskUserQuestionsUI } from "./AskUserQuestions";
+import { prepareNativeChatRequest, shouldContinueNativeQuestions } from "@/lib/native-chat-transport";
 
 export type { HarnessId } from "@/lib/harness";
 
@@ -368,6 +369,8 @@ function ScopedChatPanel({
     runtimeHook: () =>
       useChatRuntime({
         transport,
+        sendAutomaticallyWhen: shouldContinueNativeQuestions,
+        adapters: { attachments: undefined },
         onError: (error) => {
           streamMutated.current = false;
           toast.error(error.message || t("agentRunFailed"));
@@ -449,6 +452,7 @@ function ScopedChatPanel({
   return (
     <ChatActivityContext.Provider value={activities}>
     <AssistantRuntimeProvider runtime={runtime} config={auiConfig}>
+      <AskUserQuestionsUI />
       <ChatRunsProvider onRecovered={() => onMutatedRef.current()}>
       <ResourceScopedThreads resourceKey={resourceKey} />
       <ThreadAgentBinding onSelect={selectSavedAgent} />

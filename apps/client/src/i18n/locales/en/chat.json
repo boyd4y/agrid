@@ -166,5 +166,18 @@
     "minutesAgo": "{{n}}m ago",
     "hoursAgo": "{{n}}h ago",
     "daysAgo": "{{n}}d ago"
+  },
+  "questions": {
+    "title": "Your input is needed",
+    "preparing": "Preparing questions",
+    "answered": "Your answer",
+    "freeform": "Additional details",
+    "decline": "Decline",
+    "submit": "Submit answer",
+    "retry": "Retry sending",
+    "partially-answered": "Partial answers submitted",
+    "answered_status": "Answer submitted",
+    "declined": "Declined",
+    "cancelled": "Cancelled"
   }
 }

@@ -19,6 +19,7 @@ import { restoreWorkspace, type WorkspaceSnapshot } from "./workspace.js";
 import type { HarnessId } from "../ai/model.js";
 import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata, type PiCompletion } from "./model-metadata.js";
 import { validateDisabledTools } from "./tool-catalog.js";
+import { nativeQuestionTools } from "./question-tools.js";
 
 export type RuntimeMode = "local" | "sandbox";
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -91,7 +92,9 @@ export function createNativeAgent(options: {
     harness = createPi({
       // An explicit environment disables native subscription discovery on the server.
       auth: {},
-      reattachInProcess: false,
+      // Pending client tools use Pi's official parked-session path. Destructive
+      // suspension currently replaces their results with an SDK stop error.
+      reattachInProcess: true,
       thinkingLevel: "off",
       extensionFactories: options.onPiMessageEnd || options.consumePiContinuationInput ? [(pi) => {
         // continueStream resumes Pi with an empty input. Its official input hook
@@ -187,7 +190,7 @@ export function createNativeAgent(options: {
     ...options.lifecycle,
     harness,
     model,
-    tools: options.tools,
+    tools: { ...options.tools, ...nativeQuestionTools(options.harness) },
     inactiveTools: validateDisabledTools(options.harness, options.disabledTools),
     skills: options.skills,
     runtimeContext: options.runtimeContext,

@@ -1,3 +1,4 @@
+import { nativeQuestionTools } from "./question-tools.js";
 import type { HarnessV1 } from "@ai-sdk/harness";
 import { createPi } from "@ai-sdk/harness-pi";
 import { createCodex } from "@ai-sdk/harness-codex";
@@ -35,8 +36,9 @@ export function getAgentToolCatalog(harness: HarnessId): AgentToolCatalog {
     id, name: id, description: typeof definition.description === "string" ? definition.description : id, group: group(id), source: "platform", supportedHarnesses: harnesses,
   }));
   tools.push({ id: "read_skill", name: "read_skill", description: "读取此智能体已启用的 Skill 内容。关闭后无法通过此平台工具检索；Harness 原生 Skill 文件仍按 Skill 配置提供。", group: "Skills", source: "platform", supportedHarnesses: harnesses });
-  for (const [id, definition] of Object.entries(adapter.builtinTools ?? {})) {
-    tools.push({ id, name: id, description: typeof definition.description === "string" ? definition.description : id, group: "Harness 内置", source: "builtin", supportedHarnesses: harnesses.filter(key => id in (adapters[key].builtinTools ?? {})), ...(!supportsFiltering ? { alwaysEnabled: true } : {}) });
+  const builtinTools = { ...adapter.builtinTools, ...nativeQuestionTools(harness) };
+  for (const [id, definition] of Object.entries(builtinTools)) {
+    tools.push({ id, name: id, description: typeof definition.description === "string" ? definition.description : id, group: "Harness 内置", source: "builtin", supportedHarnesses: harnesses.filter(key => id in { ...adapters[key].builtinTools, ...nativeQuestionTools(key) }), ...(!supportsFiltering ? { alwaysEnabled: true } : {}) });
   }
   return { harness, supportsFiltering, tools };
 }

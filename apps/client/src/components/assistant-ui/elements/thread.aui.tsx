@@ -500,14 +500,12 @@ const ThreadSuggestionItem: FC = () => {
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
   const { t } = useTranslation("chat");
-  return (
-    <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
-      <ComposerPrimitive.AttachmentDropzone asChild>
-        <div
+  const canAttach = useAuiState(s => s.thread.capabilities.attachments);
+  const shell = <div
           data-slot="aui_composer-shell"
           className="border-foreground/10 focus-within:border-foreground/25 data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
         >
-          <ComposerAttachments />
+          {canAttach && <ComposerAttachments />}
           <ComposerPrimitive.Input
             placeholder={t("composerPlaceholder")}
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
@@ -517,8 +515,10 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
             aria-label={t("composerAria")}
           />
           <ComposerAction />
-        </div>
-      </ComposerPrimitive.AttachmentDropzone>
+        </div>;
+  return (
+    <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+      {canAttach ? <ComposerPrimitive.AttachmentDropzone asChild>{shell}</ComposerPrimitive.AttachmentDropzone> : shell}
     </ComposerPrimitive.Root>
   );
 };
@@ -534,8 +534,8 @@ const ComposerAction: FC = () => {
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
-      <ComposerAddAttachment />
-      <div className="flex items-center gap-1.5">
+      <AuiIf condition={s => s.thread.capabilities.attachments}><ComposerAddAttachment /></AuiIf>
+      <div className="ml-auto flex items-center gap-1.5">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>
           <AuiIf condition={(s) => s.composer.dictation == null}>
             <ComposerPrimitive.Dictate asChild>

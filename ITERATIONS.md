@@ -249,3 +249,5 @@
 2026-10-13 标准批量操作：新增9项统一batch_*工具，记录新增/更新/删除、字段新增/更新/删除、关联替换/添加/解除；AI Harness和MCP共用schema/描述，命令路由从共享COMMANDS读取，工具开关和表格刷新同步。每批1–100项原子事务，复用公式、关联、版本和自动化事件逻辑，保留真实租户权限；单条与批量写入锁序一致。行/关联工具返回精简摘要。明确一次性mock写入用batch_add_rows，持续未来事件才用create_automation，不新增用户意图regex拦截。8项rows/5项columns-relations新增真实DB测试及12项原关联回归通过，另真实Pi SDK写100条mock只调用批量工具一次、无自动化资源、正文回复通过；真实MCP stdio列出全部9项batch工具（总39项），shared/server/client/MCP类型检查通过。无用户数据、真实模型或用户服务操作。
 
 当前推进：SDK统一提问卡片与原位tool-result续接，核对Skills/Tools/Plan/Goal和附件实际能力；新增用户要求的按字段类型筛选器，负责人/枚举/关联/数字/日期/勾选分别匹配输入控件和运算符。
+
+2026-10-13 Harness SDK提问与能力对齐：使用官方askUserQuestions，单选/多选/自由文本/部分回答与拒绝卡片；标准tool-result续接同一Run/assistant，不重发用户输入、不重放工具。删除Run.status和warm handle恢复门禁，SDK原生状态决定续接；已验证真正跨进程恢复、回答保存后启动失败/取消再重试，以及浏览器刷新和HTTP503后明确重试。Skill保留原生包和按需文件读取；工具目录与开关包含canonical提问工具。当前三adapter真实拒绝ImagePart/FilePart，关闭自动注入的上传入口，服务端明确返回版本限制，避免静默丢弃。后端6项真实SDK针对性回归、附件2项、客户端12项、浏览器提问交互和生产/测试类型检查通过。核对清单见docs/sdk-alignment.md；Codex/Claude远程问题续接仍未实测，不能算远程验收。未调用用户模型、修改用户数据或重启用户服务。

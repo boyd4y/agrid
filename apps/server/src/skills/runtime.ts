@@ -21,7 +21,7 @@ export async function resolveAgentSkills(organizationId: string, selectedNames?:
   };
   const instructions = [
     "Skill 是包含操作方法、参考资料和脚本的技能包，tool 是可执行接口；两者不是同一概念。",
-    "按业务目标选择技能，先 read_skill 阅读说明，按需读取引用文件，再执行所需步骤。没有提供的脚本执行能力不得宣称已运行。",
+    "按目标选择技能，使用Harness原生技能目录按需阅读SKILL.md及引用文件；也可通过已启用的read_skill读取已分配技能。阅读脚本不等于执行，只有实际执行工具成功后才能报告运行结果。",
     "标准模式优先使用产品现有组件；仅在用户需要定制 UI 时考虑 HTML 单页面。Site 独立包和 client 引用尚未提供，不得宣称已创建或发布 Site。",
     skills.length ? `此智能体可用技能：\n${skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n")}` : "此智能体没有启用的技能。实际提供的业务工具仍可使用。",
   ].join("\n");

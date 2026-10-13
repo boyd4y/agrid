@@ -1,4 +1,4 @@
-import { createUIMessageStream, toUIMessageStream, stepCountIs, type TextStreamPart, type ToolSet, type UIMessage } from "ai";
+import { createUIMessageStream, toUIMessageStream, stepCountIs, type TextStreamPart, type ToolResultPart, type ToolSet, type UIMessage } from "ai";
 import type { HarnessAgentSession, HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
 import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
 import type { InMemoryFs } from "just-bash";
@@ -16,6 +16,8 @@ import { snapshotWorkspace } from "./workspace.js";
 import { saveMessageInTransaction } from "../chat/store.js";
 import { registerNativeRun } from "./drain.js";
 import { HTTPException } from "hono/http-exception";
+import { questionContinuation } from "./questions.js";
+import { parkQuestionSandbox, takeQuestionSandbox } from "./question-sandboxes.js";
 
 function hasSavedPiJournal(record: RuntimeRecord): boolean {
   if (!record.resumeState) return true;
@@ -50,6 +52,7 @@ export function createNativeChatStream(options: {
   messages: UIMessage[];
   signal?: AbortSignal;
   metadata: Record<string, unknown>;
+  toolResultContinuations?: ToolResultPart[];
 }) {
   return createUIMessageStream({
     onError: chatErrorText,
@@ -58,7 +61,9 @@ export function createNativeChatStream(options: {
       const control = new AbortController();
       const signal = AbortSignal.any([control.signal, ...(options.signal ? [options.signal] : [])]);
       let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: InMemoryFs | undefined;
-      let step = 0, completedTools = 0, activity: ChatActivity | undefined, errorText: string | undefined;
+      let agent: ReturnType<typeof createNativeAgent> | undefined;
+      let step = options.toolResultContinuations ? options.run.activity?.step ?? 0 : 0, completedTools = options.toolResultContinuations ? options.run.activity?.completedTools ?? 0 : 0, activity: ChatActivity | undefined, errorText: string | undefined;
+      let parkedQuestion = false;
       let piCompletion: PiCompletion | undefined;
       let piContinuationInput: string | undefined;
       let streamedStep = 0, modelActive = false, expectedOutputStep = 1;
@@ -172,7 +177,7 @@ export function createNativeChatStream(options: {
           await Promise.allSettled([...pendingTools]);
           // Pi stop before its first native turn may return data:{}; never commit it.
           if (session && !invocationStarted) await session.stop().catch((error) => console.error("agent.session.cleanup", chatErrorText(error)));
-          if (sandbox) await Promise.resolve(sandbox.stop()).catch((error) => console.error("agent.sandbox.stop", chatErrorText(error)));
+          if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => console.error("agent.sandbox.stop", chatErrorText(error)));
           await releaseRuntimeLease(options.lease);
         } finally { releaseNativeRun(); }
       };
@@ -181,7 +186,9 @@ export function createNativeChatStream(options: {
         await phaseWrites;
         await report("persisting");
         if (!session) throw new Error("原生会话未能启动");
-        const resumeState = await session.stop();
+        // The SDK alone decides when a client tool needs a result. Detach
+        // captures its official continuation without stopping a waiting bridge.
+        const resumeState = session.hasUnfinishedTurn() ? await session.detach() : await session.stop();
         const workspace = fs ? await snapshotWorkspace(fs) : null;
         if (options.harness === "pi" && !hasSavedPiJournal({ ...options.record, resumeState, workspace }))
           throw new Error("会话结果未完整保存，历史消息已保留；请新建对话继续。");
@@ -193,11 +200,46 @@ export function createNativeChatStream(options: {
           userMessageId: options.run.userMessageId, assistantMessageId: id,
           status: status === "completed" ? "ready" : status === "failed" ? "failed" : "interrupted", error: errorText,
         }, { id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content }, { id: options.run.id, status, error: errorText });
+        if (status === "suspended" && questionContinuation({ ...options.record, resumeState })) {
+          const questionAgent = agent!, questionSandbox = sandbox!;
+          parkQuestionSandbox(options.record.id, { sandbox: questionSandbox, fs, discard: async () => {
+            // A detached handle cannot be destroyed. Recreate through the SDK
+            // without invoking a turn, then discard its native parked runtime.
+            try {
+              const discarded = await questionAgent.createSession({ sessionId: options.record.sessionId, sandboxSession: questionSandbox, resumeFrom: resumeState, abortSignal: signal });
+              await discarded.destroy();
+            } finally {
+              await questionSandbox.destroy();
+            }
+          } });
+          parkedQuestion = true;
+        }
         await report("finished");
       };
       const startupFailure = async (error: unknown) => {
         errorText = chatErrorText(error);
         cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
+        if (options.toolResultContinuations) {
+          // The original turn already executed. Answers were committed before
+          // continuation, so an SDK startup error must neither erase them nor
+          // certify this entire turn as uninvoked. Do not replay or fake a reply.
+          const status = cancelled || options.signal?.aborted ? "cancelled" : "failed";
+          const message = options.messages.at(-1)!;
+          if (session && invocationStarted) {
+            try { await persist(message, status); }
+            catch (checkpointError) { errorText = chatErrorText(checkpointError);await failNativeRun(options.lease, options.run.id, errorText); }
+          } else {
+            const { id, ...content } = message;
+            await completeRuntimeTurn(options.lease, options.actor, options.record.id, {
+              resumeState: options.record.resumeState as HarnessAgentResumeSessionState, workspace: options.record.workspace,
+              sandboxId: options.record.sandboxId!, userMessageId: options.run.userMessageId, assistantMessageId: id,
+              status: status === "cancelled" ? "interrupted" : "failed", error: errorText,
+            }, { id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content }, { id: options.run.id, status, error: errorText });
+            await report("finished");
+          }
+          writer.write(status === "cancelled" ? { type: "abort" } : { type: "error", errorText });
+          return;
+        }
         const uninvoked = !invocationStarted && safeStartupState;
         const text = uninvoked ? `系统提示：${cancelled ? "本轮已停止" : `本轮未能启动：${errorText}`}。本轮没有执行操作，可以重新发送消息。`
           : `系统提示：本轮未能完成：${errorText}。已提交的数据修改会保留。`;
@@ -228,7 +270,7 @@ export function createNativeChatStream(options: {
         signal.throwIfAborted();
         if (options.harness === "pi" && options.record.resumeState && !safeStartupState)
           throw new Error("此对话暂时无法继续，历史消息已保留；请新建对话继续。");
-        const agent = createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
+        agent = createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
           instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
           runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
           stopWhen: limits.steps === undefined ? undefined : stepCountIs(limits.steps),
@@ -240,7 +282,8 @@ export function createNativeChatStream(options: {
           },
         });
         let opened: Awaited<ReturnType<typeof openNativeSandbox>>;
-        try { opened = await openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
+        try { opened = (options.toolResultContinuations ? takeQuestionSandbox(options.record.id) : undefined)
+          ?? await openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
         catch (error) {
           // Local restore failures describe damaged history, not a retryable submission.
           if (options.record.resumeState && options.record.mode === "local" && !signal.aborted) safeStartupState = false;
@@ -255,14 +298,14 @@ export function createNativeChatStream(options: {
           throw error;
         }
         const continuing = session.hasUnfinishedTurn();
-        if (continuing && options.harness === "pi") piContinuationInput = options.prompt;
+        if (continuing && options.harness === "pi" && !options.toolResultContinuations) piContinuationInput = options.prompt;
         waitForModelOutput(1);
         stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");
         await pollCancellation();
         signal.throwIfAborted();
         invocationStarted = true;
-        const result = continuing ? await agent.continueStream({ session, abortSignal: signal }) : await agent.stream({ session, prompt: options.prompt, abortSignal: signal });
-        if (continuing && options.harness !== "pi") {
+        const result = continuing ? await agent.continueStream({ session, abortSignal: signal, toolResultContinuations: options.toolResultContinuations }) : await agent.stream({ session, prompt: options.prompt, abortSignal: signal });
+        if (continuing && options.harness !== "pi" && !options.toolResultContinuations) {
           // Bridge-backed adapters accept fresh input through their official
           // prompt-control API, including the bridge's accepted acknowledgement.
           // Never replace a new user message with a magic continuation keyword.

@@ -1,3 +1,4 @@
+import type { HarnessAgentContinueTurnState } from "@ai-sdk/harness/agent";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
@@ -100,6 +101,8 @@ export async function listNativeRuns(threadId: string, actor: Actor) {
       status: run.status, activity: run.activity, error: run.error,
       startedAt: run.startedAt.toISOString(), endedAt: run.endedAt?.toISOString() ?? null,
       cancelRequestedAt: run.cancelRequestedAt?.toISOString() ?? null,
+      pendingQuestionCallIds: index === 0 && record?.lastAssistantMessageId === run.assistantMessageId
+        ? ((record?.resumeState?.continueFrom as HarnessAgentContinueTurnState | undefined)?.pendingToolResults ?? []).filter(call => call.toolName === "askUserQuestions").map(call => call.toolCallId) : [],
       canContinue: index === 0 && !active.includes(run.status as typeof active[number]) && Boolean(record?.resumeState?.continueFrom)
         && record?.lastUserMessageId === run.userMessageId && record?.lastAssistantMessageId === run.assistantMessageId,
     }));

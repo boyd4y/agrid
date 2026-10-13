@@ -34,3 +34,22 @@ test("official native transport submits one fresh user from a long UI history wi
   assert(!JSON.stringify(received).includes("old UI history must not be replayed"));
   assert.deepEqual(history, original);
 });
+
+test("native questions submit tool outputs in the same assistant turn without replaying user history", async () => {
+  const { shouldContinueNativeQuestions } = await import("../src/lib/native-chat-transport.ts");
+  const answer = { action: "answered", answers: { target: { optionIds: ["b"], freeform: "选择现有表" } } };
+  const question = { type: "tool-askUserQuestions", toolCallId: "question-1", state: "input-available", input: { allowPartialAnswers: false, questions: [{ id: "target", question: "选择来源", options: [{ id: "b", label: "表格" }] }] } };
+  const history = [{ id: "u1", role: "user", parts: [{ type: "text", text: "generate records" }] }, { id: "a1", role: "assistant", parts: [{ type: "step-start" }, question] }];
+  assert.equal(shouldContinueNativeQuestions({ messages: history }), false);
+  history[1].parts[1] = { ...question, state: "output-available", output: answer };
+  assert.equal(shouldContinueNativeQuestions({ messages: history }), true);
+  const request = await prepareNativeChatRequest({ id: "thread-1", messages: history, body: { agentId: "agent-1" }, trigger: "submit-message" });
+  assert.deepEqual(request.body, { id: "thread-1", agentId: "agent-1", intent: "tool-result", assistantMessageId: "a1", toolResults: [{ toolCallId: "question-1", output: answer }] });
+  assert(!("messages" in request.body));
+  // A resumed model step must never resubmit an earlier answered question.
+  history[1].parts.push({ type: "step-start" }, { type: "text", text: "已完成" });
+  assert.equal(shouldContinueNativeQuestions({ messages: history }), false);
+  history.push({ id: "u2", role: "user", parts: [{ type: "text", text: "下一步" }] });
+  const fresh = await prepareNativeChatRequest({ id: "thread-1", messages: history, body: {}, trigger: "submit-message" });
+  assert.deepEqual(fresh.body.messages, [history[2]]);
+});

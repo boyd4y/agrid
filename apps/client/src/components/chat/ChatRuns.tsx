@@ -153,8 +153,9 @@ export function RecoveredRunStatus() {
   const { t } = useTranslation(["chat", "common"]);
   const { runs, error, refresh } = useContext(ChatRunsContext);
   const running = useAuiState((s) => s.thread.isRunning);
+  const waitingQuestion = useAuiState(s => s.thread.messages.at(-1)?.content.some(part => part.type === "tool-call" && part.toolName === "askUserQuestions" && part.result === undefined));
   const latest = runs[0];
-  if (running || !latest || (!isActiveRun(latest) && !latest.canContinue)) return null;
+  if (waitingQuestion || latest?.pendingQuestionCallIds?.length || running || !latest || (!isActiveRun(latest) && !latest.canContinue)) return null;
   const statusText = error
     ? t("syncRunFailedShort")
     : isActiveRun(latest)

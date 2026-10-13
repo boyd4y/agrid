@@ -4,11 +4,12 @@ import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { resolveActor, type Actor } from "../auth/actor.js";
 import { db } from "../db/index.js";
-import { chatThreads, agentThreadLeases } from "../db/schema.js";
+import { chatThreads, agentThreadLeases, agentRuntimeSessions } from "../db/schema.js";
 import { resolveChatContext } from "../chat/context.js";
 import { loadMessages, requireThread, threadScope } from "../chat/store.js";
 import { listNativeRuns, listNativeRunEvents, requestRunCancellation } from "../harness/runs.js";
 import { getThreadTaskState } from "../harness/tasks.js";
+import { discardQuestionSandbox } from "../harness/question-sandboxes.js";
 
 export const threadsRoute = new Hono<{ Variables: { actor: Actor } }>();
 threadsRoute.use("*", async (c, next) => {
@@ -57,14 +58,17 @@ threadsRoute.patch("/:id", async (c) => {
 threadsRoute.delete("/:id", async (c) => {
   const threadId = id(c.req.param("id")), actor = c.get("actor");
   await requireThread(threadId, actor);
-  await db.transaction(async (tx) => {
+  const runtimeIds = await db.transaction(async (tx) => {
     // Serialize deletion with claims and tool commits, including a thread that
     // has not acquired its first lease yet. A running owner must stop first.
     await tx.insert(agentThreadLeases).values({ threadId, fence: 0 }).onConflictDoNothing();
     const [lease] = await tx.select({ live: sql<boolean>`${agentThreadLeases.token} is not null and ${agentThreadLeases.expiresAt} > clock_timestamp()` }).from(agentThreadLeases).where(eq(agentThreadLeases.threadId, threadId)).for("update");
     if (lease?.live) throw new HTTPException(409, { message: "请先停止当前执行，等待结果保存后再删除对话" });
+    const records = await tx.select({ id: agentRuntimeSessions.id }).from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, threadId));
     await tx.delete(chatThreads).where(threadScope(threadId, actor));
+    return records.map((record) => record.id);
   });
+  await Promise.all(runtimeIds.map((runtimeId) => discardQuestionSandbox(runtimeId).catch((error: unknown) => console.error("agent.question.discard", error instanceof Error ? error.message : "Resource cleanup failed"))));
   return c.json({ ok: true });
 });
 threadsRoute.post("/:id/title", async (c) => {

@@ -25,6 +25,8 @@ export type AgentRunSummary = {
   startedAt: string;
   endedAt: string | null;
   canContinue: boolean;
+  /** SDK pending askUserQuestions IDs only; no native state or question inputs. */
+  pendingQuestionCallIds?: string[];
 };
 export type AgentRunEvent = { id: string; runId: string; activity: ChatActivity; createdAt: string };
 
