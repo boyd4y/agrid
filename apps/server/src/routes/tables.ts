@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
-import { TABLE_ICON_NAMES } from "@tabdo/shared";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { tables } from "../db/schema.js";
@@ -58,7 +57,7 @@ tablesRoute.patch("/:id", async (c) => {
     .object({
       name: z.string().min(1).max(200).optional(),
       description: z.string().nullable().optional(),
-      icon: z.enum(TABLE_ICON_NAMES).nullable().optional(),
+      icon: z.string().trim().min(1).max(100).nullable().optional(),
       pinned: z.boolean().optional(),
     })
     .parse(await c.req.json());

@@ -243,3 +243,5 @@
 2026-10-13 分类图标选择器：144个Lucide图标，8分类与全部，中英文/图标名搜索；左右独立滚动、底排完整可见，保留原40个ID。类型检查和隔离浏览器320px窄/260px低高度、分类/搜索、失败重试、选取/默认重置通过，未调用API或截图。
 
 2026-10-13 共享UI包：依照shadcn monorepo抽为packages/ui（@tabdo/ui源码exports），31组件、语义theme/Tailwind CSS与纯utils/date/color同包；app直接引用，六个翻译/主题/旧颜色适配器留app controls，无公共UI到app/API/i18n反向依赖。双方components.json统一配置，独立Storybook含33例、深浅主题toolbar，根pnpm storybook/build-storybook；工作区锁只改importers，外部版本/snapshots保持，Docker补UI manifest。全工作区类型检查、UI3项/client11项、客户端生产构建、独立Storybook构建与33例浏览器/六组真实交互通过，零JS/console错误。无截图/用户模型或数据库操作；临时6016已关闭。
+
+2026-10-13 图标400整改：根因为服务端使用旧40项enum拒绝新增图标。按用户要求取消名称白名单，保存仅校验字符串/非空/合理长度；144项目录只服务选择器与已知图标renderer，前端从同一目录派生，未知名称正常保存并显示默认图标。真实隔离API验证两个新增图标、未知名称保存/读取、旧图标/nullreset、跨租户与格式错误；共享包构建及shared/server/client类型检查通过。未操作用户数据或重启服务。

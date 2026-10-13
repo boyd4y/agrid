@@ -103,7 +103,18 @@ test("workspace table icons and pins persist and reject invalid or foreign chang
   assert.equal(full.icon, "Rocket"); assert.equal(full.pinned, true);
   const listed = await (await req("/tables")).json();
   assert.equal(listed.find((table: { id: string }) => table.id === tableId).icon, "Rocket");
-  assert.equal((await req(`/tables/${tableId}`, { icon: "unknown-icon" }, "PATCH")).status, 400);
+  for (const icon of ["Tent", "HardDrive"]) {
+    const picked = await req(`/tables/${tableId}`, { icon }, "PATCH");
+    assert.equal(picked.status, 200, `picker icon ${icon} accepted`);
+    assert.equal((await picked.json()).icon, icon);
+  }
+  const reloaded = await (await req(`/tables/${tableId}`)).json();
+  assert.equal(reloaded.icon, "HardDrive");
+  assert.equal((await req(`/tables/${tableId}`, { icon: "unknown-icon" }, "PATCH")).status, 200);
+  assert.equal((await (await req(`/tables/${tableId}`)).json()).icon, "unknown-icon");
+  for (const icon of [42, " ", "x".repeat(101)]) {
+    assert.equal((await req(`/tables/${tableId}`, { icon }, "PATCH")).status, 400);
+  }
   assert.equal((await req(`/tables/${tableId}`, { pinned: "true" }, "PATCH")).status, 400);
   assert.equal((await req(`/tables/${foreignTableId}`, { pinned: true }, "PATCH")).status, 404);
   assert.equal((await req(`/tables/${tableId}`, { icon: null, pinned: false }, "PATCH")).status, 200);
