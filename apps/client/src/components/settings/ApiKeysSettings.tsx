@@ -78,7 +78,7 @@ export function ApiKeysSettings() {
               </p>
             </div>
             {key.revokedAt ? <Badge variant="secondary">{text("revoked")}</Badge>
-              : <Button variant="destructive-ghost" size="icon-sm" aria-label={text("revokeAria", { name: key.name })} onClick={() => setRevoking(key)}><Trash2 data-icon="inline-start" /></Button>}
+              : <Button variant="destructive-ghost" size="icon" aria-label={text("revokeAria", { name: key.name })} onClick={() => setRevoking(key)}><Trash2 data-icon="inline-start" /></Button>}
           </li>)}
         </ul>}
     </CardContent>
