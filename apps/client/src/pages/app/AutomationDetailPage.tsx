@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ArrowRight, Check, History, LoaderCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, LoaderCircle } from "lucide-react";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { AutomationEditor } from "@/components/automation/AutomationPanel";
@@ -11,11 +11,11 @@ import { Button } from "@tabdo/ui/components/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@tabdo/ui/components/card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@tabdo/ui/components/command";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
-import { DataRefreshButton } from "@/components/controls/data-refresh-button";
+import { AutomationRunsSheet } from "@/components/automation/AutomationRunsSheet";
 import { api, type MemberOption } from "@/lib/api";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import type { FullTable } from "@/types/table";
-import type { AutomationRule, AutomationRun } from "@tabdo/shared";
+import type { AutomationRule } from "@tabdo/shared";
 
 export function AutomationDetailPage() {
   const { t } = useTranslation("automation");
@@ -29,7 +29,6 @@ export function AutomationDetailPage() {
   const [error, setError] = useState<string | null>(null), [loading, setLoading] = useState(Boolean(automationId));
   const [sourceError, setSourceError] = useState<string | null>(null), [sourceLoading, setSourceLoading] = useState(false);
   const [sourceRetry, setSourceRetry] = useState(0), [saving, setSaving] = useState(false);
-  const [runs, setRuns] = useState<AutomationRun[] | null>(null);
   const previousRoute = useRef({ automationId, sourceParam });
   const refreshToken = getTableRefreshToken(tableId);
   useEffect(() => {
@@ -38,7 +37,7 @@ export function AutomationDetailPage() {
     if (automationId || (previous.automationId === automationId && previous.sourceParam === sourceParam)) return;
     setTableId(sourceParam); setSourceId(sourceParam); setStep(sourceParam ? "configure" : "source");
   }, [automationId, sourceParam]);
-  useEffect(() => { let cancelled = false; setRule(null); setError(null); setRuns(null); if (!automationId) { setLoading(false); return; } setLoading(true);
+  useEffect(() => { let cancelled = false; setRule(null); setError(null); if (!automationId) { setLoading(false); return; } setLoading(true);
     void api.getAutomation(automationId).then((rule) => { if (!cancelled) { setRule(rule); setTableId(rule.tableId); setError(null); } }).catch((error) => { if (!cancelled) setError(error.message); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [automationId]);
@@ -55,8 +54,6 @@ export function AutomationDetailPage() {
       .finally(() => { if (!cancelled) setSourceLoading(false); });
     return () => { cancelled = true; };
   }, [tableId, refreshToken, sourceRetry, t]);
-  const loadRuns = async () => { try { setRuns(await api.listAutomationRuns(tableId, { automationId, limit: 30 })); setError(null); } catch (error) { setError(error instanceof Error ? error.message : t("loadFailed")); } };
-  useEffect(() => { if (!runs || !automationId) return; const timer = window.setInterval(() => { if (!document.hidden) void loadRuns(); }, 5000); return () => window.clearInterval(timer); }, [automationId, tableId, runs !== null]);
   const selectedSource = tables.find((source) => source.id === sourceId);
   const configuredSource = table?.id === tableId ? table : tables.find((source) => source.id === tableId);
   const chooseSource = () => {
@@ -64,7 +61,7 @@ export function AutomationDetailPage() {
     if (sourceId === tableId && sourceError) setSourceRetry((previous) => previous + 1);
     setTableId(sourceId); setStep("configure");
   };
-  return <AppPage header={<AppPageHeader page="automations" description={automationId ? rule?.name ?? t("editAutomation") : t("newAutomation")}><Button variant="ghost" size="sm" disabled={saving} onClick={() => navigate("/app/automations")}><ArrowLeft data-icon="inline-start" />{t("backToList")}</Button>{rule && <Button variant="outline" size="sm" onClick={() => void loadRuns()}><History data-icon="inline-start" />{t("runs")}</Button>}</AppPageHeader>}>
+  return <AppPage header={<AppPageHeader page="automations" description={automationId ? rule?.name ?? t("editAutomation") : t("newAutomation")}><Button variant="ghost" size="sm" disabled={saving} onClick={() => navigate("/app/automations")}><ArrowLeft data-icon="inline-start" />{t("backToList")}</Button>{rule && <AutomationRunsSheet tableId={tableId} automationId={rule.id} name={rule.name} />}</AppPageHeader>}>
     {error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}
     {loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p> : (!automationId || rule) && <>
       {!automationId && step === "source" && <Card className="mx-auto w-full max-w-xl" data-testid="automation-source-step">
@@ -101,7 +98,7 @@ export function AutomationDetailPage() {
         {sourceError && <ListErrorState className="mx-auto mb-4 min-h-0 max-w-3xl flex-none py-4" title={t("sourceLoadFailed")} description={sourceError} onRetry={() => setSourceRetry((previous) => previous + 1)} />}
         {table && table.id === tableId ? <AutomationEditor key={`${table.id}:${rule?.id ?? "new"}`} tableId={table.id} columns={table.columns.filter((column) => !column.config.hidden)} members={members} initial={rule} onSavingChange={setSaving} onClose={() => navigate("/app/automations")} onSaved={() => navigate("/app/automations")} /> : sourceLoading ? <p role="status" className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />{t("readingSource")}</p> : null}
       </div>
-      {runs && <section className="mx-auto mt-6 w-full max-w-3xl rounded-xl border border-border p-4"><div className="mb-3 flex items-center justify-between"><h2 className="font-medium">{t("runs")}</h2><DataRefreshButton onRefresh={loadRuns} /></div>{!runs.length ? <p className="text-sm text-muted-foreground">{t("noRunRecords")}</p> : <ul className="flex flex-col gap-3">{runs.map((run) => <li key={run.id} className="text-sm"><div className="flex justify-between gap-2"><span>{t(`runStatus.${run.status}`)}</span><time className="text-xs text-muted-foreground">{new Date(run.createdAt).toLocaleString()}</time></div>{run.error && <p className="mt-1 text-destructive">{run.error}</p>}{run.status === "failed" && run.eventId && <Button className="mt-2" variant="outline" size="sm" onClick={async () => { try { await api.replayAutomationRun(run.id); await loadRuns(); } catch (error) { setError(error instanceof Error ? error.message : t("replayFailed")); } }}>{t("replayPending")}</Button>}</li>)}</ul>}</section>}
+
     </>}
   </AppPage>;
 }
