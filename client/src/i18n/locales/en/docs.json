@@ -28,5 +28,8 @@
   "noMatches": "No matches",
   "browse": "Browse docs",
   "tocAria": "Documentation table of contents",
-  "welcomeNav": "Welcome"
+  "welcomeNav": "Welcome",
+  "prev": "Previous",
+  "next": "Next",
+  "backHome": "Back to docs home"
 }

@@ -28,5 +28,8 @@
   "noMatches": "无匹配结果",
   "browse": "浏览文档",
   "tocAria": "文档目录",
-  "welcomeNav": "欢迎"
+  "welcomeNav": "欢迎",
+  "prev": "上一篇",
+  "next": "下一篇",
+  "backHome": "返回文档首页"
 }

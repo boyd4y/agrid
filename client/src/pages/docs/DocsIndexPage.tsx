@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { NiBot, NiBook, NiSparkles, NiZap } from "@/components/icons";
-import { docsNav, getDoc } from "@/data/docs";
-import { DocsContent } from "./DocsContent";
+import { docsNav } from "@/data/docs";
 import { DocsMobileNav, DocsSidebar } from "./DocsSidebar";
 import { SeoHead } from "@/components/seo/SeoHead";
 
 export function DocsIndexPage() {
-  const welcome = getDoc("welcome");
-  const nav = docsNav();
+  const { t, i18n } = useTranslation("docs");
+  const nav = docsNav(i18n.language);
   const agents = nav.find((s) => s.id === "agents");
   const humans = nav.find((s) => s.id === "humans");
   const refs = nav.find((s) => s.id === "reference");
@@ -15,8 +15,8 @@ export function DocsIndexPage() {
   return (
     <main className="relative">
       <SeoHead
-        title="Documentation"
-        description="tabdo docs — For AI Agents (MCP, Skill) and For Humans (UI, API). Same command layer."
+        title={t("seoTitle")}
+        description={t("seoDescription")}
         path="/docs"
       />
       <div
@@ -31,32 +31,29 @@ export function DocsIndexPage() {
         <div className="flex gap-10">
           <DocsSidebar />
           <div className="min-w-0 flex-1">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-primary">
-              Documentation
+            <p className="mb-2 text-xs font-medium text-primary">
+              {t("documentation")}
             </p>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Welcome
+              {t("welcome")}
             </h1>
             <p className="mt-3 max-w-2xl text-muted-foreground leading-relaxed">
-              tabdo is Agent-first Talk-to-Build: chat builds the system; Grid / Board
-              stay the core data view. Pick your path — no login required to read.
+              {t("welcomeBlurb")}
             </p>
 
-            {/* Dual entry — monid pattern */}
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
               <Link
                 to="/docs/mcp"
-                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:border-primary/30 hover:shadow-md"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-blue-soft)]">
                   <NiBot className="h-5 w-5 text-primary" />
                 </div>
                 <h2 className="text-lg font-semibold group-hover:text-primary">
-                  For AI Agents
+                  {t("forAgents")}
                 </h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  External: MCP + Skill. In-product: Vercel harness built-in tools.
-                  Same command layer either way.
+                  {t("forAgentsBlurb")}
                 </p>
                 <ul className="mt-4 space-y-1.5 text-sm">
                   {(agents?.pages ?? []).slice(0, 3).map((p) => (
@@ -71,17 +68,16 @@ export function DocsIndexPage() {
 
               <Link
                 to="/docs/human-quickstart"
-                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:border-primary/30 hover:shadow-md"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-yellow-soft)]">
                   <NiBook className="h-5 w-5 text-[var(--tabdo-yellow)]" />
                 </div>
                 <h2 className="text-lg font-semibold group-hover:text-primary">
-                  For Humans
+                  {t("forHumans")}
                 </h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  /app opens Talk-to-Build + tables. Full grid, kanban, filters
-                  unchanged on each table.
+                  {t("forHumansBlurb")}
                 </p>
                 <ul className="mt-4 space-y-1.5 text-sm">
                   {(humans?.pages ?? []).slice(0, 3).map((p) => (
@@ -95,9 +91,8 @@ export function DocsIndexPage() {
               </Link>
             </div>
 
-            {/* Setup strips */}
             <h2 className="mt-12 text-xl font-semibold tracking-tight">
-              Setup for AI Agents
+              {t("setupAgents")}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <Link
@@ -105,10 +100,10 @@ export function DocsIndexPage() {
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiZap className="h-4 w-4 text-primary" /> Harness
+                  <NiZap className="h-4 w-4 text-primary" /> {t("harness")}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  In-app Codex / Claude / Pi built-in tools.
+                  {t("harnessBlurb")}
                 </p>
               </Link>
               <Link
@@ -116,10 +111,10 @@ export function DocsIndexPage() {
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiSparkles className="h-4 w-4 text-primary" /> MCP
+                  <NiSparkles className="h-4 w-4 text-primary" /> {t("mcp")}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  External agents via stdio MCP.
+                  {t("mcpBlurb")}
                 </p>
               </Link>
               <Link
@@ -127,16 +122,16 @@ export function DocsIndexPage() {
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiBot className="h-4 w-4 text-primary" /> Skill
+                  <NiBot className="h-4 w-4 text-primary" /> {t("skill")}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  External table-ops skill.
+                  {t("skillBlurb")}
                 </p>
               </Link>
             </div>
 
             <h2 className="mt-10 text-xl font-semibold tracking-tight">
-              Setup for Humans
+              {t("setupHumans")}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <Link
@@ -144,22 +139,22 @@ export function DocsIndexPage() {
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiBook className="h-4 w-4" /> Workspace
+                  <NiBook className="h-4 w-4" /> {t("workspace")}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">UI walkthrough</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("workspaceBlurb")}</p>
               </Link>
               <Link
                 to="/docs/api-quickstart"
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiZap className="h-4 w-4" /> API
+                  <NiZap className="h-4 w-4" /> {t("api")}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">POST /api/commands</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("apiBlurb")}</p>
               </Link>
             </div>
 
-            <h2 className="mt-10 text-xl font-semibold tracking-tight">References</h2>
+            <h2 className="mt-10 text-xl font-semibold tracking-tight">{t("references")}</h2>
             <ul className="mt-3 space-y-2">
               {(refs?.pages ?? []).map((p) => (
                 <li key={p.slug}>
@@ -178,7 +173,7 @@ export function DocsIndexPage() {
             </ul>
 
             <p className="mt-10 text-xs text-muted-foreground">
-              Agent index:{" "}
+              {t("agentIndex")}{" "}
               <a className="underline hover:text-foreground" href="/docs/llms.txt">
                 /docs/llms.txt
               </a>{" "}
@@ -187,14 +182,6 @@ export function DocsIndexPage() {
                 /llms.txt
               </a>
             </p>
-
-            {welcome ? (
-              <div className="mt-12 border-t border-border pt-8">
-                <DocsContent
-                  blocks={welcome.body.filter((b) => b.type !== "cards")}
-                />
-              </div>
-            ) : null}
           </div>
         </div>
       </div>

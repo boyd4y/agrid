@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { docsNav, searchDocs } from "@/data/docs";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -13,9 +14,10 @@ import {
 } from "@/components/ui/select";
 
 export function DocsMobileNav() {
+  const { t, i18n } = useTranslation("docs");
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const nav = docsNav();
+  const nav = docsNav(i18n.language);
   const current =
     pathname === "/docs" ||
     nav.flatMap((s) => s.pages).some((p) => pathname === `/docs/${p.slug}`)
@@ -31,11 +33,11 @@ export function DocsMobileNav() {
           if (v) navigate(v);
         }}
       >
-        <SelectTrigger aria-label="文档目录">
-          <SelectValue placeholder="Browse docs" />
+        <SelectTrigger aria-label={t("tocAria")}>
+          <SelectValue placeholder={t("browse")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="/docs">Welcome</SelectItem>
+          <SelectItem value="/docs">{t("welcomeNav")}</SelectItem>
           {nav.map((section) =>
             section.pages.map((p) => (
               <SelectItem key={p.slug} value={`/docs/${p.slug}`}>
@@ -50,8 +52,9 @@ export function DocsMobileNav() {
 }
 
 function DocsSearch({ className }: { className?: string }) {
+  const { t, i18n } = useTranslation("docs");
   const [q, setQ] = useState("");
-  const results = useMemo(() => searchDocs(q), [q]);
+  const results = useMemo(() => searchDocs(q, i18n.language), [q, i18n.language]);
 
   return (
     <div className={cn("relative", className)}>
@@ -60,16 +63,16 @@ function DocsSearch({ className }: { className?: string }) {
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search docs…"
+          placeholder={t("searchPlaceholder")}
           className="h-9 pl-8 text-sm"
-          aria-label="搜索文档"
+          aria-label={t("searchAria")}
           data-testid="docs-search"
         />
       </div>
       {q.trim() && (
         <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-[0_8px_24px_rgba(55,53,47,0.08)]">
           {results.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">No matches</p>
+            <p className="px-3 py-2 text-xs text-muted-foreground">{t("noMatches")}</p>
           ) : (
             results.map((p) => (
               <Link
@@ -92,8 +95,9 @@ function DocsSearch({ className }: { className?: string }) {
 }
 
 export function DocsSidebar() {
+  const { t, i18n } = useTranslation("docs");
   const { pathname } = useLocation();
-  const nav = docsNav();
+  const nav = docsNav(i18n.language);
 
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
@@ -108,7 +112,7 @@ export function DocsSidebar() {
               : "text-muted-foreground hover:bg-accent hover:text-foreground"
           )}
         >
-          文档首页
+          {t("home")}
         </Link>
         {nav.map((section) => (
           <div key={section.id}>

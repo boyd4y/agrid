@@ -1,18 +1,21 @@
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { docsPages, getDoc } from "@/data/docs";
+import { useTranslation } from "react-i18next";
+import { getDoc, listDocsPages } from "@/data/docs";
 import { DocsMobileNav, DocsSidebar } from "./DocsSidebar";
 import { DocsContent } from "./DocsContent";
 import { SeoHead } from "@/components/seo/SeoHead";
 
 export function DocsArticlePage() {
+  const { t, i18n } = useTranslation("docs");
   const { slug } = useParams();
-  const page = slug ? getDoc(slug) : undefined;
+  const pages = listDocsPages(i18n.language);
+  const page = slug ? getDoc(slug, i18n.language) : undefined;
   if (!page) return <Navigate to="/docs" replace />;
 
-  const idx = docsPages.findIndex((p) => p.slug === page.slug);
-  const prev = idx > 0 ? docsPages[idx - 1] : null;
-  const next = idx < docsPages.length - 1 ? docsPages[idx + 1] : null;
+  const idx = pages.findIndex((p) => p.slug === page.slug);
+  const prev = idx > 0 ? pages[idx - 1] : null;
+  const next = idx < pages.length - 1 ? pages[idx + 1] : null;
 
   return (
     <main className="relative">
@@ -37,7 +40,7 @@ export function DocsArticlePage() {
             to="/docs"
             className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Welcome
+            <ArrowLeft className="h-3.5 w-3.5" /> {t("backHome")}
           </Link>
           <h1 className="text-3xl font-semibold tracking-tight">{page.title}</h1>
           <p className="mt-2 text-muted-foreground">{page.description}</p>
@@ -51,7 +54,7 @@ export function DocsArticlePage() {
                 to={`/docs/${prev.slug}`}
                 className="group flex flex-1 flex-col rounded-xl border border-border bg-background p-4 transition hover:border-primary/30"
               >
-                <span className="text-xs text-muted-foreground">上一篇</span>
+                <span className="text-xs text-muted-foreground">{t("prev")}</span>
                 <span className="mt-1 inline-flex items-center gap-1 font-medium group-hover:text-primary">
                   <ArrowLeft className="h-3.5 w-3.5" />
                   {prev.title}
@@ -65,7 +68,7 @@ export function DocsArticlePage() {
                 to={`/docs/${next.slug}`}
                 className="group flex flex-1 flex-col items-end rounded-xl border border-border bg-background p-4 text-right transition hover:border-primary/30"
               >
-                <span className="text-xs text-muted-foreground">下一篇</span>
+                <span className="text-xs text-muted-foreground">{t("next")}</span>
                 <span className="mt-1 inline-flex items-center gap-1 font-medium group-hover:text-primary">
                   {next.title}
                   <ArrowRight className="h-3.5 w-3.5" />
