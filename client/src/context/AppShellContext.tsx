@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 
 type AppShellContextValue = {
   sidebarCollapsed: boolean;
@@ -15,6 +16,8 @@ type AppShellContextValue = {
   aiOpen: boolean;
   setAiOpen: (v: boolean) => void;
   toggleAi: () => void;
+  recordSheetOpen: boolean;
+  setRecordSheetOpen: (v: boolean) => void;
   activeTableId: string | null;
   setActiveTableId: (id: string | null) => void;
 };
@@ -25,6 +28,8 @@ const SIDEBAR_KEY = "agrid.sidebarCollapsed";
 const AI_KEY = "agrid.aiOpen";
 
 export function AppShellProvider({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const isAiPage = pathname.replace(/\/$/, "") === "/app";
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === "1";
@@ -40,6 +45,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     }
   });
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
+  const [recordSheetOpen, setRecordSheetOpen] = useState(false);
 
   const setSidebarCollapsed = useCallback((v: boolean) => {
     setSidebarCollapsedState(v);
@@ -63,7 +69,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
     () => setSidebarCollapsed(!sidebarCollapsed),
     [sidebarCollapsed, setSidebarCollapsed]
   );
-  const toggleAi = useCallback(() => setAiOpen(!aiOpen), [aiOpen, setAiOpen]);
+  const toggleAi = useCallback(() => { if (!isAiPage) setAiOpen(!aiOpen); }, [aiOpen, setAiOpen, isAiPage]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -71,14 +77,14 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         e.preventDefault();
         setSidebarCollapsed(!sidebarCollapsed);
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+      if (!isAiPage && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
         setAiOpen(!aiOpen);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sidebarCollapsed, aiOpen, setSidebarCollapsed, setAiOpen]);
+  }, [sidebarCollapsed, aiOpen, setSidebarCollapsed, setAiOpen, isAiPage]);
 
   const value = useMemo(
     () => ({
@@ -88,6 +94,8 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       aiOpen,
       setAiOpen,
       toggleAi,
+      recordSheetOpen,
+      setRecordSheetOpen,
       activeTableId,
       setActiveTableId,
     }),
@@ -98,6 +106,7 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
       aiOpen,
       setAiOpen,
       toggleAi,
+      recordSheetOpen,
       activeTableId,
     ]
   );

@@ -1,6 +1,6 @@
 /**
  * Smoke: keyset pagination + filter pushdown against large table.
- * Usage: pnpm --filter server db:smoke:perf [tableId]
+ * Usage: pnpm --filter @tabdo/server db:smoke:perf [tableId]
  */
 import { eq } from "drizzle-orm";
 import { db, client } from "./index.js";

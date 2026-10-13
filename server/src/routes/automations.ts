@@ -5,6 +5,27 @@ import { requireActorOrg } from "../tenant/http.js";
 
 export const automationsRoute = new Hono();
 
+automationsRoute.get("/automations", async (c) => {
+  const scope = await requireActorOrg(c.req.raw);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  const offset = z.coerce.number().int().min(0).max(1_000_000).parse(c.req.query("offset") ?? 0);
+  return c.json(await crud.listWorkspaceAutomations(scope.organizationId, offset));
+});
+
+automationsRoute.get("/automations/:id", async (c) => {
+  const scope = await requireActorOrg(c.req.raw);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  try { return c.json(await crud.getWorkspaceAutomation(z.uuid().parse(c.req.param("id")), scope.organizationId)); }
+  catch (error) { return c.json({ error: error instanceof Error ? error.message : "自动化不存在" }, 404); }
+});
+
+automationsRoute.post("/automation-runs/:id/replay", async (c) => {
+  const scope = await requireActorOrg(c.req.raw);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  try { return c.json(await crud.replayAutomationRun(c.req.param("id"), scope.organizationId)); }
+  catch (e) { return c.json({ error: e instanceof Error ? e.message : "重放失败" }, 400); }
+});
+
 const cellValue = z.union([
   z.string(),
   z.number(),

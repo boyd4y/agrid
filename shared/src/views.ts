@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /** Table views (grid / board / form) — form config is view metadata over the same columns/rows. */
 
 export const VIEW_TYPES = ["grid", "board", "form"] as const;
@@ -80,9 +82,21 @@ export type FormViewConfig = {
   ending?: FormChromeBlock;
 };
 
-export type BoardViewConfig = {
-  statusColumnId?: string;
-};
+export const VIEW_NAME_SCHEMA = z.string().trim().min(1, "请输入视图名称").max(80, "视图名称最多80个字符");
+export const BOARD_VIEW_CONFIG_SCHEMA = z.object({
+  density: z.enum(["comfortable", "compact"]).optional(),
+  statusColumnId: z.string().uuid().nullable().optional(),
+  /** Selected properties in card display order. Omission preserves legacy person display. */
+  visibleColumnIds: z.array(z.string().uuid()).max(100).refine((ids) => new Set(ids).size === ids.length, "显示属性不能重复").optional(),
+  hideEmpty: z.boolean().optional(),
+}).strict();
+export const RENAME_VIEW_SCHEMA = z.object({ viewId: z.string().uuid(), name: VIEW_NAME_SCHEMA }).strict();
+export const SET_DEFAULT_VIEW_SCHEMA = z.object({ viewId: z.string().uuid() }).strict();
+export const UPDATE_BOARD_VIEW_SCHEMA = z.object({ viewId: z.string().uuid(), config: BOARD_VIEW_CONFIG_SCHEMA }).strict();
+export type BoardViewConfig = z.infer<typeof BOARD_VIEW_CONFIG_SCHEMA>;
+export type RenameViewInput = z.infer<typeof RENAME_VIEW_SCHEMA>;
+export type SetDefaultViewInput = z.infer<typeof SET_DEFAULT_VIEW_SCHEMA>;
+export type UpdateBoardViewInput = z.infer<typeof UPDATE_BOARD_VIEW_SCHEMA>;
 
 export type GridViewConfig = Record<string, never>;
 
@@ -95,6 +109,7 @@ export type TableView = {
   name: string;
   config: ViewConfig;
   sortOrder: number;
+  isDefault: boolean;
   createdAt: string | Date;
   updatedAt: string | Date;
 };

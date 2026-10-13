@@ -1,23 +1,23 @@
-# Agrid
+# tabdo
 
-> AI-native multidimensional tables. Humans and agents share one command layer.
+> An AI-native workspace for individuals and small teams, built on flexible data. Agents help organize information, arrange steps, and execute operations; people inspect and adjust results.
 
 ## Docs
 
-- [Docs index](https://agrid.app/docs/llms.txt): Full documentation map for agents.
-- [Welcome](https://agrid.app/docs): For AI Agents / For Humans dual entry.
+- [Docs index](https://tabdo.ai/docs/llms.txt): Full documentation map for agents.
+- [Welcome](https://tabdo.ai/docs): For AI Agents / For Humans dual entry.
 
 ## Blog
 
-- [Same Command Layer: Why Agents Should Not Get a Second API](https://agrid.app/blog/same-command-layer): AI agents
-- [AI-Native Tables: Anything You Click, an Agent Can Call](https://agrid.app/blog/ai-native-tables): Product
-- [100k Rows Without OFFSET: Keyset Windows for Grid and Agents](https://agrid.app/blog/100k-rows-keyset): Engineering
-- [Notion-Style Workspace Without the Toy Table](https://agrid.app/blog/notion-style-workspace): Design
-- [Multi-Harness Chat: Codex, Claude, and Pi on One Tool Surface](https://agrid.app/blog/multi-harness-chat): Engineering
-- [How-to: Wire Agrid MCP in Five Minutes](https://agrid.app/blog/mcp-five-minutes): How-to
+- [Same Command Layer: Why Agents Should Not Get a Second API](https://tabdo.ai/blog/same-command-layer): AI agents
+- [AI-Native Tables: Anything You Click, an Agent Can Call](https://tabdo.ai/blog/ai-native-tables): Product
+- [100k Rows Without OFFSET: Keyset Windows for Grid and Agents](https://tabdo.ai/blog/100k-rows-keyset): Engineering
+- [Notion-Style Workspace Without the Toy Table](https://tabdo.ai/blog/notion-style-workspace): Design
+- [Multi-Harness Chat: Codex, Claude, and Pi on One Tool Surface](https://tabdo.ai/blog/multi-harness-chat): Engineering
+- [How-to: Wire tabdo MCP in Five Minutes](https://tabdo.ai/blog/mcp-five-minutes): How-to
 
 ## Product
 
-- [Home](https://agrid.app/)
-- [Sign up](https://agrid.app/signup)
-- [Sitemap](https://agrid.app/sitemap.xml)
+- [Home](https://tabdo.ai/)
+- [Sign up](https://tabdo.ai/signup)
+- [Sitemap](https://tabdo.ai/sitemap.xml)

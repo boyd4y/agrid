@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+import { Toaster } from "@/components/ui/sonner";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { AuthLayout } from "@/layouts/AuthLayout";
@@ -16,13 +18,20 @@ import { TablesPage } from "@/pages/app/TablesPage";
 import { TableDetailPage } from "@/pages/app/TableDetailPage";
 import { TableAutomationsPage } from "@/pages/app/TableAutomationsPage";
 import { AutomationsPage } from "@/pages/app/AutomationsPage";
+import { AutomationDetailPage } from "@/pages/app/AutomationDetailPage";
+const ReportsPage = lazy(() => import("@/pages/app/ReportsPage").then((module) => ({ default: module.ReportsPage })));
+const ReportDetailPage = lazy(() => import("@/pages/app/ReportDetailPage").then((module) => ({ default: module.ReportDetailPage })));
 import { MembersPage } from "@/pages/app/MembersPage";
+import { AgentEditorPage } from "@/pages/app/AgentEditorPage";
 import { AgentsPage } from "@/pages/app/AgentsPage";
 import { SettingsPage } from "@/pages/app/SettingsPage";
+const SkillsPage = lazy(() => import("@/pages/app/SkillsPage").then((module) => ({ default: module.SkillsPage })));
+const SkillDetailPage = lazy(() => import("@/pages/app/SkillDetailPage").then((module) => ({ default: module.SkillDetailPage })));
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Toaster position="bottom-center" closeButton />
       <Routes>
         <Route element={<MarketingLayout />}>
           <Route index element={<HomePage />} />
@@ -50,11 +59,20 @@ export default function App() {
           <Route index element={<WorkspaceHomePage />} />
           <Route path="tables" element={<TablesPage />} />
           <Route path="automations" element={<AutomationsPage />} />
+          <Route path="automations/new" element={<AutomationDetailPage />} />
+          <Route path="automations/:automationId" element={<AutomationDetailPage />} />
+          <Route path="reports" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载报告…</p>}><ReportsPage /></Suspense>} />
+          <Route path="reports/new" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载报告编辑器…</p>}><ReportDetailPage /></Suspense>} />
+          <Route path="reports/:reportId" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载报告编辑器…</p>}><ReportDetailPage /></Suspense>} />
           <Route path="tables/:tableId" element={<TableDetailPage />} />
           <Route path="tables/:tableId/automations" element={<TableAutomationsPage />} />
           <Route path="members" element={<MembersPage />} />
           <Route path="agents" element={<AgentsPage />} />
+          <Route path="agents/new" element={<AgentEditorPage />} />
+          <Route path="agents/:agentId/edit" element={<AgentEditorPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="skills" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载技能…</p>}><SkillsPage /></Suspense>} />
+          <Route path="skills/:skillId" element={<Suspense fallback={<p className="p-6 text-sm text-muted-foreground">加载技能详情…</p>}><SkillDetailPage /></Suspense>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

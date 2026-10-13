@@ -1,25 +1,33 @@
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Pin, PinOff } from "lucide-react";
+import { TableIcon } from "@/components/table/TableIcon";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   NiChevronLeft,
   NiChevronRight,
   NiLogout,
   NiPlus,
-  NiTable,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAppShell } from "@/context/AppShellContext";
+import { MemberAvatar } from "@/components/members/MemberAvatar";
 import { useAuth } from "@/hooks/useAuth";
 import { authClient } from "@/lib/auth-client";
 import type { TableMeta } from "@/types/table";
-import { AgridLogo } from "@/components/brand/AgridLogo";
+import { TabdoLogo } from "@/components/brand/TabdoLogo";
+import { BRAND } from "@/lib/brand";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { APP_NAVIGATION } from "./app-navigation";
+
+const SIDEBAR_ROW = "flex min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors";
+const SIDEBAR_ICON = "h-5 w-5 shrink-0";
 
 type Props = {
   tables: TableMeta[];
   onCreateTable: () => void;
   tablesLoading?: boolean;
+  onTogglePin: (table: TableMeta) => Promise<void>;
 };
 
 function NavItem({
@@ -45,12 +53,11 @@ function NavItem({
   const location = useLocation();
   const inner = (
     <>
-      <Icon className="h-5 w-5 shrink-0" />
+      <Icon className={SIDEBAR_ICON} />
       {!collapsed && <span className="truncate">{label}</span>}
     </>
   );
-  const base =
-    "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors";
+  const base = cn(SIDEBAR_ROW, "w-full");
 
   if (onClick && !to) {
     return (
@@ -97,11 +104,15 @@ function NavItem({
  * Lower: 成员 · 智能体 · 设置 (+ user)
  * Menu names and icons match their page headers through APP_NAVIGATION.
  */
-export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
-  const { sidebarCollapsed, toggleSidebar, activeTableId } = useAppShell();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }: Props) {
+  const { sidebarCollapsed, toggleSidebar } = useAppShell();
+  const { user, refetch } = useAuth();
+  useEffect(() => {
+    const update = () => void refetch();
+    window.addEventListener("tabdo:agents-changed", update);
+    return () => window.removeEventListener("tabdo:agents-changed", update);
+  }, [refetch]);
+  const [tablesExpanded, setTablesExpanded] = useState(false);
 
   return (
     <aside
@@ -118,15 +129,15 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
           sidebarCollapsed && "justify-center px-2"
         )}
       >
-        <Link to="/app" className="flex min-w-0 items-center gap-2.5" title="Agrid">
-          <AgridLogo
+        <Link to="/app" className="flex min-w-0 items-center gap-2.5" title={BRAND.name}>
+          <TabdoLogo
             showWordmark={false}
-            markClassName="h-8 w-8 rounded-[10px] shadow-[0_4px_12px_rgba(55,53,47,0.06)]"
+            markClassName="h-8 w-8"
           />
           {!sidebarCollapsed && (
             <div className="min-w-0 leading-tight">
               <div className="truncate text-sm font-semibold tracking-tight text-foreground">
-                Agrid
+                {BRAND.name}
               </div>
               <div className="truncate text-[10px] text-muted-foreground">
                 Workspace
@@ -138,11 +149,12 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto h-7 w-7 text-muted-foreground"
+            className="ml-auto size-7"
             onClick={toggleSidebar}
             title="收起侧栏 ⌘\\"
+            aria-label="收起侧栏"
           >
-            <NiChevronLeft className="h-4 w-4" />
+            <NiChevronLeft />
           </Button>
         )}
       </div>
@@ -152,7 +164,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2"
         data-testid="sidebar-upper"
       >
-        <div className="space-y-0.5">
+        <div className="flex flex-col gap-0.5">
           {!sidebarCollapsed && (
             <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               工作区
@@ -174,17 +186,19 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
           <NavItem
             {...APP_NAVIGATION.automations}
             collapsed={sidebarCollapsed}
-            titleHint="按表格配置当 / 如果 / 就规则"
+            titleHint="创建和管理自动化"
             activeMatch={(pathname) => pathname.includes("/automations")}
           />
+          <NavItem {...APP_NAVIGATION.reports} collapsed={sidebarCollapsed} />
+          {tables.filter((table) => table.pinned).map((table) => <SidebarTable key={table.id} table={table} collapsed={sidebarCollapsed} onTogglePin={onTogglePin} />)}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {!sidebarCollapsed && (
             <div className="mb-1 flex items-center justify-between px-2.5">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                我的表格
-              </span>
+              <button type="button" onClick={() => setTablesExpanded((expanded) => !expanded)} aria-expanded={tablesExpanded} aria-controls="sidebar-my-tables" className="flex items-center gap-1 rounded py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+                <NiChevronRight className={cn("size-3 transition-transform", tablesExpanded && "rotate-90")} />我的表格
+              </button>
               <button
                 type="button"
                 onClick={onCreateTable}
@@ -195,32 +209,10 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
               </button>
             </div>
           )}
-          <ul className="max-h-full space-y-0.5 overflow-y-auto">
-            {tablesLoading && !sidebarCollapsed && (
-              <li className="px-2.5 py-1 text-xs text-muted-foreground">加载中…</li>
-            )}
-            {tables.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  title={t.name}
-                  onClick={() => navigate(`/app/tables/${t.id}`)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
-                    sidebarCollapsed && "justify-center px-2",
-                    activeTableId === t.id || location.pathname.includes(t.id)
-                      ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  )}
-                >
-                  <NiTable className="h-3.5 w-3.5 shrink-0" />
-                  {!sidebarCollapsed && <span className="truncate">{t.name}</span>}
-                </button>
-              </li>
-            ))}
-            {!tablesLoading && tables.length === 0 && !sidebarCollapsed && (
-              <li className="px-2.5 py-2 text-xs text-muted-foreground">还没有表格</li>
-            )}
+          <ul id="sidebar-my-tables" hidden={!tablesExpanded || sidebarCollapsed} className={cn("min-h-0 flex-col gap-0.5 overflow-y-auto", !tablesExpanded || sidebarCollapsed ? "hidden" : "flex")}>
+            {tablesLoading && <li className="px-2.5 py-1 text-xs text-muted-foreground">加载中…</li>}
+            {tables.filter((table) => !table.pinned).map((table) => <li key={table.id}><SidebarTable table={table} collapsed={false} onTogglePin={onTogglePin} /></li>)}
+            {!tablesLoading && !tables.some((table) => !table.pinned) && <li className="px-2.5 py-2 text-xs text-muted-foreground">{tables.length ? "表格已置顶到工作区" : "还没有表格"}</li>}
           </ul>
         </div>
       </nav>
@@ -230,7 +222,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
         className="shrink-0 border-t border-border p-2"
         data-testid="sidebar-lower"
       >
-        <div className="mb-1 space-y-0.5">
+        <div className="mb-1 flex flex-col gap-0.5">
           {!sidebarCollapsed && (
             <div className="px-2.5 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               组织
@@ -250,6 +242,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
             {...APP_NAVIGATION.settings}
             collapsed={sidebarCollapsed}
           />
+          <NavItem {...APP_NAVIGATION.skills} collapsed={sidebarCollapsed} />
           <div className={cn(sidebarCollapsed && "flex justify-center")}>
             <ThemeToggle expanded={!sidebarCollapsed} />
           </div>
@@ -259,11 +252,12 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
           <Button
             variant="ghost"
             size="icon"
-            className="mx-auto mb-1 flex h-7 w-7"
+            className="mx-auto mb-1 flex size-7"
             onClick={toggleSidebar}
             title="展开侧栏"
+            aria-label="展开侧栏"
           >
-            <NiChevronRight className="h-4 w-4" />
+            <NiChevronRight />
           </Button>
         ) : null}
 
@@ -274,9 +268,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
               sidebarCollapsed && "justify-center px-0"
             )}
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning/10 text-[11px] font-semibold text-warning">
-              {(user.name || user.email || "?").slice(0, 1).toUpperCase()}
-            </span>
+            <MemberAvatar name={user.name || user.email || "用户"} image={user.image} kind={user.kind} className="size-7" />
             {!sidebarCollapsed && (
               <>
                 <div className="min-w-0 flex-1">
@@ -290,14 +282,15 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 shrink-0 text-muted-foreground"
+                  className="size-7 shrink-0"
                   title="退出"
+                  aria-label="退出账号"
                   onClick={async () => {
                     await authClient.signOut();
                     window.location.href = "/";
                   }}
                 >
-                  <NiLogout className="h-3.5 w-3.5" />
+                  <NiLogout />
                 </Button>
               </>
             )}
@@ -306,4 +299,24 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading }: Props) {
       </div>
     </aside>
   );
+}
+
+function SidebarTable({ table, collapsed, onTogglePin }: { table: TableMeta; collapsed: boolean; onTogglePin: (table: TableMeta) => Promise<void> }) {
+  const location = useLocation();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return <div>
+    <div className="group relative">
+      <Link to={`/app/tables/${table.id}`} title={table.name} data-testid={`sidebar-table-${table.id}`} className={cn(SIDEBAR_ROW, "w-full", collapsed ? "justify-center px-2" : "pr-9", location.pathname.includes(table.id) ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+        <TableIcon name={table.icon} className={SIDEBAR_ICON} />{!collapsed && <span className="truncate">{table.name}</span>}
+      </Link>
+      {!collapsed && <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 size-6 -translate-y-1/2 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100" disabled={busy} title={table.pinned ? "取消工作区置顶" : "置顶到工作区"} aria-label={`${table.pinned ? "取消置顶" : "置顶"}${table.name}`} onClick={async () => {
+        setBusy(true); setError(null);
+        try { await onTogglePin(table); }
+        catch (error) { setError(error instanceof Error ? error.message : "置顶失败"); }
+        finally { setBusy(false); }
+      }}>{table.pinned ? <PinOff /> : <Pin />}</Button>}
+    </div>
+    {error && <p role="alert" className="px-2 text-xs text-destructive">{error}</p>}
+  </div>;
 }

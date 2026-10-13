@@ -1,18 +1,40 @@
-import { useEffect, useMemo, useRef, useState, type FC } from "react";
+import { FloatingAssistantFrame } from "./FloatingAssistantFrame";
+import { FloatingThreadControls } from "./FloatingThreadControls";
+import { ChatActivityContext, ChatRunStatus } from "./ChatRunStatus";
+import { AgentTaskPopover } from "./AgentTaskPopover";
+import { ChatRunsProvider, ChatRunsContext, isActiveRun, PersistentRunCancel } from "./ChatRuns";
+import type { ChatActivity } from "@tabdo/shared";
+import { toast } from "sonner";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FC,
+} from "react";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   AssistantRuntimeProvider,
   AuiConfig,
   Suggestions,
+  useRemoteThreadListRuntime,
+  useAuiState,
 } from "@assistant-ui/react";
+import { AssistantChatTransport, useChatRuntime } from "@assistant-ui/ai-sdk";
 import {
-  AssistantChatTransport,
-  useChatRuntime,
-} from "@assistant-ui/ai-sdk";
-import { Bot, Lock, Plus } from "lucide-react";
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Plus,
+} from "lucide-react";
 import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { ThreadList } from "@/components/assistant-ui/elements/thread-list.aui";
 import {
   ModelSelector,
   type ModelOption,
@@ -20,28 +42,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api, type MemberOption } from "@/lib/api";
+import { MemberAvatar } from "@/components/members/MemberAvatar";
 import { HARNESS_LABELS, type HarnessId } from "@/lib/harness";
-import { HarnessLogo } from "@/components/icons/HarnessLogos";
 import { chatResourceKey } from "@/lib/chat-resource";
 import { ResourceScopedThreads } from "@/components/chat/ResourceScopedThreads";
 import { SessionSwitcher } from "@/components/chat/SessionSwitcher";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  createThreadAdapter,
+  type ChatPageContext,
+} from "@/lib/chat-persistence";
 
 export type { HarnessId } from "@/lib/harness";
-
-type HarnessStatus = {
-  id: HarnessId;
-  label: string;
-  available: boolean;
-  models: { id: string; label: string }[];
-  defaultModel: string;
-  provider?: string;
-  hint?: string;
-};
-
-type ChatStatus = {
-  mode: "live" | "mock";
-  harnesses: HarnessStatus[];
-};
 
 export type OpenPreviewPayload = {
   kind?: string;
@@ -52,79 +64,115 @@ export type OpenPreviewPayload = {
 
 type Props = {
   tableId: string | null;
-  onMutated: () => void;
+  onMutated: (tableId?: string | null) => void;
   /** home = split chat pane; drawer = right AI drawer */
   variant?: "drawer" | "home";
   /** Open/close the right UI Slot plugin panel (tool-driven). */
   onOpenPreview?: (payload: OpenPreviewPayload) => void;
+  previewOpen?: boolean;
+  onTogglePreview?: () => void;
   /**
    * Override session pool key. Default: `table:{tableId}` or `workspace`.
    * Example: `automations` for a future dedicated page.
    */
   resourceKey?: string | null;
+  floatingOpen?: boolean;
+  onFloatingOpenChange?: (open: boolean) => void;
 };
 
 type RequestBody = {
   agentId: string | null;
-  tableId: string | null;
+  context: ChatPageContext;
 };
 
 const WELCOME_SUGGESTIONS = Suggestions([
   {
-    title: "建销售 CRM",
-    label: "客户 · 阶段 · 负责人 · 下次跟进",
-    prompt: "建一个销售 CRM：客户、阶段、负责人、下次跟进",
+    title: "创建表格",
+    label: "根据需求生成表格与字段",
+    prompt: "帮我创建一张销售 CRM 表格，包含客户、阶段、负责人和下次跟进日期。",
   },
   {
-    title: "列出当前表",
-    label: "预览前几行数据",
-    prompt: "列出当前表的前几行",
+    title: "制作表单",
+    label: "收集数据，直接写入表格",
+    prompt: "帮我制作一个数据收集表单，先确认要使用的表格。",
   },
   {
-    title: "加公式列",
-    label: "工时 × 8",
-    prompt: "加一列公式：工时×8",
+    title: "整理数据",
+    label: "查询、筛选和更新数据",
+    prompt: "帮我整理数据，先确认要使用的表格，再查看字段和前几行数据。",
   },
   {
-    title: "算一下",
-    label: "LaTeX 示例 $\\sum_{i=1}^{n} i$",
-    prompt:
-      "用 Markdown 和公式解释：行数 $n$ 时复杂度是 $O(n\\log n)$，并写出 $\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$",
+    title: "配置自动化",
+    label: "条件触发，自动更新字段",
+    prompt: "帮我配置自动化：状态变为已完成时，将已完成复选框设为勾选。",
   },
 ]);
 
-const AuiWelcome: FC = () => (
-  <div className="aui-thread-welcome-root mb-4 flex flex-col px-1">
-    <p className="text-xl font-medium tracking-tight text-foreground">
-      用对话操作数据
-    </p>
-    <p className="mt-1 text-sm text-muted-foreground">
-      选择智能体后建表、改单元格、加自动化。需要时智能体会打开右侧预览 Slot。
-    </p>
-  </div>
-);
+const AuiWelcome: FC = () => null;
 
 const THREAD_COMPONENTS = {
   Welcome: AuiWelcome,
+  RunStatus: ChatRunStatus,
+  ComposerCancel: PersistentRunCancel,
 } as const;
 
-function messageHasToolParts(message: {
-  parts?: Array<{ type: string }>;
+const MUTATING_TOOLS = new Set([
+  "set_relation",
+  "add_relation",
+  "remove_relation",
+  "create_table",
+  "update_cell",
+  "update_cells",
+  "add_row",
+  "delete_row",
+  "add_column",
+  "delete_column",
+  "set_status",
+  "move_card",
+  "update_column",
+  "reorder_columns",
+  "create_form_view",
+  "update_form_view",
+  "set_form_fields",
+  "add_form_field",
+  "remove_form_field",
+  "reorder_form_fields",
+  "set_form_sections",
+  "set_form_theme",
+  "set_form_layout",
+  "set_form_field_settings",
+  "rename_view",
+  "set_default_view",
+  "update_board_view",
+  "delete_view",
+  "create_grid_view",
+  "create_board_view",
+  "create_automation",
+  "update_automation",
+  "delete_automation",
+]);
+
+function messageHasMutations(message: {
+  parts?: Array<{ type: string; toolName?: string; state?: string }>;
 }): boolean {
   return (
     message.parts?.some(
       (p) =>
-        p.type === "dynamic-tool" ||
-        p.type.startsWith("tool-") ||
-        p.type === "tool-invocation"
+        p.state === "output-available" &&
+        MUTATING_TOOLS.has(
+          p.type === "dynamic-tool"
+            ? (p.toolName ?? "")
+            : p.type.replace(/^tool-/, ""),
+        ),
     ) ?? false
   );
 }
 
-function extractOpenPreview(
-  message: { parts?: Array<Record<string, unknown>> }
-): OpenPreviewPayload | null {
+function extractOpenPreview(message: {
+  parts?: Array<Record<string, unknown>>;
+}): OpenPreviewPayload | null {
   for (const p of message.parts ?? []) {
+    if (p.state !== "output-available") continue;
     const type = String(p.type ?? "");
     const toolName =
       (typeof p.toolName === "string" && p.toolName) ||
@@ -150,28 +198,114 @@ function agentModel(a: MemberOption): string {
   return a.agent?.persona?.defaultModel || "openrouter/free";
 }
 
-export function ChatPanel({
+export function ChatPanel(props: Props) {
+  const { user, session } = useAuth();
+  return (
+    <ScopedChatPanel
+      key={`${user?.id}:${session?.activeOrganizationId}`}
+      {...props}
+    />
+  );
+}
+
+function ThreadAgentBinding({ onSelect }: { onSelect: (id: string) => void }) {
+  const threadId = useAuiState((s) => s.threads.mainThreadId);
+  const savedAgentId = useAuiState((s) => s.threadListItem.custom?.agentId);
+  useEffect(() => {
+    if (typeof savedAgentId === "string") onSelect(savedAgentId);
+  }, [threadId, savedAgentId, onSelect]);
+  return null;
+}
+
+function RunAwareThread(props: React.ComponentProps<typeof Thread>) {
+  const { runs } = useContext(ChatRunsContext);
+  const streaming = useAuiState((s) => s.thread.isRunning);
+  return <Thread {...props} composerDisabled={!streaming && isActiveRun(runs[0])} />;
+}
+
+function ScopedChatPanel({
   tableId,
   onMutated,
+  floatingOpen = false,
+  onFloatingOpenChange,
   variant = "drawer",
   onOpenPreview,
+  previewOpen = false,
+  onTogglePreview,
   resourceKey: resourceKeyProp,
 }: Props) {
-  const [status, setStatus] = useState<ChatStatus | null>(null);
+  const threadSidebarId = useId();
+  const [threadListCollapsed, setThreadListCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("tabdo.chat.threadListCollapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (variant !== "home") return;
+    try {
+      localStorage.setItem(
+        "tabdo.chat.threadListCollapsed",
+        String(threadListCollapsed),
+      );
+    } catch {
+      // Collapsing still works when browser storage is unavailable.
+    }
+  }, [variant, threadListCollapsed]);
   const [agents, setAgents] = useState<MemberOption[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const selectSavedAgent = useCallback(
+    (id: string) => {
+      if (agents.some((agent) => agent.id === id)) setAgentId(id);
+    },
+    [agents],
+  );
+  const { pathname } = useLocation();
+  const page: ChatPageContext["page"] =
+    variant === "home"
+      ? "ai"
+      : /^\/app\/skills(?:\/|$)/.test(pathname)
+        ? "skills"
+      : /^\/app\/reports(?:\/|$)/.test(pathname)
+        ? "reports"
+      : /^\/app\/automations(?:\/|$)/.test(pathname) || pathname.endsWith("/automations")
+        ? "automations"
+        : /^\/app\/tables\/[^/]+$/.test(pathname)
+          ? "table"
+          : pathname.endsWith("/tables")
+            ? "tables"
+            : /^\/app\/agents(?:\/|$)/.test(pathname)
+              ? "agents"
+              : pathname.endsWith("/members")
+                ? "members"
+                : pathname.endsWith("/settings")
+                  ? "settings"
+                  : "ai";
+  const boundTableId =
+    page === "table" || page === "automations" ? tableId : null;
 
+  const reportId = page === "reports" ? pathname.match(/^\/app\/reports\/([0-9a-f-]{36})$/)?.[1] ?? null : null;
   const resourceKey = useMemo(
-    () => chatResourceKey({ tableId, resourceKey: resourceKeyProp }),
-    [tableId, resourceKeyProp]
+    () =>
+      chatResourceKey({
+        tableId: boundTableId,
+        resourceKey:
+          resourceKeyProp ?? (reportId ? `report:${reportId}` : !boundTableId && page !== "ai" ? page : null),
+      }),
+    [boundTableId, resourceKeyProp, page, reportId],
   );
 
   const requestRef = useRef<RequestBody>({
     agentId: null,
-    tableId,
+    context: { page, tableId: boundTableId, reportId },
   });
-  requestRef.current = { agentId, tableId };
+  requestRef.current = { agentId, context: { page, tableId: boundTableId, reportId } };
+  const threadAdapter = useMemo(
+    () => createThreadAdapter(() => requestRef.current),
+    [],
+  );
 
   const onMutatedRef = useRef(onMutated);
   onMutatedRef.current = onMutated;
@@ -179,39 +313,36 @@ export function ChatPanel({
   onOpenPreviewRef.current = onOpenPreview;
 
   useEffect(() => {
-    fetch("/api/chat/status")
-      .then((r) => r.json())
-      .then((s: ChatStatus) => setStatus(s))
-      .catch(() =>
-        setStatus({
-          mode: "mock",
-          harnesses: [],
-        })
-      );
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
-    setAgentsLoading(true);
-    api
-      .listMembers()
-      .then((r) => {
-        if (cancelled) return;
-        const list = (r.members ?? []).filter((m) => m.kind === "agent");
-        setAgents(list);
-        setAgentId((prev) => {
-          if (prev && list.some((a) => a.id === prev)) return prev;
-          return list[0]?.id ?? null;
+    let version = 0;
+    const load = () => {
+      const requestVersion = ++version;
+      return api
+        .listMembers()
+        .then((r) => {
+          if (cancelled || requestVersion !== version) return;
+          const list = (r.members ?? []).filter((m) => m.kind === "agent");
+          setAgents(list);
+          setAgentId((prev) => {
+            if (prev && list.some((a) => a.id === prev)) return prev;
+            return list[0]?.id ?? null;
+          });
+        })
+        .catch(() => {
+          if (!cancelled && requestVersion === version) setAgents([]);
+        })
+        .finally(() => {
+          if (!cancelled && requestVersion === version) setAgentsLoading(false);
         });
-      })
-      .catch(() => {
-        if (!cancelled) setAgents([]);
-      })
-      .finally(() => {
-        if (!cancelled) setAgentsLoading(false);
-      });
+    };
+    void load();
+    const onAgentsChanged = () => {
+      void load();
+    };
+    window.addEventListener("tabdo:agents-changed", onAgentsChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener("tabdo:agents-changed", onAgentsChanged);
     };
   }, []);
 
@@ -221,44 +352,63 @@ export function ChatPanel({
         api: "/api/chat",
         body: () => ({
           agentId: requestRef.current.agentId,
-          tableId: requestRef.current.tableId,
+          context: requestRef.current.context,
         }),
       }),
-    []
+    [],
   );
 
-  const runtime = useChatRuntime({
-    transport,
-    onData: (part) => {
-      if (part.type === "data-table-mutated") {
-        onMutatedRef.current();
-      }
-      if (part.type === "data-open-preview") {
-        const data = (part as { data?: OpenPreviewPayload }).data;
-        onOpenPreviewRef.current?.(data ?? { open: true, kind: "table" });
-      }
-    },
-    onFinish: ({ message }) => {
-      if (messageHasToolParts(message)) {
-        onMutatedRef.current();
-      }
-      const preview = extractOpenPreview(message);
-      if (preview) {
-        onOpenPreviewRef.current?.(preview);
-      }
-    },
+  const streamMutated = useRef(false);
+  const [activities, setActivities] = useState<Map<string, ChatActivity>>(new Map());
+  const runtime = useRemoteThreadListRuntime({
+    adapter: threadAdapter,
+    runtimeHook: () =>
+      useChatRuntime({
+        transport,
+        onError: (error) => {
+          streamMutated.current = false;
+          toast.error(error.message || "智能体执行失败");
+        },
+        onData: (part) => {
+          if (part.type === "data-chat-activity") {
+            const activity = part.data as ChatActivity;
+            setActivities((previous) => {
+              const next = new Map(previous);
+              next.delete(activity.threadId);
+              next.set(activity.threadId, activity);
+              if (next.size > 30) next.delete(next.keys().next().value!);
+              return next;
+            });
+          }
+          if (part.type === "data-table-mutated") {
+            const ids = (part as { data?: { tableIds?: string[] } }).data
+              ?.tableIds;
+            if (ids?.length) for (const id of ids) onMutatedRef.current(id);
+            else onMutatedRef.current();
+            streamMutated.current = true;
+          }
+          if (part.type === "data-open-preview") {
+            const data = (part as { data?: OpenPreviewPayload }).data;
+            onOpenPreviewRef.current?.(data ?? { open: true, kind: "table" });
+          }
+        },
+        onFinish: ({ message }) => {
+          if (!streamMutated.current && messageHasMutations(message)) {
+            onMutatedRef.current();
+          }
+          streamMutated.current = false;
+          const preview = extractOpenPreview(message);
+          if (preview) {
+            onOpenPreviewRef.current?.(preview);
+          }
+        },
+      }),
   });
 
   const auiConfig = useMemo(
     () => AuiConfig({ suggestions: WELCOME_SUGGESTIONS }),
-    []
+    [],
   );
-
-  const selected = agents.find((a) => a.id === agentId) ?? null;
-  const lockedHarness = selected ? agentHarness(selected) : null;
-  const lockedModel = selected ? agentModel(selected) : null;
-  const harnessStatus = status?.harnesses.find((h) => h.id === lockedHarness);
-  const harnessOnline = harnessStatus?.available ?? false;
 
   const agentOptions: ModelOption[] = useMemo(
     () =>
@@ -268,107 +418,221 @@ export function ChatPanel({
         return {
           id: a.id,
           name: a.name,
-          description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m.replace(/^openrouter\//, "")}`,
+          description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m === "__harness_default__" ? "默认模型" : m.replace(/^openrouter\//, "")}`,
           keywords: [h, m, a.email],
           icon: (
-            <span className="flex size-5 items-center justify-center rounded-full bg-agent/10 text-agent">
-              <Bot className="size-3" />
-            </span>
+            <MemberAvatar name={a.name} image={a.image} kind="agent" className="size-5" />
           ),
         };
       }),
-    [agents]
+    [agents],
   );
 
+  const [showFloatingThreads, setShowFloatingThreads] = useState(false);
   const isHome = variant === "home";
   const noAgents = !agentsLoading && agents.length === 0;
+  const selectAgent = async (next: string) => {
+    if (next === agentId) return;
+    if (runtime.thread.getState().isRunning) { toast.info("请先停止当前执行，再切换智能体");return; }
+    try {
+      const remoteId = runtime.threads.mainItem.getState().remoteId;
+      if (remoteId && isActiveRun((await api.listAgentRuns(remoteId)).runs[0])) { toast.info("请先停止当前执行，再切换智能体"); return; }
+      if (runtime.thread.getState().messages.length) await runtime.threads.switchToNewThread();
+      requestRef.current = { ...requestRef.current, agentId: next };
+      setAgentId(next);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "切换智能体失败"); }
+  };
 
   return (
+    <ChatActivityContext.Provider value={activities}>
     <AssistantRuntimeProvider runtime={runtime} config={auiConfig}>
+      <ChatRunsProvider onRecovered={() => onMutatedRef.current()}>
       <ResourceScopedThreads resourceKey={resourceKey} />
-      <div
-        className={cn(
-          "flex h-full min-h-0 flex-col bg-background",
-          !isHome && "border-l border-border"
-        )}
-        data-testid="chat-panel"
-        data-resource-key={resourceKey}
+      <ThreadAgentBinding onSelect={selectSavedAgent} />
+      <FloatingAssistantFrame
+        floating={!isHome}
+        open={floatingOpen}
+        onOpenChange={onFloatingOpenChange}
       >
-        {(!isHome || !noAgents) && <div
+        <div
           className={cn(
-            "flex shrink-0 items-center justify-between gap-2 border-b border-border",
-            isHome ? "h-11 px-6 md:px-10" : "h-11 px-2"
+            "@container/chat flex h-full min-h-0 min-w-0 bg-background",
           )}
+          data-testid="chat-panel"
+          data-resource-key={resourceKey}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-1">
-            {!noAgents && (
-              <SessionSwitcher resourceKey={resourceKey} className="min-w-0" />
+          {isHome && !noAgents && (
+            <aside
+              id={threadSidebarId}
+              className={cn(
+                "hidden w-56 shrink-0 border-r border-border bg-muted/30",
+                !threadListCollapsed && "@[640px]/chat:block",
+              )}
+              aria-label="对话列表"
+              data-testid="chat-thread-sidebar"
+            >
+              <ThreadList resourceKey={resourceKey} />
+            </aside>
+          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {(!isHome || !noAgents || onTogglePreview) && (
+              <div
+                className={cn(
+                  "flex shrink-0 items-center justify-between gap-2 border-b border-border",
+                  isHome ? "min-h-11 px-3 py-1" : "min-h-11 px-2 py-1",
+                )}
+                data-testid="chat-toolbar"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-1">
+                  {isHome && !noAgents && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="hidden size-8 shrink-0 @[640px]/chat:inline-flex"
+                      onClick={() =>
+                        setThreadListCollapsed((collapsed) => !collapsed)
+                      }
+                      aria-label={
+                        threadListCollapsed ? "展开会话列表" : "收起会话列表"
+                      }
+                      title={
+                        threadListCollapsed ? "展开会话列表" : "收起会话列表"
+                      }
+                      aria-expanded={!threadListCollapsed}
+                      aria-controls={threadSidebarId}
+                      data-testid="chat-thread-list-toggle"
+                    >
+                      {threadListCollapsed ? (
+                        <PanelLeftOpen className="size-4" />
+                      ) : (
+                        <PanelLeftClose className="size-4" />
+                      )}
+                    </Button>
+                  )}
+                  {isHome && !noAgents && (
+                    <SessionSwitcher
+                      resourceKey={resourceKey}
+                      className={cn(
+                        "min-w-0",
+                        isHome && !threadListCollapsed
+                          ? "@[640px]/chat:hidden"
+                          : "max-w-[55%] shrink",
+                      )}
+                    />
+                  )}
+
+                  {agentsLoading ? (
+                    <span className="text-[12px] text-muted-foreground">
+                      加载智能体…
+                    </span>
+                  ) : noAgents ? (
+                    <span className="text-[12px] text-muted-foreground">
+                      未选择智能体
+                    </span>
+                  ) : agentId ? (
+                    <ModelSelector
+                      key={agentOptions.map((o) => o.id).join(",")}
+                      models={agentOptions}
+                      value={agentId}
+                      onValueChange={(next) => void selectAgent(next)}
+                      size="sm"
+                      variant="ghost"
+                      searchable={agentOptions.length > 4}
+                      className={cn(
+                        "h-8 min-w-0 justify-between border-0 px-1.5 text-[12px] shadow-none",
+                        isHome
+                          ? "w-[160px] shrink-0"
+                          : "w-[180px] max-w-full shrink",
+                      )}
+                      contentClassName="w-[240px] min-w-[200px] max-w-[280px]"
+                    />
+                  ) : null}
+                </div>
+                {!noAgents && <AgentTaskPopover />}
+                {!isHome && (
+                  <FloatingThreadControls
+                    showThreads={showFloatingThreads}
+                    onShowThreads={setShowFloatingThreads}
+                    onClose={() => onFloatingOpenChange?.(false)}
+                  />
+                )}
+                {isHome && onTogglePreview && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 shrink-0"
+                    onClick={onTogglePreview}
+                    aria-label={previewOpen ? "收起工作面板" : "展开工作面板"}
+                    title={previewOpen ? "收起工作面板" : "展开工作面板"}
+                    aria-expanded={previewOpen}
+                    aria-controls="workspace-preview-panel"
+                    data-testid="workspace-preview-toggle"
+                  >
+                    {previewOpen ? (
+                      <PanelRightClose className="size-4" />
+                    ) : (
+                      <PanelRightOpen className="size-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
             )}
 
-            {agentsLoading ? (
-              <span className="text-[12px] text-muted-foreground">加载智能体…</span>
-            ) : noAgents ? (
-              <span className="text-[12px] text-muted-foreground">未选择智能体</span>
-            ) : agentId ? (
-              <ModelSelector
-                key={agentOptions.map((o) => o.id).join(",")}
-                models={agentOptions}
-                value={agentId}
-                onValueChange={setAgentId}
-                size="sm"
-                variant="ghost"
-                searchable={agentOptions.length > 4}
-                className="h-8 w-[160px] shrink-0 justify-start border-0 px-1.5 text-[12px] shadow-none"
-                contentClassName="w-[240px] min-w-[200px] max-w-[280px]"
-              />
-            ) : null}
+            {noAgents ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+                <AppEmptyState
+                  className="flex-1"
+                  data-testid="chat-no-agents"
+                  illustration={NOTIOLY.fastInternet}
+                  title="还没有智能体"
+                  description="创建一个智能体，开始对话、整理数据和配置自动化。"
+                  action={
+                    <Button asChild size="sm">
+                      <Link to="/app/agents">
+                        <Plus className="size-3.5" />
+                        去创建智能体
+                      </Link>
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col">
+                {!isHome && showFloatingThreads && (
+                  <div
+                    className="min-h-0 flex-1"
+                    data-testid="floating-thread-list"
+                    onClick={(event) => {
+                      if (
+                        (event.target as HTMLElement).closest(
+                          '[data-slot="aui_thread-list-item-trigger"], [data-slot="aui_thread-list-new"]',
+                        )
+                      )
+                        setShowFloatingThreads(false);
+                    }}
+                  >
+                    <ThreadList resourceKey={resourceKey} showNew={false} />
+                  </div>
+                )}
+                <div
+                  className={cn(
+                    "min-h-0 min-w-0 flex-1",
+                    !isHome && showFloatingThreads && "hidden",
+                  )}
+                >
+                  <RunAwareThread
+                    components={THREAD_COMPONENTS}
+                    autoFocus={isHome}
+                    dockComposer={!isHome}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-
-          {selected && lockedHarness ? (
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-              title="Harness 创建时锁定，对话内不可更换"
-              data-testid="chat-harness-badge"
-            >
-              <Lock className="size-2.5 opacity-70" />
-              <HarnessLogo id={lockedHarness} className="size-3" />
-              <span className="max-w-[7rem] truncate">
-                {(HARNESS_LABELS[lockedHarness] ?? lockedHarness).split(" ")[0]}
-                {lockedModel ? ` · ${lockedModel.replace(/^openrouter\//, "")}` : ""}
-              </span>
-              {!harnessOnline && (
-                <span className="text-warning">off</span>
-              )}
-            </span>
-          ) : (
-            <span className="shrink-0" aria-hidden />
-          )}
-        </div>}
-
-        {noAgents ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <AppEmptyState
-              className="flex-1"
-              data-testid="chat-no-agents"
-              illustration={NOTIOLY.fastInternet}
-              title="还没有智能体"
-              description="创建一个智能体，开始对话、整理数据和配置自动化。"
-              action={<Button asChild size="sm">
-              <Link to="/app/agents">
-                <Plus className="size-3.5" />
-                去创建智能体
-              </Link>
-            </Button>}
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 min-w-0 flex-1">
-              <Thread components={THREAD_COMPONENTS} autoFocus={isHome} />
-            </div>
-          </div>
-        )}
-      </div>
+        </div>
+      </FloatingAssistantFrame>
+      </ChatRunsProvider>
     </AssistantRuntimeProvider>
+    </ChatActivityContext.Provider>
   );
 }

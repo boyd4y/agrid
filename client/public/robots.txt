@@ -5,4 +5,4 @@ Allow: /blog
 Allow: /llms.txt
 Allow: /docs/llms.txt
 Disallow: /app
-Sitemap: https://agrid.app/sitemap.xml
+Sitemap: https://tabdo.ai/sitemap.xml

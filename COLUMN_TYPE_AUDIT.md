@@ -20,7 +20,3 @@
 - Date storage `YYYY-MM-DD`; display via `ColumnConfig.dateFormat` (column settings)
 
 ## Screenshots
-- `screenshots/audit/02-table.png`
-- `screenshots/audit/03-select-popover.png` (priority Popover + soft tags)
-- `screenshots/audit/04-date-picker.png` (manual + calendar)
-- `screenshots/audit/05-multi-select.png`

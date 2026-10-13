@@ -1,30 +1,34 @@
-import { useCallback, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useMemberOptions } from "@/hooks/useMemberOptions";
+import { ColumnTypeIcon } from "./ColumnTypeIcon";
+import { RelationColumnConfig } from "./RelationColumnConfig";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Plus,
   Trash2,
-  Type,
-  Hash,
-  List,
-  Tags,
-  Calendar,
-  CheckSquare,
-  User,
-  FunctionSquare,
   MoreHorizontal,
   ArrowUpDown,
   EyeOff,
   Loader2,
   ChevronDown,
   Pencil,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -32,8 +36,9 @@ import {
 import { CellDisplay, CellEditor } from "./CellEditors";
 import { FilterBar } from "./FilterBar";
 import { ColumnSettings } from "./ColumnSettings";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { api, type MemberOption } from "@/lib/api";
+import { api } from "@/lib/api";
 import type {
   CellValue,
   ColumnDef,
@@ -42,19 +47,12 @@ import type {
   RowData,
 } from "@/types/table";
 import { COLUMN_TYPE_LABELS } from "@/types/table";
-import { validateCell, type FilterCondition, type FilterLogic } from "@table/shared";
+import {
+  validateCell,
+  type FilterCondition,
+  type FilterLogic,
+} from "@tabdo/shared";
 import { useWindowedRows } from "@/hooks/useWindowedRows";
-
-const TYPE_ICONS: Record<ColumnType, ReactNode> = {
-  text: <Type className="h-3.5 w-3.5" />,
-  number: <Hash className="h-3.5 w-3.5" />,
-  select: <List className="h-3.5 w-3.5" />,
-  multi_select: <Tags className="h-3.5 w-3.5" />,
-  date: <Calendar className="h-3.5 w-3.5" />,
-  checkbox: <CheckSquare className="h-3.5 w-3.5" />,
-  person: <User className="h-3.5 w-3.5" />,
-  formula: <FunctionSquare className="h-3.5 w-3.5" />,
-};
 
 const DEFAULT_SELECT_OPTIONS = [
   { id: "a", label: "选项 A", color: "#d3e5ef" },
@@ -66,24 +64,38 @@ const ROW_H = 36;
 
 type Props = {
   table: FullTable;
+  refreshToken?: number;
   onChange: (table: FullTable) => void;
 };
 
-export function DataTable({ table, onChange }: Props) {
-  const [editing, setEditing] = useState<{ rowId: string; colId: string } | null>(null);
+export function DataTable({ table, onChange, refreshToken }: Props) {
+  const [deleteTarget, setDeleteTarget] = useState<
+    { kind: "row"; row: RowData } | { kind: "column"; column: ColumnDef } | null
+  >(null);
+  const [editing, setEditing] = useState<{
+    rowId: string;
+    colId: string;
+  } | null>(null);
   const [addingCol, setAddingCol] = useState(false);
   const [newColName, setNewColName] = useState("");
   const [newColType, setNewColType] = useState<ColumnType>("text");
+  const [newColConfig, setNewColConfig] = useState<ColumnDef["config"]>({});
+  const [addingBusy, setAddingBusy] = useState(false);
   const [newColFormula, setNewColFormula] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [settingsCol, setSettingsCol] = useState<ColumnDef | null>(null);
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [filterLogic, setFilterLogic] = useState<FilterLogic>("and");
-  const [sort, setSort] = useState<{ columnId: string; direction: "asc" | "desc" } | null>(
-    null
-  );
-  const [members, setMembers] = useState<MemberOption[]>([]);
-  const resizing = useRef<{ colId: string; startX: number; startW: number } | null>(null);
+  const [sort, setSort] = useState<{
+    columnId: string;
+    direction: "asc" | "desc";
+  } | null>(null);
+  const members = useMemberOptions();
+  const resizing = useRef<{
+    colId: string;
+    startX: number;
+    startW: number;
+  } | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
 
   const windowed = useWindowedRows({
@@ -91,30 +103,29 @@ export function DataTable({ table, onChange }: Props) {
     filters,
     filterLogic,
     sort,
+    refreshToken,
   });
 
-  useEffect(() => {
-    api.listMembers().then((r) => setMembers(r.members ?? [])).catch(() => {});
-  }, []);
+
 
   const updateLocal = useCallback(
     (next: FullTable) => onChange(next),
-    [onChange]
+    [onChange],
   );
 
   const sortedCols = useMemo(
     () => [...table.columns].sort((a, b) => a.sortOrder - b.sortOrder),
-    [table.columns]
+    [table.columns],
   );
 
   const visibleCols = useMemo(
     () => sortedCols.filter((c) => !c.config?.hidden),
-    [sortedCols]
+    [sortedCols],
   );
 
   const hiddenCols = useMemo(
     () => sortedCols.filter((c) => c.config?.hidden),
-    [sortedCols]
+    [sortedCols],
   );
 
   const totalWidth = useMemo(() => {
@@ -137,7 +148,11 @@ export function DataTable({ table, onChange }: Props) {
     void windowed.ensureRange(start, end);
   }, [virtualItems, windowed]);
 
-  const commitCell = async (row: RowData, columnId: string, value: CellValue) => {
+  const commitCell = async (
+    row: RowData,
+    columnId: string,
+    value: CellValue,
+  ) => {
     setEditing(null);
     const col = table.columns.find((c) => c.id === columnId);
     if (col) {
@@ -175,14 +190,9 @@ export function DataTable({ table, onChange }: Props) {
   };
 
   const deleteRow = async (row: RowData) => {
+    await api.deleteRow(row.id);
     windowed.removeRow(row.id);
-    try {
-      await api.deleteRow(row.id);
-      onChange({ ...table, rowCount: Math.max(0, (table.rowCount ?? 1) - 1) });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "删除行失败");
-      void windowed.reload();
-    }
+    onChange({ ...table, rowCount: Math.max(0, (table.rowCount ?? 1) - 1) });
   };
 
   const addColumn = async () => {
@@ -195,9 +205,12 @@ export function DataTable({ table, onChange }: Props) {
       newColType === "select" || newColType === "multi_select"
         ? { options: DEFAULT_SELECT_OPTIONS }
         : newColType === "formula"
-          ? { formula: newColFormula.trim(), formulaResultType: "auto" as const }
-          : {};
-    setAddingCol(false);
+          ? {
+              formula: newColFormula.trim(),
+              formulaResultType: "auto" as const,
+            }
+          : newColConfig;
+    setAddingBusy(true);
     try {
       const col = await api.addColumn(table.id, {
         name: newColName.trim(),
@@ -210,14 +223,18 @@ export function DataTable({ table, onChange }: Props) {
       setNewColName("");
       setNewColType("text");
       setNewColFormula("");
+      setNewColConfig({});
+      setAddingCol(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "新增列失败");
+    } finally {
+      setAddingBusy(false);
     }
   };
 
   const patchColumn = async (
     columnId: string,
-    data: Parameters<typeof api.patchColumn>[1]
+    data: Parameters<typeof api.patchColumn>[1],
   ) => {
     try {
       const updated = await api.patchColumn(columnId, data);
@@ -240,18 +257,12 @@ export function DataTable({ table, onChange }: Props) {
   };
 
   const deleteColumn = async (columnId: string) => {
+    await api.deleteColumn(columnId);
     setSettingsCol(null);
-    const prev = table;
     updateLocal({
       ...table,
       columns: table.columns.filter((c) => c.id !== columnId),
     });
-    try {
-      await api.deleteColumn(columnId);
-    } catch (e) {
-      updateLocal(prev);
-      setError(e instanceof Error ? e.message : "删除列失败");
-    }
   };
 
   const moveColumn = async (columnId: string, dir: "left" | "right") => {
@@ -285,7 +296,9 @@ export function DataTable({ table, onChange }: Props) {
       const w = Math.max(80, startW + (e.clientX - startX));
       updateLocal({
         ...table,
-        columns: table.columns.map((c) => (c.id === colId ? { ...c, width: w } : c)),
+        columns: table.columns.map((c) =>
+          c.id === colId ? { ...c, width: w } : c,
+        ),
       });
     };
     const onUp = async () => {
@@ -354,7 +367,11 @@ export function DataTable({ table, onChange }: Props) {
           </span>
         )}
         {sort && (
-          <button type="button" className="underline" onClick={() => setSort(null)}>
+          <button
+            type="button"
+            className="underline"
+            onClick={() => setSort(null)}
+          >
             清除排序
           </button>
         )}
@@ -380,11 +397,18 @@ export function DataTable({ table, onChange }: Props) {
         )}
       </div>
 
+
+
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-sm">
         {/* sticky header */}
         <div className="shrink-0 overflow-x-auto border-b border-border bg-muted/90">
-          <div className="flex h-9 min-w-max text-sm font-medium text-muted-foreground" style={{ width: totalWidth }}>
-            <div className="flex w-12 shrink-0 items-center justify-center text-muted-foreground">#</div>
+          <div
+            className="flex h-9 min-w-max text-sm font-medium text-muted-foreground"
+            style={{ width: totalWidth }}
+          >
+            <div className="flex w-12 shrink-0 items-center justify-center text-muted-foreground">
+              #
+            </div>
             {visibleCols.map((col) => (
               <div
                 key={col.id}
@@ -393,12 +417,14 @@ export function DataTable({ table, onChange }: Props) {
                 className="group/column-header relative flex h-9 shrink-0 items-center gap-1 px-1"
                 style={{ width: col.width, minWidth: col.width }}
               >
-                <span className="text-muted-foreground">{TYPE_ICONS[col.type as ColumnType]}</span>
+                <span className="text-muted-foreground">
+                  <ColumnTypeIcon type={col.type as ColumnType} className="size-3.5" />
+                </span>
                 <button
                   type="button"
                   className="min-w-0 flex-1 truncate text-left text-sm font-medium"
-                  onClick={() => toggleSort(col.id)}
-                  title="点击排序"
+                  onClick={() => col.type !== "relation" && toggleSort(col.id)}
+                  title={col.type === "relation" ? "关联字段" : "点击排序"}
                 >
                   {col.name}
                   {sort?.columnId === col.id && (
@@ -407,20 +433,52 @@ export function DataTable({ table, onChange }: Props) {
                     </span>
                   )}
                 </button>
+                <Popover open={settingsCol?.id === col.id} onOpenChange={(open) => { setAddingCol(false);setSettingsCol(open ? col : null); }}>
+                  <PopoverTrigger asChild>
                 <button
                   type="button"
                   className={cn(
                     "shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent",
                     "pointer-events-none opacity-0 group-hover/column-header:pointer-events-auto group-hover/column-header:opacity-100 group-focus-within/column-header:pointer-events-auto group-focus-within/column-header:opacity-100",
                     "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
-                    settingsCol?.id === col.id && "pointer-events-auto opacity-100"
+                    settingsCol?.id === col.id &&
+                      "pointer-events-auto opacity-100",
                   )}
                   aria-label={`${col.name}列设置`}
                   title="列设置"
-                  onClick={() => setSettingsCol(col)}
+                  onClick={() => {
+                    setAddingCol(false);
+                    setSettingsCol(col);
+                  }}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[360px] max-h-[min(70vh,640px)] overflow-auto p-4" align="end" aria-label={`${col.name}列设置`}>
+                    {settingsCol?.id === col.id && (
+
+        <ColumnSettings
+          key={settingsCol.id}
+          column={settingsCol}
+          allColumns={table.columns}
+          onClose={() => setSettingsCol(null)}
+          onSave={async (patch) => {
+            await patchColumn(settingsCol.id, patch);
+          }}
+          onDelete={() =>
+            setDeleteTarget({ kind: "column", column: settingsCol })
+          }
+          onHide={() => {
+            void patchColumn(settingsCol.id, {
+              config: { ...settingsCol.config, hidden: true },
+            });
+            setSettingsCol(null);
+          }}
+          onMove={(dir) => void moveColumn(settingsCol.id, dir)}
+        />
+                    )}
+                  </PopoverContent>
+                </Popover>
                 <div
                   className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/40"
                   onMouseDown={(e) => {
@@ -434,22 +492,98 @@ export function DataTable({ table, onChange }: Props) {
                 />
               </div>
             ))}
+            <Popover open={addingCol} onOpenChange={(open) => { setSettingsCol(null);setAddingCol(open); }}>
+              <PopoverTrigger asChild>
             <button
               type="button"
               className="flex w-11 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
               title="添加列"
-              onClick={() => setAddingCol(true)}
+              aria-label="添加列"
+              onClick={() => {
+                setSettingsCol(null);
+                setAddingCol(true);
+              }}
             >
               <Plus className="h-4 w-4" />
             </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[360px] max-h-[min(70vh,640px)] overflow-auto p-4" align="end" aria-label="添加列">
+
+        <div
+          className="w-full shrink-0"
+          role="region"
+          aria-label="添加列"
+          data-testid="add-column-editor"
+        >
+          <div className="space-y-1">
+            <h3 className="mb-3 text-base font-semibold">添加列</h3>
+            <Label className="mb-1 block">列名</Label>
+            <Input
+              className="mb-3"
+              value={newColName}
+              onChange={(e) => setNewColName(e.target.value)}
+              placeholder="例如：备注"
+              autoFocus
+            />
+            <Label className="mb-1 block">类型</Label>
+            <Select
+              value={newColType}
+              onValueChange={(v) => {
+                setNewColType(v as ColumnType);
+                setNewColConfig({});
+              }}
+            >
+              <SelectTrigger className="mb-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent><SelectGroup>
+                {(Object.keys(COLUMN_TYPE_LABELS) as ColumnType[]).map((t) => (
+                  <SelectItem key={t} value={t}>
+                    <ColumnTypeIcon type={t} />{COLUMN_TYPE_LABELS[t]}
+                  </SelectItem>
+                ))}
+              </SelectGroup></SelectContent>
+            </Select>
+            {(newColType === "relation" || newColType === "rollup") && (
+              <RelationColumnConfig
+                type={newColType}
+                config={newColConfig}
+                onChange={setNewColConfig}
+                columns={table.columns}
+              />
+            )}
+            {newColType === "formula" && (
+              <div className="mb-4">
+                <Label className="mb-1 block">公式</Label>
+                <Textarea
+                  className="min-h-[72px] font-mono text-sm"
+                  value={newColFormula}
+                  onChange={(e) => setNewColFormula(e.target.value)}
+                  placeholder={"{预估工时} * 8"}
+                  spellCheck={false}
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  用 {"{列名}"} 引用；支持 IF / AND / OR、四则运算等
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAddingCol(false)}>
+                <X data-icon="inline-start" />取消
+              </Button>
+              <Button disabled={addingBusy} onClick={() => void addColumn()}>
+                {addingBusy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}{addingBusy ? "添加中…" : "添加"}
+              </Button>
+            </div>
+          </div>
+        </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
         {/* virtual body */}
-        <div
-          ref={parentRef}
-          className="min-h-0 flex-1 overflow-auto"
-        >
+        <div ref={parentRef} className="min-h-0 flex-1 overflow-auto">
           <div
             className="relative"
             style={{ height: rowVirtualizer.getTotalSize(), width: totalWidth }}
@@ -469,12 +603,14 @@ export function DataTable({ table, onChange }: Props) {
                   <div className="group flex w-12 shrink-0 items-center justify-center gap-1 text-xs text-muted-foreground">
                     {row ? (
                       <>
-                        <span className="group-hover:hidden">{vi.index + 1}</span>
+                        <span className="group-hover:hidden">
+                          {vi.index + 1}
+                        </span>
                         <button
                           type="button"
                           className="hidden rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:inline-flex"
                           title="删除行"
-                          onClick={() => void deleteRow(row)}
+                          onClick={() => setDeleteTarget({ kind: "row", row })}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -505,42 +641,71 @@ export function DataTable({ table, onChange }: Props) {
                         data-row-id={row.id}
                         className={cn(
                           "group/cell relative flex h-9 shrink-0 items-center border-r border-border/50 px-2",
-                          col.type === "formula"
+                          col.type === "formula" || col.type === "rollup"
                             ? "cursor-default bg-muted/40"
                             : "cursor-pointer hover:bg-accent hover:shadow-[inset_0_0_0_1px_var(--primary)] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
-                          col.type !== "formula" && col.type !== "checkbox" && "pr-7",
-                          isEditing && "cell-editing"
+                          col.type !== "formula" &&
+                            col.type !== "rollup" &&
+                            col.type !== "checkbox" &&
+                            "pr-7",
+                          isEditing && "bg-background outline-none ring-2 ring-inset ring-primary focus:outline-none focus-within:outline-none",
                         )}
-                        role={col.type === "formula" || isEditing ? undefined : "button"}
-                        aria-pressed={col.type === "checkbox" ? Boolean(value) : undefined}
-                        tabIndex={col.type === "formula" || isEditing ? undefined : 0}
-                        aria-label={`${col.name}：${col.type === "formula" ? "只读" : "点击编辑"}`}
+                        role={
+                          col.type === "formula" ||
+                          col.type === "rollup" ||
+                          isEditing
+                            ? undefined
+                            : "button"
+                        }
+                        aria-pressed={
+                          col.type === "checkbox" ? Boolean(value) : undefined
+                        }
+                        tabIndex={
+                          col.type === "formula" ||
+                          col.type === "rollup" ||
+                          isEditing
+                            ? undefined
+                            : 0
+                        }
+                        aria-label={`${col.name}：${col.type === "formula" || col.type === "rollup" ? "只读" : "点击编辑"}`}
                         style={{ width: col.width, minWidth: col.width }}
                         onClick={() => {
-                          if (col.type === "formula") return;
+                          if (col.type === "formula" || col.type === "rollup")
+                            return;
                           if (col.type === "checkbox") {
                             void commitCell(row, col.id, !Boolean(value));
                             return;
                           }
-                          if (!isEditing) setEditing({ rowId: row.id, colId: col.id });
+                          if (!isEditing)
+                            setEditing({ rowId: row.id, colId: col.id });
                         }}
                         onKeyDown={(e) => {
-                          if (e.target !== e.currentTarget || col.type === "formula") return;
+                          if (
+                            e.target !== e.currentTarget ||
+                            col.type === "formula" ||
+                            col.type === "rollup"
+                          )
+                            return;
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            if (col.type === "checkbox") void commitCell(row, col.id, !Boolean(value));
+                            if (col.type === "checkbox")
+                              void commitCell(row, col.id, !Boolean(value));
                             else setEditing({ rowId: row.id, colId: col.id });
                           }
                         }}
                         title={
-                          col.type === "formula"
+                          col.type === "formula" || col.type === "rollup"
                             ? `公式: ${col.config?.formula ?? ""}`
-                            : col.type === "checkbox" ? "点击切换勾选" : "点击编辑 · Enter 打开"
+                            : col.type === "checkbox"
+                              ? "点击切换勾选"
+                              : "点击编辑 · Enter 打开"
                         }
                       >
                         {isEditing ? (
                           <CellEditor
                             column={col}
+                            row={row}
+                            onRowUpdated={windowed.upsertRow}
                             value={value}
                             members={members}
                             onCommit={(v) => void commitCell(row, col.id, v)}
@@ -549,15 +714,32 @@ export function DataTable({ table, onChange }: Props) {
                         ) : (
                           <>
                             <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-                              <CellDisplay column={col} value={value} members={members} />
+                              <CellDisplay
+                                column={col}
+                                value={value}
+                                members={members}
+                                relation={row.relations?.[col.id]}
+                              />
                             </div>
-                            {col.type !== "formula" && col.type !== "checkbox" && (
-                              <span className="pointer-events-none absolute right-1.5 text-muted-foreground opacity-0 group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100" aria-hidden>
-                                {["select", "multi_select", "person", "date"].includes(col.type)
-                                  ? <ChevronDown className="h-3.5 w-3.5" />
-                                  : <Pencil className="h-3 w-3" />}
-                              </span>
-                            )}
+                            {col.type !== "formula" &&
+                              col.type !== "rollup" &&
+                              col.type !== "checkbox" && (
+                                <span
+                                  className="pointer-events-none absolute right-1.5 text-muted-foreground opacity-0 group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100"
+                                  aria-hidden
+                                >
+                                  {[
+                                    "select",
+                                    "multi_select",
+                                    "person",
+                                    "date",
+                                  ].includes(col.type) ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <Pencil className="h-3 w-3" />
+                                  )}
+                                </span>
+                              )}
                           </>
                         )}
                       </div>
@@ -580,77 +762,25 @@ export function DataTable({ table, onChange }: Props) {
         </button>
       </div>
 
-      {addingCol && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-xl">
-            <h3 className="mb-3 text-base font-semibold">添加列</h3>
-            <Label className="mb-1 block">列名</Label>
-            <Input
-              className="mb-3"
-              value={newColName}
-              onChange={(e) => setNewColName(e.target.value)}
-              placeholder="例如：备注"
-              autoFocus
-            />
-            <Label className="mb-1 block">类型</Label>
-            <Select
-              value={newColType}
-              onValueChange={(v) => setNewColType(v as ColumnType)}
-            >
-              <SelectTrigger className="mb-3">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(COLUMN_TYPE_LABELS) as ColumnType[]).map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {COLUMN_TYPE_LABELS[t]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {newColType === "formula" && (
-              <div className="mb-4">
-                <Label className="mb-1 block">公式</Label>
-                <Textarea
-                  className="min-h-[72px] font-mono text-sm"
-                  value={newColFormula}
-                  onChange={(e) => setNewColFormula(e.target.value)}
-                  placeholder={'{预估工时} * 8'}
-                  spellCheck={false}
-                />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  用 {"{列名}"} 引用；支持 IF / AND / OR、四则运算等
-                </p>
-              </div>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setAddingCol(false)}>
-                取消
-              </Button>
-              <Button onClick={() => void addColumn()}>添加</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {settingsCol && (
-        <ColumnSettings
-          column={settingsCol}
-          allColumns={table.columns}
-          onClose={() => setSettingsCol(null)}
-          onSave={async (patch) => {
-            await patchColumn(settingsCol.id, patch);
-          }}
-          onDelete={() => void deleteColumn(settingsCol.id)}
-          onHide={() => {
-            void patchColumn(settingsCol.id, {
-              config: { ...settingsCol.config, hidden: true },
-            });
-            setSettingsCol(null);
-          }}
-          onMove={(dir) => void moveColumn(settingsCol.id, dir)}
-        />
-      )}
+      <DeleteConfirmation
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={deleteTarget?.kind === "column" ? "删除列？" : "删除记录？"}
+        description={
+          deleteTarget?.kind === "column"
+            ? deleteTarget.column.type === "relation"
+              ? `删除关联字段「${deleteTarget.column.name}」会同时删除对应的反向字段（如有）和关联关系。两张表的记录会保留。`
+              : `列「${deleteTarget.column.name}」及其数据将被永久删除，无法恢复。`
+            : "此记录将被永久删除，无法恢复。"
+        }
+        onConfirm={async () => {
+          if (deleteTarget?.kind === "row") await deleteRow(deleteTarget.row);
+          else if (deleteTarget?.kind === "column")
+            await deleteColumn(deleteTarget.column.id);
+        }}
+      />
     </div>
   );
 }

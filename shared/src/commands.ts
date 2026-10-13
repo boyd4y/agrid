@@ -1,3 +1,4 @@
+import type { RelationCommands, RelationResults } from "./relations.js";
 import type { CellValue, ColumnConfig, ColumnType, FullTable, TableMeta, ColumnDef, RowData } from "./types.js";
 import type { QueryRowsInput, QueryRowsResult } from "./pagination.js";
 import type {
@@ -13,6 +14,9 @@ import type {
   ListViewsInput,
   GetViewInput,
   DeleteViewInput,
+  RenameViewInput,
+  SetDefaultViewInput,
+  UpdateBoardViewInput,
   CreateFormViewInput,
   CreateGridViewInput,
   CreateBoardViewInput,
@@ -32,6 +36,7 @@ import type {
 
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
+  "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
   "listTables",
   "getTable",
   "updateCell",
@@ -53,6 +58,9 @@ export const COMMANDS = [
   "listViews",
   "getView",
   "deleteView",
+  "renameView",
+  "setDefaultView",
+  "updateBoardView",
   "createFormView",
   "updateFormView",
   "setFormFields",
@@ -127,7 +135,7 @@ export type ReorderColumnsInput = {
   columnIds: string[];
 };
 
-export type CommandInputMap = {
+export type CommandInputMap = RelationCommands & {
   queryRows: QueryRowsInput;
   updateColumn: UpdateColumnInput;
   reorderColumns: ReorderColumnsInput;
@@ -149,6 +157,9 @@ export type CommandInputMap = {
   listViews: ListViewsInput;
   getView: GetViewInput;
   deleteView: DeleteViewInput;
+  renameView: RenameViewInput;
+  setDefaultView: SetDefaultViewInput;
+  updateBoardView: UpdateBoardViewInput;
   createFormView: CreateFormViewInput;
   updateFormView: UpdateFormViewInput;
   setFormFields: SetFormFieldsInput;
@@ -164,7 +175,7 @@ export type CommandInputMap = {
   setFormChrome: SetFormChromeInput;
 };
 
-export type CommandResultMap = {
+export type CommandResultMap = RelationResults & {
   queryRows: QueryRowsResult;
   updateColumn: ColumnDef;
   reorderColumns: ColumnDef[];
@@ -186,6 +197,9 @@ export type CommandResultMap = {
   listViews: TableView[];
   getView: TableView | ResolvedFormView;
   deleteView: { ok: true };
+  renameView: TableView;
+  setDefaultView: TableView;
+  updateBoardView: TableView;
   createFormView: ResolvedFormView;
   updateFormView: ResolvedFormView;
   setFormFields: ResolvedFormView;
@@ -207,6 +221,9 @@ export type {
   ListViewsInput,
   GetViewInput,
   DeleteViewInput,
+  RenameViewInput,
+  SetDefaultViewInput,
+  UpdateBoardViewInput,
   CreateFormViewInput,
   CreateGridViewInput,
   CreateBoardViewInput,

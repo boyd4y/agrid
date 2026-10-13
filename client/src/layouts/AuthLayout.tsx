@@ -1,40 +1,53 @@
 import { Link, Outlet } from "react-router-dom";
-import { AgridLogo } from "@/components/brand/AgridLogo";
-import { AuthSideArt } from "@/components/illustrations";
+import { TabdoLogo } from "@/components/brand/TabdoLogo";
+import { AuthOrchestrationArt } from "@/components/brand/AuthOrchestrationArt";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { BRAND, BRAND_COPY } from "@/lib/brand";
 
 export function AuthLayout() {
+  const [definition, orchestration] = BRAND_COPY.slogan.split("，");
+
   return (
-    <div className="flex min-h-full bg-background text-foreground">
-      {/* Illustrated side panel — Notion marketing feel */}
-      <aside className="relative hidden w-[46%] overflow-hidden lg:block">
-        <AuthSideArt className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-muted/90 via-transparent to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-10">
-          <p className="text-2xl font-semibold tracking-tight text-foreground">
-            一张表，人和 Agent 一起写
+    <div className="relative grid min-h-svh bg-background text-foreground lg:grid-cols-[1.15fr_1fr]">
+      <header className="absolute inset-x-0 top-0 flex h-24 items-center justify-between px-6 sm:px-10 lg:px-12">
+        <Link to="/" aria-label="tabdo 首页" className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-background">
+          <TabdoLogo />
+        </Link>
+        <ThemeToggle />
+      </header>
+
+      <aside className="hidden min-w-0 flex-col border-r border-border/70 bg-muted/35 px-10 pb-8 pt-28 lg:flex xl:px-16">
+        <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center py-8">
+          <p className="mb-5 text-sm font-medium text-muted-foreground">
+            {BRAND_COPY.category}
           </p>
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            软纸质感、轻插画、命令层对齐——登录后直接进入 Notion 气质的工作台。
+          <h2 className="text-balance text-4xl font-semibold leading-[1.25] tracking-tight xl:text-5xl">
+            <span className="block">{definition}，</span>
+            <span className="block text-primary">{orchestration}</span>
+          </h2>
+          <p className="mt-5 max-w-md text-pretty text-base leading-7 text-muted-foreground">
+            {BRAND_COPY.description}
           </p>
+          <figure className="mt-8 w-full">
+            <AuthOrchestrationArt />
+          </figure>
         </div>
+        <p className="mx-auto flex w-full max-w-xl items-center gap-3 text-xs text-muted-foreground">
+          <span className="font-mono tracking-wide">Table → Do → AI</span>
+          <span aria-hidden="true" className="text-border">/</span>
+          <span>从想法，到行动</span>
+        </p>
       </aside>
 
-      {/* Form column */}
-      <div className="relative flex flex-1 flex-col items-center justify-center px-4 py-12">
-        {/* Soft doodle wash on mobile / form side */}
-        <div
-          className="pointer-events-none absolute inset-0 -z-10 lg:hidden"
-          style={{
-            background:
-              "radial-gradient(ellipse 70% 50% at 20% 10%, #F1E3B7 0%, transparent 50%), radial-gradient(ellipse 60% 40% at 90% 80%, #D3E5EF 0%, transparent 50%)",
-          }}
-        />
-        <Link to="/" className="inline-flex items-center gap-2">
-            <AgridLogo />
-          </Link>
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-background/95 p-7 shadow-[0_8px_30px_rgba(55,53,47,0.06)] backdrop-blur">
-          <Outlet />
+      <div className="flex min-w-0 flex-col px-6 pb-8 pt-28 sm:px-12 lg:pt-24">
+        <div className="flex flex-1 items-center justify-center py-10">
+          <main className="w-full max-w-sm">
+            <Outlet />
+          </main>
         </div>
+        <p className="text-center text-xs text-muted-foreground">
+          {BRAND.domain} <span aria-hidden="true" className="mx-2">·</span> {BRAND_COPY.category}
+        </p>
       </div>
     </div>
   );

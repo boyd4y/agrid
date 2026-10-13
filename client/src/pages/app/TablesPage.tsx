@@ -1,19 +1,22 @@
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
+import { DataRefreshButton } from "@/components/ui/data-refresh-button";
+import { TableIcon } from "@/components/table/TableIcon";
 import { TableActions } from "@/components/table/TableActions";
 import { Link, useOutletContext } from "react-router-dom";
-import { NiPlus, NiTable, NiZap } from "@/components/icons";
+import { NiPlus } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import type { AppOutletContext } from "@/layouts/AppShell";
 
 export function TablesPage() {
-  const { tables, createTable, tablesLoading } =
+  const { tables, createTable, tablesLoading, notifyTableMutated } =
     useOutletContext<AppOutletContext>();
 
   return (
     <AppPage header={
-      <AppPageHeader page="tables" description="所有多维表 · 表格 / 看板视图 · 自动化设置">
+      <AppPageHeader page="tables" description="管理表格、字段与数据视图。">
+        <DataRefreshButton onRefresh={notifyTableMutated} />
         <Button onClick={() => void createTable()}>
           <NiPlus className="h-4 w-4" />
           新建
@@ -47,7 +50,7 @@ export function TablesPage() {
                 className="flex min-w-0 flex-1 items-start gap-3"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <NiTable className="h-4 w-4 text-primary" />
+                  <TableIcon name={t.icon} className="h-4 w-4 text-primary" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{t.name}</div>
@@ -57,19 +60,6 @@ export function TablesPage() {
                 </div>
               </Link>
               <TableActions table={t} />
-              </div>
-              <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                <Link
-                  to={`/app/tables/${t.id}/automations`}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  data-testid={`table-automations-${t.id}`}
-                >
-                  <NiZap className="h-3.5 w-3.5 text-warning" />
-                  自动化
-                </Link>
-                <span className="text-[10px] text-muted-foreground">
-                  表格设置
-                </span>
               </div>
             </div>
           ))}

@@ -1,6 +1,6 @@
 # 表格字段操作完整性清单
 
-审计并补全（Feishu / Notion 风格 MVP）。UI 与 Agent（`/api/commands` + AI tools）共用 `@table/shared` 命令层与 `applyFilters`。
+审计并补全（Feishu / Notion 风格 MVP）。UI 与 Agent（`/api/commands` + AI tools）共用 `@tabdo/shared` 命令层与 `applyFilters`。
 
 | 能力 | 审计前 | 现状 | 说明 |
 |------|--------|------|------|

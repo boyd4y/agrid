@@ -1,3 +1,6 @@
+import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA } from "@tabdo/shared";
+import { createReportTools } from "./report-tools.js";
+import { relationConfigSchema, rollupConfigSchema } from "../commands/relations.js";
 import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { COLUMN_TYPES } from "../db/schema.js";
@@ -6,7 +9,8 @@ import {
   AGENT_DEFAULT_PAGE_SIZE,
   AGENT_MAX_PAGE_SIZE,
   clampLimit,
-} from "@table/shared";
+  FILTER_OPS,
+} from "@tabdo/shared";
 
 const cellValueSchema = z.union([
   z.string(),
@@ -16,17 +20,86 @@ const cellValueSchema = z.union([
   z.null(),
 ]);
 
+const relationRecordSchema = z.strictObject({
+  rowId: z.string().uuid().describe("源记录 UUID，使用 query_rows 获取"),
+  columnId: z.string().uuid().describe("已存在的关联字段 UUID，使用 get_table 获取；不能传字段名称"),
+  recordIds: z.array(z.string().uuid()).max(1000).describe("目标表记录 UUID 数组，使用 query_relation_records / query_rows 获取"),
+});
+
+const automationTriggerSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("row_created") }),
+  z.object({ type: z.literal("field_changed"), columnId: z.string().uuid(), toValue: cellValueSchema.optional() }),
+  z.object({ type: z.literal("enter_status"), columnId: z.string().uuid(), optionId: z.string() }),
+]);
+const automationActionSchema = z.object({ type: z.literal("update_field"), columnId: z.string().uuid(), value: cellValueSchema });
+const automationConditionSchema = z.object({ id: z.string(), columnId: z.string().uuid(), op: z.enum(FILTER_OPS), value: cellValueSchema.optional() });
+
 /** AI tools mirror the shared command layer — row reads are ALWAYS windowed */
 export function createTableTools(
   defaultTableId?: string,
-  organizationId?: string
+  organizationId?: string,
+  actorId?: string
 ): any {
-  const org = { organizationId };
+  const org = { organizationId, actorId };
+  const tableIdOrDefault = (tableId?: string) => {
+    const id = tableId || defaultTableId;
+    if (!id) throw new Error("请先指定表格；使用 list_tables 查找表格 ID。");
+    return id;
+  };
   return {
+    ...createReportTools(organizationId),
+    get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow({...input,...org})}),
+    query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords({...input,...org})}),
+    set_relation: tool({description:"整体替换已有关联字段中的目标记录。此工具不创建字段；创建关联字段用 add_column(type=relation, relation={targetTableId,...})。传 expectedVersion 防止覆盖并发修改。清空传 recordIds=[]，不删除记录。",inputSchema:zodSchema(relationRecordSchema.extend({expectedVersion:z.number().int().optional()})),execute:async input=>cmds.setRelation({...input,...org})}),
+    add_relation: tool({description:"向已有的关联字段增量添加目标记录，幂等，不覆盖其他并发添加。此工具不创建关联字段或表格关系定义；创建单双向字段用 add_column(type=relation, relation={targetTableId,inverseName,...})。需要实际字段 UUID 和目标记录 UUID 数组。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.addRelation({...input,...org})}),
+    remove_relation: tool({description:"从已有关联字段增量解除指定记录，不删除目标记录，也不删除关联字段。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.removeRelation({...input,...org})}),
     list_tables: tool({
       description: "列出当前工作区的多维表格",
       inputSchema: zodSchema(z.object({})),
       execute: async () => cmds.listTables(org),
+    }),
+
+    create_table: tool({
+      description: "在当前工作区创建表格（默认包含标题列），随后使用 add_column 配置字段。",
+      inputSchema: zodSchema(z.object({ name: z.string().min(1).max(200), description: z.string().optional() })),
+      execute: async (input) => {
+        if (!organizationId) throw new Error("缺少工作区上下文");
+        return cmds.createTable({ ...input, organizationId });
+      },
+    }),
+
+    list_automations: tool({
+      description: "列出指定表格的自动化规则。工作区对话必须先指定表格。",
+      inputSchema: zodSchema(z.object({ tableId: z.string().uuid().optional() })),
+      execute: async ({ tableId }) => cmds.listAutomations({ tableId: tableIdOrDefault(tableId), ...org }),
+    }),
+    create_automation: tool({
+      description: "创建自动化：新增行、字段变化或进入状态时，匹配条件后自动更新字段。配置前先 get_table 获取字段/选项 ID。当前后台支持 update_field 动作。",
+      inputSchema: zodSchema(z.object({
+        tableId: z.string().uuid().optional(), name: z.string().min(1), enabled: z.boolean().optional(),
+        trigger: automationTriggerSchema, conditions: z.array(automationConditionSchema).optional(),
+        conditionLogic: z.enum(["and", "or"]).optional(), actions: z.array(automationActionSchema).min(1),
+      })),
+      execute: async (input) => cmds.createAutomation({ ...input, tableId: tableIdOrDefault(input.tableId), ...org }),
+    }),
+    update_automation: tool({
+      description: "修改自动化规则、条件或字段动作；enabled 控制启用/停用。",
+      inputSchema: zodSchema(z.object({
+        automationId: z.string().uuid(), name: z.string().min(1).optional(), enabled: z.boolean().optional(),
+        trigger: automationTriggerSchema.optional(), conditions: z.array(automationConditionSchema).optional(),
+        conditionLogic: z.enum(["and", "or"]).optional(), actions: z.array(automationActionSchema).min(1).optional(),
+      })),
+      execute: async (input) => cmds.updateAutomation({ ...input, ...org }),
+    }),
+    delete_automation: tool({
+      description: "删除自动化规则并停止后续执行。",
+      inputSchema: zodSchema(z.object({ automationId: z.string().uuid() })),
+      execute: async (input) => cmds.deleteAutomation({ ...input, ...org }),
+    }),
+    list_automation_runs: tool({
+      description: "查看自动化执行记录和失败原因。最多返回 200 条。",
+      inputSchema: zodSchema(z.object({ tableId: z.string().uuid().optional(), automationId: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional() })),
+      execute: async (input) => cmds.listAutomationRuns({ ...input, tableId: tableIdOrDefault(input.tableId), ...org }),
     }),
 
     get_table: tool({
@@ -99,7 +172,7 @@ export function createTableTools(
 
     add_column: tool({
       description:
-        "新增一列。公式列：type=formula，传 formula 如 {预估工时}*8。公式列只读，改依赖列会自动重算。",
+        "新增一列。关联列传 relation 配置，可指定 inverseName 创建双向字段。汇总列传 rollup 配置。公式列：type=formula，传 formula 如 {预估工时}*8。公式列只读，改依赖列会自动重算。",
       inputSchema: zodSchema(
         z.object({
           tableId: z.string().uuid().optional(),
@@ -115,13 +188,15 @@ export function createTableTools(
             )
             .optional()
             .describe("select / multi_select 的选项"),
+          relation: relationConfigSchema.optional().describe("type=relation：目标表、单条/多条、可选反向字段名"),
+          rollup: rollupConfigSchema.optional().describe("type=rollup：本表关联字段、目标字段和聚合方式；只读，不支持嵌套汇总"),
           formula: z.string().optional().describe("公式表达式，type=formula 时必填"),
           formulaResultType: z
             .enum(["auto", "number", "text", "checkbox", "date"])
             .optional(),
         })
       ),
-      execute: async ({ tableId, name, type, options, formula, formulaResultType }) => {
+      execute: async ({ tableId, name, type, options, formula, formulaResultType, relation, rollup }) => {
         const id = tableId || defaultTableId;
         if (!id) throw new Error("缺少 tableId");
         return cmds.addColumn({
@@ -129,6 +204,7 @@ export function createTableTools(
           name,
           type,
           config: {
+            ...(relation ? {relation} : {}), ...(rollup ? {rollup} : {}),
             ...(options ? { options } : {}),
             ...(formula !== undefined
               ? { formula, formulaResultType: formulaResultType ?? "auto" }
@@ -301,13 +377,13 @@ export function createTableTools(
 
     open_preview: tool({
       description:
-        "打开右侧可扩展 UI Slot（插件预览）。默认关闭；按需打开。kind=table|form；form 时传 viewId。",
+        "切换右侧工作面板并展示内容。面板默认打开，可手动收起。kind=table|form|automations；form 时可传 viewId。",
       inputSchema: zodSchema(
         z.object({
           kind: z
             .string()
             .optional()
-            .describe("预览插件种类：table 或 form，默认 table"),
+            .describe("工作面板种类：table、form 或 automations，默认 table"),
           tableId: z
             .string()
             .uuid()
@@ -325,7 +401,13 @@ export function createTableTools(
         })
       ),
       execute: async ({ kind, tableId, viewId, open }) => {
-        const id = tableId || defaultTableId || null;
+        let id = tableId || defaultTableId || null;
+        if (open !== false && viewId) {
+          const view = await cmds.getView({ viewId, ...org });
+          if (id && id !== view.tableId) throw new Error("视图不属于指定的表格");
+          id = view.tableId;
+        }
+        if (open !== false && id) await cmds.getTable({ tableId: id, includeFirstPage: false, ...org });
         return {
           ok: true,
           open: open !== false,
@@ -538,6 +620,10 @@ export function createTableTools(
     }),
 
 
+    rename_view: tool({ description: "重命名任意表格、看板或表单视图，不改变其配置。", inputSchema: zodSchema(RENAME_VIEW_SCHEMA), execute: async (input) => cmds.renameView({ ...input, ...org }) }),
+    set_default_view: tool({ description: "设置表格唯一默认视图，整个工作区共享。", inputSchema: zodSchema(SET_DEFAULT_VIEW_SCHEMA), execute: async (input) => cmds.setDefaultView({ ...input, ...org }) }),
+    update_board_view: tool({ description: "更新看板分组单选字段、卡片显示字段（visibleColumnIds按显示顺序）及hideEmpty、density（comfortable宽松/compact精简）；标题始终显示，人员和日期固定在页脚。", inputSchema: zodSchema(UPDATE_BOARD_VIEW_SCHEMA), execute: async (input) => cmds.updateBoardView({ ...input, ...org }) }),
+
     delete_view: tool({
       description: "删除视图。同一表格至少保留一个视图。",
       inputSchema: zodSchema(z.object({ viewId: z.string().uuid() })),
@@ -565,15 +651,16 @@ export function createTableTools(
           tableId: z.string().uuid().optional(),
           name: z.string().optional(),
           statusColumnId: z.string().uuid().optional(),
+          config: BOARD_VIEW_CONFIG_SCHEMA.optional(),
         })
       ),
-      execute: async ({ tableId, name, statusColumnId }) => {
+      execute: async ({ tableId, name, statusColumnId, config }) => {
         const id = tableId || defaultTableId;
         if (!id) throw new Error("缺少 tableId");
         return cmds.createBoardView({
           tableId: id,
           name,
-          config: statusColumnId ? { statusColumnId } : {},
+          config: { ...config, ...(statusColumnId ? { statusColumnId } : {}) },
           ...org,
         });
       },

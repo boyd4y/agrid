@@ -1,6 +1,6 @@
 /**
  * Seed a large table for 100k+ smoke tests.
- * Usage: pnpm --filter server db:seed:large [count]
+ * Usage: pnpm --filter @tabdo/server db:seed:large [count]
  * Default count: 100000
  */
 import { eq } from "drizzle-orm";

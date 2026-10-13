@@ -35,7 +35,7 @@ export function BlogPostPage() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64"
         style={{
           background:
-            "radial-gradient(ellipse 50% 80% at 30% 0%, var(--agrid-purple-soft) 0%, transparent 60%), radial-gradient(ellipse 40% 60% at 80% 10%, var(--agrid-yellow-soft) 0%, transparent 50%)",
+            "radial-gradient(ellipse 50% 80% at 30% 0%, var(--tabdo-purple-soft) 0%, transparent 60%), radial-gradient(ellipse 40% 60% at 80% 10%, var(--tabdo-yellow-soft) 0%, transparent 50%)",
         }}
       />
       <div className="mx-auto max-w-3xl px-4 py-14">

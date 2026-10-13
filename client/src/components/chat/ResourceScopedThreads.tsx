@@ -43,7 +43,7 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
       const custom = threadResourceCustomUpdate(state, resourceKey);
       if (custom) methods.updateCustom(custom);
       setStoredThreadResource(threadId, resourceKey);
-      setLastThreadId(resourceKey, threadId);
+      setLastThreadId(resourceKey, state.remoteId ?? threadId);
     } catch (e) {
       console.warn("stamp thread resourceKey", e);
     }
@@ -55,7 +55,6 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
     if (appliedKeyRef.current === resourceKey) return;
 
     const scoped = threadItems.filter((t) => {
-      if (t.status === "archived") return false;
       return readThreadResourceKey(t) === resourceKey;
     });
 
@@ -69,7 +68,7 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
     }
 
     const lastId = getLastThreadId(resourceKey);
-    const byLast = lastId ? scoped.find((t) => t.id === lastId) : undefined;
+    const byLast = lastId ? scoped.find((t) => t.id === lastId || t.remoteId === lastId) : undefined;
     const sorted = [...scoped].sort((a, b) => {
       const ta = a.lastMessageAt?.getTime() ?? 0;
       const tb = b.lastMessageAt?.getTime() ?? 0;

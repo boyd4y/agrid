@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * @table/mcp — stdio MCP server
+ * @tabdo/mcp — stdio MCP server
  * Tools map 1:1 to shared COMMANDS via POST /api/commands
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA } from "@tabdo/shared";
 import { callCommand, textResult } from "./client.js";
 
 const cellValue = z.union([
@@ -37,9 +38,11 @@ const columnType = z.enum([
   "date",
   "checkbox",
   "person",
-  "formula",
+  "formula", "relation", "rollup",
 ]);
 
+const relationConfig=z.object({targetTableId:z.string().uuid(),limit:z.enum(["one","many"]).optional(),inverseName:z.string().optional(),inverseLimit:z.enum(["one","many"]).optional()});
+const rollupConfig=z.object({relationColumnId:z.string().uuid(),targetColumnId:z.string().uuid().optional(),operation:z.enum(["count","sum","average","min","max","earliest","latest"])});
 const formulaResultType = z.enum(["auto", "number", "text", "checkbox", "date"]);
 
 const selectOption = z.object({
@@ -49,9 +52,19 @@ const selectOption = z.object({
 });
 
 const server = new McpServer({
-  name: "table",
+  name: "tabdo",
   version: "0.1.0",
 });
+
+server.registerTool("rename_view", { description: "重命名表格、看板或表单视图。", inputSchema: RENAME_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("renameView", input)));
+server.registerTool("set_default_view", { description: "设置表格唯一默认视图。", inputSchema: SET_DEFAULT_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("setDefaultView", input)));
+server.registerTool("update_board_view", { description: "更新看板显示设置：分组、显示字段及顺序、隐藏空值、宽松或精简密度。标题在顶部，人员和日期在页脚。", inputSchema: UPDATE_BOARD_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("updateBoardView", input)));
+
+for(const [name,command] of [["set_relation","setRelation"],["add_relation","addRelation"],["remove_relation","removeRelation"]] as const){
+ server.registerTool(name,{description:"按记录ID替换/增量添加/解除关联，不删除记录。set使用版本检查防覆盖。",inputSchema:{rowId:z.string().uuid(),columnId:z.string().uuid(),recordIds:z.array(z.string().uuid()).max(1000),expectedVersion:z.number().int().optional()}},async input=>textResult(await callCommand(command,input)));
+}
+server.registerTool("query_relation_records",{description:"分页搜索关联候选或读取已关联记录",inputSchema:{columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()}},async input=>textResult(await callCommand("queryRelationRecords",input)));
+server.registerTool("get_row",{description:"读取单条记录和字段",inputSchema:{rowId:z.string().uuid()}},async input=>textResult(await callCommand("getRow",input)));
 
 server.registerTool(
   "list_tables",
@@ -179,13 +192,14 @@ server.registerTool(
       tableId: z.string(),
       name: z.string().min(1),
       type: columnType,
+      relation:relationConfig.optional(), rollup:rollupConfig.optional(),
       options: z.array(selectOption).optional(),
       formula: z.string().optional().describe("公式表达式，type=formula 时必填"),
       formulaResultType: formulaResultType.optional(),
       width: z.number().optional(),
     },
   },
-  async ({ tableId, name, type, options, formula, formulaResultType, width }) =>
+  async ({ tableId, name, type, options, formula, formulaResultType, width, relation, rollup }) =>
     textResult(
       await callCommand("addColumn", {
         tableId,
@@ -193,6 +207,7 @@ server.registerTool(
         type,
         width,
         config: {
+          ...(relation?{relation}:{}), ...(rollup?{rollup}:{}),
           ...(options ? { options } : {}),
           ...(formula !== undefined ? { formula, formulaResultType: formulaResultType ?? "auto" } : {}),
         },

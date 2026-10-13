@@ -1,16 +1,20 @@
 import { and, eq, sql } from "drizzle-orm";
 import {
   recomputeRowFormulas,
+  resolveFormulaDepIds,
   validateFormula,
   type CellValue,
   type ColumnDef,
-} from "@table/shared";
-import { db } from "../db/index.js";
+} from "@tabdo/shared";
+import { db, type Database } from "../db/index.js";
 import { columns, rows } from "../db/schema.js";
 import { queryRowsWindowed } from "./queryRows.js";
 
-export async function loadTableColumns(tableId: string): Promise<ColumnDef[]> {
-  const cols = await db
+export async function loadTableColumns(
+  tableId: string,
+  executor: Database = db,
+): Promise<ColumnDef[]> {
+  const cols = await executor
     .select()
     .from(columns)
     .where(eq(columns.tableId, tableId));
@@ -20,9 +24,20 @@ export async function loadTableColumns(tableId: string): Promise<ColumnDef[]> {
 /** Apply formula recompute to an in-memory cells map. */
 export function applyFormulasToCells(
   cols: ColumnDef[],
-  cells: Record<string, CellValue>
+  cells: Record<string, CellValue>,
 ): Record<string, CellValue> {
-  return recomputeRowFormulas(cols, cells);
+  return recomputeRowFormulas(cols, physicalCells(cols, cells));
+}
+
+function physicalCells(cols: ColumnDef[], cells: Record<string, CellValue>) {
+  const virtual = new Set(
+    cols
+      .filter((c) => c.type === "relation" || c.type === "rollup")
+      .map((c) => c.id),
+  );
+  return Object.fromEntries(
+    Object.entries(cells).filter(([id]) => !virtual.has(id)),
+  );
 }
 
 /**
@@ -34,7 +49,7 @@ export async function persistRowWithFormulas(
   rowId: string,
   tableId: string,
   cells: Record<string, CellValue>,
-  cols?: ColumnDef[]
+  cols?: ColumnDef[],
 ) {
   const columnDefs = cols ?? (await loadTableColumns(tableId));
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -42,8 +57,10 @@ export async function persistRowWithFormulas(
     if (!existing) return undefined;
     // Prefer caller cells on first attempt; on CAS miss recompute from latest row cells
     const base =
-      attempt === 0 ? cells : ((existing.cells ?? {}) as Record<string, CellValue>);
-    const nextCells = recomputeRowFormulas(columnDefs, base);
+      attempt === 0
+        ? cells
+        : ((existing.cells ?? {}) as Record<string, CellValue>);
+    const nextCells = applyFormulasToCells(columnDefs, base);
     const [updated] = await db
       .update(rows)
       .set({
@@ -81,11 +98,16 @@ export async function recomputeAllFormulasForTable(tableId: string) {
           if (!fresh) break;
           current = fresh;
         }
-        const nextCells = recomputeRowFormulas(
+        const nextCells = applyFormulasToCells(
           cols,
-          (current.cells ?? {}) as Record<string, CellValue>
+          (current.cells ?? {}) as Record<string, CellValue>,
         );
-        const prev = JSON.stringify(current.cells ?? {});
+        const prev = JSON.stringify(
+          physicalCells(
+            cols,
+            (current.cells ?? {}) as Record<string, CellValue>,
+          ),
+        );
         const next = JSON.stringify(nextCells);
         if (prev === next) break;
         const [u] = await db
@@ -95,7 +117,12 @@ export async function recomputeAllFormulasForTable(tableId: string) {
             version: sql`${rows.version} + 1`,
             updatedAt: new Date(),
           })
-          .where(and(eq(rows.id, current.id), eq(rows.version, current.version ?? 0)))
+          .where(
+            and(
+              eq(rows.id, current.id),
+              eq(rows.version, current.version ?? 0),
+            ),
+          )
           .returning();
         if (u) {
           updated++;
@@ -113,10 +140,20 @@ export async function recomputeAllFormulasForTable(tableId: string) {
 export function assertFormulaConfig(
   config: { formula?: string; formulaResultType?: string } | undefined,
   allColumns: ColumnDef[],
-  selfColumnId?: string
+  selfColumnId?: string,
 ) {
   const formula = config?.formula?.trim() ?? "";
   if (!formula) throw new Error("公式列必须填写表达式（config.formula）");
+  const deps = resolveFormulaDepIds(formula, allColumns).ids;
+  if (
+    allColumns.some(
+      (c) =>
+        deps.includes(c.id) && (c.type === "relation" || c.type === "rollup"),
+    )
+  )
+    throw new Error(
+      "第一版公式暂不支持引用关联或汇总字段，请使用汇总字段计算跨表数据",
+    );
   const err = validateFormula(formula, allColumns, selfColumnId);
   if (err) throw new Error(err);
 }

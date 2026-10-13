@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, GripVertical, Loader2 } from "lucide-react";
+import type { BoardViewConfig } from "@tabdo/shared";
+import { useMemberOptions } from "@/hooks/useMemberOptions";
+import { CellDisplay } from "@/components/table/CellEditors";
+import { ColumnTypeIcon } from "@/components/table/ColumnTypeIcon";
+import { openRelatedRecord } from "@/components/table/RelationPicker";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus, GripVertical, Loader2, MoreHorizontal, Trash2 } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { FullTable, RowData, SelectOption, ColumnDef } from "@/types/table";
 import { cn } from "@/lib/utils";
@@ -8,8 +17,9 @@ import { selectOptionSwatch } from "@/lib/select-colors";
 
 type Props = {
   table: FullTable;
+  config?: BoardViewConfig | Record<string, unknown>;
+  refreshToken?: number;
   onChange: (table: FullTable) => void;
-  onRefresh: () => void;
 };
 
 function findStatusColumn(table: FullTable): ColumnDef | undefined {
@@ -28,6 +38,12 @@ function findTitleColumn(table: FullTable): ColumnDef | undefined {
 
 const UNGROUPED: SelectOption = { id: "__none__", label: "未分组", color: "#ebeced" };
 const PAGE = 40;
+const INTERACTIVE_CARD_CHILD = "button,a,input,select,textarea,[contenteditable='true'],[role='button'],[role='link'],[role='checkbox'],[role='switch']";
+
+function isInteractiveCardChild(target: EventTarget | null, card: HTMLElement) {
+  const control = target instanceof Element ? target.closest(INTERACTIVE_CARD_CHILD) : null;
+  return Boolean(control && control !== card);
+}
 
 type ColState = {
   rows: RowData[];
@@ -37,12 +53,26 @@ type ColState = {
   loading: boolean;
 };
 
-export function KanbanBoard({ table, onChange, onRefresh }: Props) {
-  const statusCol = useMemo(() => findStatusColumn(table), [table]);
+export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }: Props) {
+  const config = (rawConfig ?? {}) as BoardViewConfig;
+  const members = useMemberOptions();
+  const compact = config.density === "compact";
+  const didDrag = useRef(false);
+  const dragFromControl = useRef(false);
+  const statusCol = useMemo(() => config.statusColumnId ? table.columns.find((column) => column.id === config.statusColumnId && column.type === "select") : findStatusColumn(table), [table, config.statusColumnId]);
   const titleCol = useMemo(() => findTitleColumn(table), [table]);
+  const visible = (config.visibleColumnIds ?? table.columns.filter((column) => column.type === "person").map((column) => column.id)).flatMap((id) => {
+    const column = table.columns.find((column) => column.id === id && column.id !== titleCol?.id && !column.config.hidden);
+    return column ? [column] : [];
+  });
   const [dragging, setDragging] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<{ row: RowData; group: string; title: string } | null>(null);
+  const generation = useRef(0);
+  const groupKey = useRef("");
+  const currentKey = `${table.id}:${statusCol?.id ?? ""}:${refreshToken ?? 0}`;
+  if (groupKey.current !== currentKey) { groupKey.current = currentKey; generation.current++; }
   const [cols, setCols] = useState<Record<string, ColState>>({});
 
   const columns: SelectOption[] = useMemo(() => {
@@ -53,6 +83,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
   const loadColumn = useCallback(
     async (optionId: string, cursor: string | null = null, append = false) => {
       if (!statusCol) return;
+      const current = generation.current;
       setCols((prev) => ({
         ...prev,
         [optionId]: {
@@ -71,6 +102,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
           limit: PAGE,
           includeTotal: !append,
         });
+        if (current !== generation.current) return;
         setCols((prev) => {
           const prevRows = append ? prev[optionId]?.rows ?? [] : [];
           return {
@@ -85,6 +117,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
           };
         });
       } catch (e) {
+        if (current !== generation.current) return;
         setError(e instanceof Error ? e.message : "看板列加载失败");
         setCols((prev) => ({
           ...prev,
@@ -103,11 +136,12 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
   );
 
   useEffect(() => {
+    setCols({}); setError(null);
     if (!statusCol) return;
     for (const col of columns) {
       void loadColumn(col.id, null, false);
     }
-  }, [statusCol?.id, table.id, columns.map((c) => c.id).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [statusCol?.id, table.id, columns.map((c) => c.id).join(","), refreshToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!statusCol) {
     return (
@@ -119,6 +153,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
 
   const moveCard = async (rowId: string, fromCol: string, toCol: string) => {
     if (fromCol === toCol) return;
+    const current = generation.current;
     const nextStatus = toCol === UNGROUPED.id ? null : toCol;
     const fromState = cols[fromCol];
     const row = fromState?.rows.find((r) => r.id === rowId);
@@ -149,11 +184,14 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
     });
 
     try {
-      await api.patchRow(rowId, {
+      const saved = await api.patchRow(rowId, {
         cell: { columnId: statusCol.id, value: nextStatus },
         expectedVersion: row.version,
       });
+      if (current !== generation.current) return;
+      setCols((previous) => Object.fromEntries(Object.entries(previous).map(([id, state]) => [id, { ...state, rows: state.rows.map((candidate) => candidate.id === saved.id ? saved : candidate) }])));
     } catch (e) {
+      if (current !== generation.current) return;
       setError(e instanceof Error ? e.message : "移动失败");
       void loadColumn(fromCol);
       void loadColumn(toCol);
@@ -161,11 +199,13 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
   };
 
   const addInColumn = async (statusOptionId: string) => {
+    const current = generation.current;
     const cells: Record<string, string | null> = {};
     if (titleCol) cells[titleCol.id] = "新卡片";
     cells[statusCol.id] = statusOptionId === UNGROUPED.id ? null : statusOptionId;
     try {
       const row = await api.addRow(table.id, cells);
+      if (current !== generation.current) return;
       setCols((prev) => ({
         ...prev,
         [statusOptionId]: {
@@ -179,6 +219,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
       }));
       onChange({ ...table, rowCount: (table.rowCount ?? 0) + 1 });
     } catch (e) {
+      if (current !== generation.current) return;
       setError(e instanceof Error ? e.message : "新增失败");
     }
   };
@@ -200,6 +241,7 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
           return (
             <div
               key={col.id}
+              data-kanban-group={col.id}
               className={cn(
                 "flex h-full min-h-0 w-72 shrink-0 flex-col rounded-xl border bg-muted/80",
                 overCol === col.id && dragging
@@ -237,13 +279,23 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
                   const title = titleCol
                     ? String(row.cells[titleCol.id] ?? "无标题")
                     : row.id.slice(0, 8);
-                  const personCol = table.columns.find((c) => c.type === "person");
-                  const person = personCol ? String(row.cells[personCol.id] ?? "") : "";
+
                   return (
-                    <div
+                    <Card padding="none"
                       key={row.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`打开记录：${title}`}
+                      data-testid="board-card"
+                      data-row-id={row.id}
+                      data-density={compact ? "compact" : "comfortable"}
                       draggable
+                      onPointerDown={(event) => { didDrag.current = false; dragFromControl.current = isInteractiveCardChild(event.target, event.currentTarget); }}
+                      onClick={(event) => { if (!didDrag.current && !isInteractiveCardChild(event.target, event.currentTarget)) openRelatedRecord({ id: row.id, tableId: table.id, title }); }}
+                      onKeyDown={(event) => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); openRelatedRecord({ id: row.id, tableId: table.id, title }); } }}
                       onDragStart={(e) => {
+                        if (dragFromControl.current || isInteractiveCardChild(e.target, e.currentTarget)) { e.preventDefault(); return; }
+                        didDrag.current = true;
                         e.dataTransfer.setData("text/row-id", row.id);
                         e.dataTransfer.setData("text/from-col", col.id);
                         e.dataTransfer.effectAllowed = "move";
@@ -254,20 +306,36 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
                         setOverCol(null);
                       }}
                       className={cn(
-                        "cursor-grab rounded-lg border border-border bg-background p-3 shadow-sm active:cursor-grabbing",
+                        "group/card cursor-pointer rounded-lg bg-background shadow-sm",
                         dragging === row.id && "opacity-50"
                       )}
                     >
-                      <div className="flex items-start gap-1.5">
-                        <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-foreground">{title}</div>
-                          {person && (
-                            <div className="mt-1 text-xs text-muted-foreground">{person}</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                      <CardHeader className={cn("mb-0 flex-row items-start", compact ? "gap-1.5 p-2" : "gap-2 p-3")}>
+                        <span data-board-drag-handle className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing" aria-label="拖动卡片"><GripVertical className="size-3.5 text-muted-foreground/50" /></span>
+                        <CardTitle className={cn("min-w-0 flex-1 line-clamp-2 font-medium", compact ? "text-xs leading-4" : "text-sm leading-5")}>{title}</CardTitle>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-6 shrink-0 opacity-0 group-hover/card:opacity-100 group-focus-within/card:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`卡片操作：${title}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}><DropdownMenuGroup><DropdownMenuItem variant="destructive" onSelect={() => setDeleting({ row, group: col.id, title })}><Trash2 />删除卡片</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent>
+                        </DropdownMenu>
+                      </CardHeader>
+                      {(() => {
+                        const shown = visible.filter((column) => {
+                          const value = row.cells[column.id];
+                          const empty = value === null || value === undefined || value === "" || Array.isArray(value) && value.length === 0;
+                          return !(config.hideEmpty ?? true) || !empty;
+                        });
+                        const content = shown.filter((column) => !["person", "date"].includes(column.type));
+                        const footer = shown.filter((column) => ["person", "date"].includes(column.type));
+                        const property = (column: ColumnDef, inFooter = false) => <div key={column.id} className={cn("flex min-w-0 items-center text-xs", compact ? "gap-1.5" : "gap-2", inFooter && "flex-1")} data-card-property={column.id}>
+                          <ColumnTypeIcon type={column.type} className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className={cn("truncate text-muted-foreground", inFooter ? "sr-only" : "w-16 shrink-0")} title={column.name}>{column.name}</span>
+                          <div className="min-w-0 flex-1"><CellDisplay column={column} value={row.cells[column.id] ?? null} members={members} relation={row.relations?.[column.id]} /></div>
+                        </div>;
+                        return <><CardContent className={cn("flex flex-col", compact ? "gap-1 px-2" : "gap-2 px-3", content.length > 0 && (compact ? "pb-2" : "pb-3"))} data-testid="board-card-content">{content.map((column) => property(column))}</CardContent>
+                          {footer.length > 0 && <CardFooter className={cn("flex-wrap border-t border-border", compact ? "gap-1.5 px-2 py-1.5" : "gap-2 px-3 py-2")} data-testid="board-card-footer">{footer.map((column) => property(column, true))}</CardFooter>}
+                        </>;
+                      })()}
+                    </Card>
                   );
                 })}
                 {state?.hasMore && (
@@ -298,11 +366,21 @@ export function KanbanBoard({ table, onChange, onRefresh }: Props) {
         })}
       </div>
       <p className="shrink-0 text-xs text-muted-foreground">
-        拖拽卡片切换状态 · 每列窗口加载（{PAGE}/次）· 分组列：{statusCol.name}
-        <button type="button" className="ml-2 underline" onClick={onRefresh}>
-          刷新元数据
-        </button>
+        拖拽卡片切换分组
       </p>
+      <DeleteConfirmation open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null); }} title="删除卡片？" description={`将永久删除「${deleting?.title ?? ""}」这条记录，所有视图会同步更新。`} onConfirm={async () => {
+        if (!deleting) return;
+        const current = generation.current;
+        try {
+          await api.deleteRow(deleting.row.id);
+          if (current !== generation.current) return;
+          setCols((previous) => Object.fromEntries(Object.entries(previous).map(([id, state]) => [id, { ...state, rows: state.rows.filter((row) => row.id !== deleting.row.id), total: id === deleting.group ? Math.max(0, (state.total ?? state.rows.length) - 1) : state.total }])));
+          onChange({ ...table, rowCount: Math.max(0, (table.rowCount ?? 1) - 1) });
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "删除失败，请重试");
+          throw error;
+        }
+      }} />
     </div>
   );
 }

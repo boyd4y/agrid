@@ -1,26 +1,35 @@
 import { Hono } from "hono";
 import {
-  streamText,
-  convertToModelMessages,
-  stepCountIs,
   createUIMessageStreamResponse,
-  toUIMessageStream,
+  consumeStream,
   type UIMessage,
 } from "ai";
 import { and, eq } from "drizzle-orm";
 import {
   HARNESSES,
+  NATIVE_DEFAULT_MODEL,
   anyHarnessAvailable,
   listHarnesses,
   listProviders,
-  resolveModel,
   type HarnessId,
 } from "../ai/model.js";
 import { createTableTools } from "../ai/tools.js";
-import { mockTextStream, runMockAgent } from "../ai/mock-chat.js";
 import { db } from "../db/index.js";
 import { agentProfile, member } from "../db/schema.js";
 import { resolveActor } from "../auth/actor.js";
+import { z } from "zod";
+import { resolveChatContext } from "../chat/context.js";
+import { requireThread } from "../chat/store.js";
+import { resolveAgentSkills } from "../skills/runtime.js";
+
+import { createNativeAgent } from "../harness/runtime.js";
+import { resolvePiModelMetadata } from "../harness/model-metadata.js";
+import { createNativeChatStream } from "../harness/chat-stream.js";
+import { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease } from "../harness/store.js";
+import { beginNativeRun } from "../harness/runs.js";
+import { HTTPException } from "hono/http-exception";
+import { createTaskTools, taskInstructions } from "../harness/tasks.js";
+import { validateDisabledTools } from "../harness/tool-catalog.js";
 
 export const chatRoute = new Hono();
 
@@ -28,19 +37,22 @@ chatRoute.get("/status", (c) => {
   const harnesses = listHarnesses();
   const providers = listProviders();
   return c.json({
-    mode: anyHarnessAvailable() ? "live" : "mock",
+    mode: anyHarnessAvailable() ? "live" : "unconfigured",
     providers,
     harnesses,
     note:
-      "OpenRouter is a standalone provider reusable by Codex/Claude/Pi. Chat picks an org agent; harness is locked on that agent. Built-in tools map 1:1 to /api/commands.",
+      "Chat 使用原生 HarnessAgent。Pi 支持本地虚拟工作区；Codex/Claude Code 需要 Sandbox 与对应原生协议的模型配置。未配置时返回错误，不回落离线规则。",
   });
 });
 
 chatRoute.post("/", async (c) => {
-  const body = await c.req.json();
-  const messages = (body.messages ?? []) as UIMessage[];
-  const tableId = (body.tableId ?? body.body?.tableId) as string | undefined;
-  const agentId = (body.agentId ?? body.body?.agentId) as string | undefined;
+  const actor = await resolveActor(c.req.raw);
+  if (!actor?.organizationId) return c.json({ error: "未授权" }, 401);
+  const body = z.object({ id: z.uuid(), agentId: z.string().min(1), context: z.unknown(),
+    messages: z.array(z.object({ id: z.string().min(1).max(200), role: z.enum(["user", "assistant"]), parts: z.array(z.object({ type: z.string() }).passthrough()).max(500) }).passthrough()).min(1).max(200),
+  }).parse(await c.req.json());
+  const messages = body.messages as UIMessage[];
+  const agentId = body.agentId;
 
   if (!agentId) {
     return c.json(
@@ -49,10 +61,11 @@ chatRoute.post("/", async (c) => {
     );
   }
 
-  const actor = await resolveActor(c.req.raw);
-  if (!actor?.organizationId) {
-    return c.json({ error: "未授权" }, 401);
-  }
+  const context = await resolveChatContext(body.context, actor);
+  const tableId = context.context.tableId ?? undefined;
+  const thread = await requireThread(body.id, actor);
+  if (thread.status !== "regular") return c.json({ error: "对话状态无效，请刷新后重试" }, 409);
+  if (thread.custom.resourceKey !== context.resourceKey) return c.json({ error: "对话与当前页面资源不一致，请新建对话" }, 409);
 
   // agentId = member id (preferred) or user id
   const [mem] = await db
@@ -88,7 +101,7 @@ chatRoute.post("/", async (c) => {
   const [profile] = await db
     .select()
     .from(agentProfile)
-    .where(eq(agentProfile.userId, profileUserId))
+    .where(and(eq(agentProfile.userId, profileUserId), eq(agentProfile.organizationId, actor.organizationId)))
     .limit(1);
 
   if (!profile) {
@@ -97,9 +110,8 @@ chatRoute.post("/", async (c) => {
 
   // Harness/model come ONLY from agent persona — client cannot swap
   const harness = (profile.persona?.defaultHarness ?? "pi") as HarnessId;
-  const modelId =
-    profile.persona?.defaultModel ??
-    (harness === "pi" ? "openrouter/free" : undefined);
+  const configuredModel = profile.persona?.defaultModel;
+  const modelId = configuredModel === NATIVE_DEFAULT_MODEL ? undefined : configuredModel;
 
   if (!HARNESSES.includes(harness)) {
     return c.json({ error: `未知 harness: ${harness}` }, 400);
@@ -111,72 +123,55 @@ chatRoute.post("/", async (c) => {
       ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
       .map((p) => p.text)
       .join("\n") || "";
-
-  const resolved = resolveModel(harness, modelId);
-  const tools = createTableTools(tableId, actor.organizationId);
-
-  // Only mock when selected agent harness has no API key (not because CLI missing)
-  if (!resolved) {
-    const { reply, mutated } = await runMockAgent({
-      userText: lastText || "帮助",
-      tableId,
-      organizationId: actor.organizationId,
-    });
-    return mockTextStream(
-      `【离线】智能体 harness「${harness}」未配置 API Key，走本地规则。\n配置 OPENROUTER_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY 即可上线（不依赖 CLI）。\n\n` +
-        reply,
-      { mutated }
-    );
-  }
-
+  if (!lastUser) return c.json({ error: "缺少用户消息" }, 400);
+  const index = messages.findIndex((m) => m.id === lastUser.id);
+  const { id: userMessageId, ...userContent } = lastUser;
+  if (!lastText.trim()) throw new HTTPException(400, { message: "请输入要执行的任务" });
+  if (lastUser.parts.some((part) => part.type !== "text")) throw new HTTPException(400, { message: "当前入口暂不支持消息附件" });
+  const mode = profile.persona?.runtime ?? (harness === "pi" ? "local" : "sandbox");
+  const disabledTools = validateDisabledTools(harness, profile.persona?.disabledTools ?? []);
+  const skillContext = await resolveAgentSkills(actor.organizationId, profile.persona?.skillNames);
+  const tools = { ...createTableTools(tableId, actor.organizationId, actor.userId), ...skillContext.tools };
   const personaPrompt = profile.persona?.systemPrompt?.trim();
+  const agentsDocument = `# AGENTS.md\n\n${personaPrompt || "遵循 tabdo 工作区权限，使用实际工具验证结果，再向用户报告完成情况。"}`;
   const system = [
     personaPrompt ||
-      "你是 Agrid 的 Talk-to-Build 助手（产品内 Vercel Harness 内置 tools，不是 MCP）。",
+      "你是 tabdo 的 AI 助手，使用产品内置 tools 完成操作。",
     "Agent-first：用户用对话建表、列、自动化、公式；表格 Grid/看板仍是核心数据视图，功能不削减。",
-    "用户能在表格/看板上做的操作，你都能通过 built-in tools 完成。",
+    "内置工具覆盖表格、行列、看板、表单、自动化和报告页面。只使用实际提供的工具，不要宣称完成工具不支持的操作。",
     "改单元格、增删行列、看板移卡前，先 get_table 拿列定义，再用 query_rows（窗口/游标，禁止全表）取行。",
     "select 列必须传选项 id（如 todo/doing/done），不要传中文 label。",
+    "创建表格间关联字段使用 add_column：type=relation，relation 配置目标表和可选反向字段。add_relation / set_relation / remove_relation 只绑定或解除已有字段的记录关联，columnId 必须是字段 UUID，recordIds 必须是目标记录 UUID 数组。工具失败时根据错误原因修正，未成功的操作不得宣称已完成。",
+    "报告是包含多个图表、数字和文字组件的页面。先 create_report 创建页面，再 add_report_widget 添加组件；修改前 get_report 获取组件ID，get_report_data 验证实际数据。各组件可使用不同来源，不能把字段名称当字段UUID。",
     "右侧预览是按需打开的 UI Slot 插件：默认关闭。需要让用户看到表格/结果时调用 open_preview；不需要时不要打开。",
-    tableId
-      ? `当前绑定的表格 ID: ${tableId}`
-      : "用户尚未指定表格，先 list_tables；需要时可 create_table。",
+    context.system,
+    skillContext.instructions,
     `当前智能体: ${profile.displayName}`,
-    `当前 harness: ${harness} / model: ${resolved.modelId}（创建时锁定，对话内不可更换）`,
+    `当前 harness: ${harness} / model: ${modelId ?? "默认模型"}（Harness 创建时锁定，模型来自智能体配置）`,
   ].join("\n");
 
+  // Validate configuration before creating a run or saving user input.
+  const piModel = harness === "pi" ? await resolvePiModelMetadata(modelId) : undefined;
+  createNativeAgent({ harness, mode, modelId, piModel, instructions: system, agentsDocument, tools, skills: skillContext.skills });
+  c.req.raw.signal.throwIfAborted();
+  const lease = await claimRuntimeLease(body.id, actor);
   try {
-    const result = streamText({
-      abortSignal: c.req.raw.signal,
-      model: resolved.model,
-      system,
-      messages: await convertToModelMessages(messages, { tools }),
-      tools,
-      stopWhen: stepCountIs(8),
-    });
-
-    return createUIMessageStreamResponse({
-      stream: toUIMessageStream({
-        stream: result.stream,
-        messageMetadata: ({ part }) => {
-          if (part.type === "finish-step") {
-            return {
-              agentId: profile.memberId,
-              harness,
-              modelId: resolved.modelId,
-              modelProvider: part.response?.modelId,
-            };
-          }
-          return undefined;
-        },
-        onFinish: undefined,
-      }),
-    });
-  } catch (err) {
-    console.error("chat error", err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return mockTextStream(
-      `调用智能体「${profile.displayName}」(${harness}) 失败：${msg}\n请检查 API Key，或新建使用其他 Harness 的智能体。`
-    );
+    const record = await prepareRuntimeRecord(lease, actor, { profileId: profile.id, harness, mode });
+    c.req.raw.signal.throwIfAborted();
+    if (record.resumeState?.continueFrom && !/^(继续|继续执行|continue)$/i.test(lastText.trim())) throw new HTTPException(409, { message: "上一轮尚未完成，请发送“继续执行”恢复；不会重复已完成的工具" });
+    const run = await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: messages[index - 1]?.id ?? null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
+    return createUIMessageStreamResponse({ stream: createNativeChatStream({
+      actor, lease, record, run, harness, modelId, piModel, instructions: `${system}\n${taskInstructions(record)}`, agentsDocument,
+      // The claimed Run owns cancellation. Closing the browser detaches its
+      // projection; explicit stop is persisted through the Run cancel API.
+      tools: { ...tools, ...createTaskTools(record) }, disabledTools, skills: skillContext.skills, prompt: lastText, messages,
+      // A cancelled submission before the stream starts may have raced claim.
+      // Once streaming starts, HTTP disconnects no longer cancel this Run.
+      signal: c.req.raw.signal.aborted ? AbortSignal.abort(new DOMException("启动已取消", "AbortError")) : undefined,
+      metadata: { agentId: profile.memberId, harness, modelId, runtime: mode },
+    }), consumeSseStream: ({ stream }) => { void consumeStream({ stream }); } });
+  } catch (error) {
+    await releaseRuntimeLease(lease);
+    throw error;
   }
 });

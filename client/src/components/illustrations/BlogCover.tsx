@@ -265,7 +265,7 @@ function McpFive(p: SvgProps) {
         <rect x="90" y="96" width="100" height="10" rx="4" fill={ink.fg} opacity="0.14" />
         <rect x="90" y="124" width="140" height="28" rx="8" fill={ink.softBlue} stroke={ink.border} strokeWidth="0.8" />
         <text x="160" y="143" textAnchor="middle" fontSize="11" fill={ink.fg} opacity="0.5" fontFamily="system-ui,sans-serif">
-          @table/mcp
+          @tabdo/mcp
         </text>
         <rect x="90" y="168" width="120" height="8" rx="3" fill={ink.muted} opacity="0.28" />
         <rect x="90" y="188" width="100" height="8" rx="3" fill={ink.muted} opacity="0.22" />

@@ -1,9 +1,6 @@
 /**
- * Standalone OpenRouter AI provider — reusable by any harness / settings UI.
- * Not nested under Pi; Pi/Codex/Claude may all route through this provider.
+ * OpenRouter provider configuration shared by settings and native Pi.
  */
-import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModel } from "ai";
 
 export const OPENROUTER_PROVIDER_ID = "openrouter" as const;
 
@@ -58,31 +55,7 @@ export function getOpenRouterStatus(): OpenRouterProviderStatus {
     models: [...OPENROUTER_SHARED_MODELS],
     hint: creds
       ? undefined
-      : "Set OPENROUTER_API_KEY to enable OpenRouter for all harnesses",
-  };
-}
-
-export function createOpenRouterModel(modelId?: string): {
-  model: LanguageModel;
-  modelId: string;
-  provider: typeof OPENROUTER_PROVIDER_ID;
-} | null {
-  const creds = getOpenRouterCredentials();
-  if (!creds) return null;
-  const mid = modelId || OPENROUTER_DEFAULT_MODEL;
-  const client = createOpenAI({
-    apiKey: creds.key,
-    baseURL: creds.baseURL,
-    name: "openrouter",
-    headers: {
-      "HTTP-Referer": env("APP_URL") || "http://localhost:5173",
-      "X-Title": "Agrid",
-    },
-  });
-  return {
-    model: client.chat(mid),
-    modelId: mid,
-    provider: OPENROUTER_PROVIDER_ID,
+      : "Set OPENROUTER_API_KEY to enable native Pi through OpenRouter",
   };
 }
 

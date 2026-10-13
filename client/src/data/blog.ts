@@ -37,14 +37,14 @@ export const blogPosts: BlogPost[] = [
     excerpt:
       "UI clicks, MCP tools, and Bearer keys all POST the same commands. One permission model, one conflict story.",
     date: "2026-10-08",
-    author: "Agrid Team",
+    author: "tabdo Team",
     category: "AI agents",
     tags: ["API", "MCP", "architecture"],
     cover: "same-command-layer",
     coverImage: "/blog-covers/same-command-layer.svg",
     body: [
       "Most “AI-native” products bolt a chatbot onto a human UI. The agent then scrapes DOM, invents REST shapes, or gets a narrow sidecar API that drifts.",
-      "Agrid does the opposite. Every mutation — updateCell, addRow, setStatus — is a named command. The React table, assistant-ui tools, @table/mcp, and agt_ keys are shells over that list.",
+      "tabdo does the opposite. Every mutation — updateCell, addRow, setStatus — is a named command. The React table, assistant-ui tools, @tabdo/mcp, and agt_ keys are shells over that list.",
       "That means an agent cannot do something a human cannot authorize, and a human cannot do something the agent cannot call. Docs for both audiences describe one surface.",
     ],
   },
@@ -54,7 +54,7 @@ export const blogPosts: BlogPost[] = [
     excerpt:
       "Feishu-style grid and board, with tools that mirror every cell edit and card move.",
     date: "2026-10-01",
-    author: "Agrid Team",
+    author: "tabdo Team",
     category: "Product",
     tags: ["AI", "product"],
     cover: "ai-native-tables",
@@ -71,14 +71,14 @@ export const blogPosts: BlogPost[] = [
     excerpt:
       "Virtualized UI and cursor pagination so neither the browser nor an agent ever loads the whole table.",
     date: "2026-09-28",
-    author: "Agrid Team",
+    author: "tabdo Team",
     category: "Engineering",
     tags: ["performance", "Postgres"],
     cover: "100k-rows-keyset",
     coverImage: "/blog-covers/100k-rows-keyset.svg",
     body: [
       "Feishu-grade grids assume large single tables. OFFSET 50000 is a tax; dumping JSONB cells into the client is worse.",
-      "Agrid’s getTable returns schema + rowCount only. Rows always arrive through queryRows with a keyset cursor, filters pushed into Postgres, and agent limits capped at 200.",
+      "tabdo’s getTable returns schema + rowCount only. Rows always arrive through queryRows with a keyset cursor, filters pushed into Postgres, and agent limits capped at 200.",
       "The board view window-loads each status column independently — same API the agent must use when it “moves a card.”",
     ],
   },
@@ -88,7 +88,7 @@ export const blogPosts: BlogPost[] = [
     excerpt:
       "Quiet typography, soft illustrations, and a left rail that stays out of the way of the grid.",
     date: "2026-09-20",
-    author: "Agrid Team",
+    author: "tabdo Team",
     category: "Design",
     tags: ["design", "Notion"],
     cover: "notion-style-workspace",
@@ -105,7 +105,7 @@ export const blogPosts: BlogPost[] = [
     excerpt:
       "Switch models without rewriting tools. Mock mode still exercises the same command contracts.",
     date: "2026-09-05",
-    author: "Agrid Team",
+    author: "tabdo Team",
     category: "Engineering",
     tags: ["Vercel AI SDK", "harness"],
     cover: "multi-harness-chat",
@@ -118,18 +118,18 @@ export const blogPosts: BlogPost[] = [
   },
   {
     slug: "mcp-five-minutes",
-    title: "How-to: Wire Agrid MCP in Five Minutes",
+    title: "How-to: Wire tabdo MCP in Five Minutes",
     excerpt:
       "Create an agent member, drop the key into Cursor, list tables, and move a board card.",
     date: "2026-09-01",
-    author: "Agrid Team",
+    author: "tabdo Team",
     category: "How-to",
     tags: ["MCP", "Cursor"],
     cover: "mcp-five-minutes",
     coverImage: "/blog-covers/mcp-five-minutes.svg",
     body: [
       "In Members, create an Agent and copy the one-time agt_ key.",
-      "Add the @table/mcp server to your MCP config with TABLE_API_URL and TABLE_API_KEY.",
+      "Add the @tabdo/mcp server to your MCP config with TABDO_API_URL and TABDO_API_KEY.",
       "Ask the agent: list tables → get_table → query_rows → set_status. That is the whole happy path.",
     ],
   },

@@ -44,3 +44,7 @@ export const CardContent = ({ className, ...props }: React.HTMLAttributes<HTMLDi
 );
 
 export { cardVariants };
+
+export function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("flex items-center", className)} {...props} />;
+}

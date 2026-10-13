@@ -1,4 +1,4 @@
-# Multi-tenant design — Agrid
+# Multi-tenant design — tabdo
 
 > Status: **implemented** (scheme 2, shared tables + `organization_id`).  
 > Isolation is **application-enforced** (command / route layer). PostgreSQL RLS is **optional**, not required for v1.
@@ -66,7 +66,7 @@ Aligned with Notion / 飞书-like systems: universal record store; properties ar
 
 ### 4.2 Why not schema-per-tenant (for this product)
 
-Scheme 2 does **not** need a PG schema per tenant to store data. Schema isolation adds provision/`search_path`/pool complexity; Agrid prefers:
+Scheme 2 does **not** need a PG schema per tenant to store data. Schema isolation adds provision/`search_path`/pool complexity; tabdo prefers:
 
 - Simple migrations (one track)
 - Easy connection pooling

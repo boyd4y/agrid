@@ -6,11 +6,18 @@ export type ColumnType =
   | "date"
   | "checkbox"
   | "person"
-  | "formula";
+  | "formula"
+  | "relation"
+  | "rollup";
 
 export type SelectOption = { id: string; label: string; color?: string };
 
-export type FormulaResultType = "number" | "text" | "checkbox" | "date" | "auto";
+export type FormulaResultType =
+  | "number"
+  | "text"
+  | "checkbox"
+  | "date"
+  | "auto";
 
 export type DateFormat =
   | "YYYY-MM-DD"
@@ -27,7 +34,31 @@ export const DATE_FORMAT_OPTIONS: { value: DateFormat; label: string }[] = [
   { value: "MMM D, YYYY", label: "Oct 11, 2026" },
 ];
 
+export type RelationConfig = {
+  relationId?: string;
+  direction?: "source" | "target";
+  targetTableId: string;
+  limit?: "one" | "many";
+  inverseName?: string;
+  inverseLimit?: "one" | "many";
+};
+export type RollupConfig = {
+  relationColumnId: string;
+  targetColumnId?: string;
+  operation:
+    | "count"
+    | "sum"
+    | "average"
+    | "min"
+    | "max"
+    | "earliest"
+    | "latest";
+};
+export type RelatedRecord = { id: string; tableId: string; title: string };
+
 export type ColumnConfig = {
+  relation?: RelationConfig;
+  rollup?: RollupConfig;
   options?: SelectOption[];
   /** view-level hide flag persisted on column */
   hidden?: boolean;
@@ -43,6 +74,8 @@ export type TableMeta = {
   id: string;
   name: string;
   description: string | null;
+  icon?: string | null;
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -64,6 +97,8 @@ export type RowData = {
   cells: Record<string, CellValue>;
   sortOrder: number;
   version?: number;
+  relations?: Record<string, { records: RelatedRecord[]; total: number }>;
+  affectedTableIds?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -92,6 +127,8 @@ export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
   checkbox: "勾选",
   person: "人员",
   formula: "公式",
+  relation: "关联",
+  rollup: "汇总",
 };
 
 export const FORMULA_RESULT_TYPE_LABELS: Record<FormulaResultType, string> = {

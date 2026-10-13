@@ -5,3 +5,10 @@ export * from "./pagination.js";
 export * from "./formula.js";
 export * from "./automation.js";
 export * from "./views.js";
+
+export * from "./relations.js";
+export * from "./chat.js";
+export * from "./reports.js";
+export * from "./skills.js";
+export * from "./avatars.js";
+export * from "./tools.js";

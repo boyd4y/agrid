@@ -1,3 +1,5 @@
+import { BRAND } from "@/lib/brand";
+
 export type DocsSection = {
   id: string;
   title: string;
@@ -32,7 +34,7 @@ export const docsSections: DocsSection[] = [
   {
     id: "welcome",
     title: "Welcome",
-    description: "What Agrid is and how to start",
+    description: "What tabdo is and how to start",
     audience: "both",
   },
   {
@@ -70,7 +72,7 @@ export const docsPages: DocsPage[] = [
     body: [
       {
         type: "p",
-        text: "Agrid is Agent-first Talk-to-Build: describe a system in chat and the agent creates tables, columns, automations, and formulas. Postgres Grid / Board remain the core data display — full filters, kanban, formulas are not reduced. UI, in-app Vercel harness tools, external MCP/Skill, and Bearer agt_ keys all call the same commands.",
+        text: "tabdo is Agent-first Talk-to-Build: describe a system in chat and the agent creates tables, columns, automations, and formulas. Postgres Grid / Board remain the core data display — full filters, kanban, formulas are not reduced. UI, in-app Vercel harness tools, external MCP/Skill, and Bearer agt_ keys all call the same commands.",
       },
       {
         type: "callout",
@@ -134,23 +136,23 @@ export const docsPages: DocsPage[] = [
     slug: "mcp",
     sectionId: "agents",
     title: "MCP",
-    description: "Connect Claude, Codex, Cursor, or OpenCode to Agrid via MCP.",
+    description: "Connect Claude, Codex, Cursor, or OpenCode to tabdo via MCP.",
     body: [
       {
         type: "p",
-        text: "For external agents only. Package @table/mcp exposes every command as a snake_case tool (1:1 with in-app harness tools). Tools POST to /api/commands with your agent API key. The product UI does not use MCP — it uses Vercel harness built-in tools.",
+        text: "For external agents only. Package @tabdo/mcp exposes every command as a snake_case tool (1:1 with in-app harness tools). Tools POST to /api/commands with your agent API key. The product UI does not use MCP — it uses Vercel harness built-in tools.",
       },
       {
         type: "code",
         lang: "json",
         code: `{
   "mcpServers": {
-    "agrid": {
+    "tabdo": {
       "command": "pnpm",
-      "args": ["--filter", "@table/mcp", "start"],
+      "args": ["--filter", "@tabdo/mcp", "start"],
       "env": {
-        "TABLE_API_URL": "http://localhost:3001",
-        "TABLE_API_KEY": "agt_your_key"
+        "TABDO_API_URL": "http://localhost:3001",
+        "TABDO_API_KEY": "agt_your_key"
       }
     }
   }
@@ -178,7 +180,7 @@ export const docsPages: DocsPage[] = [
     slug: "skill",
     sectionId: "agents",
     title: "Skill",
-    description: "Install the Agrid skill in Cursor, Claude Code, and other agents.",
+    description: "Install the tabdo skill in Cursor, Claude Code, and other agents.",
     body: [
       {
         type: "p",
@@ -188,7 +190,7 @@ export const docsPages: DocsPage[] = [
         type: "ol",
         items: [
           "Copy or symlink skills/table-ops into your agent skills folder",
-          "Create an Agent member in the workspace; copy the one-time agt_ key",
+          "New in-app agents do not issue API keys; external MCP requires an existing external credential",
           "Prefer MCP tools; fall back to POST /api/commands",
           "Always get_table before writing select / person cells",
         ],
@@ -204,7 +206,7 @@ export const docsPages: DocsPage[] = [
     body: [
       {
         type: "p",
-        text: "Inside Agrid (/app Talk-to-Build and the AI drawer), the assistant uses Vercel AI SDK harnesses. Tools are registered in-process via createTableTools — the same command layer as MCP, but MCP is for external agents only.",
+        text: "Inside tabdo (/app Talk-to-Build and the AI drawer), the assistant uses Vercel AI SDK harnesses. Tools are registered in-process via createTableTools — the same command layer as MCP, but MCP is for external agents only.",
       },
       {
         type: "ul",
@@ -225,12 +227,12 @@ export const docsPages: DocsPage[] = [
   {
     slug: "agent-auth",
     sectionId: "agents",
-    title: "Agent API keys",
-    description: "Create an agent member and Bearer agt_… credential.",
+    title: "Agents & authentication",
+    description: "Create in-app agents with a signed-in session; no agent key is required.",
     body: [
       {
         type: "p",
-        text: "Agents are first-class users (kind=agent) on the same member table as humans. Creating an agent returns a one-time agt_ key.",
+        text: "Create an in-app agent with a name, persona, harness and model. Creation returns the agent configuration without an API key. In-app chat uses your signed-in session. Previously issued external credentials remain valid; issuing new external credentials is currently unavailable.",
       },
       {
         type: "code",
@@ -238,7 +240,7 @@ export const docsPages: DocsPage[] = [
         code: `curl -X POST http://localhost:3001/api/members/agents \\
   -H "Content-Type: application/json" \\
   -b cookies.txt \\
-  -d '{"name":"Ops Bot","persona":{"harness":"codex"}}'`,
+  -d '{"name":"Ops Bot","persona":{"defaultHarness":"codex"}}'`,
       },
     ],
   },
@@ -485,8 +487,8 @@ export function searchDocs(query: string): DocsPage[] {
 }
 
 /** Markdown-ish index for /docs/llms.txt generators */
-export function docsLlmsLines(origin = "https://agrid.app"): string[] {
-  const lines = ["# Agrid", ""];
+export function docsLlmsLines(origin: string = BRAND.url): string[] {
+  const lines = ["# tabdo", ""];
   for (const section of docsNav()) {
     lines.push(`## ${section.title}`);
     for (const p of section.pages) {

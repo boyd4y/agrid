@@ -23,6 +23,7 @@ commandsRoute.post("/", async (c) => {
   const body = z
     .object({
       command: z.enum([
+        "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
         "listTables",
         "getTable",
         "updateCell",
@@ -44,6 +45,9 @@ commandsRoute.post("/", async (c) => {
         "listViews",
         "getView",
         "deleteView",
+        "renameView",
+        "setDefaultView",
+        "updateBoardView",
         "createFormView",
         "updateFormView",
         "setFormFields",
@@ -67,6 +71,9 @@ commandsRoute.post("/", async (c) => {
     return c.json({ error: "缺少组织上下文：请先加入或选择工作区" }, 401);
   }
 
+  if (Object.hasOwn(body.input, "skipAutomation") || Object.hasOwn(body.input, "actorId")) {
+    return c.json({ error: "内部执行选项不能通过 API 设置" }, 400);
+  }
   // Strip any client-supplied organizationId; server actor is authoritative
   const { organizationId: _ignored, ...safeInput } = body.input as Record<
     string,
@@ -79,7 +86,7 @@ commandsRoute.post("/", async (c) => {
     if (typeof fn !== "function") {
       return c.json({ error: `未知命令 ${body.command}` }, 400);
     }
-    const result = await fn({ ...safeInput, organizationId });
+    const result = await fn({ ...safeInput, organizationId, actorId: actor?.userId });
     return c.json({
       ok: true,
       command: body.command,

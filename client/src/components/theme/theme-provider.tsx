@@ -31,6 +31,8 @@ function applyTheme(resolved: "light" | "dark") {
   root.classList.add(resolved);
   root.setAttribute("data-theme", resolved);
   root.style.colorScheme = resolved;
+  const favicon = document.querySelector<HTMLLinkElement>("#tabdo-favicon");
+  if (favicon) favicon.href = `/brand/tabdo-favicon-${resolved}.svg`;
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

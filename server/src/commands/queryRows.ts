@@ -1,3 +1,4 @@
+import { cellExpression, rowProjection, relationPredicate, relatedId } from "./relation-reads.js";
 import { sql, eq, asc, desc, and, type SQL } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { columns, rows, tables } from "../db/schema.js";
@@ -13,17 +14,16 @@ import {
   type ColumnDef,
   type CellValue,
   isFilterConditionComplete,
-} from "@table/shared";
+} from "@tabdo/shared";
 
 const UNGROUPED = "__none__";
 
-function cellTextExpr(columnId: string) {
-  // cells ->> 'uuid'
-  return sql`(${rows.cells} ->> ${columnId})`;
-}
+function cellTextExpr(columnId: string, cols: ColumnDef[] = []) { return cellExpression(columnId,cols); }
 
-function isEmptySql(columnId: string, type: string): SQL {
-  const t = cellTextExpr(columnId);
+function isEmptySql(columnId: string, type: string, cols: ColumnDef[]): SQL {
+  const t = cellTextExpr(columnId,cols);
+  const col=cols.find(c=>c.id===columnId);
+  if(type==="relation"&&col)return sql`NOT EXISTS(SELECT 1 FROM row_relations rr WHERE ${relationPredicate(col)})`;
   if (type === "multi_select") {
     return sql`(
       ${rows.cells} -> ${columnId} IS NULL
@@ -48,15 +48,22 @@ function conditionSql(
   if (!isFilterConditionComplete(f)) return null;
   const col = colMap.get(f.columnId);
   if (!col) return null;
-  const type = col.type;
-  const t = cellTextExpr(f.columnId);
+  const cols=[...colMap.values()];
+  const type = col.type==="rollup" ? (["earliest","latest"].includes(col.config.rollup?.operation??"")?"date":"number") : col.type;
+  const t = cellTextExpr(f.columnId,cols);
+  if(type==="relation"&&["eq","neq","contains","not_contains"].includes(f.op)){
+    const id=Array.isArray(f.value)?f.value[0]:f.value;
+    if(typeof id!=="string"||! /^[0-9a-f-]{36}$/i.test(id))return sql`false`;
+    const match=sql`EXISTS(SELECT 1 FROM row_relations rr WHERE ${relationPredicate(col)} AND ${relatedId(col)}=${id}::uuid)`;
+    return ["neq","not_contains"].includes(f.op)?sql`NOT (${match})`:match;
+  }
   const v = f.value;
 
   switch (f.op) {
     case "is_empty":
-      return isEmptySql(f.columnId, type);
+      return isEmptySql(f.columnId, type,cols);
     case "is_not_empty":
-      return sql`NOT (${isEmptySql(f.columnId, type)})`;
+      return sql`NOT (${isEmptySql(f.columnId, type,cols)})`;
     case "eq":
       if (type === "checkbox") {
         const bool = Boolean(v);
@@ -151,64 +158,28 @@ function buildWhere(
   return and(...parts)!;
 }
 
-function keysetSql(
-  cursorRaw: string | null | undefined,
-  sort: QueryRowsInput["sort"],
-  direction: "asc" | "desc"
-): SQL | null {
-  const cursor = decodeCursor(cursorRaw);
-  if (!cursor) return null;
-
-  if (sort?.columnId) {
-    const sv = cursor.sortValue ?? "";
-    const t = cellTextExpr(sort.columnId);
-    // (sortValue, sortOrder, id) tuple compare
-    if (direction === "asc") {
-      return sql`(
-        COALESCE(${t}, '') > ${sv}
-        OR (
-          COALESCE(${t}, '') = ${sv}
-          AND (
-            ${rows.sortOrder} > ${cursor.sortOrder}
-            OR (${rows.sortOrder} = ${cursor.sortOrder} AND ${rows.id} > ${cursor.id})
-          )
-        )
-      )`;
-    }
-    return sql`(
-      COALESCE(${t}, '') < ${sv}
-      OR (
-        COALESCE(${t}, '') = ${sv}
-        AND (
-          ${rows.sortOrder} < ${cursor.sortOrder}
-          OR (${rows.sortOrder} = ${cursor.sortOrder} AND ${rows.id} < ${cursor.id})
-        )
-      )
-    )`;
-  }
-
-  // default: (sort_order, id)
-  if (direction === "desc") {
-    return sql`(
-      ${rows.sortOrder} < ${cursor.sortOrder}
-      OR (${rows.sortOrder} = ${cursor.sortOrder} AND ${rows.id} < ${cursor.id})
-    )`;
-  }
-  return sql`(
-    ${rows.sortOrder} > ${cursor.sortOrder}
-    OR (${rows.sortOrder} = ${cursor.sortOrder} AND ${rows.id} > ${cursor.id})
-  )`;
+function sortExpression(sort:QueryRowsInput["sort"],cols:ColumnDef[]) {
+  if(!sort?.columnId)return null;
+  const col=cols.find(c=>c.id===sort.columnId);if(!col)throw new Error("排序字段不属于本表");
+  if(col.type==="relation")throw new Error("关联字段请通过关联条件筛选，不支持排序");
+  const text=cellTextExpr(col.id,cols);
+  return col.type==="number"||(col.type==="rollup"&&!["earliest","latest"].includes(col.config.rollup?.operation??"")) ? sql`NULLIF(${text},'')::numeric` : text;
 }
-
-function orderParts(sort: QueryRowsInput["sort"]) {
-  if (sort?.columnId) {
-    const t = cellTextExpr(sort.columnId);
-    if (sort.direction === "desc") {
-      return [sql`${t} DESC NULLS LAST`, desc(rows.sortOrder), desc(rows.id)] as const;
-    }
-    return [sql`${t} ASC NULLS LAST`, asc(rows.sortOrder), asc(rows.id)] as const;
-  }
-  return [asc(rows.sortOrder), asc(rows.id)] as const;
+function keysetSql(input:QueryRowsInput,cols:ColumnDef[]):SQL|null {
+  const cursor=decodeCursor(input.cursor);if(!cursor){if(input.cursor)throw new Error("分页游标无效");return null;}
+  const descending=input.sort?.direction==="desc";
+  const tuple=descending?sql`(${rows.sortOrder},${rows.id}) < (${cursor.sortOrder},${cursor.id}::uuid)`:sql`(${rows.sortOrder},${rows.id}) > (${cursor.sortOrder},${cursor.id}::uuid)`;
+  const expr=sortExpression(input.sort,cols);if(!expr)return tuple;
+  if(cursor.sortValue==null||cursor.sortValue==="")return sql`${expr} IS NULL AND ${tuple}`;
+  const col=cols.find(c=>c.id===input.sort?.columnId)!;
+  const numeric=col.type==="number"||(col.type==="rollup"&&!["earliest","latest"].includes(col.config.rollup?.operation??""));
+  const value=numeric?sql`${cursor.sortValue}::numeric`:sql`${cursor.sortValue}::text`;
+  const comparison=descending?sql`${expr} < ${value}`:sql`${expr} > ${value}`;
+  return sql`(${comparison} OR ${expr} IS NULL OR (${expr}=${value} AND ${tuple}))`;
+}
+function orderParts(sort:QueryRowsInput["sort"],cols:ColumnDef[]) {
+  const expr=sortExpression(sort,cols),descending=sort?.direction==="desc";
+  return [...(expr?[descending?sql`${expr} DESC NULLS LAST`:sql`${expr} ASC NULLS LAST`]:[]),descending?desc(rows.sortOrder):asc(rows.sortOrder),descending?desc(rows.id):asc(rows.id)];
 }
 
 export async function queryRowsWindowed(
@@ -229,17 +200,16 @@ export async function queryRowsWindowed(
     .orderBy(asc(columns.sortOrder));
   const colMap = new Map(cols.map((c) => [c.id, c as ColumnDef]));
 
-  const direction = input.sort?.direction ?? "asc";
   const baseWhere = buildWhere(input.tableId, colMap, input);
-  const cursorPart = keysetSql(input.cursor, input.sort ?? null, direction);
+  const cursorPart = keysetSql(input,cols as ColumnDef[]);
   const whereClause = cursorPart ? and(baseWhere, cursorPart)! : baseWhere;
 
   const page = await db
-    .select()
+    .select(rowProjection(cols as ColumnDef[]))
     .from(rows)
     .where(whereClause)
     
-    .orderBy(...orderParts(input.sort ?? null))
+    .orderBy(...orderParts(input.sort ?? null,cols as ColumnDef[]))
     .limit(limit + 1);
 
   const hasMore = page.length > limit;
@@ -251,7 +221,7 @@ export async function queryRowsWindowed(
     const sortValue = input.sort?.columnId
       ? (last.cells?.[input.sort.columnId] != null
           ? String(last.cells[input.sort.columnId] as CellValue)
-          : "")
+          : null)
       : undefined;
     nextCursor = encodeCursor({
       sortOrder: last.sortOrder,

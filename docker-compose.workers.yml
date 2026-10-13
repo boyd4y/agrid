@@ -1,0 +1,24 @@
+# Run after `pnpm db:migrate`.
+# API and one background worker use the same image with different commands.
+# docker compose -f docker-compose.yml -f docker-compose.workers.yml up -d --build
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    command: [node, dist/queue/main.js]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${QUEUE_DATABASE_URL:-postgresql://tableapp:tableapp@postgres:5432/tableapp}
+      REDIS_URL: ${QUEUE_REDIS_URL:-redis://redis:6379}
+      QUEUE_PREFIX: ${QUEUE_PREFIX:-agrid}
+      DB_POOL_MAX: 4
+      WORKER_CONCURRENCY: 8
+      QUEUE_GLOBAL_CONCURRENCY: 32
+    stop_grace_period: 25s
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy

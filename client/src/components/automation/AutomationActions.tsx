@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { api } from "@/lib/api";
-import type { AutomationRule } from "@table/shared";
+import type { AutomationRule } from "@tabdo/shared";
 
 export function AutomationActions({ rule, onDeleted }: {
   rule: Pick<AutomationRule, "id" | "name">;
@@ -15,18 +15,16 @@ export function AutomationActions({ rule, onDeleted }: {
 
   return (
     <>
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger asChild>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground" aria-label={`${rule.name}自动化操作`} title="自动化操作">
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal data-icon="inline-start" />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-40 p-1">
-          <button type="button" className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive hover:bg-destructive/10 focus-visible:bg-destructive/10 focus-visible:outline-none" onClick={() => { setMenuOpen(false); setDeleteOpen(true); }}>
-            <Trash2 className="h-3.5 w-3.5" />删除规则
-          </button>
-        </PopoverContent>
-      </Popover>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end"><DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" onSelect={() => { setMenuOpen(false); setDeleteOpen(true); }}><Trash2 />删除规则</DropdownMenuItem>
+        </DropdownMenuGroup></DropdownMenuContent>
+      </DropdownMenu>
       <DeleteConfirmation
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

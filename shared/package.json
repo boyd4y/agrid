@@ -1,5 +1,5 @@
 {
-  "name": "@table/shared",
+  "name": "@tabdo/shared",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -14,10 +14,17 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck:test": "tsc --project tsconfig.test.json"
   },
   "devDependencies": {
+    "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }

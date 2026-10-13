@@ -7,16 +7,27 @@ import { tablesRoute } from "./routes/tables.js";
 import { rowsRoute } from "./routes/rows.js";
 import { columnsRoute } from "./routes/columns.js";
 import { chatRoute } from "./routes/chat.js";
+import { threadsRoute } from "./routes/threads.js";
 import { membersRoute } from "./routes/members.js";
 import { commandsRoute } from "./routes/commands.js";
 import { automationsRoute } from "./routes/automations.js";
+import { reportsRoute } from "./routes/reports.js";
+import { skillsRoute } from "./routes/skills.js";
 import { auth } from "./auth/index.js";
 import { listHarnesses } from "./ai/model.js";
+import { client } from "./db/index.js";
+import { activeNativeRunCount, beginNativeDrain, nativeDrainStarted, registerNativeRun, waitForNativeDrain } from "./harness/drain.js";
 
 const app = new Hono();
 const appUrl = process.env.APP_URL || "http://localhost:5173";
 
 app.use("*", logger());
+app.use("/api/chat", async (c, next) => {
+  if (nativeDrainStarted()) return c.json({ error: "服务正在保存当前执行，请稍后重试" }, 503);
+  // Cover admission/metadata/lease waits before the detached stream takes ownership.
+  const release = registerNativeRun();
+  try { await next(); } finally { release(); }
+});
 app.use(
   "*",
   cors({
@@ -30,7 +41,7 @@ app.use(
 app.get("/api/health", (c) =>
   c.json({
     ok: true,
-    service: "agrid",
+    service: "tabdo",
     multiHarness: true,
     auth: true,
     notionStyle: true,
@@ -44,11 +55,15 @@ app.route("/api/tables", tablesRoute);
 app.route("/api", rowsRoute);
 app.route("/api", columnsRoute);
 app.route("/api/chat", chatRoute);
+app.route("/api/threads", threadsRoute);
 app.route("/api/members", membersRoute);
 app.route("/api/commands", commandsRoute);
 app.route("/api", automationsRoute);
+app.route("/api/reports", reportsRoute);
+app.route("/api/skills", skillsRoute);
 
 app.onError((err, c) => {
+  if ("getResponse" in err && typeof err.getResponse === "function") return err.getResponse();
   console.error(err);
   if (err.name === "ZodError") {
     return c.json({ error: "参数错误", details: err }, 400);
@@ -66,7 +81,23 @@ console.log(`API listening on http://localhost:${port}`);
   const hs = listHarnesses();
   const online = hs.filter((h) => h.available).map((h) => `${h.id}@${h.defaultModel}`);
   console.log(
-    `[harness] mode=${online.length ? "live" : "mock"} online=${online.join(",") || "none"}`,
+    `[harness] mode=${online.length ? "live" : "unconfigured"} online=${online.join(",") || "none"}`,
   );
 }
-serve({ fetch: app.fetch, port });
+const server = serve({ fetch: app.fetch, port });
+let shutdown: Promise<void> | undefined;
+function drainAndStop() {
+  if (shutdown) return shutdown;
+  beginNativeDrain();
+  console.log(`[api] stopping after ${activeNativeRunCount()} native Run(s) have saved`);
+  shutdown = (async () => {
+    const connectionsClosed = new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    if ("closeIdleConnections" in server) server.closeIdleConnections();
+    await Promise.all([waitForNativeDrain(), connectionsClosed]);
+    await client.end();
+    if (process.connected) process.disconnect();
+  })().catch((error) => { console.error("[api] shutdown failed", error); process.exitCode = 1; });
+  return shutdown;
+}
+process.on("SIGTERM", () => void drainAndStop());
+process.on("SIGINT", () => void drainAndStop());

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { BRAND, BRAND_COPY } from "@/lib/brand";
 
 export type SeoProps = {
   title: string;
@@ -11,9 +12,8 @@ export type SeoProps = {
   noindex?: boolean;
 };
 
-const SITE = "Agrid";
-const ORIGIN =
-  typeof window !== "undefined" ? window.location.origin : "https://agrid.app";
+const SITE = BRAND.name;
+const ORIGIN = BRAND.url;
 
 function upsertMeta(attr: "name" | "property", key: string, content: string) {
   let el = document.head.querySelector(`meta[${attr}="${key}"]`) as HTMLMetaElement | null;
@@ -38,10 +38,10 @@ function upsertLink(rel: string, href: string) {
 /** Client-side SEO tags for marketing pages (title, description, OG, Twitter). */
 export function SeoHead({
   title,
-  description = "Agrid — AI-native multidimensional tables. Humans and agents share one command layer.",
+  description = BRAND_COPY.description,
   path = "/",
   type = "website",
-  image = "/agrid-mark.svg",
+  image = "/tabdo-mark.svg",
   publishedTime,
   tags,
   noindex,

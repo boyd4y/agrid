@@ -1,0 +1,21 @@
+FROM node:24-alpine AS build
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY shared/package.json shared/package.json
+COPY server/package.json server/package.json
+COPY client/package.json client/package.json
+COPY mcp/package.json mcp/package.json
+RUN pnpm install --frozen-lockfile
+COPY shared shared
+COPY server server
+RUN pnpm --filter @tabdo/server build
+
+FROM node:24-alpine
+RUN corepack enable
+WORKDIR /app
+COPY --from=build /app /app
+ENV NODE_ENV=production
+USER node
+WORKDIR /app/server
+CMD ["node", "dist/index.js"]

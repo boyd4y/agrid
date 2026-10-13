@@ -7,13 +7,20 @@ export const COLUMN_TYPES = [
   "checkbox",
   "person",
   "formula",
+  "relation",
+  "rollup",
 ] as const;
 
 export type ColumnType = (typeof COLUMN_TYPES)[number];
 
 export type SelectOption = { id: string; label: string; color?: string };
 
-export type FormulaResultType = "number" | "text" | "checkbox" | "date" | "auto";
+export type FormulaResultType =
+  | "number"
+  | "text"
+  | "checkbox"
+  | "date"
+  | "auto";
 
 export type DateFormat =
   | "YYYY-MM-DD"
@@ -30,7 +37,31 @@ export const DATE_FORMAT_OPTIONS: { value: DateFormat; label: string }[] = [
   { value: "MMM D, YYYY", label: "Oct 11, 2026" },
 ];
 
+export type RelationConfig = {
+  relationId?: string;
+  direction?: "source" | "target";
+  targetTableId: string;
+  limit?: "one" | "many";
+  inverseName?: string;
+  inverseLimit?: "one" | "many";
+};
+export type RollupConfig = {
+  relationColumnId: string;
+  targetColumnId?: string;
+  operation:
+    | "count"
+    | "sum"
+    | "average"
+    | "min"
+    | "max"
+    | "earliest"
+    | "latest";
+};
+export type RelatedRecord = { id: string; tableId: string; title: string };
+
 export type ColumnConfig = {
+  relation?: RelationConfig;
+  rollup?: RollupConfig;
   options?: SelectOption[];
   /** view-level hide flag persisted on column */
   hidden?: boolean;
@@ -44,10 +75,55 @@ export type ColumnConfig = {
 
 export type CellValue = string | number | boolean | string[] | null;
 
+export const TABLE_ICON_NAMES = [
+  "Table2",
+  "Database",
+  "Folder",
+  "BriefcaseBusiness",
+  "Users",
+  "UserRound",
+  "Contact",
+  "Building2",
+  "ShoppingCart",
+  "Package",
+  "Truck",
+  "CalendarDays",
+  "CheckSquare",
+  "ListTodo",
+  "Kanban",
+  "ChartNoAxesCombined",
+  "ChartPie",
+  "Wallet",
+  "CreditCard",
+  "Receipt",
+  "FileText",
+  "Files",
+  "BookOpen",
+  "GraduationCap",
+  "Lightbulb",
+  "Rocket",
+  "Target",
+  "Flag",
+  "Heart",
+  "Star",
+  "Globe",
+  "MapPin",
+  "Plane",
+  "Coffee",
+  "Code",
+  "Cpu",
+  "Palette",
+  "Music",
+  "Camera",
+  "Megaphone",
+] as const;
+
 export type TableMeta = {
   id: string;
   name: string;
   description: string | null;
+  icon?: string | null;
+  pinned?: boolean;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
@@ -69,6 +145,8 @@ export type RowData = {
   cells: Record<string, CellValue>;
   sortOrder: number;
   version?: number;
+  relations?: Record<string, { records: RelatedRecord[]; total: number }>;
+  affectedTableIds?: string[];
   createdAt: string | Date;
   updatedAt: string | Date;
 };
@@ -90,6 +168,8 @@ export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
   checkbox: "勾选",
   person: "人员",
   formula: "公式",
+  relation: "关联",
+  rollup: "汇总",
 };
 
 export const FORMULA_RESULT_TYPE_LABELS: Record<FormulaResultType, string> = {

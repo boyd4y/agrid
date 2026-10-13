@@ -27,10 +27,10 @@
       "@/*": [
         "./src/*"
       ],
-      "@table/shared": [
+      "@tabdo/shared": [
         "../shared/src/index.ts"
       ],
-      "@table/shared/*": [
+      "@tabdo/shared/*": [
         "../shared/src/*"
       ]
     }

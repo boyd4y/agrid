@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { RowData } from "@/types/table";
-import type { FilterCondition, FilterLogic } from "@table/shared";
-import { DEFAULT_PAGE_SIZE, isFilterConditionComplete } from "@table/shared";
+import type { FilterCondition, FilterLogic } from "@tabdo/shared";
+import { DEFAULT_PAGE_SIZE, isFilterConditionComplete } from "@tabdo/shared";
 
 type Sort = { columnId: string; direction: "asc" | "desc" } | null;
 
@@ -12,6 +12,7 @@ type Options = {
   filterLogic: FilterLogic;
   sort: Sort;
   pageSize?: number;
+  refreshToken?: number;
 };
 
 /**
@@ -24,6 +25,7 @@ export function useWindowedRows({
   filterLogic,
   sort,
   pageSize = DEFAULT_PAGE_SIZE,
+  refreshToken,
 }: Options) {
   const [totalMatched, setTotalMatched] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -36,11 +38,12 @@ export function useWindowedRows({
   const loadedPages = useRef(new Set<number>());
   const inFlight = useRef(new Set<number>());
   const queryKey = useRef("");
+  const generation = useRef(0);
   const cursorsByPage = useRef<Map<number, string | null>>(new Map([[0, null]]));
 
   const resetAndLoadFirst = useCallback(async () => {
     const activeFilters = filters.filter(isFilterConditionComplete);
-    const key = JSON.stringify({ tableId, filters: activeFilters, filterLogic, sort, pageSize });
+    const key = JSON.stringify({ tableId, filters: activeFilters, filterLogic, sort, pageSize, generation: ++generation.current });
     queryKey.current = key;
     loadedPages.current = new Set();
     inFlight.current = new Set();
@@ -76,7 +79,7 @@ export function useWindowedRows({
     } finally {
       if (queryKey.current === key) setLoading(false);
     }
-  }, [tableId, filters, filterLogic, sort, pageSize]);
+  }, [tableId, filters, filterLogic, sort, pageSize, refreshToken]);
 
   useEffect(() => {
     void resetAndLoadFirst();
@@ -108,7 +111,7 @@ export function useWindowedRows({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pageSize]
+    [tableId, filters, filterLogic, sort, pageSize]
   );
 
   async function fetchPage(pageIndex: number, key: string) {
@@ -147,7 +150,7 @@ export function useWindowedRows({
         setError(e instanceof Error ? e.message : "分页加载失败");
       }
     } finally {
-      inFlight.current.delete(pageIndex);
+      if (queryKey.current === key) inFlight.current.delete(pageIndex);
     }
   }
 

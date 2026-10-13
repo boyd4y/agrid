@@ -1,3 +1,4 @@
+import { relationConfigSchema, rollupConfigSchema } from "../commands/relations.js";
 import { Hono } from "hono";
 import { z } from "zod";
 import { COLUMN_TYPES } from "../db/schema.js";
@@ -26,6 +27,9 @@ columnsRoute.post("/tables/:id/columns", async (c) => {
             )
             .optional(),
           hidden: z.boolean().optional(),
+          relation: relationConfigSchema.extend({relationId:z.string().uuid().optional(),direction:z.enum(["source","target"]).optional(),limit:z.enum(["one","many"]).optional(),inverseLimit:z.enum(["one","many"]).optional()}).optional(),
+          rollup: rollupConfigSchema.optional(),
+          formula: z.string().optional(), formulaResultType: z.enum(["auto","number","text","checkbox","date"]).optional(), dateFormat:z.string().optional(),
         })
         .optional(),
       width: z.number().int().positive().optional(),
@@ -37,7 +41,7 @@ columnsRoute.post("/tables/:id/columns", async (c) => {
       tableId,
       name: body.name,
       type: body.type,
-      config: body.config,
+      config: body.config as import("@tabdo/shared").ColumnConfig,
       width: body.width,
       organizationId: scope.organizationId,
     });
@@ -67,6 +71,9 @@ columnsRoute.patch("/columns/:id", async (c) => {
             )
             .optional(),
           hidden: z.boolean().optional(),
+          relation: relationConfigSchema.extend({relationId:z.string().uuid().optional(),direction:z.enum(["source","target"]).optional(),limit:z.enum(["one","many"]).optional(),inverseLimit:z.enum(["one","many"]).optional()}).optional(),
+          rollup: rollupConfigSchema.optional(),
+          formula: z.string().optional(), formulaResultType: z.enum(["auto","number","text","checkbox","date"]).optional(), dateFormat:z.string().optional(),
         })
         .optional(),
       width: z.number().int().positive().optional(),
@@ -80,7 +87,7 @@ columnsRoute.patch("/columns/:id", async (c) => {
       columnId: id,
       name: body.name,
       type: body.type,
-      config: body.config,
+      config: body.config as import("@tabdo/shared").ColumnConfig,
       width: body.width,
       sortOrder: body.sortOrder,
       hidden: body.hidden,

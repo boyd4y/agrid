@@ -1,6 +1,7 @@
-import { eq, asc, desc, and } from "drizzle-orm";
+import { eq, asc, desc, and, isNull, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { automations, automationRuns } from "../db/schema.js";
+import { automations, automationRuns, automationEvents, automationOutbox, rows, tables } from "../db/schema.js";
+import { queueName } from "../queue/config.js";
 import { requireTableInOrg } from "../tenant/scope.js";
 import type {
   AutomationRule,
@@ -14,7 +15,7 @@ import type {
   AutomationAction,
   FilterCondition,
   FilterLogic,
-} from "@table/shared";
+} from "@tabdo/shared";
 
 function mapRule(row: typeof automations.$inferSelect): AutomationRule {
   return {
@@ -22,6 +23,7 @@ function mapRule(row: typeof automations.$inferSelect): AutomationRule {
     tableId: row.tableId,
     name: row.name,
     enabled: row.enabled,
+    version: row.version,
     trigger: row.trigger as AutomationTrigger,
     conditions: (row.conditions ?? []) as FilterCondition[],
     conditionLogic: (row.conditionLogic as FilterLogic) || "and",
@@ -38,6 +40,7 @@ function mapRun(row: typeof automationRuns.$inferSelect): AutomationRun {
     tableId: row.tableId,
     rowId: row.rowId,
     status: row.status as AutomationRun["status"],
+    eventId: row.eventId, attempts: row.attempts, nextStep: row.nextStep,
     triggerType: row.triggerType as AutomationRun["triggerType"],
     detail: (row.detail ?? {}) as Record<string, unknown>,
     error: row.error,
@@ -52,6 +55,22 @@ async function assertTable(tableId: string, organizationId?: string) {
   return requireTableInOrg(tableId, organizationId);
 }
 
+export async function listWorkspaceAutomations(organizationId: string, offset = 0) {
+  const hits = await db.select({ rule: automations, sourceName: tables.name }).from(automations)
+    .innerJoin(tables, eq(tables.id, automations.tableId))
+    .where(and(eq(tables.organizationId, organizationId), isNull(automations.deletedAt)))
+    .orderBy(desc(automations.createdAt), desc(automations.id)).limit(101).offset(offset);
+  return { rules: hits.slice(0, 100).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > 100 };
+}
+
+export async function getWorkspaceAutomation(id: string, organizationId: string) {
+  const [hit] = await db.select({ rule: automations, sourceName: tables.name }).from(automations)
+    .innerJoin(tables, eq(tables.id, automations.tableId))
+    .where(and(eq(automations.id, id), eq(tables.organizationId, organizationId), isNull(automations.deletedAt))).limit(1);
+  if (!hit) throw new Error("自动化不存在");
+  return { ...mapRule(hit.rule), sourceName: hit.sourceName };
+}
+
 export async function listAutomations({
   tableId,
   organizationId,
@@ -60,7 +79,7 @@ export async function listAutomations({
   const rows = await db
     .select()
     .from(automations)
-    .where(eq(automations.tableId, tableId))
+    .where(and(eq(automations.tableId, tableId), isNull(automations.deletedAt)))
     .orderBy(asc(automations.createdAt));
   return rows.map(mapRule);
 }
@@ -91,7 +110,7 @@ export async function updateAutomation(input: UpdateAutomationInput & OrgScoped)
     .select()
     .from(automations)
     .where(eq(automations.id, input.automationId));
-  if (!existing) throw new Error(`自动化不存在: ${input.automationId}`);
+  if (!existing || existing.deletedAt) throw new Error(`自动化不存在: ${input.automationId}`);
   await assertTable(existing.tableId, input.organizationId);
 
   const [row] = await db
@@ -107,6 +126,7 @@ export async function updateAutomation(input: UpdateAutomationInput & OrgScoped)
         ? { conditionLogic: input.conditionLogic }
         : {}),
       ...(input.actions !== undefined ? { actions: input.actions as never } : {}),
+      version: sql`${automations.version} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(automations.id, input.automationId))
@@ -122,10 +142,10 @@ export async function deleteAutomation({
     .select()
     .from(automations)
     .where(eq(automations.id, automationId));
-  if (!existing) throw new Error(`自动化不存在: ${automationId}`);
+  if (!existing || existing.deletedAt) throw new Error(`自动化不存在: ${automationId}`);
   await assertTable(existing.tableId, organizationId);
   const deleted = await db
-    .delete(automations)
+    .update(automations).set({ deletedAt: new Date(), enabled: false })
     .where(eq(automations.id, automationId))
     .returning();
   if (!deleted.length) throw new Error(`自动化不存在: ${automationId}`);
@@ -152,6 +172,33 @@ export async function getEnabledAutomations(tableId: string) {
   const rows = await db
     .select()
     .from(automations)
-    .where(and(eq(automations.tableId, tableId), eq(automations.enabled, true)));
+    .where(and(eq(automations.tableId, tableId), eq(automations.enabled, true), isNull(automations.deletedAt)));
   return rows.map(mapRule);
+}
+
+/** Replay the same saved plan and receipts; completed actions are never reset. */
+export async function replayAutomationRun(runId: string, organizationId: string) {
+  return db.transaction(async (tx) => {
+    const [run] = await tx.select().from(automationRuns).where(eq(automationRuns.id, runId));
+    if (!run?.eventId || run.status !== "failed") throw new Error("仅支持重放有事件记录的失败运行");
+    const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, run.eventId)).for("update");
+    if (!event || event.organizationId !== organizationId) throw new Error("运行不属于该工作区或事件记录不存在");
+    if (event.status !== "failed") throw new Error("该事件仍在执行或不能重放");
+    const [row] = await tx.select().from(rows).where(eq(rows.id, event.rowId));
+    if (!row || row.version !== event.expectedVersion) throw new Error("记录已更新或删除，请通过新的变更触发自动化");
+    const [rule] = await tx.select().from(automations).where(eq(automations.id, run.automationId));
+    if (!rule || !rule.enabled || rule.deletedAt) throw new Error("请先启用自动化规则");
+    await tx.update(automationRuns).set({ status: "queued", error: null, finishedAt: null }).where(eq(automationRuns.id, runId));
+    await tx.update(automationEvents).set({ status: "matched", error: null, finishedAt: null,
+      generation: sql`${automationEvents.generation} + 1`,
+      fence: sql`${automationEvents.fence} + 1`, updatedAt: new Date() }).where(eq(automationEvents.id, event.id));
+    const generation = event.generation + 1;
+    await tx.insert(automationOutbox).values({ eventId: event.id, queue: queueName, generation,
+      payload: { protocol: 1, eventId: event.id, generation } }).onConflictDoUpdate({
+      target: [automationOutbox.eventId, automationOutbox.queue],
+      set: { status: "pending", generation, payload: { protocol: 1, eventId: event.id, generation },
+        claimToken: null, claimUntil: null, availableAt: sql`now()`, publishedAt: null, attempts: 0, lastError: null },
+    });
+    return { ok: true as const };
+  });
 }

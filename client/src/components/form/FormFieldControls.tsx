@@ -1,3 +1,4 @@
+import { RelationPicker } from "@/components/table/RelationPicker";
 import { useState } from "react";
 import { Bot, Check, ChevronsUpDown, User } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,7 +15,7 @@ import { SelectChip } from "@/components/table/SelectChip";
 import { cn } from "@/lib/utils";
 import type { CellValue, ColumnDef, SelectOption } from "@/types/table";
 import type { MemberOption } from "@/lib/api";
-import type { FormQuestionSettings } from "@table/shared";
+import type { FormQuestionSettings } from "@tabdo/shared";
 
 type ControlProps = {
   column: ColumnDef;
@@ -40,7 +41,7 @@ export function FormFieldControl({
 }: ControlProps) {
   const tf = variant === "typeform";
 
-  if (column.type === "formula" || disabled) {
+  if (column.type === "formula" || column.type === "rollup" || disabled) {
     return (
       <div
         className={cn(
@@ -56,6 +57,7 @@ export function FormFieldControl({
     );
   }
 
+  if(column.type==="relation")return <RelationPicker column={column} value={Array.isArray(value)?value:[]} onChange={onChange}/>;
   if (column.type === "checkbox") {
     const agree =
       settings?.kind === "checkbox" ? settings.agreeLabel : undefined;

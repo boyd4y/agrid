@@ -56,6 +56,7 @@ export function DatePicker({
 
   const commitText = () => {
     const trimmed = draft.trim();
+    if (trimmed === (value ? formatDateDisplay(value, dateFormat) : "")) return;
     if (!trimmed) {
       onChange(null);
       return;

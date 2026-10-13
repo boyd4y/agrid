@@ -11,13 +11,14 @@ import {
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BRAND_COPY } from "@/lib/brand";
 import { NotiolyImage, NOTIOLY } from "@/components/illustrations/NotiolyImage";
 
 const surfaces = [
-  { label: "Talk-to-Build", hint: "对话建系统" },
-  { label: "Grid / Board", hint: "核心数据视图" },
-  { label: "Harness tools", hint: "产品内 Codex·Claude·Pi" },
-  { label: "MCP + Skill", hint: "外部 Agent" },
+  { label: "说出想法", hint: "告诉 AI 你想做什么" },
+  { label: "整理信息", hint: "把已有的信息放在一起" },
+  { label: "安排步骤", hint: "一起理清下一步" },
+  { label: "动手执行", hint: "让 AI 操作，随时查看和调整" },
 ];
 
 export function HomePage() {
@@ -27,24 +28,22 @@ export function HomePage() {
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-[1.2fr_1fr] lg:py-20">
           <div className="min-w-0">
             <Badge variant="outline" className="mb-4 h-7 rounded-full px-3 text-xs font-normal">
-              Agrid · Agent-first · Talk-to-Build
+              tabdo · {BRAND_COPY.category}
             </Badge>
             <h1 className="text-balance text-[2.75rem] font-semibold leading-[1.1] tracking-tight text-foreground sm:text-5xl lg:text-[3.25rem]">
-              用对话构建数据系统，
-              <span className="text-primary">用表格落盘</span>
+              {BRAND_COPY.slogan}
             </h1>
             <p className="mt-5 max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl">
-              Agrid 不是「多维表格再套一层 AI」。底层是 Postgres 表格与看板——这是核心数据展示；
-              默认路径是 Talk-to-Build：说需求，Agent 建表、列、自动化与公式。人看网格，Agent 写命令。
+              {BRAND_COPY.description}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild size="lg">
                 <Link to="/signup">
-                  免费开始 <NiArrowRight className="h-4 w-4" />
+                  开始使用 <NiArrowRight data-icon="inline-end" className="size-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link to="/docs">文档 · For Agents / Humans</Link>
+                <Link to="/docs">查看使用指南</Link>
               </Button>
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-2">
@@ -71,60 +70,60 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Dual agent surfaces */}
+      {/* Ideas, AI assistance, and everyday work */}
       <section className="bg-muted/60 py-14 lg:py-16">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mx-auto mb-10 max-w-2xl text-center">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              两套 Agent 入口，一套命令层
+              有了想法，就让 AI 帮你动手
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">
-              产品内用 Vercel Harness 的内置 tools；对外用 MCP + Skill。
-              UI、Harness、MCP、agt_ Key 全部落到同一 <code className="rounded-md bg-background px-1.5 py-0.5 text-sm">/api/commands</code>。
+              想整理一次旅行，或推进一个小组项目？把想做的事和已有信息告诉 tabdo。
+              让 AI 帮你理清内容、安排步骤，再动手更新记录和设置规则。
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <SurfaceCard
               icon={<NiSparkles className="h-5 w-5 text-primary" />}
-              title="产品内 · Vercel Harness"
-              body="Codex / Claude / Pi 可切换。assistant-ui 对话直接带内置 table tools——建表、改单元格、移看板。无需 MCP。"
-              cta={{ to: "/docs/harness", label: "Harness 内置 tools" }}
-              badge="Internal"
+              title="说出想做的事，一起理清下一步"
+              body="把零散的想法和资料放进工作区，让 AI 帮你整理信息、安排步骤。需要添加记录、修改内容或调整状态时，接着对话就能让它动手。"
+              cta={{ to: "/docs/harness", label: "了解 AI 助手" }}
+              badge="AI 动手"
             />
             <SurfaceCard
               icon={<NiBot className="h-5 w-5 text-primary" />}
-              title="对外 · MCP + Skill"
-              body="Claude、Codex、Cursor 等外部 Agent 通过 @table/mcp 与 table-ops Skill 接入。工具与内置 tools 1:1。"
-              cta={{ to: "/docs/mcp", label: "给外部 Agent" }}
-              badge="External"
+              title="随时看看，也随时改改"
+              body="AI 做了什么，结果就在工作区里。你可以查看记录，直接修改，也可以停下来换个方向，再告诉它下一步怎么做。"
+              cta={{ to: "/docs", label: "查看使用指南" }}
+              badge="你来决定"
             />
           </div>
         </div>
       </section>
 
-      {/* Table is core */}
+      {/* Everyday examples and supporting capabilities */}
       <section className="border-y border-border py-14 lg:py-16">
         <div className="mx-auto max-w-6xl space-y-16 px-4 lg:space-y-20">
           <DeepDive
             icon={<NiTable className="h-5 w-5" />}
-            title="表格仍是核心底层与主展示"
-            body="Agent 优先的是「怎么建、怎么改」，不是取代网格。对话建完后默认落到 Grid / Board；10 万行级虚拟滚动与游标分页撑住检查与审计。"
-            cta={{ to: "/docs/tables", label: "字段与性能" }}
+            title="旅行安排，从零散信息开始"
+            body="把想去的地方、日期和预算记下来，让 AI 帮你整理已有信息和待办事项。计划有变化时，直接更新记录，或用对话调整安排。"
+            cta={{ to: "/signup", label: "开始一个计划" }}
             art={<NotiolyImage src={NOTIOLY.painting} alt="在画布上开始创作" />}
           />
           <DeepDive
             reverse
             icon={<NiZap className="h-5 w-5" />}
-            title="Talk-to-Build：一句话出系统"
-            body="「做个 CRM，跟进自动化」→ 建表、关联列、自动化、公式。登录后 /app 默认就是对话构建 + 实时表格，不用先拖拽低代码。"
-            cta={{ to: "/signup", label: "打开工作台" }}
+            title="小组项目，下一步清清楚楚"
+            body="整理任务、负责人和进展，让 AI 协助安排步骤、更新状态。和同伴一起查看、修改，项目往前走，信息也能跟着更新。"
+            cta={{ to: "/docs", label: "看看如何使用" }}
             art={<NotiolyImage src={NOTIOLY.planning} alt="规划与构建" />}
           />
           <DeepDive
             icon={<NiKanban className="h-5 w-5" />}
-            title="自动化 · 公式 · 看板同一数据源"
-            body="当/如果/就自动化、公式列、看板移卡——人和 Agent 共用。person 列可指到员工或智能体成员。"
-            cta={{ to: "/docs/architecture", label: "同源架构" }}
+            title="给想法合适的工具"
+            body="用表单收集意见，用看板查看进展，用报告汇总结果。重复的记录更新可以设成自动化规则，也可以交给 AI 执行；你随时能查看和调整。"
+            cta={{ to: "/docs", label: "了解工作区功能" }}
             art={<NotiolyImage src={NOTIOLY.collaborate} alt="协作" />}
           />
         </div>
@@ -138,10 +137,11 @@ export function HomePage() {
                 <NiUsers className="h-5 w-5" />
               </div>
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                员工与智能体，同一张成员表
+                一个人用，也能和小团队一起用
               </h2>
               <p className="mt-3 text-muted-foreground leading-relaxed">
-                人机同权：user.kind 区分形态，member.role 决定权限。操作接口 1:1，不给人一套、给模型一套。
+                在自己的工作区里整理想法，也可以邀请同伴一起参与。
+                按需要配置 AI 助手，让它用合适的方法和工具帮你做事。
               </p>
             </div>
             <div className="mt-8 flex flex-wrap gap-3 lg:mt-0 lg:justify-end">
@@ -149,7 +149,7 @@ export function HomePage() {
                 <Link to="/signup">创建工作区</Link>
               </Button>
               <Button asChild variant="outline" size="lg">
-                <Link to="/docs">For Agents / Humans</Link>
+                <Link to="/docs">查看使用指南</Link>
               </Button>
             </div>
           </div>
@@ -166,15 +166,15 @@ export function HomePage() {
         />
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            对话构建 · 表格落盘
+            从一件想做的事开始
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-muted-foreground leading-relaxed">
-            Agrid：Agent-first 数据系统。注册后直接进入 Talk-to-Build。
+            告诉 tabdo 你的想法，把已有的信息放进来，让 AI 帮你迈出下一步。
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
               <Link to="/signup">
-                免费开始 <NiArrowRight className="h-4 w-4" />
+                开始使用 <NiArrowRight data-icon="inline-end" className="size-4" />
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg">
@@ -182,7 +182,7 @@ export function HomePage() {
             </Button>
           </div>
           <p className="mt-6 text-xs text-muted-foreground">
-            演示账号 demo@agrid.app · Demo1234!
+            想法由你开始，方向由你决定。
           </p>
         </div>
       </section>
@@ -217,7 +217,7 @@ function SurfaceCard({
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
       <Button asChild variant="ghost" className="mt-3 h-auto px-0 text-primary underline-offset-4 hover:underline">
         <Link to={cta.to}>
-          {cta.label} <NiArrowRight className="h-4 w-4" />
+          {cta.label} <NiArrowRight data-icon="inline-end" className="size-4" />
         </Link>
       </Button>
     </div>
@@ -253,7 +253,7 @@ function DeepDive({
         <p className="mt-4 text-base leading-relaxed text-muted-foreground sm:text-lg">{body}</p>
         <Button asChild variant="ghost" className="mt-4 h-auto px-0 underline-offset-4 hover:underline">
           <Link to={cta.to}>
-            {cta.label} <NiArrowRight className="h-4 w-4" />
+            {cta.label} <NiArrowRight data-icon="inline-end" className="size-4" />
           </Link>
         </Button>
       </div>

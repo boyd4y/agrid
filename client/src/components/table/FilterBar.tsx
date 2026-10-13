@@ -1,3 +1,4 @@
+import { RelationPicker } from "./RelationPicker";
 import { useState } from "react";
 import { Plus, Trash2, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import {
   type FilterCondition,
   type FilterLogic,
   type FilterOp,
-} from "@table/shared";
+} from "@tabdo/shared";
 
 type Props = {
   columns: ColumnDef[];
@@ -45,7 +46,7 @@ export function FilterBar({
   const update = (id: string, patch: Partial<FilterCondition>) => {
     onChange(
       filters.map((f) => (f.id === id ? { ...f, ...patch } : f)),
-      filterLogic
+      filterLogic,
     );
   };
 
@@ -64,7 +65,7 @@ export function FilterBar({
           value: null,
         },
       ],
-      filterLogic
+      filterLogic,
     );
   };
 
@@ -157,7 +158,10 @@ export function FilterBar({
                 const ops = opsForType(col?.type ?? "text");
                 const needsValue = filterNeedsValue(f.op);
                 return (
-                  <div key={f.id} className="flex flex-nowrap items-center gap-1.5 overflow-x-auto">
+                  <div
+                    key={f.id}
+                    className="flex flex-nowrap items-center gap-1.5 overflow-x-auto"
+                  >
                     {idx > 0 ? (
                       <span className="w-8 text-center text-[10px] font-medium uppercase text-muted-foreground">
                         {filterLogic}
@@ -177,7 +181,10 @@ export function FilterBar({
                         });
                       }}
                     >
-                      <SelectTrigger size="sm" className="w-[120px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]">
+                      <SelectTrigger
+                        size="sm"
+                        className="w-[120px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
+                      >
                         <SelectValue placeholder="列" />
                       </SelectTrigger>
                       <SelectContent>
@@ -194,7 +201,10 @@ export function FilterBar({
                         update(f.id, { op: v as FilterOp, value: null })
                       }
                     >
-                      <SelectTrigger size="sm" className="w-[110px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]">
+                      <SelectTrigger
+                        size="sm"
+                        className="w-[110px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
+                      >
                         <SelectValue placeholder="条件" />
                       </SelectTrigger>
                       <SelectContent>
@@ -220,7 +230,7 @@ export function FilterBar({
                       onClick={() =>
                         onChange(
                           filters.filter((x) => x.id !== f.id),
-                          filterLogic
+                          filterLogic,
                         )
                       }
                     >
@@ -237,7 +247,7 @@ export function FilterBar({
   );
 }
 
-function FilterValueInput({
+export function FilterValueInput({
   column,
   value,
   onChange,
@@ -246,6 +256,22 @@ function FilterValueInput({
   value: CellValue;
   onChange: (v: CellValue) => void;
 }) {
+  if (column.type === "relation")
+    return (
+      <div className="w-44 shrink-0">
+        <RelationPicker
+          column={{
+            ...column,
+            config: {
+              ...column.config,
+              relation: { ...column.config.relation!, limit: "one" },
+            },
+          }}
+          value={typeof value === "string" ? [value] : []}
+          onChange={(ids) => onChange(ids[0] ?? null)}
+        />
+      </div>
+    );
   if (column.type === "select" || column.type === "multi_select") {
     const options = column.config?.options ?? [];
     const current = options.find((o) => o.id === value);
@@ -254,7 +280,10 @@ function FilterValueInput({
         value={typeof value === "string" && value ? value : "__empty__"}
         onValueChange={(v) => onChange(v === "__empty__" ? null : v)}
       >
-        <SelectTrigger size="sm" className="h-8 w-[160px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-ring data-[state=open]:!ring-1 data-[state=open]:!ring-ring">
+        <SelectTrigger
+          size="sm"
+          className="h-8 w-[160px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-ring data-[state=open]:!ring-1 data-[state=open]:!ring-ring"
+        >
           {current ? (
             <SelectChip option={current} />
           ) : (
@@ -278,11 +307,12 @@ function FilterValueInput({
     return (
       <Select
         value={value === true ? "1" : value === false ? "0" : "__empty__"}
-        onValueChange={(v) =>
-          onChange(v === "__empty__" ? null : v === "1")
-        }
+        onValueChange={(v) => onChange(v === "__empty__" ? null : v === "1")}
       >
-        <SelectTrigger size="sm" className="w-[100px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]">
+        <SelectTrigger
+          size="sm"
+          className="w-[100px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
+        >
           <SelectValue placeholder="—" />
         </SelectTrigger>
         <SelectContent>
@@ -293,7 +323,11 @@ function FilterValueInput({
       </Select>
     );
   }
-  if (column.type === "number") {
+  if (
+    column.type === "number" ||
+    (column.type === "rollup" &&
+      !["earliest", "latest"].includes(column.config.rollup?.operation ?? ""))
+  ) {
     return (
       <Input
         size="sm"
@@ -307,7 +341,11 @@ function FilterValueInput({
       />
     );
   }
-  if (column.type === "date") {
+  if (
+    column.type === "date" ||
+    (column.type === "rollup" &&
+      ["earliest", "latest"].includes(column.config.rollup?.operation ?? ""))
+  ) {
     return (
       <DatePicker
         value={typeof value === "string" ? value : null}

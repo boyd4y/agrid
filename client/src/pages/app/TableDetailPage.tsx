@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -6,26 +6,31 @@ import {
   FileInput,
   LayoutGrid,
   Loader2,
-  MoreHorizontal,
+  Star,
   Plus,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DataRefreshButton } from "@/components/ui/data-refresh-button";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/table/DataTable";
+import { TableIconPicker } from "@/components/table/TableIcon";
 import { TableActions } from "@/components/table/TableActions";
+import { BoardViewSettings, ViewActions } from "@/components/table/ViewActions";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { FormDesigner } from "@/components/form/FormDesigner";
 import { api } from "@/lib/api";
 import type { FullTable } from "@/types/table";
-import type { ResolvedFormView, TableView } from "@table/shared";
-import { cn } from "@/lib/utils";
+import type { ResolvedFormView, TableView } from "@tabdo/shared";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import { useAppShell } from "@/context/AppShellContext";
 
@@ -41,9 +46,11 @@ function viewLabel(type: string, name: string) {
 
 export function TableDetailPage() {
   const { tableId } = useParams<{ tableId: string }>();
-  const { setTables, tableRefreshToken, notifyTableMutated } =
+  const { setTables, getTableRefreshToken, notifyTableMutated, updateTableMetadata } =
     useOutletContext<AppOutletContext>();
-  const { setAiOpen, setActiveTableId } = useAppShell();
+  const tableRefreshToken = getTableRefreshToken(tableId);
+  const [deletingView, setDeletingView] = useState<TableView | null>(null);
+  const { setActiveTableId } = useAppShell();
   const [table, setTable] = useState<FullTable | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +60,8 @@ export function TableDetailPage() {
   const [viewsLoading, setViewsLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [menuViewId, setMenuViewId] = useState<string | null>(null);
+  const tableRequest = useRef(0);
+  const viewsRequest = useRef(0);
 
   const activeView = useMemo(
     () => views.find((v) => v.id === activeViewId) ?? null,
@@ -61,50 +70,58 @@ export function TableDetailPage() {
 
   const load = useCallback(async () => {
     if (!tableId) return;
+    const version = ++tableRequest.current;
     try {
       const full = await api.getTable(tableId);
+      if (version !== tableRequest.current) return;
       setTable({ ...full, rows: full.rows ?? [], rowCount: full.rowCount ?? 0 });
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
+      if (version === tableRequest.current) setError(e instanceof Error ? e.message : "加载失败");
     } finally {
-      setLoading(false);
+      if (version === tableRequest.current) setLoading(false);
     }
   }, [tableId]);
 
   const loadViews = useCallback(async () => {
     if (!tableId) return;
+    const version = ++viewsRequest.current;
     setViewsLoading(true);
     try {
       let list = await api.listViews(tableId);
-      // Ensure at least one grid view exists (on-demand default)
-      if (!list.some((v) => v.type === "grid")) {
+      if (version !== viewsRequest.current) return;
+      // Create an initial view only after the current request confirms none exist.
+      if (!list.length) {
         const grid = await api.createGridView(tableId, "表格");
-        list = [...list, grid];
+        list = await api.listViews(tableId);
       }
+      if (version !== viewsRequest.current) return;
       setViews(list);
       setActiveViewId((prev) => {
         if (prev && list.some((v) => v.id === prev)) return prev;
-        const grid = list.find((v) => v.type === "grid");
-        return grid?.id ?? list[0]?.id ?? null;
+        return list.find((v) => v.isDefault)?.id ?? list[0]?.id ?? null;
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载视图失败");
+      if (version === viewsRequest.current) setError(e instanceof Error ? e.message : "加载视图失败");
     } finally {
-      setViewsLoading(false);
+      if (version === viewsRequest.current) setViewsLoading(false);
     }
   }, [tableId]);
 
   useEffect(() => {
     setLoading(true);
+    setActiveViewId(null);
+    setViews([]);
+    setMenuViewId(null);
     setActiveTableId(tableId ?? null);
     void load();
     void loadViews();
+    return () => { tableRequest.current++; viewsRequest.current++; };
   }, [tableId, load, loadViews, setActiveTableId]);
 
   useEffect(() => {
-    if (tableRefreshToken > 0) void load();
-  }, [tableRefreshToken, load]);
+    if (tableRefreshToken > 0) { void load(); void loadViews(); }
+  }, [tableRefreshToken, load, loadViews]);
 
   useEffect(() => {
     if (!activeView || activeView.type !== "form") {
@@ -124,7 +141,7 @@ export function TableDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeView?.id, activeView?.type]);
+  }, [activeView?.id, activeView?.type, tableRefreshToken]);
 
   const renameTable = async (name: string) => {
     if (!table || !name.trim() || name === table.name) return;
@@ -171,23 +188,12 @@ export function TableDetailPage() {
 
   const removeView = async (view: TableView) => {
     if (views.length <= 1) {
-      setError("至少保留一个视图");
-      return;
+      throw new Error("至少保留一个视图");
     }
-    const label = viewLabel(view.type, view.name);
-    if (!confirm(`确定删除视图「${label}」？`)) return;
-    setMenuViewId(null);
-    try {
-      await api.deleteView(view.id);
-      const remaining = views.filter((v) => v.id !== view.id);
-      setViews(remaining);
-      if (activeViewId === view.id) {
-        const sameType = remaining.find((v) => v.type === view.type);
-        setActiveViewId(sameType?.id ?? remaining[0]?.id ?? null);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "删除视图失败");
-    }
+    await api.deleteView(view.id);
+    const remaining = await api.listViews(view.tableId);
+    setViews(remaining);
+    setActiveViewId((current) => current && remaining.some((candidate) => candidate.id === current) ? current : remaining.find((candidate) => candidate.isDefault)?.id ?? remaining[0]?.id ?? null);
   };
 
   if (loading) {
@@ -212,6 +218,13 @@ export function TableDetailPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <DeleteConfirmation
+        open={deletingView !== null}
+        onOpenChange={(open) => { if (!open) setDeletingView(null); }}
+        title="删除视图？"
+        description={`视图「${deletingView ? viewLabel(deletingView.type, deletingView.name) : ""}」将被删除，无法恢复。表格数据会保留。`}
+        onConfirm={async () => { if (deletingView) await removeView(deletingView); }}
+      />
       <div className="shrink-0 border-b border-border bg-background/80 py-3 pl-4 pr-2 backdrop-blur md:pl-6 md:pr-2">
         <div className="flex w-full flex-wrap items-end justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -230,6 +243,8 @@ export function TableDetailPage() {
               <span className="text-border">/</span>
               <span className="truncate text-foreground">{table.name}</span>
             </nav>
+            <div className="flex min-w-0 items-center gap-1">
+              <TableIconPicker value={table.icon} onChange={(icon) => updateTableMetadata(table.id, { icon })} />
             <Input
               className="h-auto border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
               defaultValue={table.name}
@@ -239,6 +254,7 @@ export function TableDetailPage() {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();
               }}
             />
+            </div>
             {table.description && (
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {table.description}
@@ -246,131 +262,37 @@ export function TableDetailPage() {
             )}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            <div
-              className="flex max-w-[min(100vw-8rem,36rem)] items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-muted p-0.5"
-              data-testid="view-switcher"
-            >
-              {views.map((v) => {
-                const Icon = viewIcon(v.type);
-                const active = v.id === activeViewId;
-                const canDelete = views.length > 1;
-                return (
-                  <div
-                    key={v.id}
-                    className={cn(
-                      "group flex shrink-0 items-center rounded-md",
-                      active
-                        ? "bg-background text-foreground shadow-[0_4px_12px_rgba(55,53,47,0.06)]"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <button
-                      type="button"
-                      data-testid={`view-${v.type}`}
-                      data-view-id={v.id}
-                      onClick={() => setActiveViewId(v.id)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setActiveViewId(v.id);
-                        setMenuViewId(v.id);
-                      }}
-                      className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium"
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                      {viewLabel(v.type, v.name)}
-                    </button>
-                    <Popover
-                      open={menuViewId === v.id}
-                      onOpenChange={(open) => setMenuViewId(open ? v.id : null)}
-                    >
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          data-testid={`view-menu-${v.id}`}
-                          className={cn(
-                            "mr-0.5 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground",
-                            active || menuViewId === v.id
-                              ? "opacity-100"
-                              : "opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          )}
-                          title="视图选项"
-                          aria-label="视图选项"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-36 p-1" align="start">
-                        <button
-                          type="button"
-                          data-testid={`delete-view-${v.id}`}
-                          disabled={!canDelete}
-                          title={canDelete ? "删除视图" : "至少保留一个视图"}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                            canDelete
-                              ? "text-destructive hover:bg-destructive/10"
-                              : "cursor-not-allowed text-muted-foreground opacity-60"
-                          )}
-                          onClick={() => void removeView(v)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          删除视图
-                        </button>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                );
-              })}
-              <Popover open={addOpen} onOpenChange={setAddOpen}>
-                <PopoverTrigger asChild>
-                  <button
+            {activeView?.type === "board" && <BoardViewSettings key={`board-settings-${activeView.id}`} view={activeView} table={table} onUpdated={(updated) => setViews((previous) => previous.map((view) => view.id === updated.id ? updated : view))} />}
+            <Tabs value={activeViewId ?? ""} onValueChange={setActiveViewId} className="min-w-0 max-w-[min(100vw-8rem,36rem)]" data-testid="view-switcher">
+              <TabsList className="justify-start overflow-x-auto">
+                {views.map((view) => {
+                  const Icon = viewIcon(view.type);
+                  return <TabsTrigger key={view.id} value={view.id} id={`view-tab-${view.id}`} aria-controls={`view-panel-${table.id}`} data-testid={`view-${view.type}`} data-view-id={view.id} onContextMenu={(event) => { event.preventDefault(); setActiveViewId(view.id); setMenuViewId(view.id); }}>
+                    <Icon />{viewLabel(view.type, view.name)}
+                    {view.isDefault && <Star className="size-3 text-muted-foreground" aria-label="默认视图" role="img"><title>默认视图</title></Star>}
+                  </TabsTrigger>;
+                })}
+              </TabsList>
+            </Tabs>
+            {activeView ? <TableActions table={table} onMenuClose={() => setMenuViewId(null)} renderMenu={(items) => <ViewActions tableActions={items} key={`view-actions-${activeView.id}`} view={activeView} table={table} active canDelete={views.length > 1} menuOpen={menuViewId === activeView.id} onMenuOpenChange={(open) => setMenuViewId(open ? activeView.id : null)} onDeleted={() => { setMenuViewId(null); setDeletingView(activeView); }} onUpdated={(updated) => setViews((previous) => previous.map((view) => view.id === updated.id ? updated : updated.isDefault ? { ...view, isDefault: false } : view))} />} /> : <TableActions table={table} />}
+              <DropdownMenu open={addOpen} onOpenChange={setAddOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon"
                     type="button"
                     data-testid="add-view"
-                    className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    className="shrink-0"
                     title="添加视图"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-44 p-1" align="end">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-                    onClick={() => void addView("grid")}
-                  >
-                    <Columns3 className="h-3.5 w-3.5" />
-                    表格视图
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-                    onClick={() => void addView("board")}
-                  >
-                    <LayoutGrid className="h-3.5 w-3.5" />
-                    看板视图
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-                    onClick={() => void addView("form")}
-                  >
-                    <FileInput className="h-3.5 w-3.5" />
-                    表单视图
-                  </button>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAiOpen(true)}
-              title="打开 AI 助手 ⌘J"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-agent" />
-              AI
-            </Button>
-            <TableActions table={table} />
+                    <Plus data-icon="inline-start" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-44" align="end"><DropdownMenuGroup>
+                  <DropdownMenuItem onSelect={() => void addView("grid")}><Columns3 />表格视图</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void addView("board")}><LayoutGrid />看板视图</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void addView("form")}><FileInput />表单视图</DropdownMenuItem>
+                </DropdownMenuGroup></DropdownMenuContent>
+              </DropdownMenu>
+            <DataRefreshButton onRefresh={() => notifyTableMutated(table.id)} />
           </div>
         </div>
         {error && (
@@ -380,7 +302,7 @@ export function TableDetailPage() {
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:px-8 md:py-5">
+      <div id={`view-panel-${table.id}`} role="tabpanel" aria-labelledby={activeViewId ? `view-tab-${activeViewId}` : undefined} className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 md:px-8 md:py-5">
         {viewsLoading && !activeView ? (
           <div className="flex h-40 items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -395,7 +317,7 @@ export function TableDetailPage() {
                   view={formView}
                   onChange={setFormView}
                   onSubmitted={() => {
-                    notifyTableMutated();
+                    notifyTableMutated(table.id);
                     void load();
                   }}
                 />
@@ -415,11 +337,9 @@ export function TableDetailPage() {
             <div className="flex min-h-0 flex-1 flex-col">
               <KanbanBoard
                 table={table}
+                config={activeView?.config}
+                refreshToken={tableRefreshToken}
                 onChange={setTable}
-                onRefresh={() => {
-                  notifyTableMutated();
-                  void load();
-                }}
               />
             </div>
             <p className="mt-3 shrink-0 text-xs text-muted-foreground">
@@ -429,7 +349,7 @@ export function TableDetailPage() {
         ) : (
           <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col">
-              <DataTable table={table} onChange={setTable} />
+              <DataTable table={table} onChange={setTable} refreshToken={tableRefreshToken} />
             </div>
             <p className="mt-3 shrink-0 text-xs text-muted-foreground">
               视图按需添加 · 表单 / 看板 / 表格同一数据集

@@ -1,16 +1,17 @@
 {
-  "name": "@table/mcp",
+  "name": "@tabdo/mcp",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "table-mcp": "./src/index.ts"
+    "tabdo-mcp": "./src/index.ts"
   },
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@tabdo/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "zod": "^4.6.5"
   },

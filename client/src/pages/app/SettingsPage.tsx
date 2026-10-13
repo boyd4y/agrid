@@ -1,9 +1,11 @@
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Keyboard, Moon, Sun, Monitor } from "lucide-react";
 import { useAppShell } from "@/context/AppShellContext";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useTheme, type Theme } from "@/components/theme/theme-provider";
-import { cn } from "@/lib/utils";
 
 const THEME_OPTIONS: { id: Theme; label: string; icon: typeof Sun }[] = [
   { id: "light", label: "浅色", icon: Sun },
@@ -12,75 +14,30 @@ const THEME_OPTIONS: { id: Theme; label: string; icon: typeof Sun }[] = [
 ];
 
 export function SettingsPage() {
-  const { sidebarCollapsed, setSidebarCollapsed, aiOpen, setAiOpen } =
-    useAppShell();
+  const { sidebarCollapsed, setSidebarCollapsed, aiOpen, setAiOpen } = useAppShell();
   const { theme, setTheme } = useTheme();
-
-  return (
-    <AppPage header={<AppPageHeader page="settings" description="工作区外观与布局偏好" />}>
-      <section className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-semibold">外观</h2>
-        <div className="flex flex-wrap gap-2">
-          {THEME_OPTIONS.map(({ id, label, icon: Icon }) => (
-            <Button
-              key={id}
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setTheme(id)}
-              aria-pressed={theme === id}
-              className={cn(
-                "gap-1.5",
-                theme === id && "border-primary bg-accent ring-1 ring-ring"
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </Button>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-4 space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-sm font-semibold">布局</h2>
-        <label className="flex items-center justify-between gap-4 text-sm">
-          <span>收起左侧导航</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            {sidebarCollapsed ? "已收起" : "已展开"}
-          </Button>
-        </label>
-        <label className="flex items-center justify-between gap-4 text-sm">
-          <span>默认打开 AI 助手抽屉</span>
-          <Button variant="outline" size="sm" onClick={() => setAiOpen(!aiOpen)}>
-            {aiOpen ? "打开" : "关闭"}
-          </Button>
-        </label>
-      </section>
-
-      <section className="mt-4 space-y-3 rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="flex items-center gap-2 text-sm font-semibold">
-          <Keyboard className="h-4 w-4" />
-          快捷键
-        </h2>
-        <ul className="space-y-2 text-sm text-muted-foreground">
-          <li className="flex justify-between">
-            <span>收起 / 展开侧栏</span>
-            <kbd className="rounded bg-muted px-1.5 py-0.5 text-xs ring-1 ring-border">
-              ⌘ \\
-            </kbd>
-          </li>
-          <li className="flex justify-between">
-            <span>打开 / 关闭 AI</span>
-            <kbd className="rounded bg-muted px-1.5 py-0.5 text-xs ring-1 ring-border">
-              ⌘ J
-            </kbd>
-          </li>
-        </ul>
-      </section>
-    </AppPage>
-  );
+  return <AppPage className="gap-4" header={<AppPageHeader page="settings" description="工作区外观与布局偏好" />}>
+    <Card className="shrink-0">
+      <CardHeader><CardTitle>外观</CardTitle></CardHeader>
+      <CardContent>
+        <ToggleGroup type="single" variant="outline" size="sm" value={theme} onValueChange={(value) => { if (value) setTheme(value as Theme); }} aria-label="工作区外观" className="flex-wrap justify-start gap-2">
+          {THEME_OPTIONS.map(({ id, label, icon: Icon }) => <ToggleGroupItem key={id} value={id} aria-label={label}><Icon aria-hidden />{label}</ToggleGroupItem>)}
+        </ToggleGroup>
+      </CardContent>
+    </Card>
+    <Card className="shrink-0">
+      <CardHeader><CardTitle>布局</CardTitle></CardHeader>
+      <CardContent><FieldGroup>
+        <Field orientation="horizontal"><FieldLabel htmlFor="settings-sidebar">收起左侧导航</FieldLabel><Switch id="settings-sidebar" aria-label="收起左侧导航" checked={sidebarCollapsed} onCheckedChange={setSidebarCollapsed} /></Field>
+        <Field orientation="horizontal"><FieldLabel htmlFor="settings-ai">默认打开 AI 助手抽屉</FieldLabel><Switch id="settings-ai" aria-label="默认打开 AI 助手抽屉" checked={aiOpen} onCheckedChange={setAiOpen} /></Field>
+      </FieldGroup></CardContent>
+    </Card>
+    <Card className="shrink-0">
+      <CardHeader><CardTitle className="flex items-center gap-2"><Keyboard aria-hidden className="size-4" />快捷键</CardTitle></CardHeader>
+      <CardContent><ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+        <li className="flex justify-between gap-3"><span>收起 / 展开侧栏</span><kbd className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs ring-1 ring-border">⌘ \\</kbd></li>
+        <li className="flex justify-between gap-3"><span>打开 / 关闭 AI</span><kbd className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs ring-1 ring-border">⌘ J</kbd></li>
+      </ul></CardContent>
+    </Card>
+  </AppPage>;
 }

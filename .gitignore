@@ -16,3 +16,8 @@ server/dist
 **/.impeccable/live/previews/
 **/.impeccable/live/cache/
 # impeccable-ignore-end
+
+# Browser regression screenshots, frame traces and isolated API logs
+client/test/artifacts/
+screenshots/
+client/screenshots/

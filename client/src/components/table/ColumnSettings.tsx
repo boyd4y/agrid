@@ -1,3 +1,6 @@
+import { ColumnTypeIcon } from "./ColumnTypeIcon";
+import { ArrowLeft, ArrowRight, EyeOff, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import { RelationColumnConfig } from "./RelationColumnConfig";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -54,15 +58,17 @@ export function ColumnSettings({
   const [name, setName] = useState(column.name);
   const [type, setType] = useState<ColumnType>(column.type as ColumnType);
   const [options, setOptions] = useState<SelectOption[]>(
-    column.config?.options ?? []
+    column.config?.options ?? [],
   );
   const [formula, setFormula] = useState(column.config?.formula ?? "");
   const [formulaResultType, setFormulaResultType] = useState<FormulaResultType>(
-    column.config?.formulaResultType ?? "auto"
+    column.config?.formulaResultType ?? "auto",
   );
   const [dateFormat, setDateFormat] = useState<DateFormat>(
-    column.config?.dateFormat ?? "YYYY-MM-DD"
+    column.config?.dateFormat ?? "YYYY-MM-DD",
   );
+  const [extraConfig, setExtraConfig] = useState(column.config);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const isSelect = type === "select" || type === "multi_select";
@@ -80,15 +86,15 @@ export function ColumnSettings({
         name: name.trim() || column.name,
         type,
         config: {
-          ...column.config,
+          ...extraConfig,
           options: isSelect ? options : column.config?.options,
-          ...(isFormula
-            ? { formula: formula.trim(), formulaResultType }
-            : {}),
+          ...(isFormula ? { formula: formula.trim(), formulaResultType } : {}),
           ...(isDate ? { dateFormat } : {}),
         },
       });
       onClose();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "保存失败");
     } finally {
       setSaving(false);
     }
@@ -98,48 +104,87 @@ export function ColumnSettings({
     const id = `opt_${Date.now().toString(36)}`;
     setOptions((o) => [
       ...o,
-      { id, label: `选项 ${o.length + 1}`, color: COLORS[o.length % COLORS.length] },
+      {
+        id,
+        label: `选项 ${o.length + 1}`,
+        color: COLORS[o.length % COLORS.length],
+      },
     ]);
   };
 
   const refCandidates = allColumns.filter(
-    (c) => c.id !== column.id && c.type !== "formula"
+    (c) => c.id !== column.id && c.type !== "formula",
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl border border-border bg-background p-4 shadow-xl">
+    <div
+      className="w-full shrink-0"
+      role="region"
+      aria-label="列设置"
+      data-testid="column-settings-editor"
+    >
+      <div className="flex flex-col gap-1">
         <h3 className="mb-3 text-base font-semibold text-foreground">列设置</h3>
 
-        <Label className="mb-1 block">列名</Label>
-        <Input className="mb-3" value={name} onChange={(e) => setName(e.target.value)} />
+        <Label htmlFor={`column-name-${column.id}`} className="mb-1 block">列名</Label>
+        <Input
+          id={`column-name-${column.id}`}
+          className="mb-3"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
 
         <Label className="mb-1 block">类型</Label>
         <Select value={type} onValueChange={(v) => setType(v as ColumnType)}>
           <SelectTrigger className="mb-3">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent><SelectGroup>
             {(Object.keys(COLUMN_TYPE_LABELS) as ColumnType[]).map((t) => (
-              <SelectItem key={t} value={t}>
-                {COLUMN_TYPE_LABELS[t]}
+              <SelectItem
+                key={t}
+                value={t}
+                disabled={
+                  t !== column.type &&
+                  (["relation", "rollup"].includes(t) ||
+                    ["relation", "rollup"].includes(column.type))
+                }
+              >
+                <ColumnTypeIcon type={t} />{COLUMN_TYPE_LABELS[t]}
               </SelectItem>
             ))}
-          </SelectContent>
+          </SelectGroup></SelectContent>
         </Select>
 
+        {(type === "relation" || type === "rollup") && (
+          <RelationColumnConfig
+            type={type}
+            config={extraConfig}
+            onChange={setExtraConfig}
+            columns={allColumns}
+            existing
+          />
+        )}
+        {saveError && (
+          <p role="alert" className="py-2 text-xs text-destructive">
+            {saveError}
+          </p>
+        )}
         {isFormula && (
-          <div className="mb-3 space-y-2">
+          <div className="mb-3 flex flex-col gap-2">
             <Label className="block">公式表达式</Label>
             <Textarea
               className="min-h-[88px] font-mono text-sm"
               value={formula}
               onChange={(e) => setFormula(e.target.value)}
-              placeholder={'例如：{预估工时} * 8\nIF({已完成}, "完成", "进行中")'}
+              placeholder={
+                '例如：{预估工时} * 8\nIF({已完成}, "完成", "进行中")'
+              }
               spellCheck={false}
             />
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              用 {"{列名}"} 引用单元格。支持 + - * / &amp;、IF / AND / OR / NOT、CONCAT、LEN、ABS、ROUND、EMPTY、VALUE、TEXT。
+              用 {"{列名}"} 引用单元格。支持 + - * / &amp;、IF / AND / OR /
+              NOT、CONCAT、LEN、ABS、ROUND、EMPTY、VALUE、TEXT。
             </p>
             {refCandidates.length > 0 && (
               <div className="flex flex-wrap gap-1">
@@ -160,20 +205,30 @@ export function ColumnSettings({
             <Label className="block">结果类型</Label>
             <Select
               value={formulaResultType}
-              onValueChange={(v) => setFormulaResultType(v as FormulaResultType)}
+              onValueChange={(v) =>
+                setFormulaResultType(v as FormulaResultType)
+              }
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(FORMULA_RESULT_TYPE_LABELS) as FormulaResultType[]).map(
-                  (t) => (
-                    <SelectItem key={t} value={t}>
-                      {FORMULA_RESULT_TYPE_LABELS[t]}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
+              <SelectContent><SelectGroup>
+                {(
+                  Object.keys(FORMULA_RESULT_TYPE_LABELS) as FormulaResultType[]
+                ).map((t) => (
+                  <SelectItem
+                    key={t}
+                    value={t}
+                    disabled={
+                      t !== column.type &&
+                      (["relation", "rollup"].includes(t) ||
+                        ["relation", "rollup"].includes(column.type))
+                    }
+                  >
+                    {FORMULA_RESULT_TYPE_LABELS[t]}
+                  </SelectItem>
+                ))}
+              </SelectGroup></SelectContent>
             </Select>
           </div>
         )}
@@ -188,13 +243,13 @@ export function ColumnSettings({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent><SelectGroup>
                 {DATE_FORMAT_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.value} · {o.label}
                   </SelectItem>
                 ))}
-              </SelectContent>
+              </SelectGroup></SelectContent>
             </Select>
             <p className="mt-1 text-[11px] text-muted-foreground">
               存储仍为 YYYY-MM-DD；单元格按此格式显示，可手输或点日历。
@@ -206,18 +261,25 @@ export function ColumnSettings({
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between">
               <Label>选项</Label>
-              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={addOption}>
-                + 添加
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={addOption}
+              >
+                <Plus data-icon="inline-start" />添加
               </Button>
             </div>
-            <div className="max-h-40 space-y-1.5 overflow-auto">
+            <div className="flex max-h-48 flex-col gap-2 overflow-auto">
               {options.map((o, i) => (
                 <div key={o.id} className="flex items-center gap-1.5">
                   <ColorPicker
                     value={o.color || COLORS[0]}
+                    label={`${o.label}的颜色`}
                     onChange={(color) =>
                       setOptions((opts) =>
-                        opts.map((x, j) => (j === i ? { ...x, color } : x))
+                        opts.map((x, j) => (j === i ? { ...x, color } : x)),
                       )
                     }
                   />
@@ -227,18 +289,22 @@ export function ColumnSettings({
                     value={o.label}
                     onChange={(e) =>
                       setOptions((opts) =>
-                        opts.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))
+                        opts.map((x, j) =>
+                          j === i ? { ...x, label: e.target.value } : x,
+                        ),
                       )
                     }
                   />
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    className="h-8 text-xs text-destructive"
-                    onClick={() => setOptions((opts) => opts.filter((_, j) => j !== i))}
+                    size="icon"
+                    aria-label={`删除选项 ${o.label}`}
+                    onClick={() =>
+                      setOptions((opts) => opts.filter((_, j) => j !== i))
+                    }
                   >
-                    删
+                    <Trash2 data-icon="inline-start" />
                   </Button>
                 </div>
               ))}
@@ -248,25 +314,28 @@ export function ColumnSettings({
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => onMove("left")}>
-            左移
+            <ArrowLeft data-icon="inline-start" />左移
           </Button>
           <Button variant="outline" size="sm" onClick={() => onMove("right")}>
-            右移
+            <ArrowRight data-icon="inline-start" />右移
           </Button>
           <Button variant="outline" size="sm" onClick={onHide}>
-            隐藏列
+            <EyeOff data-icon="inline-start" />隐藏列
           </Button>
           <Button variant="destructive" size="sm" onClick={onDelete}>
-            删除列
+            <Trash2 data-icon="inline-start" />删除列
           </Button>
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            取消
+          <Button variant="outline" disabled={saving} onClick={onClose}>
+            <X data-icon="inline-start" />取消
           </Button>
-          <Button onClick={() => void save()} disabled={saving || (isFormula && !formula.trim())}>
-            保存
+          <Button
+            onClick={() => void save()}
+            disabled={saving || (isFormula && !formula.trim())}
+          >
+            {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? "保存中…" : "保存"}
           </Button>
         </div>
       </div>

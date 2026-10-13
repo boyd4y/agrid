@@ -1,4 +1,4 @@
-# Form View — Agrid
+# Form View — tabdo
 
 > Status: **v2 Typeform implemented** — themes (5 presets), classic/focus layout, DnD field order, question inspector, on-demand views (no fixed 3 tabs).  
 > Goal: Feishu-like **表单模式** on the **same dataset** as Grid / Board; UI on **shadcn Form**; Agent can design forms via the shared command layer.
@@ -58,7 +58,7 @@ Source of truth: Typeform product + Help Center (themes, multi-question pages, b
 
 ### 4.2 What we take vs skip
 
-| Take for Agrid | Skip / defer |
+| Take for tabdo | Skip / defer |
 |---|---|
 | Preset **themes** (gallery) + form-level theme tokens | Premium gallery / Brand Kit sync |
 | **Layout modes**: `classic` (stacked card) vs `focus` (one question at a time) | Full multi-page “form page” group model in v2.0 — start with flat ordered list + optional sections |
@@ -68,7 +68,7 @@ Source of truth: Typeform product + Help Center (themes, multi-question pages, b
 
 ### 4.3 Mapping to our model
 
-- Typeform “question” ↔ Agrid **column** + `FormFieldConfig` overlay.
+- Typeform “question” ↔ tabdo **column** + `FormFieldConfig` overlay.
 - Typeform “theme” ↔ `FormViewConfig.theme` (preset id + optional token overrides).
 - Typeform “Design panel” ↔ Form design mode: canvas (preview) + field list (sortable) + inspector.
 - Answers still land in `rows.cells` — themes never fork storage.
@@ -142,7 +142,7 @@ type FormLayoutMode = "classic" | "focus";
 // focus   = Typeform-like one question at a time + progress
 
 type FormThemePresetId =
-  | "notion-light"   // cream / charcoal — default, matches Agrid N1
+  | "notion-light"   // cream / charcoal — default, matches tabdo N1
   | "ink"            // high-contrast dark text on soft white
   | "ocean"          // cool blue accents
   | "sunset"         // warm coral / amber accents
@@ -232,7 +232,7 @@ type FormQuestionSettings =
 
 ### 8.2 Fill mode
 
-- Apply CSS variables from `theme.preset` + overrides (map onto `--agrid-*` / local form tokens).
+- Apply CSS variables from `theme.preset` + overrides (map onto `--tabdo-*` / local form tokens).
 - `classic`: single scrollable card (current structure, restyled).
 - `focus`: one visible field + Next / OK + progress; keyboard Enter advances when valid.
 - Submit still shared command path.
@@ -243,7 +243,7 @@ type FormQuestionSettings =
 
 ---
 
-## 9. Themes plan (Typeform-like, Agrid-branded)
+## 9. Themes plan (Typeform-like, tabdo-branded)
 
 ### 9.1 Presets (ship 5)
 

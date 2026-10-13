@@ -37,10 +37,10 @@ export type UpdateFieldAction = {
 
 export type RunAgentAction = {
   type: "run_agent";
-  /** agent userId (member kind=agent); optional — logs + optional writeback */
+  /** agent userId (member kind=agent); background runtime is not yet implemented. */
   agentUserId?: string | null;
   prompt?: string;
-  /** after agent (mock) completes, write this field */
+  /** Reserved writeback configuration for the future background agent runtime. */
   resultColumnId?: string;
   resultValue?: CellValue;
 };
@@ -52,6 +52,7 @@ export type AutomationRule = {
   tableId: string;
   name: string;
   enabled: boolean;
+  version: number;
   trigger: AutomationTrigger;
   conditions: FilterCondition[];
   conditionLogic: FilterLogic;
@@ -60,7 +61,7 @@ export type AutomationRule = {
   updatedAt: string | Date;
 };
 
-export type AutomationRunStatus = "queued" | "running" | "completed" | "failed" | "skipped";
+export type AutomationRunStatus = "queued" | "running" | "retrying" | "completed" | "failed" | "skipped" | "cancelled" | "superseded" | "unknown";
 
 export type AutomationRun = {
   id: string;
@@ -68,6 +69,9 @@ export type AutomationRun = {
   tableId: string;
   rowId: string;
   status: AutomationRunStatus;
+  eventId?: string | null;
+  attempts?: number;
+  nextStep?: number;
   triggerType: AutomationTriggerType;
   detail: Record<string, unknown>;
   error: string | null;

@@ -91,6 +91,8 @@ const reasoningDuration = (timing: ThreadGroupPart["timing"]) =>
 export type ThreadComponents = {
   AssistantMessage?: ComponentType | undefined;
   Welcome?: ComponentType | undefined;
+  RunStatus?: ComponentType | undefined;
+  ComposerCancel?: ComponentType | undefined;
   ToolFallback?: ToolCallMessagePartComponent | undefined;
   ToolGroup?:
     | ComponentType<PropsWithChildren<{ group: ThreadGroupPart }>>
@@ -132,6 +134,8 @@ const taskAwareGroupBy = (
 };
 
 export type ThreadProps = {
+  composerDisabled?: boolean;
+  dockComposer?: boolean;
   components?: ThreadComponents | undefined;
   autoFocus?: boolean | undefined;
 };
@@ -178,27 +182,36 @@ const ThreadHistorySkeleton: FC = () => (
 export const Thread: FC<ThreadProps> = ({
   components = EMPTY_COMPONENTS,
   autoFocus = true,
+  dockComposer = false,
+  composerDisabled = false,
 }) => {
   const isEmpty = useAuiState(isNewChatView);
 
   return (
     <ThreadComponentsContext.Provider value={components}>
-      <ThreadRoot isEmpty={isEmpty} autoFocus={autoFocus} />
+      <ThreadRoot
+        isEmpty={isEmpty}
+        autoFocus={autoFocus}
+        dockComposer={dockComposer}
+        composerDisabled={composerDisabled}
+      />
     </ThreadComponentsContext.Provider>
   );
 };
 
-const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
-  isEmpty,
-  autoFocus,
-}) => {
-  const { Welcome = ThreadWelcome } = useContext(ThreadComponentsContext);
+const ThreadRoot: FC<{
+  isEmpty: boolean;
+  autoFocus: boolean;
+  dockComposer: boolean;
+  composerDisabled: boolean;
+}> = ({ isEmpty, autoFocus, dockComposer, composerDisabled }) => {
+  const { Welcome = ThreadWelcome, RunStatus } = useContext(ThreadComponentsContext);
 
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
+      className="aui-root aui-thread-root bg-background @container flex h-full min-h-0 min-w-0 w-full flex-col"
       style={{
-        ["--thread-max-width" as string]: "100%",
+        ["--thread-max-width" as string]: "48rem",
         ["--composer-bg" as string]:
           "color-mix(in oklab, var(--color-muted) 30%, transparent)",
         ["--composer-radius" as string]: "1rem",
@@ -208,12 +221,13 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
       <ThreadPrimitive.Viewport
         turnAnchor="top"
         data-slot="aui_thread-viewport"
-        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
+        className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
       >
         <div
+          data-slot="aui_thread-content"
           className={cn(
-            "mx-auto flex w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
-            isEmpty && "justify-center",
+            "mx-auto flex min-w-0 w-full max-w-(--thread-max-width) flex-1 flex-col px-4 pt-4",
+            isEmpty && !dockComposer && "justify-center",
           )}
         >
           <AuiIf condition={isNewChatView}>
@@ -237,16 +251,17 @@ const ThreadRoot: FC<{ isEmpty: boolean; autoFocus: boolean }> = ({
           <ThreadPrimitive.ViewportFooter
             className={cn(
               "aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6",
-              !isEmpty &&
+              (!isEmpty || dockComposer) &&
                 "sticky bottom-0 mt-auto rounded-t-(--composer-radius)",
             )}
           >
             <ThreadScrollToBottom />
+            {RunStatus && <RunStatus />}
             <ThreadFollowupSuggestions />
-            <Composer autoFocus={autoFocus} />
-            <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
+            <AuiIf condition={isNewChatView}>
               <ThreadSuggestions />
             </AuiIf>
+            <fieldset disabled={composerDisabled} className="min-w-0" aria-label="发送消息"><Composer autoFocus={autoFocus} /></fieldset>
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
@@ -440,11 +455,12 @@ const ThreadScrollToBottom: FC = () => {
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
-        tooltip="Scroll to bottom"
+        tooltip="滚动到底部"
+        aria-label="滚动到底部"
         variant="outline"
-        className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
+        className="aui-thread-scroll-to-bottom absolute -top-12 z-10 size-9 self-center rounded-full border-border bg-background p-0 text-foreground shadow-sm hover:bg-accent disabled:invisible"
       >
-        <ArrowDownIcon />
+        <ArrowDownIcon className="size-4 shrink-0" />
       </TooltipIconButton>
     </ThreadPrimitive.ScrollToBottom>
   );
@@ -462,7 +478,7 @@ const ThreadWelcome: FC = () => {
 
 const ThreadSuggestions: FC = () => {
   return (
-    <div className="aui-thread-welcome-suggestions flex w-full flex-col">
+    <div className="aui-thread-welcome-suggestions grid w-full grid-cols-2 gap-2 @xl:grid-cols-4">
       <ThreadPrimitive.Suggestions>
         {() => <ThreadSuggestionItem />}
       </ThreadPrimitive.Suggestions>
@@ -472,25 +488,16 @@ const ThreadSuggestions: FC = () => {
 
 const ThreadSuggestionItem: FC = () => {
   return (
-    <div className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-2 animate-in fill-mode-both duration-200">
-      <SuggestionPrimitive.Trigger send asChild>
-        <button
-          type="button"
-          className="aui-thread-welcome-suggestion group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none"
-        >
-          <span
-            aria-hidden
-            className="text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none"
-          >
-            {">"}
-          </span>
-          <span className="min-w-0 flex-1 truncate">
-            <SuggestionPrimitive.Title className="aui-thread-welcome-suggestion-text-1 text-foreground" />{" "}
-            <SuggestionPrimitive.Description className="aui-thread-welcome-suggestion-text-2 text-muted-foreground empty:hidden" />
-          </span>
-        </button>
-      </SuggestionPrimitive.Trigger>
-    </div>
+    <SuggestionPrimitive.Trigger send={false} asChild>
+      <button
+        type="button"
+        data-testid="chat-suggestion-card"
+        className="aui-thread-welcome-suggestion flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-muted/20 px-3 py-3 text-left transition-colors hover:border-ring/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none"
+      >
+        <SuggestionPrimitive.Title className="text-sm font-medium text-foreground" />
+        <SuggestionPrimitive.Description className="text-xs leading-relaxed text-muted-foreground" />
+      </button>
+    </SuggestionPrimitive.Trigger>
   );
 };
 
@@ -504,12 +511,12 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
         >
           <ComposerAttachments />
           <ComposerPrimitive.Input
-            placeholder="Send a message..."
+            placeholder="描述你想整理的数据或完成的操作…"
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
             rows={1}
             autoFocus={autoFocus}
             enterKeyHint="send"
-            aria-label="Message input"
+            aria-label="消息输入框"
           />
           <ComposerAction />
         </div>
@@ -519,6 +526,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 };
 
 const ComposerAction: FC = () => {
+  const { ComposerCancel } = useContext(ThreadComponentsContext);
   // The stop control only cancels the send while no run it could stop is going.
   const isSending = useAuiState(
     (s) =>
@@ -590,7 +598,7 @@ const ComposerAction: FC = () => {
               s.composer.submission !== undefined)
           }
         >
-          <ComposerPrimitive.Cancel asChild>
+          {ComposerCancel ? <ComposerCancel /> : <ComposerPrimitive.Cancel asChild>
             <Button
               type="button"
               variant="default"
@@ -600,7 +608,7 @@ const ComposerAction: FC = () => {
             >
               <SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />
             </Button>
-          </ComposerPrimitive.Cancel>
+          </ComposerPrimitive.Cancel>}
         </AuiIf>
       </div>
     </div>
@@ -622,6 +630,7 @@ const AssistantMessage: FC = () => {
     ToolFallback: ToolFallbackComponent = ToolFallback,
     ToolGroup,
     ReasoningGroup,
+    RunStatus,
     TaskGroup: TaskGroupComponent,
   } = useContext(ThreadComponentsContext);
   const groupBy = TaskGroupComponent ? taskAwareGroupBy : messageGroupBy;
@@ -702,7 +711,7 @@ const AssistantMessage: FC = () => {
                   </div>
                 );
               case "indicator":
-                return (
+                return RunStatus ? null : (
                   <span
                     data-slot="aui_assistant-message-indicator"
                     className="animate-pulse font-sans"

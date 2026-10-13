@@ -51,10 +51,10 @@ function Calendar({
         day: "rdp-day relative p-0 text-center text-sm focus-within:relative focus-within:z-20",
         day_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "rdp-day_button h-8 w-8 p-0 font-normal text-foreground hover:bg-accent aria-selected:opacity-100"
+          "rdp-day_button size-8 border-none p-0 font-normal text-foreground hover:bg-accent aria-selected:opacity-100"
         ),
         selected:
-          "rdp-selected rounded-md [&_.rdp-day_button]:bg-foreground [&_.rdp-day_button]:text-background [&_.rdp-day_button]:hover:bg-foreground [&_.rdp-day_button]:hover:text-background",
+          "rdp-selected rounded-md [&_button]:bg-foreground! [&_button]:text-background! [&_button]:opacity-100 [&_button]:hover:bg-foreground! [&_button]:hover:text-background!",
         today: "rdp-today rounded-md [&:not(.rdp-selected)]:bg-muted",
         outside: "rdp-outside text-muted-foreground opacity-50",
         disabled: "rdp-disabled text-muted-foreground opacity-40",

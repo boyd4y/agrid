@@ -21,8 +21,9 @@ export function AppPage({ className, header, children, ...props }: HTMLAttribute
   );
 }
 
-export function AppPageHeader({ page, description, children, className }: {
+export function AppPageHeader({ page, title, description, children, className }: {
   page: AppPageKey;
+  title?: ReactNode;
   description?: ReactNode;
   children?: ReactNode;
   className?: string;
@@ -31,10 +32,10 @@ export function AppPageHeader({ page, description, children, className }: {
   return (
     <header className={cn("flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-6 py-6 md:px-10", className)}>
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Icon className="h-5 w-5 shrink-0 text-muted-foreground" />{label}</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Icon className="h-5 w-5 shrink-0 text-muted-foreground" />{title ?? label}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
-      {children}
+      {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}
     </header>
   );
 }

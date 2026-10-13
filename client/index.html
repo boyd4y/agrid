@@ -3,16 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/agrid-mark.svg" />
-    <title>Agrid · AI-native 多维表</title>
-    <meta name="description" content="Agrid — AI-native multidimensional tables. Humans and agents share one command layer." />
-    <meta property="og:site_name" content="Agrid" />
-    <meta property="og:title" content="Agrid · AI-native multidimensional tables" />
-    <meta property="og:description" content="Feishu/Notion-style tables with MCP, Skill, and a same-origin command API." />
+    <link id="tabdo-favicon" rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/tabdo-mark.svg" />
+    <title>tabdo · AI 原生工作空间</title>
+    <meta name="description" content="把想做的事告诉 tabdo，让 AI 帮你整理信息、安排步骤并动手完成。你随时可以查看和调整。" />
+    <meta property="og:site_name" content="tabdo" />
+    <meta property="og:title" content="tabdo · 让想法，动起来。" />
+    <meta property="og:description" content="把想做的事告诉 tabdo，让 AI 帮你整理信息、安排步骤并动手完成。你随时可以查看和调整。" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/agrid-mark.svg" />
-    <meta name="twitter:image" content="/agrid-mark.svg" />
+    <meta property="og:url" content="https://tabdo.ai/" />
+    <link rel="canonical" href="https://tabdo.ai/" />
+    <meta property="og:image" content="/tabdo-mark.svg" />
+    <meta name="twitter:image" content="/tabdo-mark.svg" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
     <script>
@@ -32,6 +34,10 @@
           dark ? "dark" : "light"
         );
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.getElementById("tabdo-favicon").setAttribute(
+          "href",
+          "/brand/tabdo-favicon-" + (dark ? "dark" : "light") + ".svg"
+        );
       })();
     </script>
   </head>

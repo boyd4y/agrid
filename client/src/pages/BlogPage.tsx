@@ -21,19 +21,19 @@ export function BlogPage() {
     <main className="relative">
       <SeoHead
         title="Blog"
-        description="Agrid blog — product, engineering, and how-to notes on AI-native tables."
+        description="tabdo blog — product, engineering, and how-to notes on AI-native tables."
         path="/blog"
       />
       <div
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72"
         style={{
           background:
-            "radial-gradient(ellipse 60% 80% at 70% 0%, var(--agrid-green-soft) 0%, transparent 60%), radial-gradient(ellipse 50% 60% at 20% 20%, var(--agrid-yellow-soft) 0%, transparent 55%)",
+            "radial-gradient(ellipse 60% 80% at 70% 0%, var(--tabdo-green-soft) 0%, transparent 60%), radial-gradient(ellipse 50% 60% at 20% 20%, var(--tabdo-yellow-soft) 0%, transparent 55%)",
         }}
       />
       <div className="mx-auto max-w-5xl px-4 py-14">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Agrid Blog
+          tabdo Blog
         </h1>
         <p className="mt-2 text-muted-foreground">
           How we build agent-equal tables — measured notes, not vapor.

@@ -1,5 +1,8 @@
+import { MemberAvatar } from "@/components/members/MemberAvatar";
+import { MemberChip } from "@/components/members/MemberChip";
+import { RelationPicker, RelationTags } from "./RelationPicker";
 import { useState, type KeyboardEvent } from "react";
-import { Check, Bot, User, Search, X } from "lucide-react";
+import { Check, Search, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,12 +23,21 @@ type EditorProps = {
   onCommit: (value: CellValue) => void;
   onCancel: () => void;
   members?: MemberOption[];
+  row?: import("@/types/table").RowData;
+  onRowUpdated?: (row: import("@/types/table").RowData) => void;
 };
 
-const OPTION_CLASS = "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-primary";
+const OPTION_CLASS =
+  "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-primary";
 const CELL_POPOVER_CLASS = "w-64 p-1";
 
-function CellOptionSearch({ value, onChange, placeholder, onClear, canClear }: {
+function CellOptionSearch({
+  value,
+  onChange,
+  placeholder,
+  onClear,
+  canClear,
+}: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
@@ -34,7 +46,10 @@ function CellOptionSearch({ value, onChange, placeholder, onClear, canClear }: {
 }) {
   return (
     <div className="mb-1 flex items-center gap-1 border-b border-border px-2 py-1.5">
-      <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <Search
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+        aria-hidden
+      />
       <Input
         size="sm"
         className="h-7 min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
@@ -60,13 +75,21 @@ function CellOptionSearch({ value, onChange, placeholder, onClear, canClear }: {
 
 function navigateOptions(e: KeyboardEvent<HTMLDivElement>) {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-  const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button[data-cell-option]:not(:disabled)"));
+  const buttons = Array.from(
+    e.currentTarget.querySelectorAll<HTMLButtonElement>(
+      "button[data-cell-option]:not(:disabled)",
+    ),
+  );
   if (!buttons.length) return;
   e.preventDefault();
   const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-  const next = index < 0
-    ? e.key === "ArrowDown" ? 0 : buttons.length - 1
-    : (index + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+  const next =
+    index < 0
+      ? e.key === "ArrowDown"
+        ? 0
+        : buttons.length - 1
+      : (index + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+        buttons.length;
   buttons[next].focus();
 }
 
@@ -74,33 +97,54 @@ export function CellDisplay({
   column,
   value,
   members = [],
+  relation,
 }: {
   column: ColumnDef;
   value: CellValue;
   members?: MemberOption[];
+  relation?: {
+    records: import("@/types/table").RelatedRecord[];
+    total: number;
+  };
 }) {
   const options = column.config?.options ?? [];
 
   switch (column.type) {
+    case "relation":
+      return (
+        <RelationTags
+          records={relation?.records ?? []}
+          total={relation?.total ?? 0}
+        />
+      );
     case "checkbox":
       return (
         <div className="flex w-full items-center justify-center" aria-hidden>
-          <span className={cn(
-            "flex h-4 w-4 items-center justify-center rounded border",
-            value ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/60 bg-background"
-          )}>
+          <span
+            className={cn(
+              "flex h-4 w-4 items-center justify-center rounded border",
+              value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-muted-foreground/60 bg-background",
+            )}
+          >
             {Boolean(value) && <Check className="h-3 w-3" />}
           </span>
         </div>
       );
     case "select": {
       const opt = options.find((o) => o.id === value);
-      return opt ? <SelectChip option={opt} /> : <span className="text-muted-foreground/50">—</span>;
+      return opt ? (
+        <SelectChip option={opt} />
+      ) : (
+        <span className="text-muted-foreground/50">—</span>
+      );
     }
     case "multi_select": {
       const ids = Array.isArray(value) ? value : [];
       const selected = options.filter((o) => ids.includes(o.id));
-      if (!selected.length) return <span className="text-muted-foreground/50">—</span>;
+      if (!selected.length)
+        return <span className="text-muted-foreground/50">—</span>;
       return (
         <div className="flex flex-wrap gap-1">
           {selected.map((o) => (
@@ -113,20 +157,14 @@ export function CellDisplay({
       if (!value) return <span className="text-muted-foreground/50">空</span>;
       const m = members.find((x) => x.userId === value || x.name === value);
       const label = m?.name ?? String(value);
-      return (
-        <span className="inline-flex h-[22px] max-w-full items-center gap-1 truncate rounded-[3px] bg-muted px-[6px] text-[12px] font-medium leading-none text-foreground">
-          {m?.kind === "agent" ? (
-            <Bot className="h-3 w-3 text-agent" />
-          ) : (
-            <User className="h-3 w-3 text-muted-foreground" />
-          )}
-          {label}
-        </span>
-      );
+      return <MemberChip name={label} kind={m?.kind} image={m?.image} />;
     }
+    case "rollup":
     case "formula": {
       const err =
-        typeof value === "string" && value.startsWith("#ERR:") ? value.slice(5) : null;
+        typeof value === "string" && value.startsWith("#ERR:")
+          ? value.slice(5)
+          : null;
       if (err) {
         return (
           <span className="truncate text-xs text-destructive" title={err}>
@@ -185,8 +223,24 @@ export function CellEditor({
   onCommit,
   onCancel,
   members = [],
+  row,
+  onRowUpdated,
 }: EditorProps) {
-  if (column.type === "formula") {
+  if (column.type === "relation")
+    return (
+      <RelationPicker
+        column={column}
+        value={Array.isArray(value) ? value : []}
+        rowId={row?.id}
+        rowVersion={row?.version}
+        records={row?.relations?.[column.id]?.records}
+        onUpdated={onRowUpdated}
+        onChange={onCommit}
+        embedded
+        onClose={onCancel}
+      />
+    );
+  if (column.type === "formula" || column.type === "rollup") {
     return (
       <div className="flex h-full w-full items-center px-1 text-xs text-muted-foreground">
         公式列只读
@@ -310,7 +364,7 @@ function PersonEditor({
     (m) =>
       !q ||
       m.name.toLowerCase().includes(q.toLowerCase()) ||
-      m.email.toLowerCase().includes(q.toLowerCase())
+      m.email.toLowerCase().includes(q.toLowerCase()),
   );
 
   const current = members.find((x) => x.userId === value || x.name === value);
@@ -326,14 +380,7 @@ function PersonEditor({
       <PopoverAnchor asChild>
         <div className="flex h-full w-full items-center">
           {current ? (
-            <span className="inline-flex h-[22px] max-w-full items-center gap-1 truncate rounded-[3px] bg-muted px-[6px] text-[12px] font-medium leading-none text-foreground">
-              {current.kind === "agent" ? (
-                <Bot className="h-3 w-3 text-agent" />
-              ) : (
-                <User className="h-3 w-3 text-muted-foreground" />
-              )}
-              {current.name}
-            </span>
+            <MemberChip name={current.name} kind={current.kind} image={current.image} />
           ) : (
             <span className="text-muted-foreground/50">空</span>
           )}
@@ -370,15 +417,11 @@ function PersonEditor({
               aria-pressed={value === m.userId || value === m.name}
               className={cn(
                 OPTION_CLASS,
-                (value === m.userId || value === m.name) && "bg-accent"
+                (value === m.userId || value === m.name) && "bg-accent",
               )}
               onClick={() => onCommit(m.userId)}
             >
-              {m.kind === "agent" ? (
-                <Bot className="h-3.5 w-3.5 shrink-0 text-agent" />
-              ) : (
-                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              )}
+              <MemberAvatar name={m.name} kind={m.kind} image={m.image} className="size-5" />
               <span className="truncate">{m.name}</span>
               {(value === m.userId || value === m.name) && (
                 <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -418,7 +461,9 @@ function SelectEditor({
   const [open, setOpen] = useState(true);
   const [q, setQ] = useState("");
   const current = options.find((o) => o.id === value) ?? null;
-  const filtered = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()));
+  const filtered = options.filter((o) =>
+    o.label.toLowerCase().includes(q.trim().toLowerCase()),
+  );
 
   return (
     <Popover
@@ -430,7 +475,11 @@ function SelectEditor({
     >
       <PopoverAnchor asChild>
         <div className="flex h-full w-full items-center">
-          {current ? <SelectChip option={current} /> : <span className="text-muted-foreground/50">—</span>}
+          {current ? (
+            <SelectChip option={current} />
+          ) : (
+            <span className="text-muted-foreground/50">—</span>
+          )}
         </div>
       </PopoverAnchor>
       <PopoverContent
@@ -451,7 +500,11 @@ function SelectEditor({
           canClear={Boolean(value)}
         />
         <div className="max-h-56 overflow-y-auto">
-          {filtered.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">没有匹配的选项</p>}
+          {filtered.length === 0 && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              没有匹配的选项
+            </p>
+          )}
           {filtered.map((o) => {
             const selected = value === o.id;
             return (
@@ -495,11 +548,15 @@ function MultiSelectEditor({
   const [selected, setSelected] = useState<string[]>(value);
   const [dirty, setDirty] = useState(false);
   const [q, setQ] = useState("");
-  const filtered = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase()));
+  const filtered = options.filter((o) =>
+    o.label.toLowerCase().includes(q.trim().toLowerCase()),
+  );
 
   const toggle = (id: string) => {
     setSelected((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
       setDirty(true);
       return next;
     });
@@ -557,7 +614,9 @@ function MultiSelectEditor({
         />
         <div className="flex min-h-8 flex-wrap items-center gap-1 px-2 py-1.5">
           {selectedOpts.length === 0 ? (
-            <span className="text-[12px] text-muted-foreground">点击选择标签</span>
+            <span className="text-[12px] text-muted-foreground">
+              点击选择标签
+            </span>
           ) : (
             selectedOpts.map((o) => (
               <SelectChip key={o.id} option={o} onRemove={() => toggle(o.id)} />
@@ -566,7 +625,11 @@ function MultiSelectEditor({
         </div>
         <div className="my-1 h-px bg-border" />
         <div className="max-h-56 overflow-y-auto">
-          {filtered.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">没有匹配的选项</p>}
+          {filtered.length === 0 && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              没有匹配的选项
+            </p>
+          )}
           {filtered.map((o) => {
             const on = selected.includes(o.id);
             return (
@@ -575,10 +638,7 @@ function MultiSelectEditor({
                 type="button"
                 data-cell-option
                 aria-pressed={on}
-                className={cn(
-                  OPTION_CLASS,
-                  on && "bg-accent"
-                )}
+                className={cn(OPTION_CLASS, on && "bg-accent")}
                 onClick={() => toggle(o.id)}
               >
                 <span
@@ -586,7 +646,7 @@ function MultiSelectEditor({
                     "inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border",
                     on
                       ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-transparent"
+                      : "border-border bg-transparent",
                   )}
                   aria-hidden
                 >

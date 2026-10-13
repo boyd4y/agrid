@@ -1,6 +1,6 @@
 /**
  * Notion-style select chip colors: soft pastel background + dark text.
- * Stored option.color may be a token name, a pastel hex, or a legacy saturated hex.
+ * Stored option.color may be a token name or a custom HEX color.
  */
 
 export type SelectColorToken =
@@ -50,22 +50,6 @@ export const SELECT_COLOR_PRESETS = [
   NOTION_SELECT_COLORS.default.background,
 ] as const;
 
-const LEGACY_SATURATED: Record<string, SelectColorToken> = {
-  "#94a3b8": "gray",
-  "#64748b": "gray",
-  "#3b82f6": "blue",
-  "#2383e2": "blue",
-  "#22c55e": "green",
-  "#84cc16": "green",
-  "#f59e0b": "orange",
-  "#ef4444": "red",
-  "#eb5757": "red",
-  "#8b5cf6": "purple",
-  "#ec4899": "pink",
-  "#06b6d4": "blue",
-  "#37352f": "default",
-};
-
 /** Pastel bg → token (for seeds / picker values) */
 const PASTEL_BG: Record<string, SelectColorToken> = Object.fromEntries(
   (Object.entries(NOTION_SELECT_COLORS) as [SelectColorToken, SelectChipStyle][]).map(
@@ -73,29 +57,29 @@ const PASTEL_BG: Record<string, SelectColorToken> = Object.fromEntries(
   )
 );
 
-function normalizeHex(input: string): string {
-  const h = input.trim().toLowerCase();
-  if (/^#[0-9a-f]{3}$/.test(h)) {
-    return `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}`;
-  }
-  return h;
+/** Accept CSS HEX in three or six digits. Never persist an incomplete input. */
+export function normalizeColorHex(input: string): string | null {
+  const hex = input.trim().replace(/^#/, "").toLowerCase();
+  if (/^[0-9a-f]{3}$/.test(hex)) return `#${[...hex].map((digit) => digit + digit).join("")}`;
+  return /^[0-9a-f]{6}$/.test(hex) ? `#${hex}` : null;
 }
 
-function resolveToken(raw?: string | null): SelectColorToken {
-  if (!raw) return "gray";
-  const key = raw.trim().toLowerCase();
-  if (key in NOTION_SELECT_COLORS) return key as SelectColorToken;
-  const hex = normalizeHex(key);
-  if (LEGACY_SATURATED[hex]) return LEGACY_SATURATED[hex];
-  if (PASTEL_BG[hex]) return PASTEL_BG[hex];
-  // Nearest-ish fallback by hue keywords in string
-  if (hex.includes("f") && hex.startsWith("#e")) return "red";
-  return "gray";
-}
+export const SELECT_COLOR_NAMES: Record<SelectColorToken, string> = {
+  default: "默认", gray: "灰色", brown: "棕色", orange: "橙色", yellow: "黄色",
+  green: "绿色", blue: "蓝色", purple: "紫色", pink: "粉色", red: "红色",
+};
 
-/** Style for select/multi_select chips (light bg + dark text). */
-export function selectOptionStyle(color?: string | null): SelectChipStyle {
-  return NOTION_SELECT_COLORS[resolveToken(color)];
+/** Custom colors are rendered exactly; choose text with WCAG-readable contrast. */
+export function selectOptionStyle(raw?: string | null): SelectChipStyle {
+  const key = raw?.trim().toLowerCase() ?? "gray";
+  if (Object.hasOwn(NOTION_SELECT_COLORS, key)) return NOTION_SELECT_COLORS[key as SelectColorToken];
+  const hex = normalizeColorHex(key);
+  if (!hex) return NOTION_SELECT_COLORS.gray;
+  if (PASTEL_BG[hex]) return NOTION_SELECT_COLORS[PASTEL_BG[hex]];
+  const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
+  const linear = channels.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  return { background: hex, color: luminance > 0.179 ? "#000000" : "#ffffff", swatch: hex };
 }
 
 /** Accent dot color for kanban column headers / picker preview. */

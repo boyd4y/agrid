@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
+import { TABLE_ICON_NAMES } from "@tabdo/shared";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { tables } from "../db/schema.js";
@@ -57,6 +58,8 @@ tablesRoute.patch("/:id", async (c) => {
     .object({
       name: z.string().min(1).max(200).optional(),
       description: z.string().nullable().optional(),
+      icon: z.enum(TABLE_ICON_NAMES).nullable().optional(),
+      pinned: z.boolean().optional(),
     })
     .parse(await c.req.json());
 
@@ -65,6 +68,8 @@ tablesRoute.patch("/:id", async (c) => {
     .set({
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
+      ...(body.icon !== undefined ? { icon: body.icon } : {}),
+      ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
       updatedAt: new Date(),
     })
     .where(and(eq(tables.id, id), eq(tables.organizationId, organizationId)))
@@ -79,10 +84,6 @@ tablesRoute.delete("/:id", async (c) => {
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const organizationId = scope.organizationId;
   const id = c.req.param("id");
-  const deleted = await db
-    .delete(tables)
-    .where(and(eq(tables.id, id), eq(tables.organizationId, organizationId)))
-    .returning();
-  if (!deleted.length) return c.json({ error: "表格不存在" }, 404);
-  return c.json({ ok: true });
+  try { return c.json(await cmds.deleteTable({tableId:id,organizationId})); }
+  catch(e) { return c.json({error:e instanceof Error?e.message:"删除失败"},400); }
 });

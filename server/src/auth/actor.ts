@@ -1,9 +1,10 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { agentProfile, member, user, organization } from "../db/schema.js";
 import type { MemberRole } from "../db/schema.js";
 import { auth } from "./index.js";
+import { memberAvatarUrl } from "./avatar.js";
 
 export type Actor = {
   kind: "human" | "agent";
@@ -17,11 +18,6 @@ export type Actor = {
 
 export function hashApiKey(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
-}
-
-export function generateApiKey() {
-  const raw = `agt_${randomBytes(24).toString("base64url")}`;
-  return { raw, hash: hashApiKey(raw), prefix: raw.slice(0, 12) };
 }
 
 /** Resolve actor from Better Auth session cookie OR Agent Bearer API key */
@@ -135,6 +131,7 @@ export async function listOrgMembers(organizationId: string) {
       name: user.name,
       email: user.email,
       kind: user.kind,
+      image: user.image,
     })
     .from(member)
     .innerJoin(user, eq(member.userId, user.id))
@@ -153,13 +150,13 @@ export async function listOrgMembers(organizationId: string) {
     email: r.email,
     kind: (r.kind === "agent" ? "agent" : "human") as "human" | "agent",
     role: r.role,
+    image: memberAvatarUrl(r.memberId, r.image),
     createdAt: r.createdAt,
     agent:
       r.kind === "agent" && byUser[r.userId]
         ? {
             displayName: byUser[r.userId].displayName,
             persona: byUser[r.userId].persona,
-            apiKeyPrefix: byUser[r.userId].apiKeyPrefix,
           }
         : null,
   }));

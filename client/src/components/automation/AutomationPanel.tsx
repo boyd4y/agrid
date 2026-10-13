@@ -1,18 +1,15 @@
+import { FilterValueInput } from "@/components/table/FilterBar";
+import { FormFieldControl } from "@/components/form/FormFieldControls";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Plus,
-  Trash2,
-  Zap,
-  History,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Trash2, Zap, History, X, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -35,7 +32,7 @@ import {
   type FilterCondition,
   type FilterLogic,
   type FilterOp,
-} from "@table/shared";
+} from "@tabdo/shared";
 import { cn } from "@/lib/utils";
 
 function newId(prefix: string) {
@@ -57,7 +54,9 @@ function defaultTrigger(columns: ColumnDef[]): AutomationTrigger {
 }
 
 function defaultAction(columns: ColumnDef[]): AutomationAction {
-  const col = columns.find((c) => c.type === "text") ?? columns[0];
+  const col =
+    columns.find((c) => c.type === "text") ??
+    columns.find((c) => !["formula", "rollup"].includes(c.type));
   return {
     type: "update_field",
     columnId: col?.id ?? "",
@@ -66,7 +65,8 @@ function defaultAction(columns: ColumnDef[]): AutomationAction {
 }
 
 function summarizeTrigger(t: AutomationTrigger, columns: ColumnDef[]) {
-  const col = (id: string) => columns.find((c) => c.id === id)?.name ?? id.slice(0, 6);
+  const col = (id: string) =>
+    columns.find((c) => c.id === id)?.name ?? id.slice(0, 6);
   if (t.type === "row_created") return AUTOMATION_TRIGGER_LABELS.row_created;
   if (t.type === "field_changed") {
     const base = `${AUTOMATION_TRIGGER_LABELS.field_changed} · ${col(t.columnId)}`;
@@ -95,9 +95,12 @@ function summarizeActions(actions: AutomationAction[], columns: ColumnDef[]) {
 
 type Props = {
   table: FullTable;
+  refreshToken?: number;
+  active?: boolean;
 };
 
-export function AutomationPanel({ table }: Props) {
+export function AutomationPanel({ table, refreshToken, active = true }: Props) {
+  const requestVersion = useRef(0);
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
   const [members, setMembers] = useState<MemberOption[]>([]);
@@ -109,29 +112,35 @@ export function AutomationPanel({ table }: Props) {
 
   const columns = useMemo(
     () => table.columns.filter((c) => !c.config?.hidden),
-    [table.columns]
+    [table.columns],
   );
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     setLoading(true);
     try {
       const [list, memberRes] = await Promise.all([
         api.listAutomations(table.id),
         api.listMembers(),
       ]);
+      if (version !== requestVersion.current) return;
       setRules(list);
       setMembers(memberRes.members ?? []);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
+      if (version === requestVersion.current)
+        setError(e instanceof Error ? e.message : "加载失败");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [table.id]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+    return () => {
+      requestVersion.current++;
+    };
+  }, [load, refreshToken]);
 
   const loadRuns = async () => {
     try {
@@ -139,6 +148,37 @@ export function AutomationPanel({ table }: Props) {
       setShowRuns(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载运行记录失败");
+    }
+  };
+
+  useEffect(() => {
+    if (!showRuns || !active) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      if (!document.hidden) {
+        try {
+          const next = await api.listAutomationRuns(table.id, { limit: 30 });
+          if (!cancelled) setRuns(next);
+        } catch {
+          /* Keep the last durable state; manual refresh reports errors. */
+        }
+      }
+      if (!cancelled) timer = setTimeout(refresh, 5000);
+    };
+    timer = setTimeout(refresh, 5000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [showRuns, table.id, active, refreshToken]);
+
+  const replay = async (id: string) => {
+    try {
+      await api.replayAutomationRun(id);
+      await loadRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "重放失败");
     }
   };
 
@@ -157,6 +197,26 @@ export function AutomationPanel({ table }: Props) {
     setRuns((prev) => prev.filter((r) => r.automationId !== id));
     if (editing !== "new" && editing?.id === id) setEditing(null);
   };
+
+  if (editing)
+    return (
+      <AutomationEditor
+        key={editing === "new" ? "new" : editing.id}
+        tableId={table.id}
+        columns={columns}
+        members={members.filter((m) => m.kind === "agent")}
+        initial={editing === "new" ? null : editing}
+        onClose={() => setEditing(null)}
+        onSaved={(rule) => {
+          setRules((prev) =>
+            prev.some((r) => r.id === rule.id)
+              ? prev.map((r) => (r.id === rule.id ? rule : r))
+              : [...prev, rule],
+          );
+          setEditing(null);
+        }}
+      />
+    );
 
   return (
     <div className="space-y-4" data-testid="automation-panel">
@@ -190,30 +250,26 @@ export function AutomationPanel({ table }: Props) {
           {error}
         </div>
       )}
-      {loading && (
-        <p className="text-xs text-muted-foreground">加载中…</p>
-      )}
+      {loading && <p className="text-xs text-muted-foreground">加载中…</p>}
       {!loading && rules.length === 0 && !editing && (
         <AppEmptyState
           illustration={NOTIOLY.chill}
           title="还没有自动化"
           description="用「当 / 如果 / 就」让字段回写或智能体跟进。"
-          action={<Button
-            type="button"
-            size="sm"
-            onClick={() => setEditing("new")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            新建规则
-          </Button>}
+          action={
+            <Button type="button" size="sm" onClick={() => setEditing("new")}>
+              <Plus className="h-3.5 w-3.5" />
+              新建规则
+            </Button>
+          }
         />
       )}
 
-      <ul className="space-y-2">
+      <ul className="flex flex-col gap-2">
         {rules.map((rule) => (
           <li
             key={rule.id}
-            className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 shadow-[0_4px_12px_rgba(55,53,47,0.04)]"
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 shadow-sm"
           >
             <Switch
               checked={rule.enabled}
@@ -236,9 +292,8 @@ export function AutomationPanel({ table }: Props) {
             </button>
             <Button
               type="button"
-              variant="ghost"
+              variant="destructive-ghost"
               size="sm"
-              className="h-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               onClick={() => setDeleteRule(rule)}
               aria-label={`删除规则${rule.name}`}
             >
@@ -251,10 +306,14 @@ export function AutomationPanel({ table }: Props) {
 
       <DeleteConfirmation
         open={deleteRule !== null}
-        onOpenChange={(open) => { if (!open) setDeleteRule(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteRule(null);
+        }}
         title="删除自动化规则？"
         description={`将永久删除「${deleteRule?.name ?? ""}」及其运行记录，此规则将不再执行。表格数据会保留。`}
-        onConfirm={async () => { if (deleteRule) await remove(deleteRule.id); }}
+        onConfirm={async () => {
+          if (deleteRule) await remove(deleteRule.id);
+        }}
       />
 
       {showRuns && (
@@ -281,9 +340,33 @@ export function AutomationPanel({ table }: Props) {
                   className="flex justify-between gap-2 rounded px-1.5 py-1 hover:bg-accent"
                 >
                   <span className="truncate">
-                    {r.triggerType} · {r.status}
+                    {AUTOMATION_TRIGGER_LABELS[r.triggerType]} ·{" "}
+                    {
+                      {
+                        queued: "排队中",
+                        running: "执行中",
+                        retrying: "等待重试",
+                        completed: "已完成",
+                        failed: "失败",
+                        skipped: "条件未满足",
+                        cancelled: "已取消",
+                        superseded: "输入已更新",
+                        unknown: "结果待确认",
+                      }[r.status]
+                    }
+                    {r.nextStep ? ` · 已完成 ${r.nextStep} 步` : ""}
                     {r.error ? ` · ${r.error}` : ""}
                   </span>
+                  {r.status === "failed" && r.eventId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 shrink-0 text-xs"
+                      onClick={() => void replay(r.id)}
+                    >
+                      重放未完成步骤
+                    </Button>
+                  )}
                   <span className="shrink-0 text-muted-foreground">
                     {new Date(r.createdAt).toLocaleString("zh-CN", {
                       hour12: false,
@@ -294,28 +377,6 @@ export function AutomationPanel({ table }: Props) {
             </ul>
           )}
         </div>
-      )}
-
-      {editing && (
-        <AutomationEditor
-          tableId={table.id}
-          columns={columns}
-          members={members.filter((m) => m.kind === "agent")}
-          initial={editing === "new" ? null : editing}
-          onClose={() => setEditing(null)}
-          onSaved={(rule) => {
-            setRules((prev) => {
-              const i = prev.findIndex((r) => r.id === rule.id);
-              if (i >= 0) {
-                const next = [...prev];
-                next[i] = rule;
-                return next;
-              }
-              return [...prev, rule];
-            });
-            setEditing(null);
-          }}
-        />
       )}
     </div>
   );
@@ -330,7 +391,7 @@ type EditorProps = {
   onSaved: (rule: AutomationRule) => void;
 };
 
-function AutomationEditor({
+export function AutomationEditor({
   tableId,
   columns,
   members,
@@ -341,16 +402,16 @@ function AutomationEditor({
   const [name, setName] = useState(initial?.name ?? "新建自动化");
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [trigger, setTrigger] = useState<AutomationTrigger>(
-    initial?.trigger ?? defaultTrigger(columns)
+    initial?.trigger ?? defaultTrigger(columns),
   );
   const [conditions, setConditions] = useState<FilterCondition[]>(
-    initial?.conditions ?? []
+    initial?.conditions ?? [],
   );
   const [conditionLogic, setConditionLogic] = useState<FilterLogic>(
-    initial?.conditionLogic ?? "and"
+    initial?.conditionLogic ?? "and",
   );
   const [actions, setActions] = useState<AutomationAction[]>(
-    initial?.actions?.length ? initial.actions : [defaultAction(columns)]
+    initial?.actions?.length ? initial.actions : [defaultAction(columns)],
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -382,10 +443,10 @@ function AutomationEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-overlay p-4 sm:items-center">
+    <section className="mx-auto w-full max-w-3xl" aria-label="自动化编辑区">
       <div
-        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-border bg-background shadow-[0_12px_40px_rgba(55,53,47,0.16)]"
-        role="dialog"
+        className="flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
+        role="region"
         aria-label="编辑自动化"
         data-testid="automation-editor"
       >
@@ -394,7 +455,14 @@ function AutomationEditor({
             <Zap className="h-4 w-4 text-warning" />
             <span className="text-sm font-semibold">当 / 如果 / 就</span>
           </div>
-          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            aria-label="返回规则列表"
+            onClick={onClose}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -414,7 +482,11 @@ function AutomationEditor({
               placeholder="自动化名称"
             />
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="启用" />
+              <Switch
+                checked={enabled}
+                onCheckedChange={setEnabled}
+                aria-label="启用"
+              />
               启用
             </div>
           </div>
@@ -447,9 +519,11 @@ function AutomationEditor({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(AUTOMATION_TRIGGER_LABELS) as Array<
-                  keyof typeof AUTOMATION_TRIGGER_LABELS
-                >).map((k) => (
+                {(
+                  Object.keys(AUTOMATION_TRIGGER_LABELS) as Array<
+                    keyof typeof AUTOMATION_TRIGGER_LABELS
+                  >
+                ).map((k) => (
                   <SelectItem key={k} value={k} className="text-xs">
                     {AUTOMATION_TRIGGER_LABELS[k]}
                   </SelectItem>
@@ -462,7 +536,7 @@ function AutomationEditor({
                 <Select
                   value={trigger.columnId}
                   onValueChange={(columnId) =>
-                    setTrigger({ ...trigger, columnId })
+                    setTrigger({ type: "field_changed", columnId })
                   }
                 >
                   <SelectTrigger className="h-8 w-[160px] bg-background text-xs">
@@ -476,21 +550,42 @@ function AutomationEditor({
                     ))}
                   </SelectContent>
                 </Select>
-                <Input
-                  className="h-8 w-[140px] text-xs"
-                  placeholder="变为（可选）"
-                  value={
-                    trigger.toValue === null || trigger.toValue === undefined
-                      ? ""
-                      : String(trigger.toValue)
-                  }
-                  onChange={(e) =>
-                    setTrigger({
-                      ...trigger,
-                      toValue: e.target.value === "" ? undefined : e.target.value,
-                    })
-                  }
-                />
+                <label className="flex items-center gap-2 text-xs">
+                  <Checkbox
+                    checked={trigger.toValue !== undefined}
+                    onCheckedChange={(checked) => {
+                      const col = columns.find(
+                        (c) => c.id === trigger.columnId,
+                      );
+                      const value: CellValue =
+                        col?.type === "relation" || col?.type === "multi_select"
+                          ? []
+                          : col?.type === "checkbox"
+                            ? false
+                            : col?.type === "number"
+                              ? 0
+                              : null;
+                      setTrigger({
+                        ...trigger,
+                        toValue: checked ? value : undefined,
+                      });
+                    }}
+                  />
+                  仅当变更为指定值时
+                </label>
+                {trigger.toValue !== undefined &&
+                  columns.find((c) => c.id === trigger.columnId) && (
+                    <div className="min-w-36 flex-1">
+                      <FormFieldControl
+                        column={columns.find((c) => c.id === trigger.columnId)!}
+                        value={trigger.toValue}
+                        onChange={(value) =>
+                          setTrigger({ ...trigger, toValue: value })
+                        }
+                        members={members}
+                      />
+                    </div>
+                  )}
               </div>
             )}
 
@@ -511,11 +606,13 @@ function AutomationEditor({
                     <SelectValue placeholder="状态列" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(selectColumns.length ? selectColumns : columns).map((c) => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">
-                        {c.name}
-                      </SelectItem>
-                    ))}
+                    {(selectColumns.length ? selectColumns : columns).map(
+                      (c) => (
+                        <SelectItem key={c.id} value={c.id} className="text-xs">
+                          {c.name}
+                        </SelectItem>
+                      ),
+                    )}
                   </SelectContent>
                 </Select>
                 <Select
@@ -599,7 +696,10 @@ function AutomationEditor({
                   const col = columns.find((x) => x.id === c.columnId);
                   const ops = opsForType(col?.type ?? "text");
                   return (
-                    <div key={c.id} className="flex flex-wrap items-center gap-1.5">
+                    <div
+                      key={c.id}
+                      className="flex flex-wrap items-center gap-1.5"
+                    >
                       <Select
                         value={c.columnId}
                         onValueChange={(columnId) => {
@@ -613,8 +713,8 @@ function AutomationEditor({
                                     op: opsForType(nc?.type ?? "text")[0],
                                     value: null,
                                   }
-                                : f
-                            )
+                                : f,
+                            ),
                           );
                         }}
                       >
@@ -623,7 +723,11 @@ function AutomationEditor({
                         </SelectTrigger>
                         <SelectContent>
                           {columns.map((col) => (
-                            <SelectItem key={col.id} value={col.id} className="text-xs">
+                            <SelectItem
+                              key={col.id}
+                              value={col.id}
+                              className="text-xs"
+                            >
                               {col.name}
                             </SelectItem>
                           ))}
@@ -634,8 +738,8 @@ function AutomationEditor({
                         onValueChange={(op) =>
                           setConditions((prev) =>
                             prev.map((f) =>
-                              f.id === c.id ? { ...f, op: op as FilterOp } : f
-                            )
+                              f.id === c.id ? { ...f, op: op as FilterOp } : f,
+                            ),
                           )
                         }
                       >
@@ -650,27 +754,17 @@ function AutomationEditor({
                           ))}
                         </SelectContent>
                       </Select>
-                      {filterNeedsValue(c.op) && (
-                        <Input
-                          className="h-8 w-[120px] text-xs"
-                          value={
-                            c.value === null || c.value === undefined
-                              ? ""
-                              : String(c.value)
+                      {filterNeedsValue(c.op) && col && (
+                        <FilterValueInput
+                          column={
+                            columns.find((column) => column.id === c.columnId)!
                           }
-                          onChange={(e) =>
+                          value={c.value ?? null}
+                          onChange={(value) =>
                             setConditions((prev) =>
                               prev.map((f) =>
-                                f.id === c.id
-                                  ? {
-                                      ...f,
-                                      value:
-                                        e.target.value === ""
-                                          ? null
-                                          : (e.target.value as CellValue),
-                                    }
-                                  : f
-                              )
+                                f.id === c.id ? { ...f, value } : f,
+                              ),
                             )
                           }
                         />
@@ -681,7 +775,9 @@ function AutomationEditor({
                         size="sm"
                         className="h-8 w-8 p-0"
                         onClick={() =>
-                          setConditions((prev) => prev.filter((f) => f.id !== c.id))
+                          setConditions((prev) =>
+                            prev.filter((f) => f.id !== c.id),
+                          )
                         }
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -717,7 +813,7 @@ function AutomationEditor({
                 <div
                   key={idx}
                   className={cn(
-                    "rounded-md border border-border bg-background p-2.5"
+                    "rounded-md border border-border bg-background p-2.5",
                   )}
                 >
                   <div className="mb-2 flex items-center gap-2">
@@ -727,13 +823,14 @@ function AutomationEditor({
                         setActions((prev) =>
                           prev.map((a, i) => {
                             if (i !== idx) return a;
-                            if (v === "update_field") return defaultAction(columns);
+                            if (v === "update_field")
+                              return defaultAction(columns);
                             return {
                               type: "run_agent",
                               agentUserId: members[0]?.userId ?? null,
                               prompt: "",
                             };
-                          })
+                          }),
                         );
                       }}
                     >
@@ -771,9 +868,9 @@ function AutomationEditor({
                           setActions((prev) =>
                             prev.map((a, i) =>
                               i === idx && a.type === "update_field"
-                                ? { ...a, columnId }
-                                : a
-                            )
+                                ? { ...a, columnId, value: null }
+                                : a,
+                            ),
                           )
                         }
                       >
@@ -781,42 +878,49 @@ function AutomationEditor({
                           <SelectValue placeholder="字段" />
                         </SelectTrigger>
                         <SelectContent>
-                          {columns.map((c) => (
-                            <SelectItem key={c.id} value={c.id} className="text-xs">
-                              {c.name}
-                            </SelectItem>
-                          ))}
+                          {columns
+                            .filter(
+                              (c) => !["formula", "rollup"].includes(c.type),
+                            )
+                            .map((c) => (
+                              <SelectItem
+                                key={c.id}
+                                value={c.id}
+                                className="text-xs"
+                              >
+                                {c.name}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
-                      <Input
-                        className="h-8 flex-1 text-xs"
-                        placeholder="写入值"
-                        value={
-                          action.value === null || action.value === undefined
-                            ? ""
-                            : String(action.value)
-                        }
-                        onChange={(e) =>
-                          setActions((prev) =>
-                            prev.map((a, i) =>
-                              i === idx && a.type === "update_field"
-                                ? {
-                                    ...a,
-                                    value:
-                                      e.target.value === ""
-                                        ? null
-                                        : e.target.value,
-                                  }
-                                : a
-                            )
-                          )
-                        }
-                      />
+                      {columns.find((c) => c.id === action.columnId) && (
+                        <div className="min-w-40 flex-1">
+                          <FormFieldControl
+                            column={
+                              columns.find((c) => c.id === action.columnId)!
+                            }
+                            value={action.value}
+                            onChange={(value) =>
+                              setActions((prev) =>
+                                prev.map((a, i) =>
+                                  i === idx && a.type === "update_field"
+                                    ? { ...a, value }
+                                    : a,
+                                ),
+                              )
+                            }
+                            members={members}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {action.type === "run_agent" && (
                     <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        后台智能体运行时尚未接入，此动作会记录为未执行。
+                      </p>
                       <Select
                         value={action.agentUserId ?? "__none__"}
                         onValueChange={(v) =>
@@ -827,8 +931,8 @@ function AutomationEditor({
                                     ...a,
                                     agentUserId: v === "__none__" ? null : v,
                                   }
-                                : a
-                            )
+                                : a,
+                            ),
                           )
                         }
                       >
@@ -859,8 +963,8 @@ function AutomationEditor({
                             prev.map((a, i) =>
                               i === idx && a.type === "run_agent"
                                 ? { ...a, prompt: e.target.value }
-                                : a
-                            )
+                                : a,
+                            ),
                           )
                         }
                       />
@@ -876,8 +980,8 @@ function AutomationEditor({
                                       resultColumnId:
                                         v === "__none__" ? undefined : v,
                                     }
-                                  : a
-                              )
+                                  : a,
+                              ),
                             )
                           }
                         >
@@ -889,7 +993,11 @@ function AutomationEditor({
                               不写回
                             </SelectItem>
                             {columns.map((c) => (
-                              <SelectItem key={c.id} value={c.id} className="text-xs">
+                              <SelectItem
+                                key={c.id}
+                                value={c.id}
+                                className="text-xs"
+                              >
                                 {c.name}
                               </SelectItem>
                             ))}
@@ -916,8 +1024,8 @@ function AutomationEditor({
                                             ? null
                                             : e.target.value,
                                       }
-                                    : a
-                                )
+                                    : a,
+                                ),
                               )
                             }
                           />
@@ -932,8 +1040,8 @@ function AutomationEditor({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            取消
+          <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onClose}>
+            <X data-icon="inline-start" />取消
           </Button>
           <Button
             type="button"
@@ -941,10 +1049,10 @@ function AutomationEditor({
             disabled={saving}
             onClick={() => void save()}
           >
-            {saving ? "保存中…" : "保存"}
+            {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? "保存中…" : "保存"}
           </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

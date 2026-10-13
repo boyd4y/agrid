@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -7,34 +8,12 @@ import {
   jsonb,
   boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-/** Column type enum as string union stored in text */
-export const COLUMN_TYPES = [
-  "text",
-  "number",
-  "select",
-  "multi_select",
-  "date",
-  "checkbox",
-  "person",
-  "formula",
-] as const;
-
-export type ColumnType = (typeof COLUMN_TYPES)[number];
-
-export type SelectOption = { id: string; label: string; color?: string };
-
-export type FormulaResultType = "number" | "text" | "checkbox" | "date" | "auto";
-
-export type ColumnConfig = {
-  options?: SelectOption[];
-  hidden?: boolean;
-  formula?: string;
-  formulaResultType?: FormulaResultType;
-};
-
-export type CellValue = string | number | boolean | string[] | null;
+export { COLUMN_TYPES } from "@tabdo/shared";
+import type { ColumnConfig, CellValue } from "@tabdo/shared";
+export type { ColumnType, ColumnConfig, CellValue, SelectOption, FormulaResultType } from "@tabdo/shared";
 
 export const MEMBER_KINDS = ["human", "agent"] as const;
 export type MemberKind = (typeof MEMBER_KINDS)[number];
@@ -47,7 +26,30 @@ export type AgentPersona = {
   defaultHarness?: "codex" | "claude" | "pi";
   defaultModel?: string;
   avatarColor?: string;
+  skillNames?: string[];
+  disabledTools?: string[];
+  runtime?: "local" | "sandbox";
 };
+
+export const skills = pgTable("skills", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  document: text("document").notNull(),
+  files: jsonb("files").$type<import("@tabdo/shared").SkillFile[]>().default([]).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  version: integer("version").default(1).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [uniqueIndex("skills_org_name_idx").on(t.organizationId, t.name)]);
+
+/** Built-in contents ship with the app; only their enabled state is per workspace. */
+export const skillSettings = pgTable("skill_settings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  enabled: boolean("enabled").notNull(),
+}, (t) => [uniqueIndex("skill_settings_org_name_idx").on(t.organizationId, t.name)]);
 
 /* ───────────── Better Auth core ───────────── */
 
@@ -178,9 +180,9 @@ export const agentProfile = pgTable("agent_profile", {
     .references(() => member.id, { onDelete: "cascade" }),
   displayName: text("display_name").notNull(),
   persona: jsonb("persona").$type<AgentPersona>().default({}).notNull(),
-  /** sha256 of full key; prefix stored for display */
-  apiKeyHash: text("api_key_hash").notNull(),
-  apiKeyPrefix: text("api_key_prefix").notNull(),
+  /** Optional legacy external credential; new in-app agents have no key. */
+  apiKeyHash: text("api_key_hash"),
+  apiKeyPrefix: text("api_key_prefix"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -198,6 +200,8 @@ export const tables = pgTable(
       }),
     name: text("name").notNull(),
     description: text("description"),
+    icon: text("icon"),
+    pinned: boolean("pinned").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -242,6 +246,17 @@ export const rows = pgTable(
 
 
 /* ───────────── Table views (grid / board / form) ───────────── */
+
+export const reports = pgTable("reports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").references(() => tables.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  config: jsonb("config").$type<Omit<import("@tabdo/shared").ReportPageConfig, "name">>().notNull(),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("reports_org_created_idx").on(t.organizationId, t.createdAt)]);
 
 export const VIEW_TYPES = ["grid", "board", "form"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
@@ -288,10 +303,12 @@ export const tableViews = pgTable(
     name: text("name").notNull(),
     config: jsonb("config").$type<ViewConfigJson>().default({}).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
+    isDefault: boolean("is_default").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    uniqueIndex("table_views_one_default_idx").on(t.tableId).where(sql`${t.isDefault} = true`),
     index("table_views_table_idx").on(t.tableId, t.sortOrder),
     index("table_views_table_type_idx").on(t.tableId, t.type),
   ]
@@ -318,6 +335,8 @@ export const automations = pgTable(
       .references(() => tables.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     enabled: boolean("enabled").default(true).notNull(),
+    version: integer("version").default(1).notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     trigger: jsonb("trigger").$type<AutomationTriggerJson>().notNull(),
     conditions: jsonb("conditions").$type<AutomationConditionJson[]>().default([]).notNull(),
     conditionLogic: text("condition_logic").default("and").notNull(),
@@ -336,14 +355,16 @@ export const automationRuns = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     automationId: uuid("automation_id")
-      .notNull()
-      .references(() => automations.id, { onDelete: "cascade" }),
+      .notNull(),
     tableId: uuid("table_id")
-      .notNull()
-      .references(() => tables.id, { onDelete: "cascade" }),
+      .notNull(),
     rowId: uuid("row_id")
-      .notNull()
-      .references(() => rows.id, { onDelete: "cascade" }),
+      .notNull(),
+    eventId: uuid("event_id"),
+    ruleVersion: integer("rule_version").default(1).notNull(),
+    ruleSnapshot: jsonb("rule_snapshot").$type<Record<string, unknown>>(),
+    nextStep: integer("next_step").default(0).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
     status: text("status").default("queued").notNull(),
     triggerType: text("trigger_type").notNull(),
     detail: jsonb("detail").$type<Record<string, unknown>>().default({}).notNull(),
@@ -354,8 +375,162 @@ export const automationRuns = pgTable(
   (t) => [
     index("automation_runs_table_idx").on(t.tableId, t.createdAt),
     index("automation_runs_auto_idx").on(t.automationId, t.createdAt),
+    uniqueIndex("automation_runs_event_rule_idx").on(t.eventId, t.automationId, t.ruleVersion),
   ]
 );
 
 export type Automation = typeof automations.$inferSelect;
 export type AutomationRunRow = typeof automationRuns.$inferSelect;
+
+/** Durable event journal. Workers are scheduled exclusively by Redis/BullMQ. */
+export const automationEvents = pgTable("automation_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull(),
+  tableId: uuid("table_id").notNull(),
+  rowId: uuid("row_id").notNull(),
+  rowVersion: integer("row_version").notNull(),
+  expectedVersion: integer("expected_version").notNull(),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+  status: text("status").default("matched").notNull(),
+  generation: integer("generation").default(0).notNull(),
+  fence: integer("fence").default(0).notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+}, (t) => [index("automation_events_org_status_idx").on(t.organizationId, t.status),
+  index("automation_events_row_idx").on(t.rowId, t.rowVersion)]);
+
+/** Atomically claimed delivery records; Redis schedules actual execution. */
+export const automationOutbox = pgTable("automation_outbox", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  eventId: uuid("event_id").notNull().references(() => automationEvents.id, { onDelete: "cascade" }),
+  queue: text("queue").notNull(),
+  payload: jsonb("payload").$type<{ protocol: 1; eventId: string; generation: number }>().notNull(),
+  status: text("status").default("pending").notNull(),
+  generation: integer("generation").default(0).notNull(),
+  claimToken: uuid("claim_token"),
+  claimUntil: timestamp("claim_until", { withTimezone: true }),
+  availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [uniqueIndex("automation_outbox_event_queue_idx").on(t.eventId, t.queue),
+  index("automation_outbox_pending_idx").on(t.availableAt, t.id).where(sql`${t.status} = 'pending'`),
+  index("automation_outbox_claim_idx").on(t.claimUntil, t.id).where(sql`${t.status} = 'publishing'`)]);
+
+export const automationStepReceipts = pgTable("automation_step_receipts", {
+  runId: uuid("run_id").notNull().references(() => automationRuns.id, { onDelete: "cascade" }),
+  step: integer("step").notNull(),
+  result: jsonb("result").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [uniqueIndex("automation_step_receipts_key").on(t.runId, t.step)]);
+
+/** Private conversations: scoped to both the signed-in account and workspace. */
+export const chatThreads = pgTable("chat_threads", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  clientId: text("client_id").notNull(),
+  title: text("title"),
+  status: text("status").$type<"regular">().default("regular").notNull(),
+  custom: jsonb("custom").$type<Record<string, unknown>>().default({}).notNull(),
+  headId: text("head_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("chat_threads_client_idx").on(t.userId, t.organizationId, t.clientId),
+  index("chat_threads_owner_idx").on(t.userId, t.organizationId, t.updatedAt, t.id)]);
+
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  threadId: uuid("thread_id").notNull().references(() => chatThreads.id, { onDelete: "cascade" }),
+  messageId: text("message_id").notNull(),
+  parentId: text("parent_id"),
+  format: text("format").default("ai-sdk/v6").notNull(),
+  content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+  /** Finished server responses cannot be replaced by a stale client snapshot. */
+  serverFinal: boolean("server_final").default(false).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [uniqueIndex("chat_messages_thread_message_idx").on(t.threadId, t.messageId),
+  index("chat_messages_thread_idx").on(t.threadId, t.createdAt, t.id)]);
+
+/** Native runtime state is private to its parent conversation, never a client payload. */
+export const agentRuntimeSessions = pgTable("agent_runtime_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  threadId: uuid("thread_id").notNull().references(() => chatThreads.id, { onDelete: "cascade" }),
+  agentProfileId: uuid("agent_profile_id").notNull().references(() => agentProfile.id, { onDelete: "cascade" }),
+  harness: text("harness").notNull(),
+  mode: text("mode").$type<"local" | "sandbox">().notNull(),
+  sessionId: uuid("session_id").defaultRandom().notNull(),
+  sandboxId: text("sandbox_id").notNull(),
+  resumeState: jsonb("resume_state").$type<{ specificationVersion: "harness-v1"; harnessId: string; type: "resume-session"; data: unknown; continueFrom?: unknown }>(),
+  workspace: jsonb("workspace").$type<import("../harness/workspace.js").WorkspaceSnapshot>(),
+  lastUserMessageId: text("last_user_message_id"),
+  lastAssistantMessageId: text("last_assistant_message_id"),
+  status: text("status").$type<"ready" | "interrupted" | "failed">().default("ready").notNull(),
+  error: text("error"),
+  plan: jsonb("plan").$type<import("@tabdo/shared").AgentPlanStep[]>().default([]).notNull(),
+  goal: jsonb("goal").$type<import("@tabdo/shared").AgentGoal>(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [uniqueIndex("agent_runtime_thread_profile_idx").on(t.threadId, t.agentProfileId)]);
+
+/** One lease per conversation also serializes runs when the selected agent changes. */
+export const agentThreadLeases = pgTable("agent_thread_leases", {
+  threadId: uuid("thread_id").primaryKey().references(() => chatThreads.id, { onDelete: "cascade" }),
+  token: uuid("token"),
+  fence: integer("fence").default(0).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+});
+
+export const agentWorkspaceSettings = pgTable("agent_workspace_settings", {
+  organizationId: text("organization_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  instructions: text("instructions").default("").notNull(),
+  version: integer("version").default(1).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** One durable run per user input; the native session owns conversation history. */
+export const agentRuns = pgTable("agent_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  threadId: uuid("thread_id").notNull().references(() => chatThreads.id, { onDelete: "cascade" }),
+  runtimeSessionId: uuid("runtime_session_id").notNull().references(() => agentRuntimeSessions.id, { onDelete: "cascade" }),
+  userMessageId: text("user_message_id").notNull(),
+  assistantMessageId: text("assistant_message_id").notNull(),
+  fence: integer("fence").notNull(),
+  status: text("status").$type<import("@tabdo/shared").AgentRunStatus>().default("starting").notNull(),
+  activity: jsonb("activity").$type<import("@tabdo/shared").ChatActivity>(),
+  cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+  error: text("error"),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("agent_runs_input_idx").on(t.threadId, t.userMessageId), index("agent_runs_thread_idx").on(t.threadId, t.startedAt, t.id)]);
+
+export const agentRunEvents = pgTable("agent_run_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  runId: uuid("run_id").notNull().references(() => agentRuns.id, { onDelete: "cascade" }),
+  activity: jsonb("activity").$type<import("@tabdo/shared").ChatActivity>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("agent_run_events_run_idx").on(t.runId, t.createdAt, t.id)]);
+
+/** Canonical relation edges: the inverse column reads the same edge. */
+export const tableRelations = pgTable("table_relations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  sourceTableId: uuid("source_table_id").notNull().references(() => tables.id, { onDelete: "cascade" }),
+  targetTableId: uuid("target_table_id").notNull().references(() => tables.id, { onDelete: "cascade" }),
+  sourceColumnId: uuid("source_column_id").notNull().references(() => columns.id, { onDelete: "cascade" }),
+  inverseColumnId: uuid("inverse_column_id").references(() => columns.id, { onDelete: "cascade" }),
+  sourceSingle: boolean("source_single").default(false).notNull(),
+  targetSingle: boolean("target_single").default(false).notNull(),
+}, (t) => [index("relation_source_table_idx").on(t.sourceTableId), index("relation_target_table_idx").on(t.targetTableId)]);
+export const rowRelations = pgTable("row_relations", {
+  relationId: uuid("relation_id").notNull().references(() => tableRelations.id, { onDelete: "cascade" }),
+  sourceRowId: uuid("source_row_id").notNull().references(() => rows.id, { onDelete: "cascade" }),
+  targetRowId: uuid("target_row_id").notNull().references(() => rows.id, { onDelete: "cascade" }),
+  sourceSingle: boolean("source_single").notNull(), targetSingle: boolean("target_single").notNull(),
+}, (t) => [uniqueIndex("relation_edge_unique").on(t.relationId, t.sourceRowId, t.targetRowId),
+  index("relation_target_row_idx").on(t.relationId, t.targetRowId, t.sourceRowId),
+  uniqueIndex("relation_source_single").on(t.relationId, t.sourceRowId).where(sql`${t.sourceSingle}`),
+  uniqueIndex("relation_target_single").on(t.relationId, t.targetRowId).where(sql`${t.targetSingle}`)]);

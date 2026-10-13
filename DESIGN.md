@@ -1,8 +1,8 @@
-# Design system — Agrid
+# Design system — tabdo
 
 > **Internal only.** Design tokens are not published on `/docs`. Source of truth:
 > `client/src/index.css` (runtime semantic CSS variables).
-> `client/src/lib/agrid-tokens.ts` contains a fixed illustration/brand palette, not a runtime theme mirror.
+> Illustration colors stay with their assets and components; application controls use the semantic theme variables in `client/src/index.css`.
 > Do not add a public docs page or marketing link for tokens.
 
 
@@ -45,3 +45,7 @@ use Radix dialogs; deletion uses an explicit confirmation dialog.
 
 Public forms keep their explicitly selected theme. Their scoped semantic
 variables must remain readable independently of the workspace theme.
+
+## tabdo logo
+
+Use the shared `TabdoLogo` component for the brand mark and wordmark. The mark comes from the user-provided `tabdo-ai-logo-kit`: two blocks connected by an upward arrow. Keep its original geometry and transparent background. Use the ink SVG (`#231F20`) on light surfaces and the white SVG (`#FFFFFF`) on dark surfaces. Tailwind `dark:` utilities switch the files using the app’s resolved `.dark` theme, including manual theme settings that differ from the OS. The browser favicon follows the resolved app theme as well. Standalone light, dark, monochrome and outlined wordmark exports live in [`docs/brand`](docs/brand/README.md).

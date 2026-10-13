@@ -35,21 +35,59 @@ export type TableQuery = {
 export function opsForType(type: ColumnType | string): FilterOp[] {
   switch (type) {
     case "number":
-      return ["eq", "neq", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"];
+      return [
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "is_empty",
+        "is_not_empty",
+      ];
     case "checkbox":
       return ["eq", "is_empty", "is_not_empty"];
     case "select":
     case "person":
       return ["eq", "neq", "is_empty", "is_not_empty"];
+    case "relation":
     case "multi_select":
       return ["contains", "not_contains", "is_empty", "is_not_empty"];
     case "date":
-      return ["eq", "neq", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"];
+      return [
+        "eq",
+        "neq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "is_empty",
+        "is_not_empty",
+      ];
+    case "rollup":
     case "formula":
-      return ["eq", "neq", "contains", "not_contains", "gt", "gte", "lt", "lte", "is_empty", "is_not_empty"];
+      return [
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "is_empty",
+        "is_not_empty",
+      ];
     case "text":
     default:
-      return ["eq", "neq", "contains", "not_contains", "is_empty", "is_not_empty"];
+      return [
+        "eq",
+        "neq",
+        "contains",
+        "not_contains",
+        "is_empty",
+        "is_not_empty",
+      ];
   }
 }
 
@@ -76,7 +114,7 @@ function matchCondition(
   cell: CellValue,
   op: FilterOp,
   value: CellValue | undefined,
-  type: string
+  type: string,
 ): boolean {
   switch (op) {
     case "is_empty":
@@ -91,14 +129,30 @@ function matchCondition(
       if (type === "checkbox") return Boolean(cell) !== Boolean(value);
       return cell !== value;
     case "contains":
-      if (type === "multi_select" && Array.isArray(cell)) {
-        const needle = typeof value === "string" ? value : Array.isArray(value) ? value[0] : null;
+      if (
+        (type === "multi_select" || type === "relation") &&
+        Array.isArray(cell)
+      ) {
+        const needle =
+          typeof value === "string"
+            ? value
+            : Array.isArray(value)
+              ? value[0]
+              : null;
         return needle != null && cell.includes(needle);
       }
       return String(cell ?? "").includes(String(value ?? ""));
     case "not_contains":
-      if (type === "multi_select" && Array.isArray(cell)) {
-        const needle = typeof value === "string" ? value : Array.isArray(value) ? value[0] : null;
+      if (
+        (type === "multi_select" || type === "relation") &&
+        Array.isArray(cell)
+      ) {
+        const needle =
+          typeof value === "string"
+            ? value
+            : Array.isArray(value)
+              ? value[0]
+              : null;
         return needle == null || !cell.includes(needle);
       }
       return !String(cell ?? "").includes(String(value ?? ""));
@@ -108,7 +162,11 @@ function matchCondition(
     case "lte": {
       const a = type === "date" ? String(cell ?? "") : Number(cell);
       const b = type === "date" ? String(value ?? "") : Number(value);
-      if (type !== "date" && (Number.isNaN(a as number) || Number.isNaN(b as number))) return false;
+      if (
+        type !== "date" &&
+        (Number.isNaN(a as number) || Number.isNaN(b as number))
+      )
+        return false;
       if (op === "gt") return a > b;
       if (op === "gte") return a >= b;
       if (op === "lt") return a < b;
@@ -118,7 +176,6 @@ function matchCondition(
       return true;
   }
 }
-
 
 /** Ops that need a comparison value. Incomplete (empty) rules are skipped. */
 export function filterNeedsValue(op: FilterOp): boolean {
@@ -138,7 +195,7 @@ export function isFilterConditionComplete(f: FilterCondition): boolean {
 export function applyFilters(
   rows: RowData[],
   columns: ColumnDef[],
-  query: TableQuery
+  query: TableQuery,
 ): RowData[] {
   const filters = (query.filters ?? []).filter(isFilterConditionComplete);
   const logic = query.filterLogic ?? "and";
@@ -150,7 +207,20 @@ export function applyFilters(
       const checks = filters.map((f) => {
         const col = colMap[f.columnId];
         if (!col) return true;
-        return matchCondition(row.cells[f.columnId] ?? null, f.op, f.value, col.type);
+        const type =
+          col.type === "rollup"
+            ? ["earliest", "latest"].includes(
+                col.config.rollup?.operation ?? "",
+              )
+              ? "date"
+              : "number"
+            : col.type;
+        return matchCondition(
+          row.cells[f.columnId] ?? null,
+          f.op,
+          f.value,
+          type,
+        );
       });
       return logic === "and" ? checks.every(Boolean) : checks.some(Boolean);
     });
@@ -166,9 +236,19 @@ export function applyFilters(
       if (isEmpty(a) && isEmpty(b)) return 0;
       if (isEmpty(a)) return 1;
       if (isEmpty(b)) return -1;
-      if (col?.type === "number" || (col?.type === "formula" && typeof a === "number" && typeof b === "number"))
+      if (
+        col?.type === "number" ||
+        (col?.type === "rollup" &&
+          !["earliest", "latest"].includes(
+            col.config.rollup?.operation ?? "",
+          )) ||
+        (col?.type === "formula" &&
+          typeof a === "number" &&
+          typeof b === "number")
+      )
         return (Number(a) - Number(b)) * dir;
-      if (col?.type === "checkbox") return (Number(Boolean(a)) - Number(Boolean(b))) * dir;
+      if (col?.type === "checkbox")
+        return (Number(Boolean(a)) - Number(Boolean(b))) * dir;
       return String(a).localeCompare(String(b), "zh") * dir;
     });
   }
@@ -180,14 +260,16 @@ export function applyFilters(
 export function validateCell(
   type: ColumnType | string,
   value: CellValue,
-  options?: { id: string }[]
+  options?: { id: string }[],
 ): string | null {
   if (value === null || value === undefined || value === "") return null;
   switch (type) {
+    case "rollup":
     case "formula":
       return "公式列只读，由表达式自动计算";
     case "number":
-      if (typeof value !== "number" || Number.isNaN(value)) return "必须是有效数字";
+      if (typeof value !== "number" || Number.isNaN(value))
+        return "必须是有效数字";
       return null;
     case "checkbox":
       if (typeof value !== "boolean") return "必须是布尔值";
@@ -195,11 +277,16 @@ export function validateCell(
     case "select":
     case "person":
       if (typeof value !== "string") return "必须是字符串选项 id";
-      if (options?.length && !options.some((o) => o.id === value)) return "选项不存在";
+      if (options?.length && !options.some((o) => o.id === value))
+        return "选项不存在";
       return null;
+    case "relation":
     case "multi_select":
       if (!Array.isArray(value)) return "必须是字符串数组";
-      if (options?.length && value.some((id) => !options.some((o) => o.id === id))) {
+      if (
+        options?.length &&
+        value.some((id) => !options.some((o) => o.id === id))
+      ) {
         return "包含无效选项";
       }
       return null;
@@ -209,7 +296,8 @@ export function validateCell(
       }
       return null;
     case "text":
-      if (typeof value !== "string" && typeof value !== "number") return "类型不匹配";
+      if (typeof value !== "string" && typeof value !== "number")
+        return "类型不匹配";
       return null;
     default:
       return `未知列类型: ${type}`;

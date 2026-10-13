@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BuilderLayout } from "@/components/builder/BuilderLayout";
 import {
   DndContext,
   closestCenter,
@@ -43,8 +44,8 @@ import type {
   FormQuestionSettings,
   FormThemePresetId,
   ResolvedFormView,
-} from "@table/shared";
-import { FORM_THEME_PRESETS } from "@table/shared";
+} from "@tabdo/shared";
+import { FORM_THEME_PRESETS } from "@tabdo/shared";
 
 type Props = {
   table: FullTable;
@@ -317,9 +318,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
           <TableForm table={table} view={view} onSubmitted={onSubmitted} />
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
-          {/* Field list */}
-          <aside className="min-h-0 overflow-auto border-r border-border p-2">
+        <BuilderLayout sidebarLabel="表单题目" inspectorLabel="题型设置" sidebar={<>
             <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               题目 · 拖拽排序
             </p>
@@ -347,10 +346,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
                 </div>
               </SortableContext>
             </DndContext>
-          </aside>
-
-          {/* Canvas */}
-          <div className="min-h-0 overflow-auto">
+          </>} canvas={
             <TableForm
               table={table}
               view={view}
@@ -358,10 +354,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
               onSelectField={setSelectedId}
               onSubmitted={onSubmitted}
             />
-          </div>
-
-          {/* Inspector */}
-          <aside className="min-h-0 overflow-auto border-l border-border p-3">
+          } inspector={<>
             <p className="mb-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               题型设置
             </p>
@@ -373,8 +366,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
                 onPatch={(patch) => void patchField(selected.columnId, patch)}
               />
             )}
-          </aside>
-        </div>
+          </>} />
       )}
     </div>
   );

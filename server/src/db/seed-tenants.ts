@@ -2,7 +2,7 @@
  * Seed TWO tenants (organizations) with isolated scheme-2 tables,
  * then verify list/get cannot cross orgs.
  *
- * Usage: pnpm --filter server db:seed:tenants
+ * Usage: pnpm --filter @tabdo/server db:seed:tenants
  */
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";

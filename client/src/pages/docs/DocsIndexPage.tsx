@@ -16,14 +16,14 @@ export function DocsIndexPage() {
     <main className="relative">
       <SeoHead
         title="Documentation"
-        description="Agrid docs — For AI Agents (MCP, Skill) and For Humans (UI, API). Same command layer."
+        description="tabdo docs — For AI Agents (MCP, Skill) and For Humans (UI, API). Same command layer."
         path="/docs"
       />
       <div
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80"
         style={{
           background:
-            "radial-gradient(ellipse 55% 70% at 75% 0%, var(--agrid-blue-soft) 0%, transparent 55%), radial-gradient(ellipse 45% 55% at 15% 10%, var(--agrid-purple-soft) 0%, transparent 50%)",
+            "radial-gradient(ellipse 55% 70% at 75% 0%, var(--tabdo-blue-soft) 0%, transparent 55%), radial-gradient(ellipse 45% 55% at 15% 10%, var(--tabdo-purple-soft) 0%, transparent 50%)",
         }}
       />
       <div className="mx-auto max-w-6xl px-4 py-12">
@@ -38,7 +38,7 @@ export function DocsIndexPage() {
               Welcome
             </h1>
             <p className="mt-3 max-w-2xl text-muted-foreground leading-relaxed">
-              Agrid is Agent-first Talk-to-Build: chat builds the system; Grid / Board
+              tabdo is Agent-first Talk-to-Build: chat builds the system; Grid / Board
               stay the core data view. Pick your path — no login required to read.
             </p>
 
@@ -48,7 +48,7 @@ export function DocsIndexPage() {
                 to="/docs/mcp"
                 className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
               >
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--agrid-blue-soft)]">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-blue-soft)]">
                   <NiBot className="h-5 w-5 text-primary" />
                 </div>
                 <h2 className="text-lg font-semibold group-hover:text-primary">
@@ -73,8 +73,8 @@ export function DocsIndexPage() {
                 to="/docs/human-quickstart"
                 className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
               >
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--agrid-yellow-soft)]">
-                  <NiBook className="h-5 w-5 text-[var(--agrid-yellow)]" />
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-yellow-soft)]">
+                  <NiBook className="h-5 w-5 text-[var(--tabdo-yellow)]" />
                 </div>
                 <h2 className="text-lg font-semibold group-hover:text-primary">
                   For Humans

@@ -27,7 +27,7 @@ Internal implementation notes; not a public documentation page.
 
 ## Validation and limits
 
-`node --test client/scripts/ui-regressions.test.mjs`: 10 passing regressions,
+`pnpm --filter @tabdo/client test`: 10 passing regressions,
 covering organization initialization/deduplication, draft thread metadata,
 first-paint theme combinations, the unified selector and core color contrast.
 Core text/button pairs and tinted notices meet 4.5:1 in the checked combinations;

@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { RelatedRecordPanel } from "@/components/table/RelatedRecordPanel";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useMatch, useNavigate } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
 import { AppShellProvider, useAppShell } from "@/context/AppShellContext";
 import { AppSidebar } from "@/components/shell/AppSidebar";
 import { AiDrawer } from "@/components/shell/AiDrawer";
+import { AiToggle } from "@/components/shell/AiToggle";
+import { notifyDataChanged, subscribeDataChanges } from "@/lib/data-changes";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import type { TableMeta } from "@/types/table";
 
 export type AppOutletContext = {
@@ -13,8 +17,10 @@ export type AppOutletContext = {
   refreshTables: () => Promise<void>;
   createTable: () => Promise<void>;
   deleteTable: (tableId: string) => Promise<void>;
+  updateTableMetadata: (tableId: string, patch: Parameters<typeof api.patchTable>[1]) => Promise<void>;
   tablesLoading: boolean;
-  notifyTableMutated: () => void;
+  notifyTableMutated: (tableId?: string | null) => void;
+  getTableRefreshToken: (tableId?: string | null) => number;
   tableRefreshToken: number;
 };
 
@@ -25,19 +31,23 @@ function AppShellInner() {
     "/app/tables/:tableId/automations"
   );
   const tableMatch = tableAutomationsMatch ?? tableDetailMatch;
+  const aiPageMatch = useMatch({ path: "/app", end: true });
   const navigate = useNavigate();
+  const tableListRequest = useRef(0);
   const [tables, setTables] = useState<TableMeta[]>([]);
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tableRefreshToken, setTableRefreshToken] = useState(0);
+  const [scopedRefresh, setScopedRefresh] = useState<{ all: number; tables: Record<string, number> }>({ all: 0, tables: {} });
 
   const refreshTables = useCallback(async () => {
+    const version = ++tableListRequest.current;
     try {
       const list = await api.listTables();
-      setTables(list);
+      if (version === tableListRequest.current) setTables(list);
     } catch (e) {
-      console.warn("listTables", e);
+      if (version === tableListRequest.current) toast.error(e instanceof Error ? e.message : "表格列表暂时无法加载", { id: "table-list-load" });
     } finally {
-      setTablesLoading(false);
+      if (version === tableListRequest.current) setTablesLoading(false);
     }
   }, []);
 
@@ -58,13 +68,24 @@ function AppShellInner() {
       setTables((prev) => [...prev, t]);
       navigate(`/app/tables/${t.id}`);
     } catch (e) {
-      console.error(e);
+      toast.error(e instanceof Error ? e.message : "创建表格失败，请重试");
     }
   }, [tables.length, navigate]);
 
-  const notifyTableMutated = useCallback(() => {
+  useEffect(() => subscribeDataChanges((change) => {
     setTableRefreshToken((n) => n + 1);
-  }, []);
+    setScopedRefresh((previous) => {
+      if (change.all) return { ...previous, all: previous.all + 1 };
+      const tables = { ...previous.tables };
+      for (const id of change.tableIds) tables[id] = (tables[id] ?? 0) + 1;
+      return { ...previous, tables };
+    });
+    void refreshTables();
+  }), [refreshTables]);
+
+  const notifyTableMutated = useCallback((tableId?: string | null) => notifyDataChanged(tableId), []);
+  const getTableRefreshToken = useCallback((tableId?: string | null) =>
+    scopedRefresh.all + (tableId ? scopedRefresh.tables[tableId] ?? 0 : 0), [scopedRefresh]);
 
   const deleteTable = useCallback(async (tableId: string) => {
     await api.deleteTable(tableId);
@@ -72,6 +93,11 @@ function AppShellInner() {
     notifyTableMutated();
     if (tableMatch?.params.tableId === tableId) navigate("/app/tables", { replace: true });
   }, [navigate, notifyTableMutated, tableMatch?.params.tableId]);
+
+  const updateTableMetadata = useCallback(async (id: string, patch: Parameters<typeof api.patchTable>[1]) => {
+    const updated = await api.patchTable(id, patch);
+    setTables((previous) => previous.map((table) => table.id === id ? { ...table, ...updated } : table));
+  }, []);
 
   const outletCtx: AppOutletContext = {
     tables,
@@ -82,6 +108,8 @@ function AppShellInner() {
     tablesLoading,
     notifyTableMutated,
     tableRefreshToken,
+    getTableRefreshToken,
+    updateTableMetadata,
   };
 
   return (
@@ -90,13 +118,16 @@ function AppShellInner() {
         tables={tables}
         onCreateTable={() => void createTable()}
         tablesLoading={tablesLoading}
+        onTogglePin={(table) => updateTableMetadata(table.id, { pinned: !table.pinned })}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex h-full min-h-0 min-w-0 w-full flex-col"><Outlet context={outletCtx} /></div>
         </main>
+        <AiToggle />
       </div>
-      <AiDrawer onMutated={notifyTableMutated} />
+      <RelatedRecordPanel/>
+      {!aiPageMatch && <AiDrawer onMutated={notifyTableMutated} />}
     </div>
   );
 }

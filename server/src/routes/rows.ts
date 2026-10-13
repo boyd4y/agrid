@@ -133,7 +133,7 @@ rowsRoute.post("/tables/:id/rows", async (c) => {
     .object({ cells: z.record(z.string(), cellValueSchema).optional() })
     .parse(await c.req.json().catch(() => ({})));
   try {
-    const row = await cmds.addRow({ tableId, cells: body.cells, organizationId: scope.organizationId });
+    const row = await cmds.addRow({ tableId, cells: body.cells, actorId: scope.actor.userId, organizationId: scope.organizationId });
     return c.json(row, 201);
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 404);
@@ -162,6 +162,7 @@ rowsRoute.patch("/rows/:id", async (c) => {
           columnId: body.cell.columnId,
           value: body.cell.value,
           expectedVersion: body.expectedVersion,
+          actorId: scope.actor.userId,
           organizationId: scope.organizationId,
         })
       );
@@ -172,6 +173,7 @@ rowsRoute.patch("/rows/:id", async (c) => {
           rowId: id,
           cells: body.cells,
           expectedVersion: body.expectedVersion,
+          actorId: scope.actor.userId,
           organizationId: scope.organizationId,
         })
       );

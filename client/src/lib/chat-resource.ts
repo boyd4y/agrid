@@ -18,8 +18,11 @@ export function chatResourceKey(opts: {
 }
 
 export function resourceKeyLabel(key: ChatResourceKey): string {
+  if (key.startsWith("report:")) return "与当前报告的对话";
   if (key.startsWith("table:")) return "与当前表格的对话";
   if (key === "workspace") return "工作区对话";
+  const labels: Record<string, string> = { tables: "表格列表的对话", automations: "自动化的对话", reports: "报告的对话", skills: "技能管理的对话", agents: "智能体管理的对话", members: "成员管理的对话", settings: "设置的对话" };
+  if (labels[key]) return labels[key];
   return "当前资源的对话";
 }
 

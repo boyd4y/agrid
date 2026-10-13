@@ -1,49 +1,17 @@
 /** Thin HTTP client → POST /api/commands (same gate as UI + agents) */
+import type { CommandName } from "@tabdo/shared";
+export type { CommandName } from "@tabdo/shared";
 
-export type CommandName =
-  | "listTables"
-  | "getTable"
-  | "queryRows"
-  | "updateCell"
-  | "updateCells"
-  | "addRow"
-  | "deleteRow"
-  | "addColumn"
-  | "deleteColumn"
-  | "updateColumn"
-  | "reorderColumns"
-  | "setStatus"
-  | "moveCard"
-  | "listViews"
-  | "getView"
-  | "createFormView"
-  | "updateFormView"
-  | "setFormFields"
-  | "addFormField"
-  | "removeFormField"
-  | "reorderFormFields"
-  | "setFormSections"
-  | "createGridView"
-  | "createBoardView"
-  | "setFormTheme"
-  | "setFormLayout"
-  | "setFormFieldSettings"
-  | "setFormChrome"
-  | "listAutomations"
-  | "createAutomation"
-  | "updateAutomation"
-  | "deleteAutomation"
-  | "listAutomationRuns";
-
-const API_URL = (process.env.TABLE_API_URL || "http://localhost:3001").replace(
-  /\/$/,
-  ""
-);
-const API_KEY = process.env.TABLE_API_KEY || "";
+const API_URL = (
+  process.env.TABDO_API_URL ||
+  process.env.TABLE_API_URL ||
+  "http://localhost:3001"
+).replace(/\/$/, "");
+const API_KEY = process.env.TABDO_API_KEY || process.env.TABLE_API_KEY || "";
 
 export async function callCommand(
   command: CommandName,
-  input: Record<string, unknown> = {}
+  input: Record<string, unknown> = {},
 ): Promise<unknown> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

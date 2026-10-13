@@ -1,3 +1,5 @@
+import { toast } from "sonner";
+import { announceApiWrite } from "./data-changes";
 import type {
   CellValue,
   ColumnDef,
@@ -16,13 +18,19 @@ import type {
   AutomationTrigger,
   AutomationAction,
   TableView,
+  BoardViewConfig,
   ResolvedFormView,
   FormFieldConfig,
   FormThemePresetId,
   FormLayoutMode,
   FormViewConfig,
   FormSectionConfig,
-} from "@table/shared";
+} from "@tabdo/shared";
+
+function announceAgentChange<T>(result: T): T {
+  window.dispatchEvent(new Event("tabdo:agents-changed"));
+  return result;
+}
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -32,19 +40,31 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
+  }).catch((error: unknown) => {
+    if (error instanceof Error && error.name === "AbortError") throw error;
+    const message = "网络连接失败，请重试";
+    toast.error(message, { id: "api-network-error" });
+    throw new Error(message, { cause: error });
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `请求失败 ${res.status}`);
+    const message = res.status >= 500 ? "服务暂时不可用，请稍后重试" : err.error || `请求失败 ${res.status}`;
+    if (res.status >= 500) toast.error(message, { id: "api-system-error" });
+    throw new Error(message);
   }
-  return res.json() as Promise<T>;
+  const result = await res.json() as T;
+  announceApiWrite(url, init, result);
+  return result;
 }
 
 export type AgentPersonaInfo = {
+  runtime?: "local" | "sandbox";
   systemPrompt?: string;
   defaultHarness?: "codex" | "claude" | "pi";
   defaultModel?: string;
   avatarColor?: string;
+  skillNames?: string[];
+  disabledTools?: string[];
 };
 
 export type MemberOption = {
@@ -54,14 +74,33 @@ export type MemberOption = {
   email: string;
   kind: "human" | "agent";
   role: string;
+  image?: string | null;
   agent?: {
     displayName?: string | null;
     persona?: AgentPersonaInfo;
-    apiKeyPrefix?: string;
   } | null;
 };
 
+async function relationCommand<T>(command:string,input:unknown){
+ const result=await request<{result:T}>("/api/commands",{method:"POST",body:JSON.stringify({command,input})});return result.result;
+}
 export const api = {
+  getAgentTools: (harness: "pi" | "codex" | "claude", signal?: AbortSignal) => request<{ harness: string; supportsFiltering: boolean; tools: import("@tabdo/shared").AgentToolCatalogItem[] }>(`/api/members/agents/tools?harness=${harness}`, { signal }),
+  listAgentRuns: (threadId: string, signal?: AbortSignal) => request<{ runs: import("@tabdo/shared").AgentRunSummary[] }>(`/api/threads/${threadId}/runs`, { signal }),
+  listAgentRunEvents: (threadId: string, runId: string, signal?: AbortSignal) => request<{ events: import("@tabdo/shared").AgentRunEvent[] }>(`/api/threads/${threadId}/runs/${runId}/events`, { signal }),
+  cancelAgentRun: (threadId: string, runId: string) => request<{ ok: boolean }>(`/api/threads/${threadId}/runs/${runId}/cancel`, { method: "POST", body: "{}" }),
+  getChatMessages: (threadId: string, signal?: AbortSignal) => request<{ headId: string | null; messages: Array<{ id: string; parentId: string | null; format: string; content: Record<string, unknown> }> }>(`/api/threads/${threadId}/messages`, { signal }),
+  getAgentTaskState: (threadId: string, signal?: AbortSignal) => request<{ state: import("@tabdo/shared").AgentTaskState | null }>(`/api/threads/${threadId}/task-state`, { signal }),
+  listSkills: () => request<import("@tabdo/shared").SkillLibrary>("/api/skills"),
+  getSkill: (id: string) => request<import("@tabdo/shared").SkillDocument>(`/api/skills/${encodeURIComponent(id)}`),
+  updateSkill: (id: string, document: string, expectedVersion: number) => request<import("@tabdo/shared").SkillDocument>(`/api/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ document, expectedVersion }) }),
+  setSkillEnabled: (id: string, enabled: boolean) => request<{ ok: boolean }>(`/api/skills/${encodeURIComponent(id)}/enabled`, { method: "PUT", body: JSON.stringify({ enabled }) }),
+  deleteSkill: (id: string) => request<{ ok: boolean }>(`/api/skills/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  getRow:(rowId:string)=>relationCommand<RowData & {columns:ColumnDef[]}>("getRow",{rowId}),
+  queryRelationRecords:(input:import("@tabdo/shared").RelationQueryInput)=>relationCommand<import("@tabdo/shared").RelationQueryResult>("queryRelationRecords",input),
+  setRelation:(input:import("@tabdo/shared").RelationWriteInput)=>relationCommand<RowData>("setRelation",input),
+  addRelation:(input:import("@tabdo/shared").RelationWriteInput)=>relationCommand<RowData>("addRelation",input),
+  removeRelation:(input:import("@tabdo/shared").RelationWriteInput)=>relationCommand<RowData>("removeRelation",input),
   listTables: () => request<TableMeta[]>("/api/tables"),
   deleteTable: (id: string) => request<{ ok: boolean }>(`/api/tables/${id}`, { method: "DELETE" }),
   getTable: (id: string) => request<FullTable>(`/api/tables/${id}`),
@@ -70,7 +109,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, description }),
     }),
-  patchTable: (id: string, data: { name?: string; description?: string | null }) =>
+  patchTable: (id: string, data: { name?: string; description?: string | null; icon?: string | null; pinned?: boolean }) =>
     request<TableMeta>(`/api/tables/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -166,9 +205,9 @@ export const api = {
     return api.queryRowsPage(input.tableId, input);
   },
   listMembers: () =>
-    request<{ members: MemberOption[] }>("/api/members").catch(() => ({
-      members: [] as MemberOption[],
-    })),
+    request<{ members: MemberOption[]; actor: { userId: string; role: string } | null }>("/api/members"),
+  updateMemberAvatar: (memberId: string, image: string | null) =>
+    request<{ ok: boolean; image: string | null }>(`/api/members/${memberId}/avatar`, { method: "PATCH", body: JSON.stringify({ image }) }).then(announceAgentChange),
   inviteMember: (email: string, role: "admin" | "member" = "member") =>
     request<{ ok: boolean }>("/api/members/invite", {
       method: "POST",
@@ -176,31 +215,38 @@ export const api = {
     }),
   createAgent: (data: {
     name: string;
+    image?: string | null;
     role?: "admin" | "member";
     persona?: {
+      runtime?: "local" | "sandbox";
       systemPrompt?: string;
       defaultHarness?: "codex" | "claude" | "pi";
       defaultModel?: string;
       avatarColor?: string;
+      skillNames?: string[];
+      disabledTools?: string[];
     };
   }) =>
     request<{
       ok: boolean;
       member: MemberOption;
-      apiKey: string;
     }>("/api/members/agents", {
       method: "POST",
       body: JSON.stringify(data),
-    }),
+    }).then(announceAgentChange),
   /** Update agent display/persona. Harness is immutable after create. */
   updateAgent: (
     memberId: string,
     data: {
       name?: string;
+      image?: string | null;
       persona?: {
+        runtime?: "local" | "sandbox";
         systemPrompt?: string;
         defaultModel?: string;
         avatarColor?: string;
+        skillNames?: string[];
+        disabledTools?: string[];
       };
     }
   ) =>
@@ -210,7 +256,7 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(data),
       }
-    ),
+    ).then(announceAgentChange),
   me: () =>
     request<{
       actor: unknown;
@@ -219,6 +265,14 @@ export const api = {
 
   listAutomations: (tableId: string) =>
     request<AutomationRule[]>(`/api/tables/${tableId}/automations`),
+  listWorkspaceAutomations: (offset = 0) => request<{ rules: (AutomationRule & { sourceName: string })[]; hasMore: boolean }>(`/api/automations?offset=${offset}`),
+  getAutomation: (id: string) => request<AutomationRule & { sourceName: string }>(`/api/automations/${id}`),
+  listReports: (offset = 0) => request<{ reports: import("@tabdo/shared").Report[]; hasMore: boolean }>(`/api/reports?offset=${offset}`),
+  getReport: (id: string) => request<import("@tabdo/shared").Report>(`/api/reports/${id}`),
+  saveReport: (config: import("@tabdo/shared").ReportPageConfig, id?: string, expectedVersion?: number) => request<import("@tabdo/shared").Report>(id ? `/api/reports/${id}` : "/api/reports", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? { ...config, expectedVersion } : config) }),
+  previewReportPage: (config: import("@tabdo/shared").ReportPageConfig) => request<import("@tabdo/shared").ReportPageData>("/api/reports/preview-page", { method: "POST", body: JSON.stringify(config) }),
+  previewReport: (config: import("@tabdo/shared").ReportConfig) => request<import("@tabdo/shared").ReportData>("/api/reports/preview", { method: "POST", body: JSON.stringify(config) }),
+  deleteReport: (id: string) => request(`/api/reports/${id}`, { method: "DELETE" }),
   createAutomation: (
     tableId: string,
     data: {
@@ -251,6 +305,8 @@ export const api = {
     }),
   deleteAutomation: (id: string) =>
     request<{ ok: boolean }>(`/api/automations/${id}`, { method: "DELETE" }),
+  replayAutomationRun: (id: string) =>
+    request<{ ok: boolean }>(`/api/automation-runs/${id}/replay`, { method: "POST" }),
   listAutomationRuns: (tableId: string, opts?: { automationId?: string; limit?: number }) => {
     const q = new URLSearchParams();
     if (opts?.automationId) q.set("automationId", opts.automationId);
@@ -278,6 +334,9 @@ export const api = {
     );
     return r.result;
   },
+  renameView: async (viewId: string, name: string) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "renameView", input: { viewId, name } }) })).result,
+  setDefaultView: async (viewId: string) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "setDefaultView", input: { viewId } }) })).result,
+  updateBoardView: async (viewId: string, config: BoardViewConfig) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "updateBoardView", input: { viewId, config } }) })).result,
   deleteView: async (viewId: string) => {
     const r = await request<{ ok: boolean; result: { ok: true } }>("/api/commands", {
       method: "POST",

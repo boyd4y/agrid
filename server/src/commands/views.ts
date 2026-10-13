@@ -1,6 +1,6 @@
-import { and, asc, eq, max } from "drizzle-orm";
-import { db } from "../db/index.js";
-import { columns, tableViews, type FormViewConfigJson, type FormFieldConfigJson } from "../db/schema.js";
+import { and, asc, eq } from "drizzle-orm";
+import { db, type Transaction } from "../db/index.js";
+import { columns, tables, tableViews, type FormViewConfigJson, type FormFieldConfigJson } from "../db/schema.js";
 import { requireOrgId, requireTableInOrg } from "../tenant/scope.js";
 import type {
   AddFormFieldInput,
@@ -25,8 +25,12 @@ import type {
   SetFormThemeInput,
   TableView,
   UpdateFormViewInput,
-} from "@table/shared";
-import { FORM_LAYOUT_MODES, FORM_THEME_PRESETS } from "@table/shared";
+  RenameViewInput,
+  SetDefaultViewInput,
+  UpdateBoardViewInput,
+  BoardViewConfig,
+} from "@tabdo/shared";
+import { FORM_LAYOUT_MODES, FORM_THEME_PRESETS, BOARD_VIEW_CONFIG_SCHEMA, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, VIEW_NAME_SCHEMA } from "@tabdo/shared";
 
 export type OrgScoped = { organizationId?: string };
 
@@ -70,6 +74,7 @@ function toTableView(row: typeof tableViews.$inferSelect): TableView {
     name: row.name,
     config: (row.config ?? {}) as TableView["config"],
     sortOrder: row.sortOrder,
+    isDefault: row.isDefault,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -83,8 +88,8 @@ async function requireViewInOrg(viewId: string, organizationId?: string) {
   return view;
 }
 
-async function loadColumns(tableId: string) {
-  return db
+async function loadColumns(tableId: string, query: typeof db | Transaction = db) {
+  return query
     .select()
     .from(columns)
     .where(eq(columns.tableId, tableId))
@@ -95,7 +100,7 @@ function defaultFieldsFromColumns(
   cols: Awaited<ReturnType<typeof loadColumns>>
 ): FormFieldConfig[] {
   return cols
-    .filter((c) => c.type !== "formula" && !(c.config as { hidden?: boolean })?.hidden)
+    .filter((c) => c.type !== "formula" && c.type !== "rollup" && !(c.config as { hidden?: boolean })?.hidden)
     .map((c) => ({
       columnId: c.id,
       required: c.type === "text" && c.name === "标题" ? true : false,
@@ -108,12 +113,63 @@ function defaultFieldsFromColumns(
     }));
 }
 
-async function nextSortOrder(tableId: string) {
-  const [agg] = await db
-    .select({ m: max(tableViews.sortOrder) })
-    .from(tableViews)
-    .where(eq(tableViews.tableId, tableId));
-  return (agg?.m ?? -1) + 1;
+async function lockTable(tx: Transaction, tableId: string) {
+  const [table] = await tx.select({ id: tables.id }).from(tables).where(eq(tables.id, tableId)).for("update");
+  if (!table) throw new Error("表格不存在");
+}
+
+/** All operations that can change the default serialize on the same parent row. */
+async function insertView(tableId: string, values: Omit<typeof tableViews.$inferInsert, "tableId" | "sortOrder" | "isDefault">) {
+  return db.transaction(async (tx) => {
+    await lockTable(tx, tableId);
+    const siblings = await tx.select({ sortOrder: tableViews.sortOrder, isDefault: tableViews.isDefault }).from(tableViews).where(eq(tableViews.tableId, tableId));
+    const [row] = await tx.insert(tableViews).values({ ...values, tableId, sortOrder: Math.max(-1, ...siblings.map((view) => view.sortOrder)) + 1, isDefault: !siblings.some((view) => view.isDefault) }).returning();
+    return row;
+  });
+}
+
+async function validateBoardConfig(tableId: string, config: BoardViewConfig, query: typeof db | Transaction = db) {
+  const cols = await loadColumns(tableId, query);
+  const ids = new Set(cols.map((column) => column.id));
+  for (const id of config.visibleColumnIds ?? []) if (!ids.has(id)) throw new Error(`显示属性不属于该表: ${id}`);
+  if (config.statusColumnId && !cols.some((column) => column.id === config.statusColumnId && column.type === "select")) throw new Error("看板分组需要该表的单选字段");
+}
+
+export async function renameView({ organizationId, ...input }: RenameViewInput & OrgScoped): Promise<TableView> {
+  const { viewId, name } = RENAME_VIEW_SCHEMA.parse({ viewId: input.viewId, name: input.name });
+  const view = await requireViewInOrg(viewId, organizationId);
+  const [row] = await db.update(tableViews).set({ name, updatedAt: new Date() }).where(and(eq(tableViews.id, viewId), eq(tableViews.tableId, view.tableId))).returning();
+  if (!row) throw new Error("视图已被删除");
+  return toTableView(row);
+}
+
+export async function setDefaultView({ organizationId, ...input }: SetDefaultViewInput & OrgScoped): Promise<TableView> {
+  const { viewId } = SET_DEFAULT_VIEW_SCHEMA.parse({ viewId: input.viewId });
+  const view = await requireViewInOrg(viewId, organizationId);
+  return db.transaction(async (tx) => {
+    await lockTable(tx, view.tableId);
+    const [current] = await tx.select().from(tableViews).where(eq(tableViews.id, viewId));
+    if (!current) throw new Error("视图已被删除");
+    await tx.update(tableViews).set({ isDefault: false }).where(and(eq(tableViews.tableId, view.tableId), eq(tableViews.isDefault, true)));
+    const [row] = await tx.update(tableViews).set({ isDefault: true, updatedAt: new Date() }).where(eq(tableViews.id, viewId)).returning();
+    return toTableView(row);
+  });
+}
+
+export async function updateBoardView({ organizationId, ...input }: UpdateBoardViewInput & OrgScoped): Promise<TableView> {
+  // API routes also pass actorId; keep it outside the public schema.
+  const { viewId, config } = UPDATE_BOARD_VIEW_SCHEMA.parse({ viewId: input.viewId, config: input.config });
+  const view = await requireViewInOrg(viewId, organizationId);
+  if (view.type !== "board") throw new Error("仅支持更新看板视图");
+  return db.transaction(async (tx) => {
+    await lockTable(tx, view.tableId);
+    const [current] = await tx.select().from(tableViews).where(eq(tableViews.id, viewId)).for("update");
+    if (!current) throw new Error("视图已被删除");
+    const next = BOARD_VIEW_CONFIG_SCHEMA.parse({ ...current.config, ...config });
+    await validateBoardConfig(view.tableId, next, tx);
+    const [row] = await tx.update(tableViews).set({ config: next, updatedAt: new Date() }).where(eq(tableViews.id, viewId)).returning();
+    return toTableView(row);
+  });
 }
 
 async function resolveFormView(
@@ -130,7 +186,7 @@ async function resolveFormView(
     .filter((f) => byId.has(f.columnId))
     .map((f) => {
       const col = byId.get(f.columnId)!;
-      const isFormula = col.type === "formula";
+      const isFormula = (col.type === "formula" || col.type === "rollup");
       return {
         ...f,
         readOnly: f.readOnly || isFormula,
@@ -175,15 +231,16 @@ export async function deleteView({
   organizationId,
 }: DeleteViewInput & OrgScoped): Promise<{ ok: true }> {
   const view = await requireViewInOrg(viewId, organizationId);
-  const siblings = await db
-    .select({ id: tableViews.id })
-    .from(tableViews)
-    .where(eq(tableViews.tableId, view.tableId));
-  if (siblings.length <= 1) {
-    throw new Error("至少保留一个视图");
-  }
-  await db.delete(tableViews).where(eq(tableViews.id, viewId));
-  return { ok: true };
+  return db.transaction(async (tx) => {
+    await lockTable(tx, view.tableId);
+    const siblings = await tx.select().from(tableViews).where(eq(tableViews.tableId, view.tableId)).orderBy(asc(tableViews.sortOrder), asc(tableViews.createdAt), asc(tableViews.id));
+    const current = siblings.find((candidate) => candidate.id === viewId);
+    if (!current) throw new Error("视图已被删除");
+    if (siblings.length <= 1) throw new Error("至少保留一个视图");
+    await tx.delete(tableViews).where(eq(tableViews.id, viewId));
+    if (current.isDefault) await tx.update(tableViews).set({ isDefault: true, updatedAt: new Date() }).where(eq(tableViews.id, siblings.find((candidate) => candidate.id !== viewId)!.id));
+    return { ok: true };
+  });
 }
 
 export async function createGridView({
@@ -192,38 +249,15 @@ export async function createGridView({
   organizationId,
 }: CreateGridViewInput & OrgScoped): Promise<TableView> {
   await requireTableInOrg(tableId, organizationId);
-  const sortOrder = await nextSortOrder(tableId);
-  const [row] = await db
-    .insert(tableViews)
-    .values({
-      tableId,
-      type: "grid",
-      name: name?.trim() || "表格",
-      config: {},
-      sortOrder,
-    })
-    .returning();
+  const row = await insertView(tableId, { type: "grid", name: name === undefined ? "表格" : VIEW_NAME_SCHEMA.parse(name), config: {} });
   return toTableView(row);
 }
 
-export async function createBoardView({
-  tableId,
-  name,
-  config,
-  organizationId,
-}: CreateBoardViewInput & OrgScoped): Promise<TableView> {
+export async function createBoardView({ tableId, name, config, organizationId }: CreateBoardViewInput & OrgScoped): Promise<TableView> {
   await requireTableInOrg(tableId, organizationId);
-  const sortOrder = await nextSortOrder(tableId);
-  const [row] = await db
-    .insert(tableViews)
-    .values({
-      tableId,
-      type: "board",
-      name: name?.trim() || "看板",
-      config: config ?? {},
-      sortOrder,
-    })
-    .returning();
+  const settings = BOARD_VIEW_CONFIG_SCHEMA.parse(config ?? {});
+  await validateBoardConfig(tableId, settings);
+  const row = await insertView(tableId, { type: "board", name: name === undefined ? "看板" : VIEW_NAME_SCHEMA.parse(name), config: settings });
   return toTableView(row);
 }
 
@@ -244,7 +278,6 @@ export async function createFormView({
     }
   }
 
-  const sortOrder = await nextSortOrder(tableId);
   const layout = config?.layout ?? "classic";
   const theme = config?.theme ?? { preset: "notion-light" as FormThemePresetId };
 
@@ -262,16 +295,7 @@ export async function createFormView({
     ending: config?.ending,
   };
 
-  const [row] = await db
-    .insert(tableViews)
-    .values({
-      tableId,
-      type: "form",
-      name: name?.trim() || formConfig.title || "表单",
-      config: formConfig,
-      sortOrder,
-    })
-    .returning();
+  const row = await insertView(tableId, { type: "form", name: name === undefined ? VIEW_NAME_SCHEMA.parse(formConfig.title || "表单") : VIEW_NAME_SCHEMA.parse(name), config: formConfig });
 
   return resolveFormView(row);
 }
@@ -305,7 +329,7 @@ export async function updateFormView({
   const [row] = await db
     .update(tableViews)
     .set({
-      ...(name !== undefined ? { name: name.trim() || view.name } : {}),
+      ...(name !== undefined ? { name: VIEW_NAME_SCHEMA.parse(name) } : {}),
       config: next,
       updatedAt: new Date(),
     })

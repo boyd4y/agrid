@@ -1,20 +1,20 @@
 ---
 name: table-ops
 description: >-
-  Operate the Agrid AI-native spreadsheet (Feishu/Notion-style) via the shared
+  Operate the tabdo AI-native spreadsheet (Feishu/Notion-style) via the shared
   command API or MCP. Use when listing tables, querying rows, editing cells,
   managing columns, or moving kanban cards — for humans and agents alike.
 ---
 
-# Agrid operations (API / MCP)
+# tabdo operations (API / MCP)
 
 Humans and agents share **one command layer**. Prefer this skill whenever you
 read or mutate workspace tables.
 
 ## Preferred surfaces
 
-1. **MCP** (`@table/mcp`) — tools named `list_tables`, `get_table`, `query_rows`, …
-2. **HTTP** — `POST {TABLE_API_URL}/api/commands` with body `{ "command", "input" }`
+1. **MCP** (`@tabdo/mcp`) — tools named `list_tables`, `get_table`, `query_rows`, …
+2. **HTTP** — `POST {TABDO_API_URL}/api/commands` with body `{ "command", "input" }`
 3. Auth: session cookie (human) **or** `Authorization: Bearer agt_…` (agent)
 
 Never invent a second write path. REST routes under `/api/tables` call the same
@@ -60,8 +60,8 @@ server commands.
 ## Example (HTTP)
 
 ```bash
-curl -s "$TABLE_API_URL/api/commands" \
-  -H "Authorization: Bearer $TABLE_API_KEY" \
+curl -s "$TABDO_API_URL/api/commands" \
+  -H "Authorization: Bearer $TABDO_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"command":"queryRows","input":{"tableId":"…","limit":50}}'
 ```
@@ -69,11 +69,11 @@ curl -s "$TABLE_API_URL/api/commands" \
 ## Example (MCP env)
 
 ```
-TABLE_API_URL=http://localhost:3001
-TABLE_API_KEY=agt_…
+TABDO_API_URL=http://localhost:3001
+TABDO_API_KEY=agt_…
 ```
 
-Run: `pnpm --filter @table/mcp start` from the monorepo root.
+Run: `pnpm --filter @tabdo/mcp start` from the monorepo root.
 
 ## Docs
 

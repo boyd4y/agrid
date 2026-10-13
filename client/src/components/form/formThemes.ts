@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { FormThemeConfig, FormThemePresetId, FormThemeTokens } from "@table/shared";
+import type { FormThemeConfig, FormThemePresetId, FormThemeTokens } from "@tabdo/shared";
 
 export type ResolvedFormTheme = Required<
   Pick<

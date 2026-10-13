@@ -1,3 +1,4 @@
+import { useMemberOptions } from "@/hooks/useMemberOptions";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -15,14 +16,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { FormFieldControl } from "./FormFieldControls";
 import { formThemeStyle } from "./formThemes";
-import { api, type MemberOption } from "@/lib/api";
+import { api } from "@/lib/api";
 import type { CellValue, ColumnDef, FullTable } from "@/types/table";
 import type {
   FormFieldConfig,
   FormViewConfig,
   ResolvedFormField,
   ResolvedFormView,
-} from "@table/shared";
+} from "@tabdo/shared";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -45,7 +46,7 @@ function buildZod(
   for (const f of fields) {
     if (f.hidden) continue;
     const col = columnsById[f.columnId];
-    if (!col || col.type === "formula" || f.readOnly) continue;
+    if (!col || (col.type === "formula" || col.type === "rollup") || f.readOnly) continue;
     const label = f.label || col.name;
     let schema: z.ZodTypeAny;
     switch (col.type) {
@@ -55,6 +56,7 @@ function buildZod(
       case "checkbox":
         schema = z.boolean();
         break;
+      case "relation":
       case "multi_select":
         schema = z.array(z.string());
         break;
@@ -67,7 +69,7 @@ function buildZod(
         break;
     }
     if (f.required) {
-      if (col.type === "multi_select") {
+      if ((col.type === "multi_select" || col.type === "relation")) {
         schema = z.array(z.string()).min(1, `${label}为必填`);
       } else if (col.type === "checkbox") {
         schema = z.boolean();
@@ -112,7 +114,7 @@ function defaultValues(
   for (const f of fields) {
     if (f.hidden) continue;
     const col = columnsById[f.columnId];
-    if (!col || col.type === "formula") continue;
+    if (!col || (col.type === "formula" || col.type === "rollup")) continue;
     if (f.defaultValue !== undefined) {
       out[f.columnId] = f.defaultValue as CellValue;
       continue;
@@ -121,6 +123,7 @@ function defaultValues(
       case "checkbox":
         out[f.columnId] = false;
         break;
+      case "relation":
       case "multi_select":
         out[f.columnId] = [];
         break;
@@ -142,16 +145,14 @@ export function TableForm({
   highlightColumnId,
   onSelectField,
 }: Props) {
-  const [members, setMembers] = useState<MemberOption[]>([]);
+  const members = useMemberOptions();
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<-1 | number>(-1); // -1 = welcome
   const [welcomeDone, setWelcomeDone] = useState(false);
 
-  useEffect(() => {
-    api.listMembers().then((r) => setMembers(r.members ?? [])).catch(() => {});
-  }, []);
+
 
   const columnsById = useMemo(
     () => Object.fromEntries(table.columns.map((c) => [c.id, c])),
@@ -167,7 +168,7 @@ export function TableForm({
     layout: "classic",
     theme: { preset: "notion-light" },
     fields: table.columns
-      .filter((c) => c.type !== "formula" && !c.config?.hidden)
+      .filter((c) => c.type !== "formula" && c.type !== "rollup" && !c.config?.hidden)
       .map((c) => ({ columnId: c.id, required: c.name === "标题" })),
   };
 
@@ -217,7 +218,7 @@ export function TableForm({
       const cells: Record<string, CellValue> = {};
       for (const f of fields) {
         const col = columnsById[f.columnId];
-        if (!col || col.type === "formula" || f.readOnly) continue;
+        if (!col || (col.type === "formula" || col.type === "rollup") || f.readOnly) continue;
         let v = values[f.columnId] as CellValue;
         if (col.type === "text" && v === "") v = null;
         if (col.type === "number" && (v === "" || v === undefined)) v = null;
@@ -279,7 +280,7 @@ export function TableForm({
   const renderField = (f: ResolvedFormField, opts?: { large?: boolean }) => {
     const col = columnsById[f.columnId];
     if (!col) return null;
-    const readOnly = f.readOnly || col.type === "formula";
+    const readOnly = f.readOnly || (col.type === "formula" || col.type === "rollup");
     const large = opts?.large ?? layout === "focus";
     return (
       <FormField

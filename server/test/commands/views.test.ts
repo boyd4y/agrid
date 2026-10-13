@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { after, before, test } from "node:test";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
+const { db, client } = await import("../../src/db/index.js");
+const { organization } = await import("../../src/db/schema.js");
+const commands = await import("../../src/commands/index.js");
+const org = randomUUID(), foreign = randomUUID(), scope = { organizationId: org };
+let tableId: string, titleId: string, statusId: string;
+before(async () => {
+  await db.insert(organization).values([{ id: org, name: "View test", slug: org }, { id: foreign, name: "Other", slug: foreign }]);
+  tableId = (await commands.createTable({ ...scope, name: "View records" })).id;
+  titleId = (await commands.getTable({ ...scope, tableId })).columns[0].id;
+  statusId = (await commands.addColumn({ ...scope, tableId, name: "状态", type: "select", config: { options: [{ id: "todo", label: "待办", color: "blue" }] } })).id;
+});
+after(async () => { await db.delete(organization).where(eq(organization.id, org)); await db.delete(organization).where(eq(organization.id, foreign)); await client.end(); });
+test("concurrent creation/default changes retain one default and deletion chooses a stable fallback", async () => {
+  const created = await Promise.all([commands.createGridView({ ...scope, tableId }), commands.createBoardView({ ...scope, tableId })]);
+  let views = await commands.listViews({ ...scope, tableId });
+  assert.equal(views.filter((view) => view.isDefault).length, 1);
+  await Promise.all(created.map((view) => commands.setDefaultView({ ...scope, viewId: view.id })));
+  views = await commands.listViews({ ...scope, tableId });
+  assert.equal(views.filter((view) => view.isDefault).length, 1);
+  const selected = views.find((view) => view.isDefault)!;
+  await commands.deleteView({ ...scope, viewId: selected.id });
+  const [remaining] = await commands.listViews({ ...scope, tableId });
+  assert.equal(remaining.isDefault, true);
+  await assert.rejects(commands.deleteView({ ...scope, viewId: remaining.id }), /至少保留/);
+});
+test("rename/board patches persist, merge concurrent independent changes and enforce table/tenant boundaries", async () => {
+  const board = await commands.createBoardView({ ...scope, tableId, name: "看板" });
+  assert.equal((await commands.renameView({ ...scope, viewId: board.id, name: "  Sprint  " })).name, "Sprint");
+  await assert.rejects(commands.renameView({ ...scope, viewId: board.id, name: " " }));
+  await Promise.all([commands.updateBoardView({ ...scope, viewId: board.id, config: { visibleColumnIds: [titleId] } }), commands.updateBoardView({ ...scope, viewId: board.id, config: { statusColumnId: statusId, hideEmpty: false, density: "compact" } })]);
+  const result = (await commands.listViews({ ...scope, tableId })).find((view) => view.id === board.id)!;
+  assert.deepEqual(result.config, { visibleColumnIds: [titleId], statusColumnId: statusId, hideEmpty: false, density: "compact" });
+  await assert.rejects(commands.updateBoardView({ ...scope, viewId: board.id, config: { statusColumnId: titleId } }), /单选/);
+  await assert.rejects(commands.updateBoardView({ ...scope, viewId: board.id, config: { visibleColumnIds: [randomUUID()] } }), /不属于/);
+  for (const action of [() => commands.renameView({ organizationId: foreign, viewId: board.id, name: "侵入" }), () => commands.setDefaultView({ organizationId: foreign, viewId: board.id }), () => commands.updateBoardView({ organizationId: foreign, viewId: board.id, config: { hideEmpty: true } })]) await assert.rejects(action);
+});

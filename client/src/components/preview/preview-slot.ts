@@ -3,16 +3,20 @@ import type { FullTable } from "@/types/table";
 
 /**
  * Extensible UI slot for chat-mode right pane (Harness / Codex style).
- * Default slot is "table" — same DataTable + same data source as /app/tables/:id.
+ * Tabs open on demand; "table" shares DataTable and data with /app/tables/:id.
  * Register more kinds (diff, terminal, browser, …) via registerPreviewSlot.
  */
-export type PreviewSlotKind = "table" | "form" | (string & {});
+export type PreviewSlotKind = "table" | "form" | "automations" | (string & {});
+
+export type PreviewTab = { kind: PreviewSlotKind; tableId: string; viewId?: string | null };
 
 export type PreviewSlotContext = {
+  active?: boolean;
   tableId: string | null;
   /** Form view id when kind=form */
   viewId?: string | null;
   table: FullTable | null;
+  refreshToken?: number;
   setTable: (table: FullTable) => void;
   loading: boolean;
   error: string | null;
@@ -20,8 +24,6 @@ export type PreviewSlotContext = {
   tablesMeta: { id: string; name: string }[];
   onSelectTable: (id: string) => void;
   onCreateTable: () => void;
-  /** Collapse the right UI slot when provided by the host */
-  onCollapse?: () => void;
 };
 
 export type PreviewSlotRenderer = (ctx: PreviewSlotContext) => ReactNode;

@@ -1,9 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { readThreadResourceKey } from "@/lib/chat-resource";
 import {
   AuiIf,
   ThreadListItemMorePrimitive,
@@ -13,10 +15,9 @@ import {
   useAuiState,
 } from "@assistant-ui/react";
 import {
-  ArchiveIcon,
   Loader2Icon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
-  PencilIcon,
   PlusIcon,
   SearchIcon,
   TrashIcon,
@@ -26,25 +27,60 @@ import {
   Fragment,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type ComponentPropsWithoutRef,
   type FC,
 } from "react";
 
-export const ThreadList: FC = () => {
+export const ThreadList: FC<{ resourceKey?: string; showNew?: boolean }> = ({
+  resourceKey,
+  showNew = true,
+}) => {
   const [search, setSearch] = useState("");
-  const hasThreads = useAuiState((s) => s.threads.threadIds.length > 0);
+
+  useEffect(() => setSearch(""), [resourceKey]);
 
   return (
-    <ThreadListRoot>
-      <ThreadListNew />
-      {hasThreads && (
+    <ThreadListRoot className="h-full min-h-0 p-3">
+      <div
+        className="mb-2 flex items-center gap-1"
+        data-testid="chat-thread-list-actions"
+      >
         <ThreadListSearch value={search} onValueChange={setSearch} />
-      )}
-      <ThreadListItems searchQuery={hasThreads ? search : ""} />
+        {showNew && (
+          <ThreadListNew
+            size="icon"
+            className="size-8 shrink-0 justify-center px-0"
+            aria-label="新对话"
+            title="新对话"
+          >
+            <PlusIcon className="size-4" />
+          </ThreadListNew>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <ThreadListItems searchQuery={search} resourceKey={resourceKey} />
+      </div>
+      <ThreadListLoadMore />
     </ThreadListRoot>
+  );
+};
+
+const ThreadListLoadMore: FC = () => {
+  const aui = useAui();
+  const hasMore = useAuiState((s) => s.threads.hasMore);
+  const loading = useAuiState((s) => s.threads.isLoadingMore);
+  if (!hasMore) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={loading}
+      onClick={() => void aui.threads.loadMore()}
+    >
+      {loading ? "加载中…" : "更多对话"}
+    </Button>
   );
 };
 
@@ -56,7 +92,10 @@ export const ThreadListSearch = forwardRef<
   }
 >(({ className, value, onValueChange, ...props }, ref) => {
   return (
-    <div data-slot="aui_thread-list-search" className="relative px-0.5 py-1">
+    <div
+      data-slot="aui_thread-list-search"
+      className="relative min-w-0 flex-1 px-0.5 py-1"
+    >
       <SearchIcon
         data-slot="aui_thread-list-search-icon"
         className="text-muted-foreground pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2"
@@ -83,26 +122,32 @@ export const ThreadListRoot: FC<
   return (
     <ThreadListPrimitive.Root
       data-slot="aui_thread-list-root"
-      className={cn("flex flex-col gap-0.5", className)}
+      className={cn("flex min-h-full flex-col gap-0.5", className)}
       {...props}
     />
   );
 };
 
 export const ThreadListItems: FC<
-  ComponentPropsWithoutRef<"div"> & { searchQuery?: string }
-> = ({ className, searchQuery = "", ...props }) => {
+  ComponentPropsWithoutRef<"div"> & {
+    searchQuery?: string;
+    resourceKey?: string;
+  }
+> = ({ className, searchQuery = "", resourceKey, ...props }) => {
   return (
     <div
       data-slot="aui_thread-list-items"
-      className={cn("flex flex-col gap-0.5", className)}
+      className={cn("flex min-h-full flex-col gap-0.5", className)}
       {...props}
     >
       <AuiIf condition={(s) => s.threads.isLoading}>
         <ThreadListSkeleton />
       </AuiIf>
       <AuiIf condition={(s) => !s.threads.isLoading}>
-        <ThreadListItemGroups searchQuery={searchQuery} />
+        <ThreadListItemGroups
+          searchQuery={searchQuery}
+          resourceKey={resourceKey}
+        />
       </AuiIf>
     </div>
   );
@@ -113,9 +158,9 @@ const dateGroupLabel = (
   startOfToday: number,
   startOfYesterday: number,
 ): string => {
-  if (!date || date.getTime() >= startOfToday) return "Today";
-  if (date.getTime() >= startOfYesterday) return "Yesterday";
-  return "Earlier";
+  if (!date || date.getTime() >= startOfToday) return "今天";
+  if (date.getTime() >= startOfYesterday) return "昨天";
+  return "更早";
 };
 
 const startOfLocalDay = (date: Date) =>
@@ -160,7 +205,7 @@ export type ThreadListGroup = { label: string; indices: number[] };
  * or while the local day start is unknown during server render and hydration,
  * in which case `filteredIndices` keeps the runtime order.
  */
-export const useThreadListGroups = (searchQuery = "") => {
+export const useThreadListGroups = (searchQuery = "", resourceKey?: string) => {
   const threadIds = useAuiState((s) => s.threads.threadIds);
   const threadItems = useAuiState((s) => s.threads.threadItems);
 
@@ -172,13 +217,13 @@ export const useThreadListGroups = (searchQuery = "") => {
     const dates = threadIds.map((id) => itemsById.get(id)?.lastMessageAt);
     const filteredIndices = threadIds
       .map((id, index) => ({ id, index }))
-      .filter(
-        ({ id }) =>
-          !query ||
-          (itemsById.get(id)?.title || "New Chat")
-            .toLowerCase()
-            .includes(query),
-      )
+      .filter(({ id }) => {
+        const item = itemsById.get(id);
+        if (!item || item.status !== "regular") return false;
+        if (resourceKey && readThreadResourceKey(item) !== resourceKey)
+          return false;
+        return !query || (item.title || "新对话").toLowerCase().includes(query);
+      })
       .map(({ index }) => index);
     if (
       startOfToday === undefined ||
@@ -209,23 +254,44 @@ export const useThreadListGroups = (searchQuery = "") => {
       }
     }
     return { threadIds, filteredIndices, groups: result };
-  }, [threadIds, threadItems, query, startOfToday]);
+  }, [threadIds, threadItems, query, startOfToday, resourceKey]);
 };
 
-const ThreadListItemGroups: FC<{ searchQuery?: string }> = ({
-  searchQuery = "",
-}) => {
-  const { threadIds, filteredIndices, groups } =
-    useThreadListGroups(searchQuery);
+const ThreadListItemGroups: FC<{
+  searchQuery?: string;
+  resourceKey?: string;
+}> = ({ searchQuery = "", resourceKey }) => {
+  const { threadIds, filteredIndices, groups } = useThreadListGroups(
+    searchQuery,
+    resourceKey,
+  );
   const query = searchQuery.trim();
 
-  if (query && filteredIndices.length === 0) {
+  if (filteredIndices.length === 0) {
     return (
       <div
         data-slot="aui_thread-list-empty"
-        className="text-muted-foreground px-2.5 py-4 text-sm"
+        data-testid="thread-list-empty"
+        className="flex flex-1 flex-col items-center justify-center gap-3 px-3 py-8 text-center"
       >
-        没有匹配的对话
+        <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          {query ? (
+            <SearchIcon className="size-5" />
+          ) : (
+            <MessageSquareIcon className="size-5" />
+          )}
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium">
+            {query ? "没有匹配的对话" : "还没有对话"}
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {query ? "试试其他关键词" : "新建对话，开始与智能体交流"}
+          </p>
+        </div>
+        {!query && (
+          <ThreadListNew variant="outline" className="justify-center" />
+        )}
       </div>
     );
   }
@@ -298,11 +364,7 @@ ThreadListNew.displayName = "ThreadListNew";
 
 const ThreadListSkeleton: FC = () => {
   return (
-    <div
-      role="status"
-      aria-label="加载对话"
-      className="flex flex-col gap-0.5"
-    >
+    <div role="status" aria-label="加载对话" className="flex flex-col gap-0.5">
       {Array.from({ length: 5 }, (_, i) => (
         <div
           key={i}
@@ -322,169 +384,79 @@ const ThreadListSkeleton: FC = () => {
 
 export const ThreadListItem: FC = () => {
   const isRunning = useAuiState((s) => s.threadListItem.isRunning);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const restoreFocusRef = useRef(false);
-
-  useEffect(() => {
-    if (isRenaming || !restoreFocusRef.current) return;
-    restoreFocusRef.current = false;
-    triggerRef.current?.focus();
-  }, [isRenaming]);
 
   return (
     <ThreadListItemPrimitive.Root
       data-slot="aui_thread-list-item"
       className="group hover:bg-muted focus-visible:bg-muted data-active:bg-muted has-focus-visible:bg-muted has-data-[state=open]:bg-muted relative flex h-8 items-center rounded-md transition-colors focus-visible:outline-none"
     >
-      {isRenaming ? (
-        <ThreadListItemRename
-          onDone={(restoreFocus) => {
-            restoreFocusRef.current = restoreFocus;
-            setIsRenaming(false);
-          }}
-        />
-      ) : (
-        <ThreadListItemPrimitive.Trigger
-          ref={triggerRef}
-          data-slot="aui_thread-list-item-trigger"
-          className="focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none group-hover:pe-9 group-has-focus-visible:pe-9 group-has-data-[state=open]:pe-9 group-data-active:pe-9 focus-visible:ring-1"
+      <ThreadListItemPrimitive.Trigger
+        data-slot="aui_thread-list-item-trigger"
+        className="focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none group-hover:pe-9 group-has-focus-visible:pe-9 group-has-data-[state=open]:pe-9 group-data-active:pe-9 focus-visible:ring-1"
+      >
+        {isRunning && (
+          <Loader2Icon
+            aria-hidden
+            data-slot="aui_thread-list-item-running"
+            className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin"
+          />
+        )}
+        <span
+          data-slot="aui_thread-list-item-title"
+          className="min-w-0 flex-1 truncate"
         >
-          {isRunning && (
-            <Loader2Icon
-              aria-hidden
-              data-slot="aui_thread-list-item-running"
-              className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin"
-            />
-          )}
-          <span
-            data-slot="aui_thread-list-item-title"
-            className="min-w-0 flex-1 truncate"
-          >
-            <ThreadListItemPrimitive.Title fallback="新对话" />
-          </span>
-          {isRunning && <span className="sr-only">Running</span>}
-        </ThreadListItemPrimitive.Trigger>
-      )}
-      <ThreadListItemMore onRename={() => setIsRenaming(true)} />
+          <ThreadListItemPrimitive.Title fallback="新对话" />
+        </span>
+        {isRunning && <span className="sr-only">Running</span>}
+      </ThreadListItemPrimitive.Trigger>
+      <ThreadListItemMore />
     </ThreadListItemPrimitive.Root>
   );
 };
 
-const ThreadListItemRename: FC<{
-  onDone: (restoreFocus: boolean) => void;
-}> = ({ onDone }) => {
+const ThreadListItemMore: FC = () => {
   const aui = useAui();
-  const title = useAuiState((s) => s.threadListItem.title) ?? "";
-  const [value, setValue] = useState(title);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const settledRef = useRef(false);
-
-  useEffect(() => {
-    inputRef.current?.select();
-  }, []);
-
-  const commit = (restoreFocus: boolean) => {
-    if (settledRef.current) return;
-    settledRef.current = true;
-
-    const next = value.trim();
-    if (!next || next === title) {
-      onDone(restoreFocus);
-      return;
-    }
-
-    // Deferred so a synchronous throw lands on the rejection path too.
-    Promise.resolve()
-      .then(() => aui.threadListItem.rename(next))
-      .then(
-        () => onDone(restoreFocus),
-        () => {
-          settledRef.current = false;
-          if (restoreFocus) inputRef.current?.focus();
-        },
-      );
-  };
-
-  const cancel = () => {
-    if (settledRef.current) return;
-    settledRef.current = true;
-    onDone(true);
-  };
-
+  const [deleteOpen, setDeleteOpen] = useState(false);
   return (
-    <Input
-      ref={inputRef}
-      autoFocus
-      data-slot="aui_thread-list-item-rename"
-      aria-label="Rename thread"
-      value={value}
-      className="h-7 min-w-0 flex-1 ps-2.5 pe-9 text-sm"
-      onChange={(event) => setValue(event.target.value)}
-      onBlur={() => commit(false)}
-      onKeyDown={(event) => {
-        if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)
-          return;
-        if (event.key === "Enter") {
-          event.preventDefault();
-          commit(true);
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          cancel();
-        }
-      }}
-    />
-  );
-};
-
-const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
-  return (
-    <ThreadListItemMorePrimitive.Root sharedFocusGroup>
-      <ThreadListItemMorePrimitive.Trigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          data-slot="aui_thread-list-item-more"
-          className="data-[state=open]:bg-accent absolute end-1.5 top-1/2 size-6 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:opacity-100"
-        >
-          <MoreHorizontalIcon className="size-3.5" />
-          <span className="sr-only">More options</span>
-        </Button>
-      </ThreadListItemMorePrimitive.Trigger>
-      <ThreadListItemMorePrimitive.Content
-        side="right"
-        align="start"
-        sideOffset={6}
-        data-slot="aui_thread-list-item-more-content"
-        className="bg-popover text-popover-foreground data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl border p-1.5"
-      >
-        <ThreadListItemMorePrimitive.Item
-          data-slot="aui_thread-list-item-more-item"
-          className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
-          onSelect={onRename}
-        >
-          <PencilIcon className="size-4" />
-          Rename
-        </ThreadListItemMorePrimitive.Item>
-        <ThreadListItemPrimitive.Archive asChild>
-          <ThreadListItemMorePrimitive.Item
-            data-slot="aui_thread-list-item-more-item"
-            className="hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
+    <>
+      <ThreadListItemMorePrimitive.Root sharedFocusGroup>
+        <ThreadListItemMorePrimitive.Trigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            data-slot="aui_thread-list-item-more"
+            className="data-[state=open]:bg-accent absolute end-1.5 top-1/2 size-6 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:opacity-100"
           >
-            <ArchiveIcon className="size-4" />
-            Archive
-          </ThreadListItemMorePrimitive.Item>
-        </ThreadListItemPrimitive.Archive>
-        <ThreadListItemPrimitive.Delete asChild>
+            <MoreHorizontalIcon className="size-3.5" />
+            <span className="sr-only">对话操作</span>
+          </Button>
+        </ThreadListItemMorePrimitive.Trigger>
+        <ThreadListItemMorePrimitive.Content
+          side="right"
+          align="start"
+          sideOffset={6}
+          data-slot="aui_thread-list-item-more-content"
+          className="popover-surface bg-popover text-popover-foreground data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 overflow-hidden rounded-xl border p-1.5"
+        >
           <ThreadListItemMorePrimitive.Item
+            onSelect={() => setDeleteOpen(true)}
             data-slot="aui_thread-list-item-more-item"
             className="text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
           >
             <TrashIcon className="size-4" />
-            Delete
+            删除
           </ThreadListItemMorePrimitive.Item>
-        </ThreadListItemPrimitive.Delete>
-      </ThreadListItemMorePrimitive.Content>
-    </ThreadListItemMorePrimitive.Root>
+        </ThreadListItemMorePrimitive.Content>
+      </ThreadListItemMorePrimitive.Root>
+      <DeleteConfirmation
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="删除对话？"
+        description="此对话及全部消息将被永久删除，无法恢复。"
+        onConfirm={async () => {
+          await aui.threadListItem.delete();
+        }}
+      />
+    </>
   );
 };

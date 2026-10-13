@@ -1,0 +1,298 @@
+import { createUIMessageStream, toUIMessageStream, stepCountIs, type TextStreamPart, type ToolSet, type UIMessage } from "ai";
+import type { HarnessAgentSession, HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
+import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
+import type { InMemoryFs } from "just-bash";
+import type { Actor } from "../auth/actor.js";
+import type { ChatActivity, AgentRunStatus } from "@tabdo/shared";
+import type { HarnessId } from "../ai/model.js";
+import { chatRunLimits } from "./limits.js";
+import { chatErrorText, normalizeChatToolErrors } from "../ai/errors.js";
+import { createNativeAgent, openNativeSandbox } from "./runtime.js";
+import type { PiModelMetadata } from "./model-metadata.js";
+import { nativeHostTools, nativeToolDenial } from "./tools.js";
+import { completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease, withRuntimeLease, type RuntimeRecord, type RuntimeLease } from "./store.js";
+import { recordRunActivity, failNativeRun, runCancellationRequested, type AgentRun } from "./runs.js";
+import { snapshotWorkspace } from "./workspace.js";
+import { saveMessageInTransaction } from "../chat/store.js";
+import { registerNativeRun } from "./drain.js";
+
+function hasSavedPiJournal(record: RuntimeRecord): boolean {
+  if (!record.resumeState) return true;
+  const name = (record.resumeState.data as { sessionFileName?: unknown })?.sessionFileName;
+  if (typeof name !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.jsonl?$/.test(name)) return false;
+  if (record.mode === "sandbox") return true; // Remote lookup still must succeed before invocation.
+  const file = record.workspace?.find((entry) => entry.type === "file" && entry.path.endsWith(`/${name}`));
+  if (!file?.content) return false;
+  try {
+    const bytes = Buffer.from(file.content, "base64");
+    if (bytes.toString("base64") !== file.content) return false;
+    const entries = bytes.toString("utf8").trim().split("\n").map((line) => JSON.parse(line));
+    return entries.length > 1 && entries[0]?.type === "session";
+  } catch { return false; }
+}
+
+/** UI transport around the official agent; no application-owned tool loop or history replay. */
+export function createNativeChatStream(options: {
+  actor: Actor;
+  lease: RuntimeLease;
+  record: RuntimeRecord;
+  run: AgentRun;
+  harness: HarnessId;
+  modelId?: string;
+  piModel?: PiModelMetadata;
+  instructions: string;
+  agentsDocument?: string;
+  tools: ToolSet;
+  disabledTools?: readonly string[];
+  skills: readonly HarnessV1Skill[];
+  prompt: string;
+  messages: UIMessage[];
+  signal?: AbortSignal;
+  metadata: Record<string, unknown>;
+}) {
+  return createUIMessageStream({
+    onError: chatErrorText,
+    execute: async ({ writer }) => {
+      const releaseNativeRun = registerNativeRun();
+      const control = new AbortController();
+      const signal = AbortSignal.any([control.signal, ...(options.signal ? [options.signal] : [])]);
+      let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: InMemoryFs | undefined;
+      let step = 0, completedTools = 0, activity: ChatActivity | undefined, errorText: string | undefined;
+      let streamedStep = 0, modelActive = false, expectedOutputStep = 1;
+      let cancelled = false, timedOut = false, lostLease = false, closed = false;
+      // Set before calling the SDK, not from callbacks or completed-tool counts.
+      let invocationStarted = false;
+      let safeStartupState = options.harness === "pi" && hasSavedPiJournal(options.record);
+      let timeoutReason = "本轮执行超时";
+      let stepDeadline: ReturnType<typeof setTimeout> | undefined;
+      let firstOutputDeadline: ReturnType<typeof setTimeout> | undefined;
+      let chunkDeadline: ReturnType<typeof setTimeout> | undefined;
+      let heartbeatBusy = false, lastRenewal = Date.now();
+      let phaseWrites = Promise.resolve();
+      const pendingTools = new Set<Promise<unknown>>();
+      const activeTools = new Map<string, string>();
+      const limits = chatRunLimits();
+      const abortTimeout = (reason: string) => {
+        if (signal.aborted) return;
+        timedOut = true;timeoutReason = reason;control.abort(new DOMException(reason, "TimeoutError"));
+      };
+      // Harness 1.0.149 discards the inherited streamText timeout option.
+      // Use its official lifecycle/stream events to bound the AbortSignal instead.
+      const timeout = setTimeout(() => abortTimeout("本轮执行超时"), limits.timeout.totalMs);
+      const clearModelDeadlines = () => { clearTimeout(firstOutputDeadline);clearTimeout(chunkDeadline); };
+      const waitForModelOutput = (nextStep: number) => {
+        clearModelDeadlines();modelActive = true;expectedOutputStep = nextStep;
+        firstOutputDeadline = setTimeout(() => abortTimeout("模型首个输出等待超时"), limits.timeout.firstChunkMs);
+      };
+      const modelOutput = () => {
+        if (!modelActive || streamedStep !== expectedOutputStep) return;
+        clearTimeout(firstOutputDeadline);clearTimeout(chunkDeadline);
+        chunkDeadline = setTimeout(() => abortTimeout("模型输出流超时"), limits.timeout.chunkMs);
+      };
+      const pollMs = Math.max(200, Math.min(10_000, Number(process.env.AI_RUN_POLL_MS) || 2000));
+      const heartbeat = setInterval(async () => {
+        if (closed || heartbeatBusy) return;
+        heartbeatBusy = true;
+        try {
+          if (await runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
+          if (Date.now() - lastRenewal >= 15_000) {
+            if (!await renewRuntimeLease(options.lease)) { lostLease = true;control.abort(new Error("运行已被其他实例接管")); }
+            lastRenewal = Date.now();
+          }
+        } catch (error) { errorText = chatErrorText(error);control.abort(error); }
+        finally { heartbeatBusy = false; }
+      }, pollMs);
+
+      const report = (phase: ChatActivity["phase"], toolName?: string) => {
+        if (activity?.phase === phase && activity.toolName === toolName && activity.step === step && activity.completedTools === completedTools) return phaseWrites;
+        activity = { threadId: options.lease.threadId, runId: options.run.id, phase, step, startedAt: options.run.startedAt.getTime(), updatedAt: Date.now(), toolName, completedTools };
+        const update = activity;
+        phaseWrites = phaseWrites.then(async () => {
+          await recordRunActivity(options.lease, options.run.id, update);
+          writer.write({ type: "data-chat-activity", data: update, transient: true });
+        }).catch((error) => { errorText = chatErrorText(error);control.abort(error); });
+        return phaseWrites;
+      };
+      const { tools, projectErrors, failures } = nativeHostTools(options.tools, async (execute) => {
+          signal.throwIfAborted();
+          const operation = withRuntimeLease(options.lease, async () => {
+            signal.throwIfAborted();
+            return execute();
+          });
+          pendingTools.add(operation);
+          try { return await operation; } finally { pendingTools.delete(operation); }
+      });
+      const lifecycle: NonNullable<Parameters<typeof createNativeAgent>[0]["lifecycle"]> = {
+        onStart: async () => { await report("waiting-model"); },
+        onStepStart: async ({ stepNumber }) => { clearTimeout(stepDeadline);stepDeadline = setTimeout(() => abortTimeout("本轮步骤执行超时"), limits.timeout.stepMs);step = stepNumber + 1;await report("waiting-model"); },
+        onLanguageModelCallStart: async () => { waitForModelOutput(step);await report("waiting-model"); },
+        onLanguageModelCallEnd: () => { modelActive = false;clearModelDeadlines(); },
+        onToolExecutionStart: async ({ toolCall }) => { modelActive = false;clearModelDeadlines();activeTools.set(toolCall.toolCallId, toolCall.toolName);await report("tool", toolCall.toolName); },
+        onToolExecutionEnd: async ({ toolCall, toolOutput }) => {
+          activeTools.delete(toolCall.toolCallId);
+          if (toolOutput.type === "tool-result" && !nativeToolDenial(toolOutput.output) && !failures.has(toolCall.toolCallId)) completedTools++;
+          const remaining = activeTools.values().next().value;
+          await report(remaining ? "tool" : "waiting-model", remaining);
+        },
+        onStepEnd: ({ toolResults }) => {
+          modelActive = false;clearTimeout(stepDeadline);clearModelDeadlines();
+          for (const result of toolResults) {
+            if (failures.has(result.toolCallId) || nativeToolDenial(result.output)) continue;
+            if (["create_goal", "update_goal", "update_plan"].includes(result.toolName)) continue;
+            if (!/^(create_|update_|rename_|add_|delete_|set_|remove_|reorder_|move_card)/.test(result.toolName)) continue;
+            const output = result.output as { affectedTableIds?: string[]; tableId?: string; id?: string } | undefined;
+            const ids = output?.affectedTableIds ?? (output?.tableId ? [output.tableId] : result.toolName === "create_table" && output?.id ? [output.id] : undefined);
+            if (ids?.length === 0) continue;
+            writer.write({ type: "data-table-mutated", data: { tableIds: ids }, transient: true });
+          }
+          // Pi reports the next model lifecycle only once it has output. Bound
+          // the wait between native steps as well as the visible output stream.
+          if (toolResults.length) {
+            waitForModelOutput(step + 1);
+            stepDeadline = setTimeout(() => abortTimeout("本轮步骤执行超时"), limits.timeout.stepMs);
+          }
+        },
+      };
+
+      const cleanup = async () => {
+        try {
+          closed = true;clearTimeout(timeout);clearInterval(heartbeat);clearTimeout(stepDeadline);clearModelDeadlines();
+          await Promise.allSettled([...pendingTools]);
+          // Pi stop before its first native turn may return data:{}; never commit it.
+          if (session && !invocationStarted) await session.stop().catch((error) => console.error("agent.session.cleanup", chatErrorText(error)));
+          if (sandbox) await Promise.resolve(sandbox.stop()).catch((error) => console.error("agent.sandbox.stop", chatErrorText(error)));
+          await releaseRuntimeLease(options.lease);
+        } finally { releaseNativeRun(); }
+      };
+      const persist = async (message: UIMessage, status: AgentRunStatus) => {
+        await Promise.allSettled([...pendingTools]);
+        await phaseWrites;
+        await report("persisting");
+        if (!session) throw new Error("原生会话未能启动");
+        const resumeState = await session.stop();
+        const workspace = fs ? await snapshotWorkspace(fs) : null;
+        if (options.harness === "pi" && !hasSavedPiJournal({ ...options.record, resumeState, workspace }))
+          throw new Error("会话结果未完整保存，历史消息已保留；请新建对话继续。");
+        // Pi's native stop saves its own journal. Missing it must not become empty history on reload.
+        if (fs && !fs.getAllPaths().some((path) => path.endsWith(".jsonl"))) throw new Error("原生会话日志未保存，不能继续此对话；请核对已完成的数据修改");
+        const { id, ...content } = message;
+        await completeRuntimeTurn(options.lease, options.actor, options.record.id, {
+          resumeState, workspace, sandboxId: sandbox!.id,
+          userMessageId: options.run.userMessageId, assistantMessageId: id,
+          status: status === "completed" ? "ready" : status === "failed" ? "failed" : "interrupted", error: errorText,
+        }, { id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content }, { id: options.run.id, status, error: errorText });
+        await report("finished");
+      };
+      const startupFailure = async (error: unknown) => {
+        errorText = chatErrorText(error);
+        cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
+        const uninvoked = !invocationStarted && safeStartupState;
+        const text = uninvoked ? `${cancelled ? "本轮已停止" : `本轮未能启动：${errorText}`}。本轮没有执行操作，可以重新发送消息。`
+          : `本轮未能完成：${errorText}。已提交的数据修改会保留，请核对后再继续。`;
+        const message: UIMessage = { id: options.run.assistantMessageId, role: "assistant", parts: [{ type: "text", text }] };
+        if (uninvoked) {
+          await phaseWrites;
+          await completeUninvokedPiRun(options.lease, options.actor, options.record.id,
+            { id: message.id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: message.parts } },
+            { id: options.run.id, status: cancelled ? "cancelled" : "failed", error: errorText });
+          await report("finished");
+        } else if (session && invocationStarted) {
+          try { await persist(message, cancelled ? "cancelled" : "failed"); }
+          catch (checkpointError) { errorText = chatErrorText(checkpointError);await failNativeRun(options.lease, options.run.id, errorText); }
+        } else {
+          await withRuntimeLease(options.lease, (tx) => saveMessageInTransaction(tx, options.lease.threadId, options.actor, { id: message.id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: message.parts } }, true));
+          await failNativeRun(options.lease, options.run.id, errorText);
+          await report("finished");
+        }
+        writer.write({ type: "start", messageId: message.id });
+        writer.write({ type: "text-start", id: "run-error" });
+        writer.write({ type: "text-delta", id: "run-error", delta: text });
+        writer.write({ type: "text-end", id: "run-error" });
+        writer.write({ type: "finish" });
+      };
+
+      try {
+        await report("starting");
+        signal.throwIfAborted();
+        if (options.harness === "pi" && options.record.resumeState && !safeStartupState)
+          throw new Error("此对话暂时无法继续，历史消息已保留；请新建对话继续。");
+        const agent = createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
+          instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
+          runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
+          stopWhen: stepCountIs(limits.steps),
+        });
+        let opened: Awaited<ReturnType<typeof openNativeSandbox>>;
+        try { opened = await openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
+        catch (error) {
+          // Local restore failures describe damaged history, not a retryable submission.
+          if (options.record.resumeState && options.record.mode === "local" && !signal.aborted) safeStartupState = false;
+          throw error;
+        }
+        sandbox = opened.sandbox;fs = opened.fs;
+        try { session = await agent.createSession({ sessionId: options.record.sessionId, sandboxSession: sandbox, abortSignal: signal,
+          ...(options.record.resumeState ? { resumeFrom: options.record.resumeState as HarnessAgentResumeSessionState } : {}),
+        }); } catch (error) {
+          // A resumed session that fails SDK validation/start is not proven intact.
+          if (options.record.resumeState && !signal.aborted) safeStartupState = false;
+          throw error;
+        }
+        const continuing = session.hasUnfinishedTurn();
+        if (continuing && !/^(继续|继续执行|continue)$/i.test(options.prompt.trim())) throw new Error("上一轮尚未完成，请先发送“继续执行”恢复原生 turn");
+        waitForModelOutput(1);
+        stepDeadline = setTimeout(() => abortTimeout("本轮步骤执行超时"), limits.timeout.stepMs);
+        if (await runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
+        signal.throwIfAborted();
+        invocationStarted = true;
+        const result = continuing ? await agent.continueStream({ session, abortSignal: signal }) : await agent.stream({ session, prompt: options.prompt, abortSignal: signal });
+        let finalStepHasText = false, terminalWritten = false;
+        const terminalText = (controller: TransformStreamDefaultController<TextStreamPart<ToolSet>>, text: string) => {
+          terminalWritten = true;
+          controller.enqueue({ type: "text-start", id: "run-note" });
+          controller.enqueue({ type: "text-delta", id: "run-note", text: `\n\n${text}` });
+          controller.enqueue({ type: "text-end", id: "run-note" });
+        };
+        const stream = result.stream.pipeThrough(projectErrors()).pipeThrough(normalizeChatToolErrors()).pipeThrough(new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
+          async transform(part, controller) {
+            if (part.type === "start-step") { streamedStep++;finalStepHasText = false; }
+            if (["text-delta", "reasoning-delta", "tool-input-delta"].includes(part.type)) modelOutput();
+            if (part.type === "text-delta" && part.text.trim()) { finalStepHasText = true;await report("writing"); }
+            if (part.type === "reasoning-delta") await report("reasoning");
+            if (part.type === "finish" || part.type === "abort" || part.type === "error") { modelActive = false;clearModelDeadlines();clearTimeout(stepDeadline); }
+            if (part.type === "error") errorText = chatErrorText(part.error);
+            if (part.type === "abort") {
+              cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
+              errorText ||= timedOut ? timeoutReason : lostLease ? "运行已被接管" : "已停止执行";
+              if (!terminalWritten) terminalText(controller, `${errorText}。已完成的工具结果会保留。`);
+            }
+            if (part.type === "error" && !terminalWritten) terminalText(controller, `本轮未能完成：${errorText}。已完成的工具结果会保留。`);
+            if (part.type === "finish" && !finalStepHasText && !terminalWritten) {
+              if (session!.hasUnfinishedTurn()) terminalText(controller, "本轮已暂停，已有工具结果已保留。发送“继续执行”继续剩余步骤。");
+              else {
+                errorText ||= "模型未返回正文，本轮未完成";
+                terminalText(controller, `${errorText}。已完成的工具结果会保留。`);
+              }
+            }
+            controller.enqueue(part);
+          },
+        }));
+        writer.merge(toUIMessageStream({ stream, tools: agent.tools, originalMessages: options.messages,
+          generateMessageId: () => options.run.assistantMessageId, onError: chatErrorText,
+          messageMetadata: ({ part }) => part.type === "finish-step" ? { ...options.metadata, runId: options.run.id } : undefined,
+          onFinish: async ({ responseMessage, outcome, isCancelled }) => {
+            try {
+              if (isCancelled) { cancelled = true;control.abort(new DOMException("客户端停止执行", "AbortError")); }
+              const status: AgentRunStatus = cancelled || options.signal?.aborted ? "cancelled" : errorText || timedOut || lostLease || outcome.status === "failed" ? "failed" : session!.hasUnfinishedTurn() ? "suspended" : "completed";
+              await persist(responseMessage, status);
+            } catch (error) {
+              errorText = chatErrorText(error);
+              await failNativeRun(options.lease, options.run.id, errorText).catch(() => {});
+              throw error;
+            } finally { await cleanup(); }
+          },
+        }));
+      } catch (error) {
+        try { await startupFailure(error); } finally { await cleanup(); }
+      }
+    },
+  });
+}

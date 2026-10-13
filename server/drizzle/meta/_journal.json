@@ -43,6 +43,111 @@
       "when": 1760190000000,
       "tag": "0005_table_views",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791816000000,
+      "tag": "0006_automation_queue",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791830000000,
+      "tag": "0007_atomic_automation_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791838000000,
+      "tag": "0008_optional_agent_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791840000000,
+      "tag": "0009_chat_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791851674000,
+      "tag": "0010_remove_chat_archiving",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791853200000,
+      "tag": "0011_table_workspace_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791853300000,
+      "tag": "0012_table_relations",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791860144552,
+      "tag": "0013_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791860144553,
+      "tag": "0014_report_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791862000000,
+      "tag": "0015_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791862100000,
+      "tag": "0016_skill_bundles",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791862200000,
+      "tag": "0017_skill_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791862300000,
+      "tag": "0018_native_agent_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791862400000,
+      "tag": "0019_agent_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791862500000,
+      "tag": "0020_view_preferences",
+      "breakpoints": true
     }
   ]
 }
