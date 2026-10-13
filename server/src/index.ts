@@ -16,6 +16,7 @@ import { skillsRoute } from "./routes/skills.js";
 import { auth } from "./auth/index.js";
 import { listHarnesses } from "./ai/model.js";
 import { client } from "./db/index.js";
+import { assertSchemaReady, checkSchemaReady } from "./db/schema-ready.js";
 import { activeNativeRunCount, beginNativeDrain, nativeDrainStarted, registerNativeRun, waitForNativeDrain } from "./harness/drain.js";
 
 const app = new Hono();
@@ -38,16 +39,17 @@ app.use(
   })
 );
 
-app.get("/api/health", (c) =>
-  c.json({
-    ok: true,
+app.get("/api/health", async (c) => {
+  const schema = await checkSchemaReady();
+  return c.json({
+    ok: schema.ok,
     service: "tabdo",
     multiHarness: true,
     auth: true,
-    notionStyle: true,
     automations: true,
-  })
-);
+    schema,
+  }, schema.ok ? 200 : 503);
+});
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
@@ -76,6 +78,7 @@ app.onError((err, c) => {
 });
 
 const port = Number(process.env.PORT ?? 3001);
+await assertSchemaReady();
 console.log(`API listening on http://localhost:${port}`);
 {
   const hs = listHarnesses();

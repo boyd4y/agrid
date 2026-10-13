@@ -85,6 +85,17 @@ async function main() {
 
   console.log("Migrations complete");
 
+  const [{ icon }] = await migrationClient`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'tables' AND column_name = 'icon'
+    ) AS icon
+  `;
+  const [{ chat }] = await migrationClient`
+    SELECT to_regclass('public.chat_threads') IS NOT NULL AS chat
+  `;
+  console.log("Schema columns check: tables.icon=", icon, "chat_threads=", chat);
+
   await migrationClient.end();
 }
 
