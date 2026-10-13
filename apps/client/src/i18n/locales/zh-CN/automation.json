@@ -85,5 +85,15 @@
   "backToList": "返回列表",
   "readingSource": "读取来源字段…",
   "noRunRecords": "还没有运行记录。",
-  "pickTriggerTable": "选择触发自动化的表格"
+  "pickTriggerTable": "选择触发自动化的表格",
+  "creationStep": "第 {{step}} 步，共 2 步",
+  "searchSource": "搜索表格…",
+  "noMatchingSource": "没有找到匹配的表格",
+  "sourceSelected": "已选中",
+  "selectedSource": "已选择：{{name}}",
+  "nextStep": "下一步",
+  "backToSource": "返回来源",
+  "changeSourceHint": "原来源的草稿会保留；切换来源将重新配置。",
+  "sourceLoadFailed": "来源字段加载失败",
+  "noAvailableSources": "还没有可用表格。"
 }

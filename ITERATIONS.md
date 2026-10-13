@@ -257,3 +257,7 @@
 2026-10-14 shadcn CLI网络与monorepo入口：复现最新版4.21.4在HTTP/HTTPS代理与SOCKS all_proxy同时存在时docs/info read ECONNRESET；官方registry0.1.3优先SOCKS且HTTPS自定义connector未封装TLS，本机隔离SOCKS fixture观察到明文GET。仅在存在有效HTTP代理时，workspace入口为CLI子进程清除ALL_PROXY/all_proxy，保留地址/凭证/NO_PROXY，不改用户全局设置、不硬编码代理；固定官方CLI版本，根pnpm shadcn默认apps/client、shadcn:ui选择packages/ui。原components.json配置经真实CLI验证正确，无需改样式或组件；两个包docs select/input/button、info共享UI/CSS/utils解析均通过，node语法与版本检查、offline frozen install通过。锁文件保留已有包版本、既有workspace依赖与平台元数据，仅新增CLI闭包及其共享依赖必要非optional标记。说明与upstream修复后移除路径见docs/shadcn-cli.md；SOCKS-only环境不擅自绕过。未操作DB/模型、服务或截图。
 
 2026-10-14 筛选控件尺寸与上下文：字段/运算符/所有类型值输入统一176×32，关联和人员选择器使用公共size=sm、日期填满值输入宽度；自动化条件复用相同尺寸，触发值/动作值使用compact控件并按上下文伸展宽度，常规表单使用36px/typeform保持原大尺寸。补公共DatePicker/表单选择器size接口，长名称/日期占位截断，保留原输入/选择行为。真实隔离filters浏览器逐类型量测三个控件宽高相等并回归筛选通过；无截图或用户数据修改。
+
+2026-10-14 自动化创建交互：来源独立为紧凑第一步，搜索名称/描述、表格图标摘要、明确下一步；第二步显示来源并可返回，同来源保留全部Editor草稿、换来源重建配置且提前提示。已保存规则来源固定，source参数入口保留；加载错误明确重试、真实保存中禁用返回/取消且阻止重复提交、保存失败保留草稿。现有大builders仅更新对应入口选择器；新增独立浏览器完整证明搜索/键盘/草稿/换源/400加载与保存重试/数据库唯一真实规则/固定来源/中英/700px明暗布局，无截图。开发HMR可能干扰页刷新测试，因此最终在独立HMR-off Vite5126+API3124完成并清理，不重启用户服务；client类型检查通过。
+
+自动化值上下文复核：修复原先把全部成员提前筛为智能体导致人员字段无法选择人的问题；人员条件/更新字段接收全部成员，仅执行智能体动作筛选智能体。相同浏览器流程验证人员选择、智能体默认项与实际保存的两个ID；类型检查和完整创建流程通过，隔离资源已清理。

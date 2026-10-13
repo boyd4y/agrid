@@ -15,15 +15,15 @@ try {
   await goto('/app/automations');
   await page.getByTestId('automations-hub').waitFor();
   await page.getByRole('link', { name: '新建自动化', exact: true }).first().click();
-  await page.locator('#automation-source').waitFor();
+  await page.getByTestId('automation-source-step').waitFor();
   assert.equal(await page.getByTestId('automation-editor').count(), 0, 'creation chooses source before editor');
-  await page.locator('#automation-source').click();
   await page.getByRole('option', { name: 'Builder source', exact: true }).click();
+  await page.getByRole('button', { name: '下一步', exact: true }).click();
   const editor = page.getByTestId('automation-editor');
   await editor.waitFor();
   await editor.getByPlaceholder('自动化名称').fill('Builder automation');
   await editor.getByRole('combobox').first().click();
-  await page.getByRole('option', { name: '当新增记录时', exact: true }).click();
+  await page.getByRole('option', { name: '新建记录时', exact: true }).click();
   await editor.getByRole('switch', { name: '启用', exact: true }).click();
   await editor.getByRole('button', { name: '保存', exact: true }).click();
   await page.waitForURL('**/app/automations');
@@ -43,7 +43,7 @@ try {
   await goto(`/app/tables/${table.id}/automations`);
   await page.waitForURL(`**/app/automations/new?source=${table.id}`);
   await editor.waitFor();
-  assert.match(await page.locator('#automation-source').innerText(), /Builder source/);
+  assert.match(await page.getByTestId('automation-configuration-step').innerText(), /Builder source/);
   await goto('/app/automations');
   await page.getByRole('button', { name: 'Edited automation自动化操作', exact: true }).click();
   await page.getByRole('menuitem', { name: '删除规则', exact: true }).click();

@@ -206,7 +206,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
         key={editing === "new" ? "new" : editing.id}
         tableId={table.id}
         columns={columns}
-        members={members.filter((m) => m.kind === "agent")}
+        members={members}
         initial={editing === "new" ? null : editing}
         onClose={() => setEditing(null)}
         onSaved={(rule) => {
@@ -389,6 +389,7 @@ type EditorProps = {
   initial: AutomationRule | null;
   onClose: () => void;
   onSaved: (rule: AutomationRule) => void;
+  onSavingChange?: (saving: boolean) => void;
 };
 
 export function AutomationEditor({
@@ -398,6 +399,7 @@ export function AutomationEditor({
   initial,
   onClose,
   onSaved,
+  onSavingChange,
 }: EditorProps) {
   const { t } = useTranslation("automation");
   const [sampleRows, setSampleRows] = useState<RowData[]>([]);
@@ -430,9 +432,12 @@ export function AutomationEditor({
   const [error, setError] = useState<string | null>(null);
 
   const selectColumns = columns.filter((c) => c.type === "select");
+  const agents = members.filter((member) => member.kind === "agent");
 
   const save = async () => {
+    if (saving) return;
     setSaving(true);
+    onSavingChange?.(true);
     setError(null);
     try {
       if (!actions.length) throw new Error(t("needAction"));
@@ -452,6 +457,7 @@ export function AutomationEditor({
       setError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setSaving(false);
+      onSavingChange?.(false);
     }
   };
 
@@ -474,6 +480,7 @@ export function AutomationEditor({
             size="sm"
             className="h-7 w-7 p-0"
             aria-label={t("backToRules")}
+            disabled={saving}
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -839,7 +846,7 @@ export function AutomationEditor({
                               return defaultAction(columns);
                             return {
                               type: "run_agent",
-                              agentUserId: members[0]?.userId ?? null,
+                              agentUserId: agents[0]?.userId ?? null,
                               prompt: "",
                             };
                           }),
@@ -956,7 +963,7 @@ export function AutomationEditor({
                           <SelectItem value="__none__" className="text-xs">
                             {t("systemAgent")}
                           </SelectItem>
-                          {members.map((m) => (
+                          {agents.map((m) => (
                             <SelectItem
                               key={m.userId}
                               value={m.userId}

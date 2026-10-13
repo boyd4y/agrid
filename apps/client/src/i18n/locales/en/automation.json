@@ -85,5 +85,15 @@
   "backToList": "Back to list",
   "readingSource": "Loading source fields…",
   "noRunRecords": "No run records yet.",
-  "pickTriggerTable": "Pick the table that triggers this automation"
+  "pickTriggerTable": "Pick the table that triggers this automation",
+  "creationStep": "Step {{step}} of 2",
+  "searchSource": "Search tables…",
+  "noMatchingSource": "No matching tables",
+  "sourceSelected": "Selected",
+  "selectedSource": "Selected: {{name}}",
+  "nextStep": "Next",
+  "backToSource": "Back to source",
+  "changeSourceHint": "Returning to the same source keeps your draft. Choosing another source starts a new configuration.",
+  "sourceLoadFailed": "Could not load source fields",
+  "noAvailableSources": "No tables available yet."
 }
