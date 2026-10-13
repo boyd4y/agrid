@@ -53,20 +53,20 @@
 
 | 剩余逻辑 | 位置 | 审核结论 |
 | --- | --- | --- |
-| UI parent 必须等于原生 lastAssistant；首轮不能有 UI parent | `server/src/harness/runs.ts` | 多余执行拦截，取消 UI 消息树对原生恢复的否决权；新输入的展示父节点由服务端选取 |
-| history append/update 在 HTTP 拒绝后也保存用户消息 | `client/src/lib/chat-persistence.ts` | 两套写入权冲突；原生执行由服务端保存获准输入与结果，客户端 history 仅加载 |
-| 已保存同 ID 的临时用户消息不允许换 parent | `server/src/chat/store.ts` | 与服务端规范化产生竞态；只能规范化未获准运行、非 server-final 的待提交用户消息，不能改已执行消息 |
-| 按 imported Run ID / assistant 存在条件跳过同步 | `client/src/components/chat/ChatRuns.tsx` | HTTP 拒绝不生成新 Run，旧 ID 不变，因此不修正本地错误分支；需与纯展示历史同步分开 |
-| 继续按钮读取 UI history head，再发送继续消息 | `client/src/components/chat/ChatRuns.tsx` | UI head 已污染时同样失败；按钮不是独立的原生恢复接口，不应依赖错误消息分支 |
-| 最新 Run 与保存的输入边界不一致就要求新建对话 | `server/src/harness/runs.ts` | 需收敛到真实保存完整性。完整状态的 failed/cancelled/suspended 都不应因状态名称被拒绝；实际丢失最新执行结果仍不能以旧快照冒充完整恢复 |
-| 无 resume state 的多重 SQL“未执行证明”与手工 Pi journal 检查 | `server/src/harness/runs.ts`、`chat-stream.ts` | 自定义恢复层较重；完整状态直接交官方恢复，缺失/损坏必须具体报原因，不能静默新建空会话或重放 UI tools |
-| Codex/Claude 已暂停时固定继续口令 | `server/src/routes/chat.ts`、`chat-stream.ts` | 仍为额外平台限制；需要按相应官方输入/续接能力处理，而非要求口令或吞掉普通追问 |
-| 请求携带完整 UI history，最多200消息 | `server/src/routes/chat.ts`、`client/src/components/chat/ChatPanel.tsx` | 原生执行只需要最新输入；当前累积 UI history 可让长会话撞请求上限，应精简传输 |
-| 进度保存/轮询失败影响控制流程，GET runs 会更新过期执行为 failed | `server/src/harness/chat-stream.ts`、`runs.ts` | 区分观测状态和原生执行状态；租约失效必须停止，单纯进度展示失败不应拥有额外执行控制权 |
-| 每轮模型目录前置检查、强制 thinking off、输出预算 | `server/src/harness/model-metadata.ts`、`runtime.ts` | 模型配置层，不是会话是否可恢复的证据；目录网络失败目前可挡住已有会话，配置和恢复应解耦。真实提供商上下文/输出上限仍存在 |
-| Plan/Goal最多40步、一个进行中、关闭/替换约束 | `server/src/harness/tasks.ts` | 额外产品状态约束，不属于 Harness 执行生命周期；当前不会直接暂停 Run，但应避免旧任务状态阻止新方向 |
-| 本地工作区4000项/32MB、全部文件与原生日志一起快照 | `server/src/harness/workspace.ts` | 存储部署边界；不能把快照容量问题归为用户会话不能续接，不能丢原生日志后假称保存成功 |
-| 平台错误说明仍插入 assistant text | `server/src/harness/chat-stream.ts` | 已标注系统提示，但仍是平台文字；应与模型内容分开呈现，不据此生成“任务未完成/需继续”的工作流 |
+| UI parent 必须等于原生 lastAssistant；首轮不能有 UI parent | `apps/server/src/harness/runs.ts` | 多余执行拦截，取消 UI 消息树对原生恢复的否决权；新输入的展示父节点由服务端选取 |
+| history append/update 在 HTTP 拒绝后也保存用户消息 | `apps/client/src/lib/chat-persistence.ts` | 两套写入权冲突；原生执行由服务端保存获准输入与结果，客户端 history 仅加载 |
+| 已保存同 ID 的临时用户消息不允许换 parent | `apps/server/src/chat/store.ts` | 与服务端规范化产生竞态；只能规范化未获准运行、非 server-final 的待提交用户消息，不能改已执行消息 |
+| 按 imported Run ID / assistant 存在条件跳过同步 | `apps/client/src/components/chat/ChatRuns.tsx` | HTTP 拒绝不生成新 Run，旧 ID 不变，因此不修正本地错误分支；需与纯展示历史同步分开 |
+| 继续按钮读取 UI history head，再发送继续消息 | `apps/client/src/components/chat/ChatRuns.tsx` | UI head 已污染时同样失败；按钮不是独立的原生恢复接口，不应依赖错误消息分支 |
+| 最新 Run 与保存的输入边界不一致就要求新建对话 | `apps/server/src/harness/runs.ts` | 需收敛到真实保存完整性。完整状态的 failed/cancelled/suspended 都不应因状态名称被拒绝；实际丢失最新执行结果仍不能以旧快照冒充完整恢复 |
+| 无 resume state 的多重 SQL“未执行证明”与手工 Pi journal 检查 | `apps/server/src/harness/runs.ts`、`chat-stream.ts` | 自定义恢复层较重；完整状态直接交官方恢复，缺失/损坏必须具体报原因，不能静默新建空会话或重放 UI tools |
+| Codex/Claude 已暂停时固定继续口令 | `apps/server/src/routes/chat.ts`、`chat-stream.ts` | 仍为额外平台限制；需要按相应官方输入/续接能力处理，而非要求口令或吞掉普通追问 |
+| 请求携带完整 UI history，最多200消息 | `apps/server/src/routes/chat.ts`、`apps/client/src/components/chat/ChatPanel.tsx` | 原生执行只需要最新输入；当前累积 UI history 可让长会话撞请求上限，应精简传输 |
+| 进度保存/轮询失败影响控制流程，GET runs 会更新过期执行为 failed | `apps/server/src/harness/chat-stream.ts`、`runs.ts` | 区分观测状态和原生执行状态；租约失效必须停止，单纯进度展示失败不应拥有额外执行控制权 |
+| 每轮模型目录前置检查、强制 thinking off、输出预算 | `apps/server/src/harness/model-metadata.ts`、`runtime.ts` | 模型配置层，不是会话是否可恢复的证据；目录网络失败目前可挡住已有会话，配置和恢复应解耦。真实提供商上下文/输出上限仍存在 |
+| Plan/Goal最多40步、一个进行中、关闭/替换约束 | `apps/server/src/harness/tasks.ts` | 额外产品状态约束，不属于 Harness 执行生命周期；当前不会直接暂停 Run，但应避免旧任务状态阻止新方向 |
+| 本地工作区4000项/32MB、全部文件与原生日志一起快照 | `apps/server/src/harness/workspace.ts` | 存储部署边界；不能把快照容量问题归为用户会话不能续接，不能丢原生日志后假称保存成功 |
+| 平台错误说明仍插入 assistant text | `apps/server/src/harness/chat-stream.ts` | 已标注系统提示，但仍是平台文字；应与模型内容分开呈现，不据此生成“任务未完成/需继续”的工作流 |
 
 应保留：访问权限、工具真实参数校验、同消息幂等、租约与防并发写、用户主动停止、真实持久化错误。`session.hasUnfinishedTurn()` 选择官方 continuation 或新 prompt 是 SDK 生命周期要求，不是平台额外“任务状态”检查。
 

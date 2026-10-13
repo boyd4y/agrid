@@ -225,3 +225,7 @@
 本轮验证：隔离测试DB与本机真实 Pi/SSE，routes7项、store7项、startup-boundary2项通过；新增真实 SQL 进度写入故障测试通过，工具一次、正常回复/会话持久化且无合成失败提示。模型目录4项、client11项及客户端/服务端生产与测试类型检查通过。HTTP拒绝残留两条消息后仍可普通续接，最新输入进入原生日志且工具不重放。未调用用户模型、未修改实际用户数据/历史、未新增截图或迁移。真实 Codex/Claude Sandbox 未验收；冷缓存未知模型上下文仍属配置降级边界。最新完整性/权限/租约/提交幂等保护保留，详见 docs/agent-run-audit.md 最后一节。
 
 2026-10-13 合入远端国际化后的启动修复：保留远端16个提交，解决chat-persistence唯一import冲突；原生transport参数独立为无界面依赖模块。删除未使用的RUN_LABELS Proxy，类型/颜色翻译使用普通对象getter，报告类型使用普通getter返回对象/数组，消除React热更新Symbol异常及空数组反射失真；旧unit fixture适配翻译边界，client11项与client/server测试类型检查通过。MCP开发脚本保持原状；根dev先构建shared，server dev不再并行重复删除重建dist，消除MCP启动竞态；真实stdio initialize返回tabdo。未重启用户API/Vite。用户后续要求将工作区整理为apps/*与packages/*，继续推进。
+
+2026-10-13 pnpm工作区目录规范化：应用移动为apps/{client,server,mcp}，公共契约为packages/shared；workspace globs、lock importers/link、Vite/Storybook/tsconfig、开发watch、根.env定位、浏览器fixture/产物忽略、Docker和当前文档均同步。包名/workspace:*依赖保持，锁定版本无升级。根build使用pnpm依赖图，shared先构建一次，MCP加入编译脚本；Docker选择server及其workspace依赖构建。原启动命令保持，开发server不重复删除shared产物。全工作区源码/测试类型检查、client11项/shared公式、迁移后4项真实原生聊天回归通过，MCP通过真实stdio initialize和tools/list（30项）。目录变化后原开发进程需要按新路径重新启动，未代用户重启API/Vite，未修改用户DB或调用真实模型。
+
+开发协作规则：按用户要求，每个独立feature完成并检查通过就单独提交，避免积攒无关改动；持续任务按功能提交。

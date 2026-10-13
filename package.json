@@ -6,7 +6,7 @@
     "dev": "pnpm --filter @tabdo/shared build && pnpm --parallel -r --filter @tabdo/server --filter @tabdo/client --filter @tabdo/mcp dev",
     "dev:client": "pnpm --filter @tabdo/client dev",
     "dev:server": "pnpm --filter @tabdo/shared build && pnpm --filter @tabdo/server dev",
-    "build": "pnpm --filter @tabdo/shared build && pnpm -r --filter '!@tabdo/shared' build",
+    "build": "pnpm -r build",
     "db:generate": "pnpm --filter @tabdo/server db:generate",
     "db:migrate": "pnpm --filter @tabdo/server db:migrate",
     "db:seed": "pnpm --filter @tabdo/server db:seed",

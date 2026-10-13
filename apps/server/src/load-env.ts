@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envCandidates = [
-  resolve(__dirname, "../../.env"),
-  resolve(process.cwd(), "../.env"),
+  resolve(__dirname, "../../../.env"),
+  resolve(process.cwd(), "../../.env"),
   resolve(process.cwd(), ".env"),
 ];
 

@@ -1,6 +1,6 @@
 # 测试与浏览器回归
 
-测试与源码按包平级：`server/test/{ai,commands,queue,reports,skills,harness,routes}`、`shared/test`、`client/test`。生产 TypeScript 只编译 `src`；server/shared 构建先清理 `dist`，避免旧编译测试残留。server/shared 的 `tsconfig.test.json` 单独覆盖测试和其源码导入，检查时不输出文件。
+测试与源码按包平级：`apps/server/test/{ai,commands,queue,reports,skills,harness,routes}`、`packages/shared/test`、`apps/client/test`。生产 TypeScript 只编译 `src`；apps/server/shared 构建先清理 `dist`，避免旧编译测试残留。apps/server/shared 的 `tsconfig.test.json` 单独覆盖测试和其源码导入，检查时不输出文件。
 
 ## 常规检查
 
@@ -16,7 +16,7 @@ pnpm build
 
 server 常规入口覆盖 AI 错误、关联、报告/独立自动化、Skill、原生 Harness 和 chat API。仍保留 `test:chat`、`test:relations`、`test:reports`、`test:skills`、`test:harness` 各业务入口。`test:queue` 单独运行，因为它要求专用队列数据库和 Redis，不能与其他用例共用存储。
 
-`server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。本地 Python 探测实际返回不支持（exit 127），没有将宿主 Python 或成功读取脚本记作原生脚本执行成功。单独运行：
+`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。本地 Python 探测实际返回不支持（exit 127），没有将宿主 Python 或成功读取脚本记作原生脚本执行成功。单独运行：
 
 ```bash
 pnpm --filter @tabdo/server exec tsx --test test/harness/skills-bundle.test.ts
@@ -24,7 +24,7 @@ pnpm --filter @tabdo/server exec tsx --test test/harness/skills-bundle.test.ts
 
 ## 显式启用的真实 Sandbox 验收
 
-`server/test/harness/remote-smoke.ts` 不在常规测试的 `*.test.ts` 范围内。它需要 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID` 三项完整配置，或有效 `VERCEL_OIDC_TOKEN`。凭证通过环境或仓库 `.env` 读取，脚本不输出凭证值。先检查配置，再显式启用真实资源创建：
+`apps/server/test/harness/remote-smoke.ts` 不在常规测试的 `*.test.ts` 范围内。它需要 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID` 三项完整配置，或有效 `VERCEL_OIDC_TOKEN`。凭证通过环境或仓库 `.env` 读取，脚本不输出凭证值。先检查配置，再显式启用真实资源创建：
 
 ```bash
 pnpm --filter @tabdo/server test:harness:remote -- --preflight
@@ -41,7 +41,7 @@ Pi 是 host runtime，因此模型由宿主本地 HTTP fixture 确定性响应�
 
 ## 实际浏览器回归
 
-`server/test/harness/startup-boundary.test.ts` 使用独立 `*_agent_test` 数据库和真实 HarnessAgent/Pi、本地 HTTP provider。它断言尚未调用 turn 的真实 SDK stop 可返回空状态，而应用不会覆盖旧 resume/workspace；首轮失败与取消后的新输入、已有会话的启动前失败/停止、未完成 session 的错误输入与官方继续均不重放已提交工具。客户端伪造未执行证明和旧空状态仍拒绝恢复。它只证明明确未调用 Pi invocation 的边界，不证明进程崩溃后的自动重放安全。
+`apps/server/test/harness/startup-boundary.test.ts` 使用独立 `*_agent_test` 数据库和真实 HarnessAgent/Pi、本地 HTTP provider。它断言尚未调用 turn 的真实 SDK stop 可返回空状态，而应用不会覆盖旧 resume/workspace；首轮失败与取消后的新输入、已有会话的启动前失败/停止、未完成 session 的错误输入与官方继续均不重放已提交工具。客户端伪造未执行证明和旧空状态仍拒绝恢复。它只证明明确未调用 Pi invocation 的边界，不证明进程崩溃后的自动重放安全。
 
 先启动已有前端（默认 `http://localhost:5173`），安装本地 Chrome 或执行 `pnpm --filter @tabdo/client exec playwright install chromium` 后设置 `BROWSER_CHANNEL=bundled`。浏览器脚本自行启动测试 API，默认端口 `3112`；API 与页面请求使用指定的独立数据库，并路由页面 `/api` 请求至测试 API。它不会重启正在运行的 `3001` API 或前端。测试只清理自身新建的工作区和账号。
 
@@ -60,9 +60,9 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 - `platform-style`：Settings、Skill 列表/详情、Reports 列表/Builder、Automations 列表/来源选择的紧凑 light/dark 截图；有记录的报告刷新失败和自动化失败重试；Skill 文件选择、复制失败反馈与真实剪贴板；主题单选和侧栏偏好刷新恢复。
 - `kanban-drag`：整卡标题/正文的原生浏览器拖拽，Sheet 打开/关闭前后真实 PATCH 与状态持久化、无误开详情；卡片菜单控件不触发行拖拽；统一删除确认的取消/失败 toast/重试/删除刷新恢复。API 通知会刷新看板列，动作先等待数据稳定，再定位当前语义标题/正文，不依赖合成 drag 事件或过期卡片坐标。
 
-新增 browser suite 放 `client/test/browser/*.mjs`，复用 `fixture.mjs`；默认入口自动发现 suite 并串行执行。`fixture.mjs` 提供本地 provider metadata，涉及模型执行的 suite 通过 `modelRequest` 提供 HTTP fixture，不连接真实供应商。
+新增 browser suite 放 `apps/client/test/browser/*.mjs`，复用 `fixture.mjs`；默认入口自动发现 suite 并串行执行。`fixture.mjs` 提供本地 provider metadata，涉及模型执行的 suite 通过 `modelRequest` 提供 HTTP fixture，不连接真实供应商。
 
-可配置 `BROWSER_BASE_URL`、`BROWSER_API_PORT`、`BROWSER_CHANNEL`、`BROWSER_EXECUTABLE_PATH`、`BROWSER_ARTIFACT_DIR`。默认截图、API 日志与 Dashboard 帧轨迹写入被 git 忽略的 `client/test/artifacts/<运行时间>/`，无用户绝对路径或 `/tmp` 文件依赖。
+可配置 `BROWSER_BASE_URL`、`BROWSER_API_PORT`、`BROWSER_CHANNEL`、`BROWSER_EXECUTABLE_PATH`、`BROWSER_ARTIFACT_DIR`。默认截图、API 日志与 Dashboard 帧轨迹写入被 git 忽略的 `apps/client/test/artifacts/<运行时间>/`，无用户绝对路径或 `/tmp` 文件依赖。
 
 ## 队列进程与 Redis 故障测试
 
@@ -76,12 +76,12 @@ AUTOMATION_LEASE_MS=1000 WORKER_LOCK_MS=1000 WORKER_STALLED_MS=1000 \
 QUEUE_TEST_REDIS_CONTAINER=agrid-queue-test-redis pnpm --filter @tabdo/server test:queue
 ```
 
-故障用例会清空指定 `_queue_test` 数据库内的测试数据；设置 `QUEUE_TEST_REDIS_CONTAINER=agrid-queue-test-redis` 时，会暂时停止并恢复这个专用 Redis 容器验证断线恢复，要求端口 `6381`。不设置时该断线用例跳过，其余执行。短 lock/stalled 参数使崩溃接管在用例等待时间内完成。进程 fixture 位于 `server/test/queue/fault-worker.ts`；可选负载脚本为 `test:queue:load`，位于 `server/test/queue/load.ts`。
+故障用例会清空指定 `_queue_test` 数据库内的测试数据；设置 `QUEUE_TEST_REDIS_CONTAINER=agrid-queue-test-redis` 时，会暂时停止并恢复这个专用 Redis 容器验证断线恢复，要求端口 `6381`。不设置时该断线用例跳过，其余执行。短 lock/stalled 参数使崩溃接管在用例等待时间内完成。进程 fixture 位于 `apps/server/test/queue/fault-worker.ts`；可选负载脚本为 `test:queue:load`，位于 `apps/server/test/queue/load.ts`。
 
 
 ## 完整 Pi host journal 恢复证明
 
-`server/test/harness/journal-recovery.test.ts` 使用本地 HTTP provider 与独立 UUID 原生会话，无数据库。第一轮保存官方 opaque resume/sandbox snapshot；第二轮九个只读 fixture 查询完成、模型尚未输出时读取该会话 host journal，忽略清理阶段新产生的 resume/snapshot。它只替换旧快照中同 basename 的原生日志，再用原样旧 resume 创建新官方会话和新 user turn。
+`apps/server/test/harness/journal-recovery.test.ts` 使用本地 HTTP provider 与独立 UUID 原生会话，无数据库。第一轮保存官方 opaque resume/sandbox snapshot；第二轮九个只读 fixture 查询完成、模型尚未输出时读取该会话 host journal，忽略清理阶段新产生的 resume/snapshot。它只替换旧快照中同 basename 的原生日志，再用原样旧 resume 创建新官方会话和新 user turn。
 
 断言同 filename、严格字节前缀、JSONL完整、最新 user prompt、9/9 toolCall结果覆盖与末条 toolResult；新 provider 请求能看到全部九个结果，工具执行计数仍九。该证明仅覆盖结果完整的只读查询，不证明缺失/损坏日志、未完成工具或未知写操作可以重放。它没有实现自动 crash recovery，也没有更改 runtime。
 
@@ -91,7 +91,7 @@ pnpm --filter @tabdo/server exec tsx --test test/harness/journal-recovery.test.t
 
 ## 智能体工具设置
 
-`server/test/harness/tool-settings.test.ts` 核对当前三种 adapter 目录与共享 ID；真实 Pi/HTTP provider 验证 native+host 工具过滤、禁用工具强制调用不执行、模型收到原生错误及 UI error 投影。`server/test/routes/chat.test.ts` 另外验证目录权限与 Harness 兼容性、配置持久化和保留/清空、真实聊天读取配置、被拒绝的建表和计划调用不修改数据库且无 mutation 通知、刷新保留结构化错误。
+`apps/server/test/harness/tool-settings.test.ts` 核对当前三种 adapter 目录与共享 ID；真实 Pi/HTTP provider 验证 native+host 工具过滤、禁用工具强制调用不执行、模型收到原生错误及 UI error 投影。`apps/server/test/routes/chat.test.ts` 另外验证目录权限与 Harness 兼容性、配置持久化和保留/清空、真实聊天读取配置、被拒绝的建表和计划调用不修改数据库且无 mutation 通知、刷新保留结构化错误。
 
 ```bash
 DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \

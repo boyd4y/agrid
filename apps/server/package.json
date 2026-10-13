@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/dev.ts",
-    "build": "pnpm --filter @tabdo/shared build && rm -rf dist && tsc",
+    "build": "rm -rf dist && tsc",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
@@ -18,7 +18,7 @@
     "test:queue": "tsx --test test/queue/queue.test.ts",
     "dev:api": "pnpm --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
-    "queue:dev": "tsx watch --conditions=development --include '../shared/src/**/*.ts' src/queue/main.ts",
+    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' src/queue/main.ts",
     "queue:start": "node dist/queue/main.js",
     "test:chat": "tsx --test test/ai/errors.test.ts test/routes/chat.test.ts",
     "test:relations": "tsx --test test/commands/relations.test.ts",

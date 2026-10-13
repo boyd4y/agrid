@@ -73,7 +73,7 @@ Pi 可配置 `OPENROUTER_API_KEY`；自定义兼容提供商需要 `PI_API_KEY`�
 
 Sandbox 使用 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或部署环境 OIDC。已有 sandbox 必须通过 SDK resume lookup 恢复，不能拿旧 ID 调用 create 假装恢复。
 
-四个内置技能来自 `server/skills/{table,form,report,automation}` 的真实 `SKILL.md` 与递归引用/脚本文件。工作区启用和智能体分配的交集作为官方 `skills` bundle 传入 Harness；首次模型请求只收到名称、描述与读取位置，完整业务方法通过原生 `read` 按需读取。`skills-bundle.test.ts` 使用真实四包和官方 Pi 原生工具验证逐文件挂载、读取完整 report 文档/脚本及 `bash` 读取 reference；停止后恢复工作区并撤销 report 分配，SDK 移除旧目录，新 turn 无法再读取旧脚本。平台 API 与 Explorer 保持内置内容只读，管理员启停不修改内容。[官方 Skills 文档](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)说明这种按需加载与后续 turn 更新方式。
+四个内置技能来自 `apps/server/skills/{table,form,report,automation}` 的真实 `SKILL.md` 与递归引用/脚本文件。工作区启用和智能体分配的交集作为官方 `skills` bundle 传入 Harness；首次模型请求只收到名称、描述与读取位置，完整业务方法通过原生 `read` 按需读取。`skills-bundle.test.ts` 使用真实四包和官方 Pi 原生工具验证逐文件挂载、读取完整 report 文档/脚本及 `bash` 读取 reference；停止后恢复工作区并撤销 report 分配，SDK 移除旧目录，新 turn 无法再读取旧脚本。平台 API 与 Explorer 保持内置内容只读，管理员启停不修改内容。[官方 Skills 文档](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)说明这种按需加载与后续 turn 更新方式。
 
 本地 just-bash 实测 `python3` 返回不可用、退出码 127，因此加载 `report/scripts/summarize-csv.py` 不代表执行成功。report 文档仅在具备 Python 的环境运行该脚本；本地可读取 metrics reference，并使用现有产品聚合工具。远程 Python 能力仍需在真实 Sandbox 验证。
 
@@ -87,7 +87,7 @@ Sandbox 使用 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或部�
 
 ## 开发验证
 
-源码放 `server/src/harness/`；测试放平级目录 `server/test/harness/`。各包全部测试和持续浏览器回归已迁入平级 `test/`，统一入口见 [测试说明](testing.md)。
+源码放 `apps/server/src/harness/`；测试放平级目录 `apps/server/test/harness/`。各包全部测试和持续浏览器回归已迁入平级 `test/`，统一入口见 [测试说明](testing.md)。
 
 使用独立测试数据库并先执行迁移；测试命令拒绝应用数据库：
 

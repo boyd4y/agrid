@@ -41,9 +41,9 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 聊天集成测试使用独立、已迁移且名称以 `_agent_test` 结尾的数据库：`DATABASE_URL=postgresql://.../tabdo_agent_test pnpm --filter @tabdo/server test:chat`。
 全部测试已归档到各包平级 `test/`，统一命令、独立数据库和持续浏览器回归见 [测试说明](docs/testing.md)。
 
-聊天发送启动独立 Run，使用保存的原生 Session，而不是重放 UI 历史。默认 16 步，在 SDK 的暂停边界结束后可发送“继续执行”恢复未完成 turn；Pi 可能在边界前预取下一次模型请求。等待限制见 `.env.example` 的 `AI_CHAT_*`：每步 90 秒、首个输出 45 秒、流中断 30 秒、整轮 5 分钟，通过官方生命周期/流事件驱动的 AbortSignal 控制。超时或无文字结束会追加说明；停止不会撤销已提交的数据修改。Run 状态、阶段事件、消息与原生检查点持久化；同一对话的重复发送和并发执行会被拒绝。进程崩溃导致检查点缺失时要求核对数据并新建对话，不自动重试工具。
+聊天发送启动独立 Run，使用保存的原生 Session，只提交最新用户输入。默认没有平台步数或超时限制；仅显式配置 `.env.example` 的 `AI_CHAT_*` 才启用。未完成 turn 使用官方续接能力接收普通追问，自然结束无正文不再被平台改判失败。停止不会撤销已提交的数据修改；同一提交与并发执行仍有保护。真正丢失最新保存状态时明确报错，不重放 UI 工具历史。
 
-本地只需要配置 Pi/OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。plan/goal 已持久化并可在聊天 header 查看；AGENTS.md 从人设内部生成。完整 Run 管理界面仍在迭代，远程 Sandbox 尚待真实凭证验收。
+本地只需要配置 Pi/OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。plan/goal 已持久化并可在聊天 header 查看；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
 
 ### 设计系统
 - Notion 色板（`#37352f` / `#2383e2` / `#e9e9e7`）
@@ -51,6 +51,8 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 - **Storybook**：`pnpm --filter @tabdo/client storybook` → http://localhost:6006
 
 ## 快速开始
+
+项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`。包之间通过 `workspace:*` 和 `@tabdo/shared` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
 
 ```bash
 cd /workspace/tabdo
@@ -118,7 +120,7 @@ pnpm db:smoke:perf          # 验证 cursor / filter / kanban window / 单格 pa
 ## 文档 · MCP · Skill（人机同源）
 
 - **公开文档**：http://localhost:5173/docs — 概念、命令层 API、MCP、Skill（Marketing 顶栏「文档」）
-- **MCP 包**：[`mcp/`](./mcp) → `@tabdo/mcp`，tools 与 `COMMANDS` 1:1，经 `POST /api/commands`
+- **MCP 包**：[`apps/mcp/`](./apps/mcp) → `@tabdo/mcp`，tools 与 `COMMANDS` 1:1，经 `POST /api/commands`
 - **Agent Skill**：[`skills/table-ops/SKILL.md`](./skills/table-ops/SKILL.md)
 
 ```bash

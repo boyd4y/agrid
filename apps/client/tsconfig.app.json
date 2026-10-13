@@ -28,10 +28,10 @@
         "./src/*"
       ],
       "@tabdo/shared": [
-        "../shared/src/index.ts"
+        "../../packages/shared/src/index.ts"
       ],
       "@tabdo/shared/*": [
-        "../shared/src/*"
+        "../../packages/shared/src/*"
       ]
     },
     "resolveJsonModule": true

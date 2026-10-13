@@ -16,7 +16,7 @@ const config: StorybookConfig = {
       resolve: {
         alias: {
           "@": path.resolve(__dirname, "../src"),
-          "@tabdo/shared": path.resolve(__dirname, "../../shared/src/index.ts"),
+          "@tabdo/shared": path.resolve(__dirname, "../../../packages/shared/src/index.ts"),
         },
       },
     });

@@ -238,7 +238,7 @@ export const docsPages: DocsPage[] = [
     body: [
       {
         type: "p",
-        text: "server/src/commands is the only write implementation. HTTP, in-app tools, and external MCP are shells. Table product features (grid, board, filters) stay complete.",
+        text: "apps/server/src/commands is the only write implementation. HTTP, in-app tools, and external MCP are shells. Table product features (grid, board, filters) stay complete.",
       },
       {
         type: "callout",

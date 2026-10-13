@@ -18,6 +18,6 @@ The mark has a 96 × 100 viewBox. Preserve its aspect ratio; do not redraw, reco
 
 ## App integration
 
-`TabdoLogo.tsx` uses the original files copied to `client/public/brand/`. Tailwind `dark:hidden` / `dark:block` switch the variants according to the app's `.dark` class, including explicit themes that differ from the OS. The favicon uses copies of these originals, selected both by the initial theme script and `ThemeProvider`. `/favicon.svg` and `/tabdo-mark.svg` are OS-adaptive standalone fallbacks.
+`TabdoLogo.tsx` uses the original files copied to `apps/client/public/brand/`. Tailwind `dark:hidden` / `dark:block` switch the variants according to the app's `.dark` class, including explicit themes that differ from the OS. The favicon uses copies of these originals, selected both by the initial theme script and `ThemeProvider`. `/favicon.svg` and `/tabdo-mark.svg` are OS-adaptive standalone fallbacks.
 
 `directions/` contains the earlier logo exploration. Those concepts are superseded by the supplied kit and are not production assets.

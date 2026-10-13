@@ -8,12 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 
-export const workspace = fileURLToPath(new URL('../../../', import.meta.url));
+export const workspace = fileURLToPath(new URL('../../../../', import.meta.url));
 export const frontend = process.env.BROWSER_BASE_URL ?? 'http://localhost:5173';
 export const databaseUrl = process.env.DATABASE_URL;
 assert(databaseUrl && new URL(databaseUrl).pathname.endsWith('_agent_test'), 'Set DATABASE_URL to an isolated, migrated *_agent_test database');
 export const postgres = createRequire(new URL('../../../server/package.json', import.meta.url))('postgres');
-export const artifactDir = process.env.BROWSER_ARTIFACT_DIR ?? join(workspace, 'client/test/artifacts', new Date().toISOString().replaceAll(':', '-'));
+export const artifactDir = process.env.BROWSER_ARTIFACT_DIR ?? join(workspace, 'apps/client/test/artifacts', new Date().toISOString().replaceAll(':', '-'));
 await mkdir(artifactDir, { recursive: true });
 export const artifact = (name) => join(artifactDir, name);
 export const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

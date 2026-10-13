@@ -3,8 +3,8 @@ dist
 .env
 *.log
 .DS_Store
-client/dist
-server/dist
+apps/client/dist
+apps/server/dist
 
 # impeccable-ignore-start
 **/.impeccable/config.local.json
@@ -18,6 +18,6 @@ server/dist
 # impeccable-ignore-end
 
 # Browser regression screenshots, frame traces and isolated API logs
-client/test/artifacts/
+apps/client/test/artifacts/
 screenshots/
-client/screenshots/
+apps/client/screenshots/

@@ -238,7 +238,7 @@ export const docsPages: DocsPage[] = [
     body: [
       {
         type: "p",
-        text: "server/src/commands 是唯一写入实现。HTTP、产品内工具与外部 MCP 都是外壳。表格产品能力（表格、看板、筛选）保持完整。",
+        text: "apps/server/src/commands 是唯一写入实现。HTTP、产品内工具与外部 MCP 都是外壳。表格产品能力（表格、看板、筛选）保持完整。",
       },
       {
         type: "callout",

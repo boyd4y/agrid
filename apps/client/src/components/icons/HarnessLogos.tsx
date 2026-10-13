@@ -34,7 +34,7 @@ export function AnthropicLogo({ className, ...props }: IconProps) {
 }
 
 /**
- * Pi brand mark — exact asset at client/public/brand/pi-logo.svg
+ * Pi brand mark — exact asset at apps/client/public/brand/pi-logo.svg
  */
 export function PiLogo({ className, ...props }: IconProps) {
   return (
@@ -59,7 +59,7 @@ export function PiLogo({ className, ...props }: IconProps) {
 
 /**
  * OpenRouter provider mark — standalone provider (not Pi).
- * Asset: client/public/brand/openrouter-logo.svg
+ * Asset: apps/client/public/brand/openrouter-logo.svg
  */
 export function OpenRouterLogo({ className, ...props }: IconProps) {
   return (
