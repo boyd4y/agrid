@@ -95,5 +95,13 @@
   "enabledSkillsHeading": "已启用的技能",
   "selected": "已选择",
   "orgSelectFailed": "选择工作区失败",
-  "newChatTitle": "新对话"
+  "newChatTitle": "新对话",
+  "pagination": {
+    "label": "分页",
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "第 {{page}} 页",
+    "pageOf": "第 {{page}} 页，共 {{total}} 页",
+    "noResults": "没有匹配的结果。"
+  }
 }

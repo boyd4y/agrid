@@ -11,6 +11,8 @@ import { Field, FieldLabel, FieldGroup, FieldError } from "@tabdo/ui/components/
 import { Separator } from "@tabdo/ui/components/separator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/controls/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
+import { useArrayPagination } from "@/hooks/useListPagination";
+import { ListPagination } from "@/components/controls/list-pagination";
 import { MemberDirectory, MemberDirectoryRow } from "@/components/members/MemberDirectory";
 import { AvatarPicker } from "@/components/members/AvatarPicker";
 import { api, type MemberOption } from "@/lib/api";
@@ -79,14 +81,17 @@ export function MembersPage() {
   const openInvite = () => { setEmail(""); setInviteError(null); setShowInvite(true); };
   const invite = canManage ? <Button size="sm" data-testid="members-invite-open" onClick={openInvite}><UserPlus data-icon="inline-start" />{t("members.invite")}</Button> : undefined;
   const visible = members.filter((member) => `${member.name} ${member.email}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const pagination = useArrayPagination(visible);
+  useEffect(() => pagination.resetPage(), [query, pagination.resetPage]);
   return <Dialog open={showInvite} onOpenChange={(open) => { if (!busy) setShowInvite(open); }}>
-    <AppPage data-testid="members-page" className="items-center" header={<AppPageHeader page="members" description={<>{t("members.descriptionBefore")}<Link to="/app/agents" className="underline underline-offset-2">{t("members.descriptionLink")}</Link>{t("members.descriptionAfter")}</>}>
+    <AppPage contentWidth="standard" data-testid="members-page" className="items-center" header={<AppPageHeader page="members" description={<>{t("members.descriptionBefore")}<Link to="/app/agents" className="underline underline-offset-2">{t("members.descriptionLink")}</Link>{t("members.descriptionAfter")}</>}>
       <Button variant="ghost" size="icon" aria-label={t("members.refreshAria")} disabled={loading} onClick={() => void refresh()}><RefreshCw data-icon="inline-start" /></Button>{invite}
     </AppPageHeader>}>
       <MemberDirectory label={t("nav.members")} count={members.length} query={query} onQueryChange={setQuery} loading={loading} error={loadError} onRetry={() => void refresh()}
+        pagination={visible.length > 0 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}
         empty={!members.length ? <AppEmptyState data-testid="members-empty" className="flex-1" illustration={NOTIOLY.collaborate} title={t("members.emptyTitle")} description={t("members.emptyDescription")} action={invite} />
           : !visible.length ? <AppEmptyState className="flex-1" illustration={NOTIOLY.collaborate} title={t("members.noMatchTitle")} description={t("members.noMatchDescription")} /> : undefined}>
-        {visible.map((member) => <MemberDirectoryRow key={member.id} member={member} description={member.email}
+        {pagination.items.map((member) => <MemberDirectoryRow key={member.id} member={member} description={member.email}
           metadata={<Badge variant="outline">{roleLabel(member.role)}</Badge>}
           action={(canManage || member.userId === actor?.userId) && <MemberAvatarEditor member={member} />} />)}
       </MemberDirectory>

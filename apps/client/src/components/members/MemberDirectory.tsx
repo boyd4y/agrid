@@ -7,12 +7,12 @@ import { ListErrorState } from "@/components/shell/ListErrorState";
 import { MemberAvatar } from "./MemberAvatar";
 import type { MemberOption } from "@/lib/api";
 
-export function MemberDirectory({ label, count, query, onQueryChange, loading, error, onRetry, empty, children }: {
+export function MemberDirectory({ label, count, query, onQueryChange, loading, error, onRetry, empty, pagination, children }: {
   label: string; count: number; query: string; onQueryChange: (query: string) => void;
-  loading: boolean; error: string | null; onRetry: () => void; empty?: ReactNode; children: ReactNode;
+  loading: boolean; error: string | null; onRetry: () => void; empty?: ReactNode; pagination?: ReactNode; children: ReactNode;
 }) {
   const { t } = useTranslation(["app", "common"]);
-  return <div className="flex w-full max-w-6xl flex-1 flex-col gap-5" data-testid="member-directory">
+  return <div className="flex w-full flex-1 flex-col gap-5" data-testid="member-directory">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <label className="relative w-full max-w-sm">
         <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -23,6 +23,7 @@ export function MemberDirectory({ label, count, query, onQueryChange, loading, e
     {loading ? <div role="status" aria-label={t("directory.loadingLabel", { label })} className="flex flex-col gap-3">{[0, 1, 2].map((id) => <Skeleton key={id} className="h-28 w-full" />)}</div>
       : error ? <ListErrorState title={t("directory.loadFailed")} description={error} onRetry={onRetry} />
       : empty ?? <ul className="divide-y rounded-xl border bg-card">{children}</ul>}
+    {!loading && !error && pagination}
   </div>;
 }
 

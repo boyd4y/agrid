@@ -9,7 +9,8 @@ automationsRoute.get("/automations", async (c) => {
   const scope = await requireActorOrg(c.req.raw);
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const offset = z.coerce.number().int().min(0).max(1_000_000).parse(c.req.query("offset") ?? 0);
-  return c.json(await crud.listWorkspaceAutomations(scope.organizationId, offset));
+  const limit = z.coerce.number().int().min(1).max(100).parse(c.req.query("limit") ?? 100);
+  return c.json(await crud.listWorkspaceAutomations(scope.organizationId, offset, limit));
 });
 
 automationsRoute.get("/automations/:id", async (c) => {

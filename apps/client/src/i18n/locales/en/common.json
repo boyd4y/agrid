@@ -95,5 +95,13 @@
   "enabledSkillsHeading": "Enabled skills",
   "selected": "Selected",
   "orgSelectFailed": "Failed to select workspace",
-  "newChatTitle": "New chat"
+  "newChatTitle": "New chat",
+  "pagination": {
+    "label": "Pagination",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}}",
+    "pageOf": "Page {{page}} of {{total}}",
+    "noResults": "No matching results."
+  }
 }

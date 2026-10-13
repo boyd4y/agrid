@@ -278,9 +278,9 @@ export const api = {
 
   listAutomations: (tableId: string) =>
     request<AutomationRule[]>(`/api/tables/${tableId}/automations`),
-  listWorkspaceAutomations: (offset = 0) => request<{ rules: (AutomationRule & { sourceName: string })[]; hasMore: boolean }>(`/api/automations?offset=${offset}`),
+  listWorkspaceAutomations: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ rules: (AutomationRule & { sourceName: string })[]; hasMore: boolean }>(`/api/automations?offset=${offset}&limit=${limit}`, { signal }),
   getAutomation: (id: string) => request<AutomationRule & { sourceName: string }>(`/api/automations/${id}`),
-  listReports: (offset = 0) => request<{ reports: import("@tabdo/shared").Report[]; hasMore: boolean }>(`/api/reports?offset=${offset}`),
+  listReports: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ reports: import("@tabdo/shared").Report[]; hasMore: boolean }>(`/api/reports?offset=${offset}&limit=${limit}`, { signal }),
   getReport: (id: string) => request<import("@tabdo/shared").Report>(`/api/reports/${id}`),
   saveReport: (config: import("@tabdo/shared").ReportPageConfig, id?: string, expectedVersion?: number) => request<import("@tabdo/shared").Report>(id ? `/api/reports/${id}` : "/api/reports", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? { ...config, expectedVersion } : config) }),
   previewReportPage: (config: import("@tabdo/shared").ReportPageConfig) => request<import("@tabdo/shared").ReportPageData>("/api/reports/preview-page", { method: "POST", body: JSON.stringify(config) }),

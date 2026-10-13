@@ -15,9 +15,9 @@ export async function getReport(id: string, organizationId: string) {
   if (!row) throw new ReportError("报告不存在", 404);
   return mapReport(row);
 }
-export async function listReports(organizationId: string, offset = 0) {
-  const found = await db.select().from(reports).where(eq(reports.organizationId, organizationId)).orderBy(desc(reports.createdAt), desc(reports.id)).limit(101).offset(offset);
-  return { reports: found.slice(0, 100).map(mapReport), hasMore: found.length > 100 };
+export async function listReports(organizationId: string, offset = 0, limit = 100) {
+  const found = await db.select().from(reports).where(eq(reports.organizationId, organizationId)).orderBy(desc(reports.createdAt), desc(reports.id)).limit(limit + 1).offset(offset);
+  return { reports: found.slice(0, limit).map(mapReport), hasMore: found.length > limit };
 }
 export async function validateReport(config: ReportConfig, organizationId: string) {
   const [table] = await db.select().from(tables).where(and(eq(tables.id, config.tableId), eq(tables.organizationId, organizationId))).limit(1);

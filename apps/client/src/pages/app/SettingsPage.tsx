@@ -24,7 +24,7 @@ export function SettingsPage() {
     { id: "system", label: t("theme.system"), icon: Monitor },
   ];
 
-  return <AppPage className="gap-4" header={<AppPageHeader page="settings" description={t("settings.description")} />}>
+  return <AppPage contentWidth="standard" className="gap-4" header={<AppPageHeader page="settings" description={t("settings.description")} />}>
     <Card className="shrink-0">
       <CardHeader><CardTitle>{t("settings.appearance")}</CardTitle></CardHeader>
       <CardContent>

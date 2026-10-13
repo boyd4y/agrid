@@ -55,12 +55,12 @@ async function assertTable(tableId: string, organizationId?: string) {
   return requireTableInOrg(tableId, organizationId);
 }
 
-export async function listWorkspaceAutomations(organizationId: string, offset = 0) {
+export async function listWorkspaceAutomations(organizationId: string, offset = 0, limit = 100) {
   const hits = await db.select({ rule: automations, sourceName: tables.name }).from(automations)
     .innerJoin(tables, eq(tables.id, automations.tableId))
     .where(and(eq(tables.organizationId, organizationId), isNull(automations.deletedAt)))
-    .orderBy(desc(automations.createdAt), desc(automations.id)).limit(101).offset(offset);
-  return { rules: hits.slice(0, 100).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > 100 };
+    .orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
+  return { rules: hits.slice(0, limit).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > limit };
 }
 
 export async function getWorkspaceAutomation(id: string, organizationId: string) {

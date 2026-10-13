@@ -15,7 +15,11 @@ export function reportErrorResponse(error: Error, c: Context) {
 }
 reportsRoute.onError(reportErrorResponse);
 const org = (c: Context<Env>) => c.get("organizationId");
-reportsRoute.get("/", async (c) => c.json(await service.listReports(org(c), z.coerce.number().int().min(0).max(1_000_000).parse(c.req.query("offset") ?? 0))));
+reportsRoute.get("/", async (c) => {
+  const offset = z.coerce.number().int().min(0).max(1_000_000).parse(c.req.query("offset") ?? 0);
+  const limit = z.coerce.number().int().min(1).max(100).parse(c.req.query("limit") ?? 100);
+  return c.json(await service.listReports(org(c), offset, limit));
+});
 reportsRoute.post("/", async (c) => c.json(await service.saveReport(z.union([reportPageSchema, reportConfigSchema]).parse(await c.req.json()), org(c)), 201));
 reportsRoute.post("/preview", async (c) => c.json(await service.queryReport(reportConfigSchema.parse(await c.req.json()), org(c))));
 reportsRoute.post("/preview-page", async (c) => c.json(await service.queryReportPage(reportPageSchema.parse(await c.req.json()), org(c))));

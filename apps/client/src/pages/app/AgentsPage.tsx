@@ -10,6 +10,8 @@ import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { HARNESS_LABELS } from "@/lib/harness";
 import { HarnessLogo } from "@/components/icons/HarnessLogos";
+import { useArrayPagination } from "@/hooks/useListPagination";
+import { ListPagination } from "@/components/controls/list-pagination";
 import { MemberDirectory, MemberDirectoryRow } from "@/components/members/MemberDirectory";
 
 export function AgentsPage() {
@@ -40,14 +42,17 @@ export function AgentsPage() {
     return () => { requestId.current++; window.removeEventListener("tabdo:agents-changed", onChange); };
   }, [refresh]);
   const visible = agents.filter((agent) => agent.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const pagination = useArrayPagination(visible);
+  useEffect(() => pagination.resetPage(), [query, pagination.resetPage]);
   const create = canManage ? <Button asChild size="sm"><Link to="/app/agents/new"><Plus data-icon="inline-start" />{t("agents.create")}</Link></Button> : undefined;
-  return <AppPage data-testid="agents-page" className="items-center" header={<AppPageHeader page="agents" description={t("agents.description")}>
+  return <AppPage contentWidth="standard" data-testid="agents-page" className="items-center" header={<AppPageHeader page="agents" description={t("agents.description")}>
     <Button variant="ghost" size="icon" aria-label={t("agents.refreshAria")} disabled={loading} onClick={() => void refresh()}><RefreshCw data-icon="inline-start" /></Button>{create}
   </AppPageHeader>}>
     <MemberDirectory label={t("nav.agents")} count={agents.length} query={query} onQueryChange={setQuery} loading={loading} error={error} onRetry={() => void refresh()}
+      pagination={visible.length > 0 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}
       empty={!agents.length ? <AppEmptyState className="flex-1" illustration={NOTIOLY.fastInternet} title={t("agents.emptyTitle")} description={t("agents.emptyDescription")} action={create} />
         : !visible.length ? <AppEmptyState className="flex-1" illustration={NOTIOLY.fastInternet} title={t("agents.noMatchTitle")} description={t("agents.noMatchDescription")} /> : undefined}>
-            {visible.map((agent) => {
+            {pagination.items.map((agent) => {
               const persona = agent.agent?.persona;
               const harness = persona?.defaultHarness ?? "pi";
               const model = persona?.defaultModel ?? "openrouter/free";

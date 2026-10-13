@@ -1,3 +1,8 @@
+import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
+import { Input } from "@tabdo/ui/components/input";
+import { useArrayPagination } from "@/hooks/useListPagination";
+import { ListPagination } from "@/components/controls/list-pagination";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { TableIcon } from "@/components/table/TableIcon";
@@ -15,8 +20,13 @@ export function TablesPage() {
   const { tables, createTable, tablesLoading, notifyTableMutated } =
     useOutletContext<AppOutletContext>();
 
+  const [query, setQuery] = useState("");
+  const visible = tables.filter(table => `${table.name} ${table.description ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const pagination = useArrayPagination(visible);
+  useEffect(() => pagination.resetPage(), [query, pagination.resetPage]);
+
   return (
-    <AppPage header={
+    <AppPage contentWidth="standard" className="gap-5" data-testid="tables-page" header={
       <AppPageHeader page="tables" description={t("tables.description")}>
         <DataRefreshButton onRefresh={notifyTableMutated} />
         <Button onClick={() => void createTable()}>
@@ -26,6 +36,7 @@ export function TablesPage() {
       </AppPageHeader>
     }>
 
+      <div className="relative w-full max-w-sm"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={t("directory.searchAria", { label: t("nav.tables") })} placeholder={t("directory.searchPlaceholder", { label: t("nav.tables") })} className="pl-9" value={query} disabled={tablesLoading && tables.length === 0} onChange={event => setQuery(event.target.value)} /></div>
       {tablesLoading ? (
         <p className="text-sm text-muted-foreground">{t("common:loading")}</p>
       ) : tables.length === 0 ? (
@@ -39,11 +50,13 @@ export function TablesPage() {
             {t("tables.newTable")}
           </Button>}
         />
-      ) : (
+      ) : visible.length === 0 ? <p className="text-sm text-muted-foreground">{t("common:pagination.noResults")}</p> : (
+        <>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-3">
-          {tables.map((table) => (
+          {pagination.items.map((table) => (
             <div
               key={table.id}
+              data-testid="table-list-item"
               className="rounded-xl border border-border bg-background p-4 shadow-[0_8px_24px_rgba(55,53,47,0.04)] transition hover:bg-muted/40"
             >
               <div className="flex items-start gap-1">
@@ -66,6 +79,8 @@ export function TablesPage() {
             </div>
           ))}
         </div>
+        <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />
+        </>
       )}
     </AppPage>
   );
