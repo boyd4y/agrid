@@ -17,11 +17,13 @@
     "db:seed:formula": "pnpm --filter @tabdo/server exec tsx src/db/seed-formula.ts",
     "db:smoke:formula": "pnpm --filter @tabdo/server exec tsx src/db/smoke-formula.ts",
     "mcp": "pnpm --filter @tabdo/mcp start",
-    "typecheck": "pnpm --filter @tabdo/shared typecheck && pnpm --filter @tabdo/server exec tsc --noEmit && pnpm --filter @tabdo/client exec tsc -b --pretty false && pnpm --filter @tabdo/mcp exec tsc --noEmit",
+    "typecheck": "pnpm --filter @tabdo/ui typecheck && pnpm --filter @tabdo/shared typecheck && pnpm --filter @tabdo/server exec tsc --noEmit && pnpm --filter @tabdo/client exec tsc -b --pretty false && pnpm --filter @tabdo/mcp exec tsc --noEmit",
     "dev:queue": "pnpm --filter @tabdo/shared build && pnpm --filter @tabdo/server queue:dev",
-    "test": "pnpm --filter @tabdo/shared test && pnpm --filter @tabdo/client test && pnpm --filter @tabdo/server test",
+    "test": "pnpm --filter @tabdo/ui test && pnpm --filter @tabdo/shared test && pnpm --filter @tabdo/client test && pnpm --filter @tabdo/server test",
     "typecheck:test": "pnpm --filter @tabdo/shared typecheck:test && pnpm --filter @tabdo/server typecheck:test",
-    "test:browser": "pnpm --filter @tabdo/client test:browser"
+    "test:browser": "pnpm --filter @tabdo/client test:browser",
+    "storybook": "pnpm --filter @tabdo/ui storybook",
+    "build-storybook": "pnpm --filter @tabdo/ui build-storybook"
   },
   "packageManager": "pnpm@9.15.0"
 }

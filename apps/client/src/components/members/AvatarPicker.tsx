@@ -1,9 +1,9 @@
 import { lazy, Suspense, useId, useRef, useState } from "react";
 import { ImagePlus, Loader2, Trash2, Smile, Bot } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Button } from "@tabdo/ui/components/button";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@tabdo/ui/components/field";
 import { MemberAvatar } from "./MemberAvatar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 const DiceBearAvatars = lazy(() => import("./DiceBearAvatars"));

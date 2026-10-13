@@ -5,19 +5,19 @@ import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Zap, History, X, Save, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@tabdo/ui/components/button";
+import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
+import { Switch } from "@tabdo/ui/components/switch";
+import { Checkbox } from "@tabdo/ui/components/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@tabdo/ui/components/select";
 import { api, type MemberOption } from "@/lib/api";
 import type { ColumnDef, CellValue, FullTable } from "@/types/table";
 import {

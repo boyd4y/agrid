@@ -1,7 +1,7 @@
 import { Table2 } from "lucide-react";
 import type { ReportData } from "@tabdo/shared";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@tabdo/ui/components/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
 import { useTranslation } from "react-i18next";
 
 export function ReportDataPopover({ data, title }: { data: ReportData; title: string }) {

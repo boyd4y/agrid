@@ -241,3 +241,5 @@
 2026-10-13 1-token预算修复：本机真实Pi SDK复现长输入在缺少context目录时被安全估算将16384压为1；改用官方provider samplingParams显式保留已配置输出预算、compat统一预算字段，继续尊重目录真实output cap，由provider报告实际context溢出。未知模型16384、目录cap2048、自定义Pi16384三个原生SSE场景通过；相关7项回归与服务端生产/测试类型检查通过。未读取用户prompt或真实Run、未调用用户模型或新增重试/续接拦截。
 
 2026-10-13 分类图标选择器：144个Lucide图标，8分类与全部，中英文/图标名搜索；左右独立滚动、底排完整可见，保留原40个ID。类型检查和隔离浏览器320px窄/260px低高度、分类/搜索、失败重试、选取/默认重置通过，未调用API或截图。
+
+2026-10-13 共享UI包：依照shadcn monorepo抽为packages/ui（@tabdo/ui源码exports），31组件、语义theme/Tailwind CSS与纯utils/date/color同包；app直接引用，六个翻译/主题/旧颜色适配器留app controls，无公共UI到app/API/i18n反向依赖。双方components.json统一配置，独立Storybook含33例、深浅主题toolbar，根pnpm storybook/build-storybook；工作区锁只改importers，外部版本/snapshots保持，Docker补UI manifest。全工作区类型检查、UI3项/client11项、客户端生产构建、独立Storybook构建与33例浏览器/六组真实交互通过，零JS/console错误。无截图/用户模型或数据库操作；临时6016已关闭。

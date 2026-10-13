@@ -12,8 +12,8 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@/components/ui/form";
-import { Button } from "@/components/ui/button";
+} from "@tabdo/ui/components/form";
+import { Button } from "@tabdo/ui/components/button";
 import { FormFieldControl } from "./FormFieldControls";
 import { formThemeStyle } from "./formThemes";
 import { api } from "@/lib/api";

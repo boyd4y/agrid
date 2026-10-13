@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@tabdo/ui/components/input";
+import { Label } from "@tabdo/ui/components/label";
+import { Checkbox } from "@tabdo/ui/components/checkbox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@tabdo/ui/components/select";
 import { useTranslation } from "react-i18next";
 import type {
   ColumnConfig,

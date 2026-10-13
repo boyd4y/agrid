@@ -5,9 +5,9 @@ import { useTranslation } from "react-i18next";
 import type { SkillLibrary, SkillSummary } from "@tabdo/shared";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { ListErrorState } from "@/components/shell/ListErrorState";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { Switch } from "@tabdo/ui/components/switch";
 import { api } from "@/lib/api";
 
 export function SkillsPage() {

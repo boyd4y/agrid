@@ -1,11 +1,11 @@
 import { BookOpen, Lock, Monitor, Cloud, X } from "lucide-react";
 import type { SkillSummary } from "@tabdo/shared";
-import { Field, FieldGroup, FieldLabel, FieldDescription } from "@/components/ui/field";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Field, FieldGroup, FieldLabel, FieldDescription } from "@tabdo/ui/components/field";
+import { Card, CardHeader, CardTitle, CardDescription } from "@tabdo/ui/components/card";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@tabdo/ui/components/select";
 import { HarnessLogo } from "@/components/icons/HarnessLogos";
 import { SkillPicker } from "@/components/skills/SkillPicker";
 import type { HarnessId } from "@/lib/harness";

@@ -24,8 +24,8 @@ import {
   ToolGroupTrigger,
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@tabdo/ui/components/button";
+import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { cn } from "@/lib/utils";
 import {
   ActionBarMorePrimitive,

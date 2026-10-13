@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { useOutletContext } from "react-router-dom";
 import { MoreHorizontal, Trash2, Pin, PinOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@tabdo/ui/components/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
 import { TableIconPicker } from "./TableIcon";
-import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
-import { DropdownMenuGroup, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
+import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
+import { DropdownMenuGroup, DropdownMenuItem } from "@tabdo/ui/components/dropdown-menu";
+import { Separator } from "@tabdo/ui/components/separator";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import type { TableMeta } from "@/types/table";
 import { useTranslation } from "react-i18next";

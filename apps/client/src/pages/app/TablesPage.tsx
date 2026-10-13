@@ -1,10 +1,10 @@
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
-import { DataRefreshButton } from "@/components/ui/data-refresh-button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { TableIcon } from "@/components/table/TableIcon";
 import { TableActions } from "@/components/table/TableActions";
 import { Link, useOutletContext } from "react-router-dom";
 import { NiPlus } from "@/components/icons";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import type { AppOutletContext } from "@/layouts/AppShell";

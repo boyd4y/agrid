@@ -4,12 +4,12 @@ import { Check, Circle, ListChecks, LoaderCircle, RefreshCw } from "lucide-react
 import { useTranslation } from "react-i18next";
 import type { AgentTaskState } from "@tabdo/shared";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
-import { FieldDescription, FieldError } from "@/components/ui/field";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@tabdo/ui/components/button";
+import { Badge } from "@tabdo/ui/components/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
+import { Separator } from "@tabdo/ui/components/separator";
+import { FieldDescription, FieldError } from "@tabdo/ui/components/field";
+import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { ChatActivityContext } from "./ChatRunStatus";
 
 export function AgentTaskPopover() {

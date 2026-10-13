@@ -1,6 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { useAppShell } from "@/context/AppShellContext";
 import { APP_NAVIGATION } from "./app-navigation";
 import { useMatch } from "react-router-dom";

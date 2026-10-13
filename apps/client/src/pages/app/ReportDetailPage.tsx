@@ -3,8 +3,8 @@ import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom
 import { ArrowLeft, Eye, Pencil, Save, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppPageHeader } from "@/components/shell/AppPage";
-import { Button } from "@/components/ui/button";
-import { DataRefreshButton } from "@/components/ui/data-refresh-button";
+import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { ReportBuilder } from "@/components/reports/ReportBuilder";
 import { api } from "@/lib/api";
 import { subscribeDataChanges } from "@/lib/data-changes";

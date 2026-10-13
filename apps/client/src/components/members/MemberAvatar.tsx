@@ -1,6 +1,6 @@
 import { parseBotAvatar } from "@tabdo/shared";
 import { BotAvatar } from "@/components/agents/BotAvatar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@tabdo/ui/components/avatar";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 

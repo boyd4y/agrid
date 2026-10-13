@@ -20,11 +20,11 @@ import {
   Pencil,
   X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Button } from "@tabdo/ui/components/button";
+import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
+import { Label } from "@tabdo/ui/components/label";
 import {
   Select,
   SelectContent,
@@ -32,11 +32,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@tabdo/ui/components/select";
 import { CellDisplay, CellEditor } from "./CellEditors";
 import { FilterBar } from "./FilterBar";
 import { ColumnSettings } from "./ColumnSettings";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import type {

@@ -1,8 +1,8 @@
 import { ChevronDown, FileInput, Plus, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuGroup } from "@/components/ui/dropdown-menu";
+import { Button } from "@tabdo/ui/components/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@tabdo/ui/components/tabs";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuGroup } from "@tabdo/ui/components/dropdown-menu";
 import { TableIcon } from "@/components/table/TableIcon";
 import { APP_NAVIGATION } from "@/components/shell/app-navigation";
 import { getPreviewSlotRenderer, registerPreviewSlot, type PreviewSlotContext, type PreviewSlotKind, type PreviewTab } from "./preview-slot";

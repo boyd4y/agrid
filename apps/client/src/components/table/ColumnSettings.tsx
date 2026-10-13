@@ -2,10 +2,10 @@ import { ColumnTypeIcon } from "./ColumnTypeIcon";
 import { ArrowLeft, ArrowRight, EyeOff, Loader2, Plus, Save, Trash2, X } from "lucide-react";
 import { RelationColumnConfig } from "./RelationColumnConfig";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
+import { Label } from "@tabdo/ui/components/label";
 import {
   Select,
   SelectContent,
@@ -13,8 +13,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { ColorPicker } from "@/components/ui/color-picker";
+} from "@tabdo/ui/components/select";
+import { ColorPicker } from "@/components/controls/color-picker";
 import { SELECT_COLOR_PRESETS } from "@/lib/select-colors";
 import type {
   ColumnDef,

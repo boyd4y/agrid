@@ -4,7 +4,7 @@ import { Play, Square } from "lucide-react";
 import type { AgentRunSummary, AgentRunStatus, ChatActivity } from "@tabdo/shared";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { cn } from "@/lib/utils";
 import i18n from "@/i18n";
 import { useTranslation } from "react-i18next";

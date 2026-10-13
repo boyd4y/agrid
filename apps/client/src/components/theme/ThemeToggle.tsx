@@ -1,6 +1,6 @@
 import { Monitor, Moon, Sun } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@tabdo/ui/components/dropdown-menu";
+import { Button } from "@tabdo/ui/components/button";
 import { useTheme, type Theme } from "./theme-provider";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";

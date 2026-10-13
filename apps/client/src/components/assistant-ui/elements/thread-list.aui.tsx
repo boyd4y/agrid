@@ -1,9 +1,9 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@tabdo/ui/components/button";
+import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
+import { Input } from "@tabdo/ui/components/input";
+import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { cn } from "@/lib/utils";
 import { readThreadResourceKey } from "@/lib/chat-resource";
 import {

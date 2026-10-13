@@ -4,11 +4,11 @@ import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Save, X, Settings2, BookOp
 import { toast } from "sonner";
 import type { SkillSummary } from "@tabdo/shared";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
-import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldSet } from "@/components/ui/field";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@tabdo/ui/components/button";
+import { Field, FieldError, FieldSet } from "@tabdo/ui/components/field";
+import { Card, CardContent } from "@tabdo/ui/components/card";
+import { Separator } from "@tabdo/ui/components/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tabdo/ui/components/tabs";
 import { api, type MemberOption } from "@/lib/api";
 import { type HarnessId } from "@/lib/harness";
 import { AgentBasicFields, AgentSkillFields, type AgentBasicValues, type HarnessStatus } from "@/components/agents/AgentConfigurationFields";

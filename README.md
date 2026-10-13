@@ -48,11 +48,11 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 ### 设计系统
 - Notion 色板（`#37352f` / `#2383e2` / `#e9e9e7`）
 - shadcn 组件 + **cva** variants
-- **Storybook**：`pnpm --filter @tabdo/client storybook` → http://localhost:6006
+- **共享 UI / Storybook**：`pnpm storybook` → http://localhost:6006；`pnpm build-storybook` 构建静态文档
 
 ## 快速开始
 
-项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`。包之间通过 `workspace:*` 和 `@tabdo/shared` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
+项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`，共享界面位于 `packages/ui`（`@tabdo/ui`，含独立 Storybook）。包之间通过 `workspace:*` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
 
 ```bash
 cd /workspace/tabdo
@@ -80,7 +80,7 @@ pnpm dev               # :5173 前端 + :3001 API
 ## Storybook
 
 ```bash
-pnpm --filter @tabdo/client storybook
+pnpm storybook
 ```
 
 ## 环境变量

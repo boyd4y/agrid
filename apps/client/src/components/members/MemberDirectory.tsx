@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@tabdo/ui/components/input";
+import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { MemberAvatar } from "./MemberAvatar";
 import type { MemberOption } from "@/lib/api";

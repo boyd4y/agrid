@@ -1,16 +1,16 @@
 import { RelationPicker } from "./RelationPicker";
 import { useState } from "react";
 import { Plus, Trash2, Filter, ChevronDown, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { DatePicker } from "@/components/controls/date-picker";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@tabdo/ui/components/select";
 import type { ColumnDef, CellValue } from "@/types/table";
 import { SelectChip } from "./SelectChip";
 import { useTranslation } from "react-i18next";

@@ -10,8 +10,8 @@ import {
   NiUsers,
   NiZap,
 } from "@/components/icons";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@tabdo/ui/components/button";
+import { Badge } from "@tabdo/ui/components/badge";
 import { NotiolyImage, NOTIOLY } from "@/components/illustrations/NotiolyImage";
 
 export function HomePage() {

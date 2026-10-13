@@ -36,8 +36,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "./collapsible-root";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@tabdo/ui/components/button";
+import { Textarea } from "@tabdo/ui/components/textarea";
 
 const ANIMATION_DURATION = 200;
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { TableForm } from "@/components/form/TableForm";
 import { api } from "@/lib/api";
 import type { ResolvedFormView } from "@tabdo/shared";

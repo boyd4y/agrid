@@ -21,3 +21,6 @@ apps/server/dist
 apps/client/test/artifacts/
 screenshots/
 apps/client/screenshots/
+
+# Generated component documentation
+storybook-static/

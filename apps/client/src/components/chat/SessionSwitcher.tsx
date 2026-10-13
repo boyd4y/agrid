@@ -2,13 +2,13 @@ import { useMemo, useState, type FC } from "react";
 import { ChevronDown, MessageSquare, Plus } from "lucide-react";
 import { useAui, useAuiState } from "@assistant-ui/react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@tabdo/ui/components/popover";
 import { cn } from "@/lib/utils";
 import {
   type ChatResourceKey,

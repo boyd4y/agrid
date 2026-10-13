@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, RefreshCw, Save, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { Field, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@tabdo/ui/components/sheet";
 import { api } from "@/lib/api";
 import { subscribeDataChanges } from "@/lib/data-changes";
 import { useMemberOptions } from "@/hooks/useMemberOptions";

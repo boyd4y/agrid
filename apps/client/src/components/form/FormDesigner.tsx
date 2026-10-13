@@ -25,15 +25,15 @@ import {
   Loader2,
   Settings2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
+import { Checkbox } from "@tabdo/ui/components/checkbox";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@tabdo/ui/components/popover";
 import { TableForm } from "./TableForm";
 import { FORM_THEME_PRESET_META } from "./formThemes";
 import { api } from "@/lib/api";

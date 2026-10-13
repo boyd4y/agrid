@@ -8,7 +8,7 @@ import {
   NiLogout,
   NiPlus,
 } from "@/components/icons";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { cn } from "@/lib/utils";
 import { useAppShell } from "@/context/AppShellContext";
 import { MemberAvatar } from "@/components/members/MemberAvatar";

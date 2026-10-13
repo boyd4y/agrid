@@ -10,17 +10,17 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DataRefreshButton } from "@/components/ui/data-refresh-button";
-import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
+import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
+import { Input } from "@tabdo/ui/components/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@tabdo/ui/components/dropdown-menu";
 import { DataTable } from "@/components/table/DataTable";
 import { TableIconPicker } from "@/components/table/TableIcon";
 import { TableActions } from "@/components/table/TableActions";
@@ -30,7 +30,7 @@ import { FormDesigner } from "@/components/form/FormDesigner";
 import { api } from "@/lib/api";
 import type { FullTable } from "@/types/table";
 import type { ResolvedFormView, TableView } from "@tabdo/shared";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@tabdo/ui/components/tabs";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import { useAppShell } from "@/context/AppShellContext";
 import { useTranslation } from "react-i18next";

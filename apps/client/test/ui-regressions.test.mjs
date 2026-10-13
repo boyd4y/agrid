@@ -123,7 +123,7 @@ test("first paint uses the saved theme over OS preference, including invalid/blo
   }
 });
 
-const css = await read("../src/index.css");
+const css = await read("../../../packages/ui/src/styles/globals.css");
 test("Tailwind dark utilities and theme tokens share one class selector", () => {
   assert.match(css, /@custom-variant dark \(&:where\(\.dark, \.dark \*\)\);/);
   assert.doesNotMatch(css, /@media\s*\(prefers-color-scheme/);

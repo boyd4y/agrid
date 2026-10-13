@@ -1,8 +1,8 @@
 import { Check, Plus } from "lucide-react";
 import type { SkillSummary } from "@tabdo/shared";
-import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@tabdo/ui/components/button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@tabdo/ui/components/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@tabdo/ui/components/popover";
 import { useTranslation } from "react-i18next";
 
 export function SkillPicker({ skills, selected, onChange, disabled = false }: {

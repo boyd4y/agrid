@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/controls/sonner";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { AuthLayout } from "@/layouts/AuthLayout";

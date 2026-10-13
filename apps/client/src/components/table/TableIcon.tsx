@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Table2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Field, FieldError } from "@/components/ui/field";
+import { Button } from "@tabdo/ui/components/button";
+import { Input } from "@tabdo/ui/components/input";
+import { Popover, PopoverTrigger, PopoverContent } from "@tabdo/ui/components/popover";
+import { DropdownMenuItem } from "@tabdo/ui/components/dropdown-menu";
+import { ToggleGroup, ToggleGroupItem } from "@tabdo/ui/components/toggle-group";
+import { Field, FieldError } from "@tabdo/ui/components/field";
 import { TABLE_ICONS, TABLE_ICON_CATEGORIES, type TableIconCategory } from "@/lib/table-icons";
 import { cn } from "@/lib/utils";
 

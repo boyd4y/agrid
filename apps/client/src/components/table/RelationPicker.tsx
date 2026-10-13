@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Link2, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Button } from "@tabdo/ui/components/button";
+import { Badge } from "@tabdo/ui/components/badge";
+import { Input } from "@tabdo/ui/components/input";
 import {
   Popover,
   PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@tabdo/ui/components/popover";
 import type { ColumnDef, RelatedRecord, RowData } from "@/types/table";
 import type { RelationQueryResult } from "@tabdo/shared";
 import { useTranslation } from "react-i18next";

@@ -1,7 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { TabdoLogo } from "@/components/brand/TabdoLogo";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";

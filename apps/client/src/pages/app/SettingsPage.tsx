@@ -1,10 +1,10 @@
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Keyboard, Moon, Sun, Monitor, Languages } from "lucide-react";
 import { useAppShell } from "@/context/AppShellContext";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Switch } from "@/components/ui/switch";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Card, CardHeader, CardTitle, CardContent } from "@tabdo/ui/components/card";
+import { Field, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
+import { Switch } from "@tabdo/ui/components/switch";
+import { ToggleGroup, ToggleGroupItem } from "@tabdo/ui/components/toggle-group";
 import { useTheme, type Theme } from "@/components/theme/theme-provider";
 import { useTranslation } from "react-i18next";
 import { setAppLocale, type AppLocale } from "@/i18n";

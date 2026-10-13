@@ -1,7 +1,7 @@
 import { useAui } from "@assistant-ui/react";
 import { History, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 export function FloatingThreadControls({
   showThreads,
   onShowThreads,

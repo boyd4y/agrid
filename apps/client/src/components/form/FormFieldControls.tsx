@@ -1,16 +1,16 @@
 import { RelationPicker } from "@/components/table/RelationPicker";
 import { useState } from "react";
 import { Bot, Check, ChevronsUpDown, User } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { Checkbox } from "@tabdo/ui/components/checkbox";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
+import { Button } from "@tabdo/ui/components/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
-import { DatePicker } from "@/components/ui/date-picker";
+} from "@tabdo/ui/components/popover";
+import { DatePicker } from "@/components/controls/date-picker";
 import { SelectChip } from "@/components/table/SelectChip";
 import { cn } from "@/lib/utils";
 import type { CellValue, ColumnDef, SelectOption } from "@/types/table";

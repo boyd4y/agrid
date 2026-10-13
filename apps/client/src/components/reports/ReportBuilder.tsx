@@ -11,11 +11,11 @@ import {
   Settings2,
 } from "lucide-react";
 import { BuilderLayout } from "@/components/builder/BuilderLayout";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@tabdo/ui/components/button";
+import { Separator } from "@tabdo/ui/components/separator";
+import { Field, FieldLabel, FieldGroup } from "@tabdo/ui/components/field";
+import { Input } from "@tabdo/ui/components/input";
+import { Textarea } from "@tabdo/ui/components/textarea";
 import {
   Select,
   SelectContent,
@@ -23,7 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@tabdo/ui/components/select";
 import { ReportChart } from "./ReportChart";
 import { ReportDataPopover } from "./ReportDataPopover";
 import { DashboardCanvas } from "./DashboardCanvas";

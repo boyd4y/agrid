@@ -1,5 +1,5 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Funnel, FunnelChart, LabelList, Line, LineChart, Pie, PieChart, PolarAngleAxis, PolarGrid, Radar, RadarChart, RadialBar, RadialBarChart, Scatter, ScatterChart, Treemap, XAxis, YAxis } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@tabdo/ui/components/chart";
 import type { ReportConfig, ReportData } from "@tabdo/shared";
 import i18n from "@/i18n";
 const color = (index: number) => `var(--chart-${index % 5 + 1})`;

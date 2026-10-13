@@ -4,14 +4,14 @@ import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { docsNav, searchDocs } from "@/data/docs";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { Input } from "@tabdo/ui/components/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@tabdo/ui/components/select";
 
 export function DocsMobileNav() {
   const { t, i18n } = useTranslation("docs");

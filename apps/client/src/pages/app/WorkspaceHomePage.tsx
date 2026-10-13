@@ -4,7 +4,7 @@ import { useOutletContext } from "react-router-dom";
 import { ChatPanel, type OpenPreviewPayload } from "@/components/chat/ChatPanel";
 import { PreviewSlot } from "@/components/preview/PreviewSlot";
 import type { PreviewSlotContext, PreviewSlotKind, PreviewTab } from "@/components/preview/preview-slot";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@tabdo/ui/components/resizable";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import { api } from "@/lib/api";
 import type { FullTable } from "@/types/table";

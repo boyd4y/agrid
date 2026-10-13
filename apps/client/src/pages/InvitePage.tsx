@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";

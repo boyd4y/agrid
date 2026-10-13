@@ -1,5 +1,5 @@
 import { Loader2, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { DataTable } from "@/components/table/DataTable";
 import type { PreviewSlotContext } from "./preview-slot";
 import { useTranslation } from "react-i18next";

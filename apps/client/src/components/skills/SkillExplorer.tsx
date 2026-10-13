@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronRight, Code2, Copy, FileText, Folder } from "lucide-react";
 import type { SkillDocument, SkillFile } from "@tabdo/shared";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 

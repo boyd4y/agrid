@@ -8,8 +8,8 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
+} from "@tabdo/ui/components/tooltip";
+import { Button } from "@tabdo/ui/components/button";
 import { cn } from "@/lib/utils";
 
 export type TooltipIconButtonProps = ComponentPropsWithRef<typeof Button> & {

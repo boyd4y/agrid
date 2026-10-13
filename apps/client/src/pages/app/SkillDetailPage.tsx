@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import type { SkillDocument } from "@tabdo/shared";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { SkillExplorer } from "@/components/skills/SkillExplorer";
-import { Button } from "@/components/ui/button";
+import { Button } from "@tabdo/ui/components/button";
 import { api } from "@/lib/api";
 import { useTranslation } from "react-i18next";
 

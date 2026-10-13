@@ -3,11 +3,11 @@ import { Cpu, Wrench, Search, Loader2, RefreshCw } from "lucide-react";
 import type { AgentToolCatalogItem } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import type { HarnessId } from "@/lib/harness";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Field, FieldGroup, FieldContent, FieldLabel, FieldDescription, FieldError } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@tabdo/ui/components/card";
+import { Field, FieldGroup, FieldContent, FieldLabel, FieldDescription, FieldError } from "@tabdo/ui/components/field";
+import { Input } from "@tabdo/ui/components/input";
+import { Switch } from "@tabdo/ui/components/switch";
+import { Button } from "@tabdo/ui/components/button";
 import { useTranslation } from "react-i18next";
 
 export function AgentToolFields({ harness, disabledTools, onChange, disabled }: {

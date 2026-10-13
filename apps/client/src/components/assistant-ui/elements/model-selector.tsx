@@ -8,7 +8,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@tabdo/ui/components/popover";
 import {
   Command,
   CommandEmpty,
@@ -17,7 +17,7 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@/components/ui/command";
+} from "@tabdo/ui/components/command";
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui";
 
 import {

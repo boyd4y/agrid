@@ -1,6 +1,6 @@
 # 测试与浏览器回归
 
-测试与源码按包平级：`apps/server/test/{ai,commands,queue,reports,skills,harness,routes}`、`packages/shared/test`、`apps/client/test`。生产 TypeScript 只编译 `src`；apps/server/shared 构建先清理 `dist`，避免旧编译测试残留。apps/server/shared 的 `tsconfig.test.json` 单独覆盖测试和其源码导入，检查时不输出文件。
+测试与源码按包平级：`apps/server/test/{ai,commands,queue,reports,skills,harness,routes}`、`packages/shared/test`、`packages/ui/test`、`apps/client/test`。生产 TypeScript 只编译 `src`；apps/server/shared 构建先清理 `dist`，避免旧编译测试残留。apps/server/shared 的 `tsconfig.test.json` 单独覆盖测试和其源码导入，检查时不输出文件。
 
 ## 常规检查
 

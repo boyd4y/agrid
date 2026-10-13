@@ -3,14 +3,14 @@ import { MemberChip } from "@/components/members/MemberChip";
 import { RelationPicker, RelationTags } from "./RelationPicker";
 import { useState, type KeyboardEvent } from "react";
 import { Check, Search, X } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Checkbox } from "@tabdo/ui/components/checkbox";
+import { Input } from "@tabdo/ui/components/input";
 import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-} from "@/components/ui/popover";
-import { DatePicker } from "@/components/ui/date-picker";
+} from "@tabdo/ui/components/popover";
+import { DatePicker } from "@/components/controls/date-picker";
 import { formatDateDisplay } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { SelectChip } from "./SelectChip";

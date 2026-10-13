@@ -3,9 +3,9 @@ import { Avatar, Style } from "@dicebear/core";
 import definition from "@dicebear/styles/notionists.json";
 import croodlesDefinition from "@dicebear/styles/croodles.json";
 import { RefreshCw, UserRound, Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { FieldDescription } from "@/components/ui/field";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@tabdo/ui/components/button";
+import { FieldDescription } from "@tabdo/ui/components/field";
+import { Tabs, TabsList, TabsTrigger } from "@tabdo/ui/components/tabs";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 
