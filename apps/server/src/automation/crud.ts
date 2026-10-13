@@ -3,8 +3,8 @@ import { db, type Transaction } from "../db/index.js";
 import { automations, automationRuns, automationEvents, automationOutbox, rows, tables, member,
   columns, agentProfile, integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { queueName } from "../queue/config.js";
-import { requireTableInOrg } from "../tenant/scope.js";
-import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, parseAutomationCommand, validateAutomationActionReferences,
+import { requireTableInOrg, requireOrgId } from "../tenant/scope.js";
+import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA, parseAutomationCommand, validateAutomationActionReferences,
   type AutomationRule, type AutomationRun, type AutomationSource, type CreateAutomationInput, type UpdateAutomationInput,
   type ListAutomationsInput, type DeleteAutomationInput, type ListAutomationRunsInput } from "@tabdo/shared";
 import { schedulePreview, syncSchedule } from "./schedule.js";
@@ -90,9 +90,13 @@ export async function getWorkspaceAutomation(id: string, organizationId: string)
   const [sourceTable] = row.tableId ? await db.select({ name: tables.name }).from(tables).where(eq(tables.id, row.tableId)) : [];
   return { ...mapRule(row), sourceName: sourceTable?.name ?? null };
 }
-export async function listAutomations({ tableId, organizationId }: ListAutomationsInput & OrgScoped) {
-  await requireTableInOrg(tableId, organizationId);
-  return (await db.select().from(automations).where(and(eq(automations.tableId, tableId), isNull(automations.deletedAt))).orderBy(asc(automations.createdAt))).map(mapRule);
+export async function listAutomations(input: ListAutomationsInput & OrgScoped) {
+  const organizationId = requireOrgId(input.organizationId);
+  const { tableId, offset, limit } = AUTOMATION_LIST_SCHEMA.parse({ tableId: input.tableId, offset: input.offset, limit: input.limit });
+  if (tableId) await requireTableInOrg(tableId, organizationId);
+  return (await db.select().from(automations).where(and(eq(automations.organizationId, organizationId),
+    tableId ? eq(automations.tableId, tableId) : undefined, isNull(automations.deletedAt)))
+    .orderBy(asc(automations.createdAt), asc(automations.id)).limit(limit ?? 100).offset(offset ?? 0)).map(mapRule);
 }
 export async function createAutomation(input: CreateAutomationInput & OrgScoped) {
   const { organizationId, actorId, ...wire } = input;
@@ -137,10 +141,19 @@ export async function listRuleRuns(automationId: string, organizationId: string,
   return (await db.select().from(automationRuns).where(eq(automationRuns.automationId, automationId)).orderBy(desc(automationRuns.createdAt)).limit(Math.min(Math.max(limit, 1), 200))).map(mapRun);
 }
 export async function listAutomationRuns(input: ListAutomationRunsInput & OrgScoped) {
-  await requireTableInOrg(input.tableId, input.organizationId);
-  const conds = [eq(automationRuns.tableId, input.tableId)];
-  if (input.automationId) conds.push(eq(automationRuns.automationId, input.automationId));
-  return (await db.select().from(automationRuns).where(and(...conds)).orderBy(desc(automationRuns.createdAt)).limit(Math.min(Math.max(input.limit ?? 50, 1), 200))).map(mapRun);
+  const organizationId = requireOrgId(input.organizationId);
+  const { tableId, automationId, limit } = AUTOMATION_RUN_LIST_SCHEMA.parse({ tableId: input.tableId, automationId: input.automationId, limit: input.limit });
+  if (tableId) await requireTableInOrg(tableId, organizationId);
+  if (automationId) {
+    const rule = await ownedRule(automationId, organizationId);
+    if (tableId && rule.tableId !== tableId) throw new Error("自动化不属于指定表格");
+  }
+  return (await db.select({ run: automationRuns }).from(automationRuns)
+    .innerJoin(automations, eq(automations.id, automationRuns.automationId)).where(and(
+      eq(automations.organizationId, organizationId), isNull(automations.deletedAt),
+      tableId ? eq(automationRuns.tableId, tableId) : undefined,
+      automationId ? eq(automationRuns.automationId, automationId) : undefined))
+    .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit ?? 50)).map(hit => mapRun(hit.run));
 }
 export async function getEnabledAutomations(tableId: string) {
   return (await db.select().from(automations).where(and(eq(automations.tableId, tableId), eq(automations.enabled, true), isNull(automations.deletedAt)))).map(mapRule);

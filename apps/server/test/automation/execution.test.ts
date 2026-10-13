@@ -103,6 +103,33 @@ test("verified external events match their source and typed conditions without i
   const saved = await db.select().from(rows).where(eq(rows.tableId, target.id));assert.equal(saved.length, 1);
   assert.equal(saved[0].cells[target.title], "After first receipt");assert.equal(saved[0].cells[amount.id], 0);assert.equal(saved[0].cells[enabled.id], false);
   assert.equal(event.status, "completed");
+
+  // The actual agent tools must discover and inspect non-table rules even from a table conversation.
+  const { createTableTools } = await import("../../src/ai/tools.js");
+  const tools = createTableTools(target.id, org, owner);
+  const options = { toolCallId: "automation-query-fixture", messages: [] };
+  const all = await tools.list_automations.execute({}, options);
+  const externalRule = all.find((rule: any) => rule.source.kind === "webhook" && rule.source.endpointId === endpointId);
+  assert(externalRule);
+  const first = await tools.list_automations.execute({ limit: 1 }, options);
+  const next = await tools.list_automations.execute({ limit: 1, offset: 1 }, options);
+  assert.deepEqual([first[0].id, next[0].id], all.slice(0, 2).map((rule: any) => rule.id));
+  const filtered = await tools.list_automations.execute({ tableId: target.id }, options);
+  assert(!filtered.some((rule: any) => rule.id === externalRule.id));
+  const inspected = await tools.list_automation_runs.execute({ automationId: externalRule.id }, options);
+  assert.equal(inspected.length, 1);assert.equal(inspected[0].status, "completed");assert.equal(inspected[0].tableId, null);
+  assert.equal(inspected[0].ruleSnapshot, undefined);
+  await assert.rejects(tools.list_automation_runs.execute({ tableId: target.id, automationId: externalRule.id }, options), /不属于/);
+  await assert.rejects(commands.listAutomations({}), /组织/);
+  await assert.rejects(commands.listAutomationRuns({}), /组织/);
+  const foreign = randomUUID();
+  await db.insert(organization).values({ id: foreign, name: "Foreign automation", slug: foreign });
+  try {
+    await db.insert(member).values({ id: randomUUID(), userId: owner, organizationId: foreign, role: "owner" });
+    const foreignRule = await createAutomation({ organizationId: foreign, actorId: owner, name: "Private schedule", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" }, actions: [{ type: "command", command: "addRow", input: { tableId: target.id } }] });
+    assert(!(await tools.list_automations.execute({}, options)).some((rule: any) => rule.id === foreignRule.id));
+    await assert.rejects(tools.list_automation_runs.execute({ automationId: foreignRule.id }, options), /不存在/);
+  } finally { await db.delete(organization).where(eq(organization.id, foreign)); }
 });
 
 test("a real receipt insertion failure rolls back its batch; retry preserves prior receipts and executes only the remaining step", async () => {

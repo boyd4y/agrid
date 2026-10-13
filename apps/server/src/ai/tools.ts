@@ -1,5 +1,5 @@
 import { createBatchTools } from "./batch-tools.js";
-import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA } from "@tabdo/shared";
+import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
 import { createReportTools } from "./report-tools.js";
 import { relationConfigSchema, rollupConfigSchema } from "../commands/relations.js";
 import { tool, zodSchema } from "ai";
@@ -63,9 +63,9 @@ export function createTableTools(
     }),
 
     list_automations: tool({
-      description: "列出指定表格的自动化规则。工作区对话必须先指定表格。",
-      inputSchema: zodSchema(z.object({ tableId: z.string().uuid().optional() })),
-      execute: async ({ tableId }) => cmds.listAutomations({ tableId: tableIdOrDefault(tableId), ...org }),
+      description: "列出当前工作区的所有来源自动化，包括表格、邮件、Webhook和定时；tableId可选以筛选指定表格，按offset分页，每页最多100条。",
+      inputSchema: zodSchema(AUTOMATION_LIST_SCHEMA),
+      execute: async input => cmds.listAutomations({ ...input, ...org }),
     }),
     create_automation: tool({
       description: "创建持续生效的自动化：表格变更、Webhook、已接入的AgentMail邮箱或定时计划，执行数据命令或指定智能体任务。一次性mock/导入用batch_add_rows。来源必须实际配置；先get_table取得字段ID。智能体动作必须选真实agentUserId+prompt。",
@@ -83,9 +83,9 @@ export function createTableTools(
       execute: async (input) => cmds.deleteAutomation({ ...input, ...org }),
     }),
     list_automation_runs: tool({
-      description: "查看自动化执行记录和失败原因。最多返回 200 条。",
-      inputSchema: zodSchema(z.object({ tableId: z.string().uuid().optional(), automationId: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional() })),
-      execute: async (input) => cmds.listAutomationRuns({ ...input, tableId: tableIdOrDefault(input.tableId), ...org }),
+      description: "查看当前工作区的自动化执行记录和失败原因，可按automationId查询任意来源规则，或按tableId筛选；最多200条。",
+      inputSchema: zodSchema(AUTOMATION_RUN_LIST_SCHEMA),
+      execute: async input => cmds.listAutomationRuns({ ...input, ...org }),
     }),
 
     get_table: tool({

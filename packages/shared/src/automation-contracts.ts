@@ -123,6 +123,8 @@ export const AUTOMATION_CREATE_SCHEMA = z.object({ source: AUTOMATION_SOURCE_SCH
   conditions: z.array(AUTOMATION_FILTER_SCHEMA).max(100).optional(), conditionLogic: z.enum(["and", "or"]).optional(),
   eventConditions: z.array(AUTOMATION_EVENT_CONDITION_SCHEMA).max(100).optional(), actions: z.array(AUTOMATION_ACTION_SCHEMA).min(1).max(100) }).strict();
 export const AUTOMATION_UPDATE_SCHEMA = AUTOMATION_CREATE_SCHEMA.omit({ tableId: true }).partial();
+export const AUTOMATION_LIST_SCHEMA = z.object({ tableId: uuid.optional(), offset: z.number().int().min(0).max(1_000_000).optional(), limit: z.number().int().min(1).max(100).optional() }).strict();
+export const AUTOMATION_RUN_LIST_SCHEMA = z.object({ tableId: uuid.optional(), automationId: uuid.optional(), limit: z.number().int().min(1).max(200).optional() }).strict();
 
 /** Validate reference structure before saving, without requiring a live event. */
 export function validateAutomationActionReferences(actions: readonly AutomationAction[]): void {

@@ -131,11 +131,11 @@ export type UpdateAutomationInput = {
   actions?: AutomationAction[];
 };
 
-export type ListAutomationsInput = { tableId: string };
+export type ListAutomationsInput = { tableId?: string; offset?: number; limit?: number };
 export type GetAutomationInput = { automationId: string };
 export type DeleteAutomationInput = { automationId: string };
 export type ListAutomationRunsInput = {
-  tableId: string;
+  tableId?: string;
   automationId?: string;
   limit?: number;
 };

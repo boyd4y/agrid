@@ -6,7 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { COLUMN_TYPES, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA } from "@tabdo/shared";
+import { COLUMN_TYPES, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
 import { callCommand, textResult } from "./client.js";
 
 const cellValue = z.union([
@@ -57,8 +57,8 @@ for (const [name, definition] of Object.entries(BATCH_TOOLS)) {
 server.registerTool("create_automation", { description: "创建持续生效的表格事件、Webhook、AgentMail或定时自动化，动作可操作数据或运行指定智能体。一次性新增mock记录用batch_add_rows。", inputSchema: AUTOMATION_CREATE_SCHEMA.shape }, async input => textResult(await callCommand("createAutomation", input)));
 server.registerTool("update_automation", { description: "修改已保存自动化的配置、时间计划和动作，或启停。", inputSchema: AUTOMATION_UPDATE_SCHEMA.extend({ automationId: z.string().uuid() }).shape }, async input => textResult(await callCommand("updateAutomation", input)));
 server.registerTool("delete_automation", { description: "删除自动化并停止未来触发。", inputSchema: { automationId: z.string().uuid() } }, async input => textResult(await callCommand("deleteAutomation", input)));
-server.registerTool("list_automations", { description: "列出指定表格的自动化。", inputSchema: { tableId: z.string().uuid() } }, async input => textResult(await callCommand("listAutomations", input)));
-server.registerTool("list_automation_runs", { description: "查看指定表格的自动化执行结果，最多200条。", inputSchema: { tableId: z.string().uuid(), automationId: z.string().uuid().optional(), limit: z.number().int().min(1).max(200).optional() } }, async input => textResult(await callCommand("listAutomationRuns", input)));
+server.registerTool("list_automations", { description: "分页列出工作区所有来源自动化，tableId可选筛选。", inputSchema: AUTOMATION_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listAutomations", input)));
+server.registerTool("list_automation_runs", { description: "查看工作区自动化执行结果，可按任意来源automationId或tableId筛选，最多200条。", inputSchema: AUTOMATION_RUN_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listAutomationRuns", input)));
 
 server.registerTool("rename_view", { description: "重命名表格、看板或表单视图。", inputSchema: RENAME_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("renameView", input)));
 server.registerTool("set_default_view", { description: "设置表格唯一默认视图。", inputSchema: SET_DEFAULT_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("setDefaultView", input)));
