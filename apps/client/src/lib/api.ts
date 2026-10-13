@@ -118,7 +118,12 @@ function uploadFiles(tableId: string, columnId: string, files: File[], onProgres
     xhr.send(body);
   });
 }
+export type UserApiKeyInfo = { id: string; name: string; prefix: string; createdAt: string; revokedAt: string | null };
+
 export const api = {
+  listApiKeys: (signal?: AbortSignal) => request<{ keys: UserApiKeyInfo[] }>("/api/user/api-keys", { signal }),
+  createApiKey: (name: string) => request<{ key: UserApiKeyInfo; secret: string }>("/api/user/api-keys", { method: "POST", body: JSON.stringify({ name }), errorToast: false }),
+  revokeApiKey: (id: string) => request<{ key: UserApiKeyInfo }>(`/api/user/api-keys/${id}`, { method: "DELETE", errorToast: false }),
   uploadFiles,
   getFiles: (ids: string[]) => request<{ files: import("@tabdo/shared").StoredFile[] }>(`/api/files?ids=${encodeURIComponent(ids.join(","))}`),
   fileDownloadUrl: (id: string) => `/api/files/${encodeURIComponent(id)}/download`,

@@ -4,6 +4,7 @@ import { organization } from "better-auth/plugins";
 import { db } from "../db/index.js";
 import * as schema from "../db/schema.js";
 import { sendInviteEmail } from "./email.js";
+import { userKeyInvitationContext } from "./key-invitation-context.js";
 
 const appUrl = process.env.APP_URL || "http://localhost:5173";
 /** Dev-only fallback — never valid in production. */
@@ -54,6 +55,7 @@ const secret = isProd
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",
   basePath: "/api/auth",
+  hooks: { before: userKeyInvitationContext },
   secret,
   trustedOrigins: [appUrl, "http://localhost:5173", "http://127.0.0.1:5173"],
   database: drizzleAdapter(db, {

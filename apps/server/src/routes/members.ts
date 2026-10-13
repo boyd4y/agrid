@@ -6,6 +6,7 @@ import { getAgentToolCatalog, validateDisabledTools } from "../harness/tool-cata
 import { db } from "../db/index.js";
 import { agentProfile, member, user, organization } from "../db/schema.js";
 import { auth } from "../auth/index.js";
+import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
 import { validateSelectedSkills } from "../skills/service.js";
 import { avatarImageSchema, botAvatarSchema, memberAvatarUrl } from "../auth/avatar.js";
 import {
@@ -56,7 +57,7 @@ membersRoute.post("/invite", async (c) => {
     .parse(await c.req.json());
 
   try {
-    const result = await auth.api.createInvitation({
+    const createInvitation = () => auth.api.createInvitation({
       body: {
         email: body.email,
         role: body.role,
@@ -64,6 +65,9 @@ membersRoute.post("/invite", async (c) => {
       },
       headers: c.req.raw.headers,
     });
+    const result = actor.kind === "human" && /^bearer tab_/i.test(c.req.header("authorization") ?? "")
+      ? await withUserKeyInvitation(actor, createInvitation)
+      : await createInvitation();
     return c.json({ ok: true, invitation: result });
   } catch (e) {
     return c.json(

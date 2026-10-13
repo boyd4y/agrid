@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { agentProfile, member, user, organization } from "../db/schema.js";
+import { agentProfile, member, user, organization, userApiKeys } from "../db/schema.js";
 import type { MemberRole } from "../db/schema.js";
 import { auth } from "./index.js";
 import { memberAvatarUrl } from "./avatar.js";
@@ -20,9 +20,22 @@ export function hashApiKey(raw: string) {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-/** Resolve actor from Better Auth session cookie OR Agent Bearer API key */
+/** Resolve actor from a session cookie or a user / legacy agent Bearer key. */
 export async function resolveActor(req: Request): Promise<Actor | null> {
   const authHeader = req.headers.get("authorization");
+  if (authHeader?.toLowerCase().startsWith("bearer tab_")) {
+    const raw = authHeader.slice("bearer ".length).trim();
+    if (!/^tab_[A-Za-z0-9_-]{43}$/.test(raw)) return null;
+    const [hit] = await db.select({ account: user, membership: member })
+      .from(userApiKeys)
+      .innerJoin(user, eq(user.id, userApiKeys.userId))
+      .innerJoin(member, and(eq(member.userId, userApiKeys.userId), eq(member.organizationId, userApiKeys.organizationId)))
+      .where(and(eq(userApiKeys.keyHash, hashApiKey(raw)), isNull(userApiKeys.revokedAt))).limit(1);
+    if (!hit || hit.account.kind !== "human") return null;
+    return { kind: "human", userId: hit.account.id, memberId: hit.membership.id,
+      organizationId: hit.membership.organizationId, role: hit.membership.role,
+      name: hit.account.name, email: hit.account.email };
+  }
   if (authHeader?.toLowerCase().startsWith("bearer agt_")) {
     const raw = authHeader.slice("bearer ".length).trim();
     const hash = hashApiKey(raw);

@@ -131,7 +131,7 @@
     "noMatch": "No matching skills"
   },
   "settings": {
-    "description": "Workspace appearance and layout preferences",
+    "description": "Workspace preferences and personal API access",
     "appearance": "Appearance",
     "appearanceAria": "Workspace appearance",
     "layout": "Layout",
@@ -141,7 +141,32 @@
     "shortcutSidebar": "Collapse / expand sidebar",
     "shortcutAi": "Open / close AI",
     "language": "Language",
-    "languageAria": "Interface language"
+    "languageAria": "Interface language",
+    "apiKeys": {
+      "title": "Personal API keys",
+      "description": "Access this workspace as you. Your current membership and permissions apply to every request.",
+      "create": "Create API key",
+      "name": "Name",
+      "namePlaceholder": "e.g. Personal script",
+      "createdTitle": "API key created",
+      "once": "Copy this key now. It is shown only once and cannot be viewed again after closing.",
+      "secretLabel": "API key",
+      "copy": "Copy API key",
+      "copied": "API key copied",
+      "copyFailed": "Unable to copy. Select and copy the key manually.",
+      "usage": "Send it in the Authorization header as Bearer tab_… . Keep it private.",
+      "creating": "Creating…",
+      "createFailed": "Unable to create the key. Please retry.",
+      "empty": "No API keys in this workspace yet.",
+      "loadFailed": "Unable to load API keys",
+      "revoke": "Revoke key",
+      "revokeAria": "Revoke {{name}}",
+      "revokeTitle": "Revoke this API key?",
+      "revokeDescription": "“{{name}}” will stop working immediately. Scripts using it will lose access.",
+      "revoking": "Revoking…",
+      "revoked": "Revoked",
+      "createdAt": "Created {{date}}"
+    }
   },
   "directory": {
     "loadingLabel": "Loading {{label}}",

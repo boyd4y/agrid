@@ -65,6 +65,18 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/** Personal API credentials are bound to one user/workspace; never store plaintext. */
+export const userApiKeys = pgTable("user_api_keys", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull(),
+  prefix: text("prefix").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+}, (t) => [uniqueIndex("user_api_keys_hash_idx").on(t.keyHash), index("user_api_keys_owner_idx").on(t.userId, t.organizationId, t.createdAt)]);
+
 export const session = pgTable(
   "session",
   {

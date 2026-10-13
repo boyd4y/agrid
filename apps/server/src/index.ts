@@ -12,6 +12,7 @@ import { membersRoute } from "./routes/members.js";
 import { commandsRoute } from "./routes/commands.js";
 import { automationsRoute } from "./routes/automations.js";
 import { reportsRoute } from "./routes/reports.js";
+import { apiKeysRoute } from "./routes/api-keys.js";
 import { filesRoute } from "./routes/files.js";
 import { skillsRoute } from "./routes/skills.js";
 import { auth } from "./auth/index.js";
@@ -65,6 +66,7 @@ app.route("/api", automationsRoute);
 app.route("/api/reports", reportsRoute);
 app.route("/api/skills", skillsRoute);
 app.route("/api", filesRoute);
+app.route("/api/user/api-keys", apiKeysRoute);
 
 app.onError((err, c) => {
   if ("getResponse" in err && typeof err.getResponse === "function") return err.getResponse();

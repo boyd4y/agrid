@@ -8,11 +8,14 @@ import { ToggleGroup, ToggleGroupItem } from "@tabdo/ui/components/toggle-group"
 import { useTheme, type Theme } from "@/components/theme/theme-provider";
 import { useTranslation } from "react-i18next";
 import { setAppLocale, type AppLocale } from "@/i18n";
+import { useAuth } from "@/hooks/useAuth";
+import { ApiKeysSettings } from "@/components/settings/ApiKeysSettings";
 
 export function SettingsPage() {
   const { t, i18n } = useTranslation(["app", "common"]);
   const { sidebarCollapsed, setSidebarCollapsed, aiOpen, setAiOpen } = useAppShell();
   const { theme, setTheme } = useTheme();
+  const { user, session } = useAuth();
   const locale = (i18n.language?.startsWith("en") ? "en" : "zh-CN") as AppLocale;
   const mod = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
     ? t("common:modKey")
@@ -57,6 +60,7 @@ export function SettingsPage() {
         <Field orientation="horizontal"><FieldLabel htmlFor="settings-ai">{t("settings.defaultAiDrawer")}</FieldLabel><Switch id="settings-ai" aria-label={t("settings.defaultAiDrawer")} checked={aiOpen} onCheckedChange={setAiOpen} /></Field>
       </FieldGroup></CardContent>
     </Card>
+    {user && user.kind !== "agent" && <ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} />}
     <Card className="shrink-0">
       <CardHeader><CardTitle className="flex items-center gap-2"><Keyboard aria-hidden className="size-4" />{t("settings.shortcuts")}</CardTitle></CardHeader>
       <CardContent><ul className="flex flex-col gap-2 text-sm text-muted-foreground">
