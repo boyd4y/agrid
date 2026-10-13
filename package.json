@@ -23,7 +23,12 @@
     "typecheck:test": "pnpm --filter @tabdo/shared typecheck:test && pnpm --filter @tabdo/server typecheck:test",
     "test:browser": "pnpm --filter @tabdo/client test:browser",
     "storybook": "pnpm --filter @tabdo/ui storybook",
-    "build-storybook": "pnpm --filter @tabdo/ui build-storybook"
+    "build-storybook": "pnpm --filter @tabdo/ui build-storybook",
+    "shadcn": "node scripts/shadcn.mjs",
+    "shadcn:ui": "node scripts/shadcn.mjs --workspace=ui"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "shadcn": "4.21.4"
+  }
 }

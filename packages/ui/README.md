@@ -24,3 +24,5 @@ pnpm --filter @tabdo/ui typecheck
 ```
 
 Storybook runs on port 6006 by default. For an independent instance use `pnpm --filter @tabdo/ui exec storybook dev -p 6016 --ci --no-open`. The toolbar switches light and dark themes; examples use local state and do not call application APIs.
+
+For component documentation and project inspection, run `pnpm shadcn:ui docs select input button` or `pnpm shadcn:ui info --json` from the repository root. `pnpm shadcn` targets the client app. These use the pinned official CLI and the configured workspace aliases; see [CLI and proxy notes](../../docs/shadcn-cli.md).
