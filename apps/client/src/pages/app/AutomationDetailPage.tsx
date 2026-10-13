@@ -13,6 +13,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
 import { AutomationRunsSheet } from "@/components/automation/AutomationRunsSheet";
 import { api, type MemberOption } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import type { FullTable } from "@/types/table";
 import type { AutomationRule } from "@tabdo/shared";
@@ -64,7 +65,7 @@ export function AutomationDetailPage() {
   return <AppPage header={<AppPageHeader page="automations" description={automationId ? rule?.name ?? t("editAutomation") : t("newAutomation")}><Button variant="ghost" size="sm" disabled={saving} onClick={() => navigate("/app/automations")}><ArrowLeft data-icon="inline-start" />{t("backToList")}</Button>{rule && <AutomationRunsSheet tableId={tableId} automationId={rule.id} name={rule.name} />}</AppPageHeader>}>
     {error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}
     {loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p> : (!automationId || rule) && <>
-      {!automationId && step === "source" && <Card className="mx-auto w-full max-w-xl" data-testid="automation-source-step">
+      {!automationId && step === "source" && <Card className="mx-auto my-auto w-full max-w-xl shrink-0" data-testid="automation-source-step">
         <CardHeader><CardDescription>{t("creationStep", { step: 1 })}</CardDescription><CardTitle>{t("pickSourceTable")}</CardTitle></CardHeader>
         <CardContent>
           {tablesLoading ? <p role="status" className="py-6 text-sm text-muted-foreground">{t("loading")}</p> : !tables.length ? <FieldGroup><Field><FieldDescription>{t("noAvailableSources")}</FieldDescription><Button asChild variant="outline" className="self-start"><Link to="/app/tables">{t("createTableFirst")}</Link></Button></Field></FieldGroup> : <FieldGroup><Field>
@@ -88,7 +89,7 @@ export function AutomationDetailPage() {
           <Button type="button" className="shrink-0" disabled={!selectedSource || saving} onClick={chooseSource}>{t("nextStep")}<ArrowRight data-icon="inline-end" /></Button>
         </CardFooter>
       </Card>}
-      <div data-testid="automation-configuration-step" hidden={!automationId && step !== "configure"}>
+      <div className={cn(!automationId && "my-auto shrink-0")} data-testid="automation-configuration-step" hidden={!automationId && step !== "configure"}>
         {automationId ? <FieldGroup className="mx-auto mb-5 w-full max-w-3xl"><Field><FieldLabel htmlFor="automation-source">{t("sourceTable")}</FieldLabel>
           <Select value={tableId} disabled><SelectTrigger id="automation-source"><SelectValue placeholder={t("pickTriggerTable")} /></SelectTrigger><SelectContent><SelectGroup>{tables.map((source) => <SelectItem key={source.id} value={source.id}>{source.name}</SelectItem>)}</SelectGroup></SelectContent></Select>
         </Field></FieldGroup> : <div className="mx-auto mb-4 flex w-full max-w-3xl flex-wrap items-center justify-between gap-3">
