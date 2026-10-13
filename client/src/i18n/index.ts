@@ -8,6 +8,7 @@ import chatZh from "./locales/zh-CN/chat.json";
 import docsZh from "./locales/zh-CN/docs.json";
 import marketingZh from "./locales/zh-CN/marketing.json";
 import authZh from "./locales/zh-CN/auth.json";
+import tableZh from "./locales/zh-CN/table.json";
 
 import commonEn from "./locales/en/common.json";
 import errorsEn from "./locales/en/errors.json";
@@ -16,6 +17,7 @@ import chatEn from "./locales/en/chat.json";
 import docsEn from "./locales/en/docs.json";
 import marketingEn from "./locales/en/marketing.json";
 import authEn from "./locales/en/auth.json";
+import tableEn from "./locales/en/table.json";
 
 export const LOCALE_STORAGE_KEY = "tabdo.locale";
 export const LEGACY_LOCALE_KEYS = ["agrid.locale"] as const;
@@ -74,6 +76,7 @@ void i18n.use(initReactI18next).init({
       docs: docsZh,
       marketing: marketingZh,
       auth: authZh,
+      table: tableZh,
     },
     en: {
       common: commonEn,
@@ -83,12 +86,13 @@ void i18n.use(initReactI18next).init({
       docs: docsEn,
       marketing: marketingEn,
       auth: authEn,
+      table: tableEn,
     },
   },
   lng: initial,
   fallbackLng: "zh-CN",
   defaultNS: "common",
-  ns: ["common", "errors", "app", "chat", "docs", "marketing", "auth"],
+  ns: ["common", "errors", "app", "chat", "docs", "marketing", "auth", "table"],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

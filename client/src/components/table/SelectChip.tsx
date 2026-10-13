@@ -1,8 +1,9 @@
 import { X } from "lucide-react";
 import { selectOptionStyle } from "@/lib/select-colors";
 import type { SelectOption } from "@/types/table";
+import { useTranslation } from "react-i18next";
 
-/** Shared Notion-style select/multi_select chip — same in cell, popover, and filters. */
+/** Shared select/multi_select chip — same in cell, popover, and filters. */
 export function SelectChip({
   option,
   onRemove,
@@ -12,6 +13,7 @@ export function SelectChip({
   onRemove?: () => void;
   className?: string;
 }) {
+  const { t } = useTranslation("table");
   const style = selectOptionStyle(option.color);
   return (
     <span
@@ -25,7 +27,7 @@ export function SelectChip({
       {onRemove && (
         <button
           type="button"
-          aria-label={`移除${option.label}`}
+          aria-label={t("removeOption", { label: option.label })}
           className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm opacity-60 hover:bg-current/10 hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();

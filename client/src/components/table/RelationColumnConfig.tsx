@@ -10,21 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
 import type {
   ColumnConfig,
   ColumnDef,
   FullTable,
   TableMeta,
 } from "@/types/table";
-const operations = {
-  count: "关联记录数",
-  sum: "求和",
-  average: "平均值",
-  min: "最小值",
-  max: "最大值",
-  earliest: "最早日期",
-  latest: "最晚日期",
-} as const;
 export function RelationColumnConfig({
   type,
   config,
@@ -38,6 +30,16 @@ export function RelationColumnConfig({
   columns: ColumnDef[];
   existing?: boolean;
 }) {
+  const { t } = useTranslation("table");
+  const operations = {
+    count: t("rollupOps.count"),
+    sum: t("rollupOps.sum"),
+    average: t("rollupOps.average"),
+    min: t("rollupOps.min"),
+    max: t("rollupOps.max"),
+    earliest: t("rollupOps.earliest"),
+    latest: t("rollupOps.latest"),
+  } as const;
   const [tables, setTables] = useState<TableMeta[]>([]),
     [target, setTarget] = useState<FullTable | null>(null),
     [error, setError] = useState<string | null>(null);
@@ -115,7 +117,7 @@ export function RelationColumnConfig({
       {type === "relation" ? (
         <>
           <div className="space-y-1">
-            <Label>关联表格</Label>
+            <Label>{t("relationTable")}</Label>
             <Select
               value={relation?.targetTableId ?? ""}
               onValueChange={(targetTableId) =>
@@ -123,8 +125,8 @@ export function RelationColumnConfig({
               }
               disabled={existing}
             >
-              <SelectTrigger aria-label="关联表格">
-                <SelectValue placeholder="选择目标表格" />
+              <SelectTrigger aria-label={t("relationTable")}>
+                <SelectValue placeholder={t("pickTargetTable")} />
               </SelectTrigger>
               <SelectContent>
                 {tables.map((table) => (
@@ -136,7 +138,7 @@ export function RelationColumnConfig({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>允许关联</Label>
+            <Label>{t("relationAllow")}</Label>
             <Select
               value={relation?.limit ?? "many"}
               onValueChange={(limit) =>
@@ -144,18 +146,18 @@ export function RelationColumnConfig({
               }
               disabled={existing}
             >
-              <SelectTrigger aria-label="允许关联">
+              <SelectTrigger aria-label={t("relationAllow")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="one">一条记录</SelectItem>
-                <SelectItem value="many">多条记录</SelectItem>
+                <SelectItem value="one">{t("relationLimitOne")}</SelectItem>
+                <SelectItem value="many">{t("relationLimitMany")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {existing ? (
             <p className="text-xs text-muted-foreground">
-              更换目标表或关联限制，请创建新关联字段。删除此字段也会移除对应的反向字段。
+              {t("relationChangeHint")}
             </p>
           ) : (
             <>
@@ -164,21 +166,21 @@ export function RelationColumnConfig({
                   checked={Boolean(relation?.inverseName)}
                   onCheckedChange={(checked) =>
                     updateRelation({
-                      inverseName: checked ? "关联记录" : undefined,
+                      inverseName: checked ? t("inverseDefaultName") : undefined,
                     })
                   }
                 />
-                在目标表显示反向关联
+                {t("showInverse")}
               </label>
               {relation?.inverseName !== undefined && (
                 <div className="space-y-2">
                   <Input
-                    aria-label="反向字段名称"
+                    aria-label={t("inverseFieldName")}
                     value={relation.inverseName}
                     onChange={(e) =>
                       updateRelation({ inverseName: e.target.value })
                     }
-                    placeholder="反向字段名称"
+                    placeholder={t("inverseFieldName")}
                   />
                   <Select
                     value={relation.inverseLimit ?? "many"}
@@ -186,12 +188,12 @@ export function RelationColumnConfig({
                       updateRelation({ inverseLimit: limit as "one" | "many" })
                     }
                   >
-                    <SelectTrigger aria-label="反向关联限制">
+                    <SelectTrigger aria-label={t("inverseLimit")}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="one">反向最多一条记录</SelectItem>
-                      <SelectItem value="many">反向允许多条记录</SelectItem>
+                      <SelectItem value="one">{t("inverseLimitOne")}</SelectItem>
+                      <SelectItem value="many">{t("inverseLimitMany")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -202,15 +204,15 @@ export function RelationColumnConfig({
       ) : (
         <>
           <div className="space-y-1">
-            <Label>通过哪个关联汇总</Label>
+            <Label>{t("rollupVia")}</Label>
             <Select
               value={rollup?.relationColumnId ?? ""}
               onValueChange={(relationColumnId) =>
                 updateRollup({ relationColumnId, targetColumnId: undefined })
               }
             >
-              <SelectTrigger aria-label="汇总关联字段">
-                <SelectValue placeholder="选择本表关联字段" />
+              <SelectTrigger aria-label={t("rollupRelationField")}>
+                <SelectValue placeholder={t("pickRelationField")} />
               </SelectTrigger>
               <SelectContent>
                 {columns
@@ -224,12 +226,12 @@ export function RelationColumnConfig({
             </Select>
             {!columns.some((c) => c.type === "relation") && (
               <p className="text-xs text-muted-foreground">
-                请先创建一个关联字段。
+                {t("needRelationFirst")}
               </p>
             )}
           </div>
           <div className="space-y-1">
-            <Label>计算方式</Label>
+            <Label>{t("rollupMethod")}</Label>
             <Select
               value={rollup?.operation ?? "count"}
               onValueChange={(operation) =>
@@ -239,7 +241,7 @@ export function RelationColumnConfig({
                 })
               }
             >
-              <SelectTrigger aria-label="汇总计算方式">
+              <SelectTrigger aria-label={t("rollupMethodAria")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -253,16 +255,16 @@ export function RelationColumnConfig({
           </div>
           {rollup?.operation && rollup.operation !== "count" && (
             <div className="space-y-1">
-              <Label>目标字段</Label>
+              <Label>{t("targetField")}</Label>
               <Select
                 value={rollup.targetColumnId ?? ""}
                 onValueChange={(targetColumnId) =>
                   updateRollup({ targetColumnId })
                 }
               >
-                <SelectTrigger aria-label="汇总目标字段">
+                <SelectTrigger aria-label={t("rollupTargetField")}>
                   <SelectValue
-                    placeholder={`选择${valueType === "date" ? "日期" : "数字"}字段`}
+                    placeholder={valueType === "date" ? t("pickDateField") : t("pickNumberField")}
                   />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,7 +280,7 @@ export function RelationColumnConfig({
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            汇总由关联记录计算，只读，不支持嵌套汇总。
+            {t("rollupReadonlyHint")}
           </p>
         </>
       )}

@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/popover";
 import type { ColumnDef, RelatedRecord, RowData } from "@/types/table";
 import type { RelationQueryResult } from "@tabdo/shared";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 export function openRelatedRecord(record: RelatedRecord) {
   window.dispatchEvent(
@@ -33,7 +35,7 @@ export function RelationTags({
             key={record.id}
             type="button"
             className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-            title={`打开 ${record.title}`}
+            title={i18n.t("table:openRelated", { title: record.title })}
             onClick={(e) => {
               e.stopPropagation();
               openRelatedRecord(record);
@@ -44,7 +46,7 @@ export function RelationTags({
           </button>
         ))
       ) : (
-        <span className="text-muted-foreground/50">空</span>
+        <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>
       )}
       {total > records.length && (
         <span className="shrink-0 text-xs text-muted-foreground">
@@ -75,6 +77,7 @@ export function RelationPicker({
   embedded?: boolean;
   onClose?: () => void;
 }) {
+  const { t } = useTranslation("table");
   const [open, setOpen] = useState(embedded),
     [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
@@ -174,7 +177,7 @@ export function RelationPicker({
               : [...value, id],
         );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "关联保存失败");
+      setError(e instanceof Error ? e.message : t("relationSaveFailed"));
     } finally {
       setBusy(false);
     }
@@ -200,7 +203,7 @@ export function RelationPicker({
         ...Object.fromEntries(next.records.map((r) => [r.id, r])),
       }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
+      setError(e instanceof Error ? e.message : t("loadFailed"));
     } finally {
       setBusy(false);
     }
@@ -212,7 +215,7 @@ export function RelationPicker({
           titles[id] ?? {
             id,
             tableId: column.config.relation?.targetTableId ?? "",
-            title: "加载中…",
+            title: t("loading"),
           },
       );
   const anchor = (
@@ -240,7 +243,7 @@ export function RelationPicker({
             <span className="min-w-0 truncate">
               {selectedRecords.length
                 ? selectedRecords.map((r) => r.title).join("、")
-                : "选择关联记录"}
+                : t("pickRelated")}
             </span>
             <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
           </Button>
@@ -250,7 +253,7 @@ export function RelationPicker({
         align="start"
         sideOffset={6}
         className="w-80 max-w-[calc(100vw-2rem)] p-1"
-        aria-label={`选择${column.name}关联记录`}
+        aria-label={t("pickRelatedNamed", { name: column.name })}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex items-center gap-2 border-b border-border p-2">
@@ -259,8 +262,8 @@ export function RelationPicker({
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索记录…"
-            aria-label="搜索关联记录"
+            placeholder={t("searchRecords")}
+            aria-label={t("searchRelatedAria")}
             className="h-8 border-0 px-0 shadow-none focus-visible:ring-0"
           />
         </div>
@@ -271,7 +274,7 @@ export function RelationPicker({
         )}
         {selectedRecords.length > 0 && (
           <div className="max-h-36 overflow-auto border-b border-border p-2">
-            <p className="mb-1 text-xs text-muted-foreground">已关联</p>
+            <p className="mb-1 text-xs text-muted-foreground">{t("alreadyLinked")}</p>
             {selectedRecords.map((record) => (
               <div key={record.id} className="flex items-center gap-1 py-0.5">
                 <button
@@ -288,7 +291,7 @@ export function RelationPicker({
                   size="icon"
                   className="size-6"
                   disabled={busy}
-                  aria-label={`解除关联 ${record.title}`}
+                  aria-label={t("unlinkNamed", { title: record.title })}
                   onClick={() => void choose(record.id, true)}
                 >
                   <X className="size-3" />
@@ -303,16 +306,16 @@ export function RelationPicker({
                 disabled={busy}
                 onClick={() => void loadMore(true)}
               >
-                更多已关联记录
+                {t("moreLinked")}
               </Button>
             )}
           </div>
         )}
         <div className="max-h-56 overflow-auto p-1">
           {loading ? (
-            <p className="p-2 text-xs text-muted-foreground">加载中…</p>
+            <p className="p-2 text-xs text-muted-foreground">{t("loading")}</p>
           ) : page?.records.length === 0 ? (
-            <p className="p-2 text-xs text-muted-foreground">没有匹配的记录</p>
+            <p className="p-2 text-xs text-muted-foreground">{t("noMatchingRecords")}</p>
           ) : (
             page?.records.map((record) => {
               const selected = rowId
@@ -348,7 +351,7 @@ export function RelationPicker({
               disabled={busy}
               onClick={() => void loadMore(false)}
             >
-              加载更多
+              {t("loadMore")}
             </Button>
           )}
         </div>

@@ -23,6 +23,7 @@ import type {
   FormulaResultType,
   SelectOption,
 } from "@/types/table";
+import { useTranslation } from "react-i18next";
 import {
   COLUMN_TYPE_LABELS,
   DATE_FORMAT_OPTIONS,
@@ -55,6 +56,7 @@ export function ColumnSettings({
   onHide,
   onMove,
 }: Props) {
+  const { t } = useTranslation("table");
   const [name, setName] = useState(column.name);
   const [type, setType] = useState<ColumnType>(column.type as ColumnType);
   const [options, setOptions] = useState<SelectOption[]>(
@@ -94,7 +96,7 @@ export function ColumnSettings({
       });
       onClose();
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "保存失败");
+      setSaveError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -106,7 +108,7 @@ export function ColumnSettings({
       ...o,
       {
         id,
-        label: `选项 ${o.length + 1}`,
+        label: t("optionN", { n: o.length + 1 }),
         color: COLORS[o.length % COLORS.length],
       },
     ]);
@@ -120,13 +122,13 @@ export function ColumnSettings({
     <div
       className="w-full shrink-0"
       role="region"
-      aria-label="列设置"
+      aria-label={t("columnSettings")}
       data-testid="column-settings-editor"
     >
       <div className="flex flex-col gap-1">
-        <h3 className="mb-3 text-base font-semibold text-foreground">列设置</h3>
+        <h3 className="mb-3 text-base font-semibold text-foreground">{t("columnSettings")}</h3>
 
-        <Label htmlFor={`column-name-${column.id}`} className="mb-1 block">列名</Label>
+        <Label htmlFor={`column-name-${column.id}`} className="mb-1 block">{t("columnName")}</Label>
         <Input
           id={`column-name-${column.id}`}
           className="mb-3"
@@ -134,7 +136,7 @@ export function ColumnSettings({
           onChange={(e) => setName(e.target.value)}
         />
 
-        <Label className="mb-1 block">类型</Label>
+        <Label className="mb-1 block">{t("columnType")}</Label>
         <Select value={type} onValueChange={(v) => setType(v as ColumnType)}>
           <SelectTrigger className="mb-3">
             <SelectValue />
@@ -172,19 +174,18 @@ export function ColumnSettings({
         )}
         {isFormula && (
           <div className="mb-3 flex flex-col gap-2">
-            <Label className="block">公式表达式</Label>
+            <Label className="block">{t("formulaExpression")}</Label>
             <Textarea
               className="min-h-[88px] font-mono text-sm"
               value={formula}
               onChange={(e) => setFormula(e.target.value)}
               placeholder={
-                '例如：{预估工时} * 8\nIF({已完成}, "完成", "进行中")'
+                t("formulaPlaceholder")
               }
               spellCheck={false}
             />
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              用 {"{列名}"} 引用单元格。支持 + - * / &amp;、IF / AND / OR /
-              NOT、CONCAT、LEN、ABS、ROUND、EMPTY、VALUE、TEXT。
+              {t("formulaHelp")}
             </p>
             {refCandidates.length > 0 && (
               <div className="flex flex-wrap gap-1">
@@ -202,7 +203,7 @@ export function ColumnSettings({
                 ))}
               </div>
             )}
-            <Label className="block">结果类型</Label>
+            <Label className="block">{t("resultType")}</Label>
             <Select
               value={formulaResultType}
               onValueChange={(v) =>
@@ -235,7 +236,7 @@ export function ColumnSettings({
 
         {isDate && (
           <div className="mb-3">
-            <Label className="mb-1 block">日期显示格式</Label>
+            <Label className="mb-1 block">{t("dateDisplayFormat")}</Label>
             <Select
               value={dateFormat}
               onValueChange={(v) => setDateFormat(v as DateFormat)}
@@ -252,7 +253,7 @@ export function ColumnSettings({
               </SelectGroup></SelectContent>
             </Select>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              存储仍为 YYYY-MM-DD；单元格按此格式显示，可手输或点日历。
+              {t("dateFormatHint")}
             </p>
           </div>
         )}
@@ -260,7 +261,7 @@ export function ColumnSettings({
         {isSelect && (
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between">
-              <Label>选项</Label>
+              <Label>{t("options")}</Label>
               <Button
                 type="button"
                 variant="ghost"
@@ -268,7 +269,7 @@ export function ColumnSettings({
                 className="h-7 text-xs"
                 onClick={addOption}
               >
-                <Plus data-icon="inline-start" />添加
+                <Plus data-icon="inline-start" />{t("add")}
               </Button>
             </div>
             <div className="flex max-h-48 flex-col gap-2 overflow-auto">
@@ -276,7 +277,7 @@ export function ColumnSettings({
                 <div key={o.id} className="flex items-center gap-1.5">
                   <ColorPicker
                     value={o.color || COLORS[0]}
-                    label={`${o.label}的颜色`}
+                    label={t("optionColorOf", { label: o.label })}
                     onChange={(color) =>
                       setOptions((opts) =>
                         opts.map((x, j) => (j === i ? { ...x, color } : x)),
@@ -299,7 +300,7 @@ export function ColumnSettings({
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label={`删除选项 ${o.label}`}
+                    aria-label={t("deleteOption", { label: o.label })}
                     onClick={() =>
                       setOptions((opts) => opts.filter((_, j) => j !== i))
                     }
@@ -314,28 +315,28 @@ export function ColumnSettings({
 
         <div className="mb-4 flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => onMove("left")}>
-            <ArrowLeft data-icon="inline-start" />左移
+            <ArrowLeft data-icon="inline-start" />{t("moveLeft")}
           </Button>
           <Button variant="outline" size="sm" onClick={() => onMove("right")}>
-            <ArrowRight data-icon="inline-start" />右移
+            <ArrowRight data-icon="inline-start" />{t("moveRight")}
           </Button>
           <Button variant="outline" size="sm" onClick={onHide}>
-            <EyeOff data-icon="inline-start" />隐藏列
+            <EyeOff data-icon="inline-start" />{t("hideColumn")}
           </Button>
           <Button variant="destructive" size="sm" onClick={onDelete}>
-            <Trash2 data-icon="inline-start" />删除列
+            <Trash2 data-icon="inline-start" />{t("deleteColumn")}
           </Button>
         </div>
 
         <div className="flex justify-end gap-2">
           <Button variant="outline" disabled={saving} onClick={onClose}>
-            <X data-icon="inline-start" />取消
+            <X data-icon="inline-start" />{t("cancel")}
           </Button>
           <Button
             onClick={() => void save()}
             disabled={saving || (isFormula && !formula.trim())}
           >
-            {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? "保存中…" : "保存"}
+            {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? t("saving") : t("save")}
           </Button>
         </div>
       </div>

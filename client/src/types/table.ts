@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 export type ColumnType =
   | "text"
   | "number"
@@ -118,23 +119,21 @@ export type QueryRowsPage = {
   limit: number;
 };
 
-export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
-  text: "文本",
-  number: "数字",
-  select: "单选",
-  multi_select: "多选",
-  date: "日期",
-  checkbox: "勾选",
-  person: "人员",
-  formula: "公式",
-  relation: "关联",
-  rollup: "汇总",
-};
+const COLUMN_TYPE_KEYS: ColumnType[] = [
+  "text", "number", "select", "multi_select", "date", "checkbox", "person", "formula", "relation", "rollup",
+];
 
-export const FORMULA_RESULT_TYPE_LABELS: Record<FormulaResultType, string> = {
-  auto: "自动",
-  number: "数字",
-  text: "文本",
-  checkbox: "勾选",
-  date: "日期",
-};
+/** Live labels — reads current i18n language. Prefer iterating COLUMN_TYPE_KEYS for menus. */
+export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = new Proxy({} as Record<ColumnType, string>, {
+  get: (_t, prop: string) => i18n.t(`table:columnTypes.${prop}`),
+  ownKeys: () => COLUMN_TYPE_KEYS,
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});
+
+const FORMULA_RESULT_KEYS: FormulaResultType[] = ["auto", "number", "text", "checkbox", "date"];
+
+export const FORMULA_RESULT_TYPE_LABELS: Record<FormulaResultType, string> = new Proxy({} as Record<FormulaResultType, string>, {
+  get: (_t, prop: string) => i18n.t(`table:formulaResult.${prop}`),
+  ownKeys: () => FORMULA_RESULT_KEYS,
+  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+});

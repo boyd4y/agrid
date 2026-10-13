@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { NOTION_SELECT_COLORS, SELECT_COLOR_NAMES, SELECT_COLOR_PRESETS, normalizeColorHex, selectOptionStyle, type SelectColorToken } from "@/lib/select-colors";
+import { SELECT_COLORS, SELECT_COLOR_NAMES, SELECT_COLOR_PRESETS, normalizeColorHex, selectOptionStyle, type SelectColorToken } from "@/lib/select-colors";
 
 type Props = { value: string; onChange: (color: string) => void; className?: string; label?: string };
 
@@ -36,7 +36,7 @@ export function ColorPicker({ value, onChange, className, label = "选择颜色"
           <p className="text-sm font-medium">预设颜色</p>
           <div className="grid grid-cols-5 gap-2">
             {SELECT_COLOR_PRESETS.map((color) => {
-              const token = (Object.keys(NOTION_SELECT_COLORS) as SelectColorToken[]).find((name) => NOTION_SELECT_COLORS[name].background === color)!;
+              const token = (Object.keys(SELECT_COLORS) as SelectColorToken[]).find((name) => SELECT_COLORS[name].background === color)!;
               const active = selected.background === color;
               return <Button key={color} type="button" variant="outline" size="icon" className={cn("size-8 p-1", active && "ring-2 ring-ring ring-offset-2 ring-offset-popover")}
                 aria-label={SELECT_COLOR_NAMES[token]} aria-pressed={active} title={SELECT_COLOR_NAMES[token]} onClick={() => { onChange(color); setOpen(false); }}>

@@ -1,5 +1,6 @@
+import i18n from "@/i18n";
 /**
- * Notion-style select chip colors: soft pastel background + dark text.
+ * Select chip colors: soft pastel background + dark text.
  * Stored option.color may be a token name or a custom HEX color.
  */
 
@@ -22,8 +23,8 @@ export type SelectChipStyle = {
   swatch: string;
 };
 
-/** Canonical Notion select palette */
-export const NOTION_SELECT_COLORS: Record<SelectColorToken, SelectChipStyle> = {
+/** Canonical select chip pastel palette */
+export const SELECT_COLORS: Record<SelectColorToken, SelectChipStyle> = {
   default: { background: "#f1f1ef", color: "#787774", swatch: "#d3d1cb" },
   gray: { background: "#ebeced", color: "#5a5a57", swatch: "#9b9a97" },
   brown: { background: "#eee0da", color: "#64473a", swatch: "#a27763" },
@@ -38,21 +39,21 @@ export const NOTION_SELECT_COLORS: Record<SelectColorToken, SelectChipStyle> = {
 
 /** Preset hexes for ColorPicker / new options (pastel backgrounds) */
 export const SELECT_COLOR_PRESETS = [
-  NOTION_SELECT_COLORS.gray.background,
-  NOTION_SELECT_COLORS.blue.background,
-  NOTION_SELECT_COLORS.green.background,
-  NOTION_SELECT_COLORS.yellow.background,
-  NOTION_SELECT_COLORS.orange.background,
-  NOTION_SELECT_COLORS.red.background,
-  NOTION_SELECT_COLORS.purple.background,
-  NOTION_SELECT_COLORS.pink.background,
-  NOTION_SELECT_COLORS.brown.background,
-  NOTION_SELECT_COLORS.default.background,
+  SELECT_COLORS.gray.background,
+  SELECT_COLORS.blue.background,
+  SELECT_COLORS.green.background,
+  SELECT_COLORS.yellow.background,
+  SELECT_COLORS.orange.background,
+  SELECT_COLORS.red.background,
+  SELECT_COLORS.purple.background,
+  SELECT_COLORS.pink.background,
+  SELECT_COLORS.brown.background,
+  SELECT_COLORS.default.background,
 ] as const;
 
 /** Pastel bg → token (for seeds / picker values) */
 const PASTEL_BG: Record<string, SelectColorToken> = Object.fromEntries(
-  (Object.entries(NOTION_SELECT_COLORS) as [SelectColorToken, SelectChipStyle][]).map(
+  (Object.entries(SELECT_COLORS) as [SelectColorToken, SelectChipStyle][]).map(
     ([token, s]) => [s.background.toLowerCase(), token]
   )
 );
@@ -64,18 +65,27 @@ export function normalizeColorHex(input: string): string | null {
   return /^[0-9a-f]{6}$/.test(hex) ? `#${hex}` : null;
 }
 
-export const SELECT_COLOR_NAMES: Record<SelectColorToken, string> = {
-  default: "默认", gray: "灰色", brown: "棕色", orange: "橙色", yellow: "黄色",
-  green: "绿色", blue: "蓝色", purple: "紫色", pink: "粉色", red: "红色",
-};
+const SELECT_COLOR_KEYS: SelectColorToken[] = [
+  "default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red",
+];
+
+/** Live color names — reads current i18n language. */
+export const SELECT_COLOR_NAMES: Record<SelectColorToken, string> = new Proxy(
+  {} as Record<SelectColorToken, string>,
+  {
+    get: (_t, prop: string) => i18n.t(`table:colors.${prop}`),
+    ownKeys: () => SELECT_COLOR_KEYS,
+    getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+  },
+);
 
 /** Custom colors are rendered exactly; choose text with WCAG-readable contrast. */
 export function selectOptionStyle(raw?: string | null): SelectChipStyle {
   const key = raw?.trim().toLowerCase() ?? "gray";
-  if (Object.hasOwn(NOTION_SELECT_COLORS, key)) return NOTION_SELECT_COLORS[key as SelectColorToken];
+  if (Object.hasOwn(SELECT_COLORS, key)) return SELECT_COLORS[key as SelectColorToken];
   const hex = normalizeColorHex(key);
-  if (!hex) return NOTION_SELECT_COLORS.gray;
-  if (PASTEL_BG[hex]) return NOTION_SELECT_COLORS[PASTEL_BG[hex]];
+  if (!hex) return SELECT_COLORS.gray;
+  if (PASTEL_BG[hex]) return SELECT_COLORS[PASTEL_BG[hex]];
   const channels = [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16) / 255);
   const linear = channels.map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
   const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];

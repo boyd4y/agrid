@@ -53,12 +53,15 @@ import {
   type FilterLogic,
 } from "@tabdo/shared";
 import { useWindowedRows } from "@/hooks/useWindowedRows";
+import { useTranslation } from "react-i18next";
 
-const DEFAULT_SELECT_OPTIONS = [
-  { id: "a", label: "选项 A", color: "#d3e5ef" },
-  { id: "b", label: "选项 B", color: "#dbeddb" },
-  { id: "c", label: "选项 C", color: "#fadec9" },
-];
+function defaultSelectOptions(t: (k: string) => string) {
+  return [
+    { id: "a", label: t("defaultOptionA"), color: "#d3e5ef" },
+    { id: "b", label: t("defaultOptionB"), color: "#dbeddb" },
+    { id: "c", label: t("defaultOptionC"), color: "#fadec9" },
+  ];
+}
 
 const ROW_H = 36;
 
@@ -69,6 +72,7 @@ type Props = {
 };
 
 export function DataTable({ table, onChange, refreshToken }: Props) {
+  const { t } = useTranslation("table");
   const [deleteTarget, setDeleteTarget] = useState<
     { kind: "row"; row: RowData } | { kind: "column"; column: ColumnDef } | null
   >(null);
@@ -175,7 +179,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
       windowed.upsertRow(updated);
     } catch (e) {
       windowed.upsertRow(row);
-      setError(e instanceof Error ? e.message : "保存失败");
+      setError(e instanceof Error ? e.message : t("saveFailed"));
     }
   };
 
@@ -185,7 +189,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
       windowed.prependOrAppendRow(row, true);
       onChange({ ...table, rowCount: (table.rowCount ?? 0) + 1 });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "新增行失败");
+      setError(e instanceof Error ? e.message : t("addRowFailed"));
     }
   };
 
@@ -198,12 +202,12 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
   const addColumn = async () => {
     if (!newColName.trim()) return;
     if (newColType === "formula" && !newColFormula.trim()) {
-      setError("公式列需要填写表达式");
+      setError(t("formulaNeedsExpression"));
       return;
     }
     const config =
       newColType === "select" || newColType === "multi_select"
-        ? { options: DEFAULT_SELECT_OPTIONS }
+        ? { options: defaultSelectOptions(t) }
         : newColType === "formula"
           ? {
               formula: newColFormula.trim(),
@@ -226,7 +230,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
       setNewColConfig({});
       setAddingCol(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "新增列失败");
+      setError(e instanceof Error ? e.message : t("addColumnFailed"));
     } finally {
       setAddingBusy(false);
     }
@@ -251,7 +255,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
       }
       return updated;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "更新列失败");
+      setError(e instanceof Error ? e.message : t("updateColumnFailed"));
       throw e;
     }
   };
@@ -277,7 +281,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
       const cols = await api.reorderColumns(table.id, next);
       updateLocal({ ...table, columns: cols });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "重排列失败");
+      setError(e instanceof Error ? e.message : t("reorderColumnFailed"));
     }
   };
 
@@ -337,7 +341,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
             }}
             className="underline"
           >
-            关闭
+            {t("close")}
           </button>
         </div>
       )}
@@ -358,12 +362,11 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
         <ArrowUpDown className="h-3.5 w-3.5" />
         {windowed.loading ? (
           <span className="inline-flex items-center gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" /> 加载中…
+            <Loader2 className="h-3 w-3 animate-spin" /> {t("loading")}
           </span>
         ) : (
           <span>
-            匹配 {windowed.totalMatched.toLocaleString()} 行 · 表内共{" "}
-            {(table.rowCount ?? 0).toLocaleString()} 行 · 虚拟滚动
+            {t("matchedRows", { matched: windowed.totalMatched.toLocaleString(), total: (table.rowCount ?? 0).toLocaleString() })}
           </span>
         )}
         {sort && (
@@ -372,13 +375,13 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
             className="underline"
             onClick={() => setSort(null)}
           >
-            清除排序
+            {t("clearSort")}
           </button>
         )}
         {hiddenCols.length > 0 && (
           <div className="flex items-center gap-1">
             <EyeOff className="h-3.5 w-3.5" />
-            已隐藏:
+            {t("hiddenPrefix")}
             {hiddenCols.map((c) => (
               <button
                 key={c.id}
@@ -424,7 +427,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                   type="button"
                   className="min-w-0 flex-1 truncate text-left text-sm font-medium"
                   onClick={() => col.type !== "relation" && toggleSort(col.id)}
-                  title={col.type === "relation" ? "关联字段" : "点击排序"}
+                  title={col.type === "relation" ? t("relationField") : t("clickToSort")}
                 >
                   {col.name}
                   {sort?.columnId === col.id && (
@@ -444,8 +447,8 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                     settingsCol?.id === col.id &&
                       "pointer-events-auto opacity-100",
                   )}
-                  aria-label={`${col.name}列设置`}
-                  title="列设置"
+                  aria-label={t("columnSettingsNamed", { name: col.name })}
+                  title={t("columnSettings")}
                   onClick={() => {
                     setAddingCol(false);
                     setSettingsCol(col);
@@ -454,7 +457,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[360px] max-h-[min(70vh,640px)] overflow-auto p-4" align="end" aria-label={`${col.name}列设置`}>
+                  <PopoverContent className="w-[360px] max-h-[min(70vh,640px)] overflow-auto p-4" align="end" aria-label={t("columnSettingsNamed", { name: col.name })}>
                     {settingsCol?.id === col.id && (
 
         <ColumnSettings
@@ -497,8 +500,8 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
             <button
               type="button"
               className="flex w-11 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground"
-              title="添加列"
-              aria-label="添加列"
+              title={t("addColumn")}
+              aria-label={t("addColumn")}
               onClick={() => {
                 setSettingsCol(null);
                 setAddingCol(true);
@@ -507,25 +510,25 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
               <Plus className="h-4 w-4" />
             </button>
               </PopoverTrigger>
-              <PopoverContent className="w-[360px] max-h-[min(70vh,640px)] overflow-auto p-4" align="end" aria-label="添加列">
+              <PopoverContent className="w-[360px] max-h-[min(70vh,640px)] overflow-auto p-4" align="end" aria-label={t("addColumn")}>
 
         <div
           className="w-full shrink-0"
           role="region"
-          aria-label="添加列"
+          aria-label={t("addColumn")}
           data-testid="add-column-editor"
         >
           <div className="space-y-1">
-            <h3 className="mb-3 text-base font-semibold">添加列</h3>
-            <Label className="mb-1 block">列名</Label>
+            <h3 className="mb-3 text-base font-semibold">{t("addColumn")}</h3>
+            <Label className="mb-1 block">{t("columnName")}</Label>
             <Input
               className="mb-3"
               value={newColName}
               onChange={(e) => setNewColName(e.target.value)}
-              placeholder="例如：备注"
+              placeholder={t("columnNamePlaceholder")}
               autoFocus
             />
-            <Label className="mb-1 block">类型</Label>
+            <Label className="mb-1 block">{t("columnType")}</Label>
             <Select
               value={newColType}
               onValueChange={(v) => {
@@ -554,25 +557,25 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
             )}
             {newColType === "formula" && (
               <div className="mb-4">
-                <Label className="mb-1 block">公式</Label>
+                <Label className="mb-1 block">{t("formulaLabel")}</Label>
                 <Textarea
                   className="min-h-[72px] font-mono text-sm"
                   value={newColFormula}
                   onChange={(e) => setNewColFormula(e.target.value)}
-                  placeholder={"{预估工时} * 8"}
+                  placeholder={t("formulaExample")}
                   spellCheck={false}
                 />
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  用 {"{列名}"} 引用；支持 IF / AND / OR、四则运算等
+                  {t("formulaHelpShort")}
                 </p>
               </div>
             )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAddingCol(false)}>
-                <X data-icon="inline-start" />取消
+                <X data-icon="inline-start" />{t("cancel")}
               </Button>
               <Button disabled={addingBusy} onClick={() => void addColumn()}>
-                {addingBusy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}{addingBusy ? "添加中…" : "添加"}
+                {addingBusy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}{addingBusy ? t("adding") : t("add")}
               </Button>
             </div>
           </div>
@@ -609,7 +612,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                         <button
                           type="button"
                           className="hidden rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:inline-flex"
-                          title="删除行"
+                          title={t("deleteRow")}
                           onClick={() => setDeleteTarget({ kind: "row", row })}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -667,7 +670,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                             ? undefined
                             : 0
                         }
-                        aria-label={`${col.name}：${col.type === "formula" || col.type === "rollup" ? "只读" : "点击编辑"}`}
+                        aria-label={t("cellAria", { name: col.name, hint: col.type === "formula" || col.type === "rollup" ? t("readonlyHint") : t("clickToEdit") })}
                         style={{ width: col.width, minWidth: col.width }}
                         onClick={() => {
                           if (col.type === "formula" || col.type === "rollup")
@@ -695,10 +698,10 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                         }}
                         title={
                           col.type === "formula" || col.type === "rollup"
-                            ? `公式: ${col.config?.formula ?? ""}`
+                            ? t("formulaPrefix", { formula: col.config?.formula ?? "" })
                             : col.type === "checkbox"
-                              ? "点击切换勾选"
-                              : "点击编辑 · Enter 打开"
+                              ? t("clickToggleCheck")
+                              : t("clickEditEnter")
                         }
                       >
                         {isEditing ? (
@@ -758,7 +761,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
           className="flex w-full shrink-0 items-center gap-2 border-t border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
         >
           <Plus className="h-4 w-4" />
-          新行
+          {t("newRow")}
         </button>
       </div>
 
@@ -767,13 +770,13 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-        title={deleteTarget?.kind === "column" ? "删除列？" : "删除记录？"}
+        title={deleteTarget?.kind === "column" ? t("deleteColumnQ") : t("deleteRecordQ")}
         description={
           deleteTarget?.kind === "column"
             ? deleteTarget.column.type === "relation"
-              ? `删除关联字段「${deleteTarget.column.name}」会同时删除对应的反向字段（如有）和关联关系。两张表的记录会保留。`
-              : `列「${deleteTarget.column.name}」及其数据将被永久删除，无法恢复。`
-            : "此记录将被永久删除，无法恢复。"
+              ? t("deleteRelationColumnDesc", { name: deleteTarget.column.name })
+              : t("deleteColumnDesc", { name: deleteTarget.column.name })
+            : t("deleteRecordDesc")
         }
         onConfirm={async () => {
           if (deleteTarget?.kind === "row") await deleteRow(deleteTarget.row);

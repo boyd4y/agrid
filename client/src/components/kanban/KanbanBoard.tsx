@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import type { FullTable, RowData, SelectOption, ColumnDef } from "@/types/table";
 import { cn } from "@/lib/utils";
 import { selectOptionSwatch } from "@/lib/select-colors";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   table: FullTable;
@@ -24,19 +25,19 @@ type Props = {
 
 function findStatusColumn(table: FullTable): ColumnDef | undefined {
   return (
-    table.columns.find((c) => c.name === "状态" && c.type === "select") ||
+    table.columns.find((c) => c.name === "状态" /* seed */ && c.type === "select") ||
     table.columns.find((c) => c.type === "select")
   );
 }
 
 function findTitleColumn(table: FullTable): ColumnDef | undefined {
   return (
-    table.columns.find((c) => c.name === "标题") ||
+    table.columns.find((c) => c.name === "标题" /* seed */) ||
     table.columns.find((c) => c.type === "text")
   );
 }
 
-const UNGROUPED: SelectOption = { id: "__none__", label: "未分组", color: "#ebeced" };
+/* built per-render via t("ungrouped") */
 const PAGE = 40;
 const INTERACTIVE_CARD_CHILD = "button,a,input,select,textarea,[contenteditable='true'],[role='button'],[role='link'],[role='checkbox'],[role='switch']";
 
@@ -54,6 +55,8 @@ type ColState = {
 };
 
 export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }: Props) {
+  const { t } = useTranslation("table");
+  const UNGROUPED = { id: "__none__", label: t("ungrouped"), color: "#ebeced" } as const;
   const config = (rawConfig ?? {}) as BoardViewConfig;
   const members = useMemberOptions();
   const compact = config.density === "compact";
@@ -118,7 +121,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
         });
       } catch (e) {
         if (current !== generation.current) return;
-        setError(e instanceof Error ? e.message : "看板列加载失败");
+        setError(e instanceof Error ? e.message : t("boardColLoadFailed"));
         setCols((prev) => ({
           ...prev,
           [optionId]: {
@@ -146,7 +149,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
   if (!statusCol) {
     return (
       <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-6 text-sm text-warning">
-        看板需要至少一列「单选」类型（建议命名为「状态」）才能分组。请先在表格视图添加列。
+        {t("boardNeedsSelect")}
       </div>
     );
   }
@@ -192,7 +195,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
       setCols((previous) => Object.fromEntries(Object.entries(previous).map(([id, state]) => [id, { ...state, rows: state.rows.map((candidate) => candidate.id === saved.id ? saved : candidate) }])));
     } catch (e) {
       if (current !== generation.current) return;
-      setError(e instanceof Error ? e.message : "移动失败");
+      setError(e instanceof Error ? e.message : t("moveFailed"));
       void loadColumn(fromCol);
       void loadColumn(toCol);
     }
@@ -201,7 +204,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
   const addInColumn = async (statusOptionId: string) => {
     const current = generation.current;
     const cells: Record<string, string | null> = {};
-    if (titleCol) cells[titleCol.id] = "新卡片";
+    if (titleCol) cells[titleCol.id] = t("newCard");
     cells[statusCol.id] = statusOptionId === UNGROUPED.id ? null : statusOptionId;
     try {
       const row = await api.addRow(table.id, cells);
@@ -220,7 +223,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
       onChange({ ...table, rowCount: (table.rowCount ?? 0) + 1 });
     } catch (e) {
       if (current !== generation.current) return;
-      setError(e instanceof Error ? e.message : "新增失败");
+      setError(e instanceof Error ? e.message : t("addFailed"));
     }
   };
 
@@ -230,7 +233,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
         <div className="shrink-0 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
           <button type="button" className="ml-2 underline" onClick={() => setError(null)}>
-            关闭
+            {t("close")}
           </button>
         </div>
       )}
@@ -277,7 +280,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
               <div className="flex min-h-[120px] flex-1 flex-col gap-2 overflow-y-auto p-2">
                 {cards.map((row) => {
                   const title = titleCol
-                    ? String(row.cells[titleCol.id] ?? "无标题")
+                    ? String(row.cells[titleCol.id] ?? t("untitled"))
                     : row.id.slice(0, 8);
 
                   return (
@@ -285,7 +288,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
                       key={row.id}
                       role="button"
                       tabIndex={0}
-                      aria-label={`打开记录：${title}`}
+                      aria-label={t("openRecordNamed", { title })}
                       data-testid="board-card"
                       data-row-id={row.id}
                       data-density={compact ? "compact" : "comfortable"}
@@ -311,11 +314,11 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
                       )}
                     >
                       <CardHeader className={cn("mb-0 flex-row items-start", compact ? "gap-1.5 p-2" : "gap-2 p-3")}>
-                        <span data-board-drag-handle className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing" aria-label="拖动卡片"><GripVertical className="size-3.5 text-muted-foreground/50" /></span>
+                        <span data-board-drag-handle className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing" aria-label={t("dragCard")}><GripVertical className="size-3.5 text-muted-foreground/50" /></span>
                         <CardTitle className={cn("min-w-0 flex-1 line-clamp-2 font-medium", compact ? "text-xs leading-4" : "text-sm leading-5")}>{title}</CardTitle>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-6 shrink-0 opacity-0 group-hover/card:opacity-100 group-focus-within/card:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100" aria-label={`卡片操作：${title}`}><MoreHorizontal /></Button></DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}><DropdownMenuGroup><DropdownMenuItem variant="destructive" onSelect={() => setDeleting({ row, group: col.id, title })}><Trash2 />删除卡片</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent>
+                          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-6 shrink-0 opacity-0 group-hover/card:opacity-100 group-focus-within/card:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100" aria-label={t("cardActionsNamed", { title })}><MoreHorizontal /></Button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}><DropdownMenuGroup><DropdownMenuItem variant="destructive" onSelect={() => setDeleting({ row, group: col.id, title })}><Trash2 />{t("deleteCard")}</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent>
                         </DropdownMenu>
                       </CardHeader>
                       {(() => {
@@ -346,7 +349,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
                     disabled={state.loading}
                     onClick={() => void loadColumn(col.id, state.nextCursor, true)}
                   >
-                    加载更多
+                    {t("loadMore")}
                   </Button>
                 )}
               </div>
@@ -358,7 +361,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
                   onClick={() => void addInColumn(col.id)}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  添加卡片
+                  {t("addCard")}
                 </Button>
               </div>
             </div>
@@ -366,9 +369,9 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
         })}
       </div>
       <p className="shrink-0 text-xs text-muted-foreground">
-        拖拽卡片切换分组
+        {t("dragHint")}
       </p>
-      <DeleteConfirmation open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null); }} title="删除卡片？" description={`将永久删除「${deleting?.title ?? ""}」这条记录，所有视图会同步更新。`} onConfirm={async () => {
+      <DeleteConfirmation open={Boolean(deleting)} onOpenChange={(open) => { if (!open) setDeleting(null); }} title={t("deleteCardQ")} description={t("deleteCardDesc", { title: deleting?.title ?? "" })} onConfirm={async () => {
         if (!deleting) return;
         const current = generation.current;
         try {
@@ -377,7 +380,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
           setCols((previous) => Object.fromEntries(Object.entries(previous).map(([id, state]) => [id, { ...state, rows: state.rows.filter((row) => row.id !== deleting.row.id), total: id === deleting.group ? Math.max(0, (state.total ?? state.rows.length) - 1) : state.total }])));
           onChange({ ...table, rowCount: Math.max(0, (table.rowCount ?? 1) - 1) });
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "删除失败，请重试");
+          toast.error(error instanceof Error ? error.message : t("deleteFailedRetry"));
           throw error;
         }
       }} />

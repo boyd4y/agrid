@@ -33,6 +33,7 @@ import type { ResolvedFormView, TableView } from "@tabdo/shared";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AppOutletContext } from "@/layouts/AppShell";
 import { useAppShell } from "@/context/AppShellContext";
+import { useTranslation } from "react-i18next";
 
 function viewIcon(type: string) {
   if (type === "board") return LayoutGrid;
@@ -40,11 +41,12 @@ function viewIcon(type: string) {
   return Columns3;
 }
 
-function viewLabel(type: string, name: string) {
-  return name || (type === "board" ? "看板" : type === "form" ? "表单" : "表格");
+function viewLabel(type: string, name: string, t: (k: string) => string) {
+  return name || (type === "board" ? t("board") : type === "form" ? t("form") : t("grid"));
 }
 
 export function TableDetailPage() {
+  const { t } = useTranslation("table");
   const { tableId } = useParams<{ tableId: string }>();
   const { setTables, getTableRefreshToken, notifyTableMutated, updateTableMetadata } =
     useOutletContext<AppOutletContext>();
@@ -77,7 +79,7 @@ export function TableDetailPage() {
       setTable({ ...full, rows: full.rows ?? [], rowCount: full.rowCount ?? 0 });
       setError(null);
     } catch (e) {
-      if (version === tableRequest.current) setError(e instanceof Error ? e.message : "加载失败");
+      if (version === tableRequest.current) setError(e instanceof Error ? e.message : t("loadFailed"));
     } finally {
       if (version === tableRequest.current) setLoading(false);
     }
@@ -92,7 +94,7 @@ export function TableDetailPage() {
       if (version !== viewsRequest.current) return;
       // Create an initial view only after the current request confirms none exist.
       if (!list.length) {
-        const grid = await api.createGridView(tableId, "表格");
+        const grid = await api.createGridView(tableId, t("grid"));
         list = await api.listViews(tableId);
       }
       if (version !== viewsRequest.current) return;
@@ -102,7 +104,7 @@ export function TableDetailPage() {
         return list.find((v) => v.isDefault)?.id ?? list[0]?.id ?? null;
       });
     } catch (e) {
-      if (version === viewsRequest.current) setError(e instanceof Error ? e.message : "加载视图失败");
+      if (version === viewsRequest.current) setError(e instanceof Error ? e.message : t("loadViewsFailed"));
     } finally {
       if (version === viewsRequest.current) setViewsLoading(false);
     }
@@ -135,7 +137,7 @@ export function TableDetailPage() {
         if (!cancelled) setFormView(full as ResolvedFormView);
       } catch (e) {
         if (!cancelled)
-          setError(e instanceof Error ? e.message : "加载表单失败");
+          setError(e instanceof Error ? e.message : t("loadFormFailed"));
       }
     })();
     return () => {
@@ -152,7 +154,7 @@ export function TableDetailPage() {
         prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "重命名失败");
+      setError(e instanceof Error ? e.message : t("renameFailed"));
     }
   };
 
@@ -162,16 +164,16 @@ export function TableDetailPage() {
     try {
       let created: TableView;
       if (type === "grid") {
-        created = await api.createGridView(tableId, `表格 ${views.filter((v) => v.type === "grid").length + 1}`);
+        created = await api.createGridView(tableId, t("gridN", { n: views.filter((v) => v.type === "grid").length + 1 }));
       } else if (type === "board") {
-        created = await api.createBoardView(tableId, { name: "看板" });
+        created = await api.createBoardView(tableId, { name: t("board") });
       } else {
         created = await api.createFormView(tableId, {
-          name: "收集表",
-          title: "收集表",
-          description: "提交一条新记录",
-          submitLabel: "提交",
-          successMessage: "已写入表格",
+          name: t("formDefaults.name"),
+          title: t("formDefaults.title"),
+          description: t("formDefaults.description"),
+          submitLabel: t("formDefaults.submitLabel"),
+          successMessage: t("formDefaults.successMessage"),
         });
         // Apply Typeform defaults after create
         await api.setFormTheme(created.id, "sunset");
@@ -181,14 +183,14 @@ export function TableDetailPage() {
       setViews((prev) => [...prev, created]);
       setActiveViewId(created.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "创建视图失败");
+      setError(e instanceof Error ? e.message : t("createViewFailed"));
     }
   };
 
 
   const removeView = async (view: TableView) => {
     if (views.length <= 1) {
-      throw new Error("至少保留一个视图");
+      throw new Error(t("keepOneView"));
     }
     await api.deleteView(view.id);
     const remaining = await api.listViews(view.tableId);
@@ -200,7 +202,7 @@ export function TableDetailPage() {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
-        加载表格…
+        {t("loadingTable")}
       </div>
     );
   }
@@ -208,7 +210,7 @@ export function TableDetailPage() {
   if (!table) {
     return (
       <div className="p-8 text-sm text-muted-foreground">
-        {error || "表格不存在"}
+        {error || t("tableMissing")}
       </div>
     );
   }
@@ -221,15 +223,15 @@ export function TableDetailPage() {
       <DeleteConfirmation
         open={deletingView !== null}
         onOpenChange={(open) => { if (!open) setDeletingView(null); }}
-        title="删除视图？"
-        description={`视图「${deletingView ? viewLabel(deletingView.type, deletingView.name) : ""}」将被删除，无法恢复。表格数据会保留。`}
+        title={t("deleteViewQ")}
+        description={t("deleteViewDesc", { name: deletingView ? viewLabel(deletingView.type, deletingView.name, t) : "" })}
         onConfirm={async () => { if (deletingView) await removeView(deletingView); }}
       />
       <div className="shrink-0 border-b border-border bg-background/80 py-3 pl-4 pr-2 backdrop-blur md:pl-6 md:pr-2">
         <div className="flex w-full flex-wrap items-end justify-between gap-3">
           <div className="min-w-0 flex-1">
             <nav
-              aria-label="面包屑"
+              aria-label={t("breadcrumb")}
               className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground"
               data-testid="table-breadcrumb"
             >
@@ -238,7 +240,7 @@ export function TableDetailPage() {
                 className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                表格
+                {t("tables")}
               </Link>
               <span className="text-border">/</span>
               <span className="truncate text-foreground">{table.name}</span>
@@ -268,8 +270,8 @@ export function TableDetailPage() {
                 {views.map((view) => {
                   const Icon = viewIcon(view.type);
                   return <TabsTrigger key={view.id} value={view.id} id={`view-tab-${view.id}`} aria-controls={`view-panel-${table.id}`} data-testid={`view-${view.type}`} data-view-id={view.id} onContextMenu={(event) => { event.preventDefault(); setActiveViewId(view.id); setMenuViewId(view.id); }}>
-                    <Icon />{viewLabel(view.type, view.name)}
-                    {view.isDefault && <Star className="size-3 text-muted-foreground" aria-label="默认视图" role="img"><title>默认视图</title></Star>}
+                    <Icon />{viewLabel(view.type, view.name, t)}
+                    {view.isDefault && <Star className="size-3 text-muted-foreground" aria-label={t("defaultView")} role="img"><title>{t("defaultView")}</title></Star>}
                   </TabsTrigger>;
                 })}
               </TabsList>
@@ -281,15 +283,15 @@ export function TableDetailPage() {
                     type="button"
                     data-testid="add-view"
                     className="shrink-0"
-                    title="添加视图"
+                    title={t("addView")}
                   >
                     <Plus data-icon="inline-start" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-44" align="end"><DropdownMenuGroup>
-                  <DropdownMenuItem onSelect={() => void addView("grid")}><Columns3 />表格视图</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void addView("board")}><LayoutGrid />看板视图</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => void addView("form")}><FileInput />表单视图</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void addView("grid")}><Columns3 />{t("gridView")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void addView("board")}><LayoutGrid />{t("boardView")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void addView("form")}><FileInput />{t("formViewMenu")}</DropdownMenuItem>
                 </DropdownMenuGroup></DropdownMenuContent>
               </DropdownMenu>
             <DataRefreshButton onRefresh={() => notifyTableMutated(table.id)} />
@@ -306,7 +308,7 @@ export function TableDetailPage() {
         {viewsLoading && !activeView ? (
           <div className="flex h-40 items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
-            加载视图…
+            {t("loadingView")}
           </div>
         ) : isForm ? (
           formView ? (
@@ -322,14 +324,11 @@ export function TableDetailPage() {
                   }}
                 />
               </div>
-              <p className="mt-3 shrink-0 text-xs text-muted-foreground">
-                视图按需添加 · 表单 / 看板 / 表格同一数据集
-              </p>
             </div>
           ) : (
             <div className="flex h-40 items-center justify-center gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              加载表单…
+              {t("loadingForm")}
             </div>
           )
         ) : isBoard ? (
@@ -342,18 +341,12 @@ export function TableDetailPage() {
                 onChange={setTable}
               />
             </div>
-            <p className="mt-3 shrink-0 text-xs text-muted-foreground">
-              视图按需添加 · 表单 / 看板 / 表格同一数据集
-            </p>
           </div>
         ) : (
           <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col">
               <DataTable table={table} onChange={setTable} refreshToken={tableRefreshToken} />
             </div>
-            <p className="mt-3 shrink-0 text-xs text-muted-foreground">
-              视图按需添加 · 表单 / 看板 / 表格同一数据集
-            </p>
           </div>
         )}
       </div>

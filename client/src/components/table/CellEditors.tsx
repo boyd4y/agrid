@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { SelectChip } from "./SelectChip";
 import type { CellValue, ColumnDef, SelectOption } from "@/types/table";
 import type { MemberOption } from "@/lib/api";
+import i18n from "@/i18n";
 
 type EditorProps = {
   column: ColumnDef;
@@ -61,8 +62,8 @@ function CellOptionSearch({
       />
       <button
         type="button"
-        aria-label="清除所选值"
-        title="清除所选值"
+        aria-label={i18n.t("table:clearSelected")}
+        title={i18n.t("table:clearSelected")}
         disabled={!canClear}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30"
         onClick={onClear}
@@ -154,7 +155,7 @@ export function CellDisplay({
       );
     }
     case "person": {
-      if (!value) return <span className="text-muted-foreground/50">空</span>;
+      if (!value) return <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>;
       const m = members.find((x) => x.userId === value || x.name === value);
       const label = m?.name ?? String(value);
       return <MemberChip name={label} kind={m?.kind} image={m?.image} />;
@@ -194,7 +195,7 @@ export function CellDisplay({
       );
     case "date": {
       if (value === null || value === undefined || value === "") {
-        return <span className="text-muted-foreground/50">空</span>;
+        return <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>;
       }
       const fmt = column.config?.dateFormat ?? "YYYY-MM-DD";
       return (
@@ -208,7 +209,7 @@ export function CellDisplay({
       return (
         <span className="truncate">
           {value === null || value === undefined || value === "" ? (
-            <span className="text-muted-foreground/50">空</span>
+            <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>
           ) : (
             String(value)
           )}
@@ -243,7 +244,7 @@ export function CellEditor({
   if (column.type === "formula" || column.type === "rollup") {
     return (
       <div className="flex h-full w-full items-center px-1 text-xs text-muted-foreground">
-        公式列只读
+        {i18n.t("table:formulaReadonly")}
       </div>
     );
   }
@@ -382,7 +383,7 @@ function PersonEditor({
           {current ? (
             <MemberChip name={current.name} kind={current.kind} image={current.image} />
           ) : (
-            <span className="text-muted-foreground/50">空</span>
+            <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>
           )}
         </div>
       </PopoverAnchor>
@@ -392,12 +393,12 @@ function PersonEditor({
         side="bottom"
         sideOffset={6}
         className={CELL_POPOVER_CLASS}
-        aria-label="选择人员"
+        aria-label={i18n.t("table:pickPerson")}
         onKeyDown={navigateOptions}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <CellOptionSearch
-          placeholder="搜索人员…"
+          placeholder={i18n.t("table:searchPeople")}
           value={q}
           onChange={setQ}
           onClear={() => onCommit(null)}
@@ -405,7 +406,7 @@ function PersonEditor({
         />
         {list.length === 0 && (
           <div className="px-2 py-2 text-xs text-muted-foreground">
-            暂无成员
+            {i18n.t("table:noMembers")}
           </div>
         )}
         <div className="max-h-56 overflow-y-auto">
@@ -433,7 +434,7 @@ function PersonEditor({
           <Input
             size="sm"
             className="mt-1 h-8"
-            placeholder="或输入人名后回车"
+            placeholder={i18n.t("table:orTypeNameEnter")}
             onKeyDown={(e) => {
               if (e.key === "Enter")
                 onCommit((e.target as HTMLInputElement).value || null);
@@ -488,12 +489,12 @@ function SelectEditor({
         side="bottom"
         sideOffset={6}
         className={CELL_POPOVER_CLASS}
-        aria-label="选择选项"
+        aria-label={i18n.t("table:pickOption")}
         onKeyDown={navigateOptions}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <CellOptionSearch
-          placeholder="搜索选项…"
+          placeholder={i18n.t("table:searchOptions")}
           value={q}
           onChange={setQ}
           onClear={() => onCommit(null)}
@@ -502,7 +503,7 @@ function SelectEditor({
         <div className="max-h-56 overflow-y-auto">
           {filtered.length === 0 && (
             <p className="px-2 py-3 text-xs text-muted-foreground">
-              没有匹配的选项
+              {i18n.t("table:noMatchingOptions")}
             </p>
           )}
           {filtered.map((o) => {
@@ -590,7 +591,7 @@ function MultiSelectEditor({
         side="bottom"
         sideOffset={6}
         className={CELL_POPOVER_CLASS}
-        aria-label="选择多个选项"
+        aria-label={i18n.t("table:pickOptions")}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onKeyDown={(e) => {
           navigateOptions(e);
@@ -603,7 +604,7 @@ function MultiSelectEditor({
         }}
       >
         <CellOptionSearch
-          placeholder="搜索选项…"
+          placeholder={i18n.t("table:searchOptions")}
           value={q}
           onChange={setQ}
           onClear={() => {
@@ -615,7 +616,7 @@ function MultiSelectEditor({
         <div className="flex min-h-8 flex-wrap items-center gap-1 px-2 py-1.5">
           {selectedOpts.length === 0 ? (
             <span className="text-[12px] text-muted-foreground">
-              点击选择标签
+              {i18n.t("table:clickToPickTags")}
             </span>
           ) : (
             selectedOpts.map((o) => (
@@ -627,7 +628,7 @@ function MultiSelectEditor({
         <div className="max-h-56 overflow-y-auto">
           {filtered.length === 0 && (
             <p className="px-2 py-3 text-xs text-muted-foreground">
-              没有匹配的选项
+              {i18n.t("table:noMatchingOptions")}
             </p>
           )}
           {filtered.map((o) => {

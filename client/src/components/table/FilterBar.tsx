@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/select";
 import type { ColumnDef, CellValue } from "@/types/table";
 import { SelectChip } from "./SelectChip";
+import { useTranslation } from "react-i18next";
 import {
-  FILTER_OP_LABELS,
   filterNeedsValue,
   isFilterConditionComplete,
   opsForType,
@@ -39,6 +39,7 @@ export function FilterBar({
   onChange,
   defaultOpen = false,
 }: Props) {
+  const { t } = useTranslation("table");
   const [open, setOpen] = useState(defaultOpen || filters.length > 0);
   const visibleCols = columns.filter((c) => !c.config?.hidden);
   const activeCount = filters.filter(isFilterConditionComplete).length;
@@ -87,7 +88,7 @@ export function FilterBar({
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           )}
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          筛选
+          {t("filter")}
           {filters.length > 0 && (
             <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
               {activeCount > 0 ? activeCount : filters.length}
@@ -96,14 +97,14 @@ export function FilterBar({
         </Button>
         {!open && filters.length === 0 && (
           <span className="text-[11px] text-muted-foreground">
-            已折叠 · 点击展开
+            {t("filterCollapsed")}
           </span>
         )}
         {!open && filters.length > 0 && (
           <span className="text-[11px] text-muted-foreground">
             {activeCount > 0
-              ? `${activeCount} 条条件生效中`
-              : `${filters.length} 条条件未填完（暂不生效）`}
+              ? t("filterActive", { count: activeCount })
+              : t("filterIncomplete", { count: filters.length })}
           </span>
         )}
         <Button
@@ -113,7 +114,7 @@ export function FilterBar({
           onClick={add}
         >
           <Plus className="h-3.5 w-3.5" />
-          条件
+          {t("conditions")}
         </Button>
         {filters.length > 0 && (
           <Button
@@ -122,7 +123,7 @@ export function FilterBar({
             className="h-7 text-xs text-muted-foreground"
             onClick={() => onChange([], filterLogic)}
           >
-            清空
+            {t("clearFilters")}
           </Button>
         )}
       </div>
@@ -140,7 +141,7 @@ export function FilterBar({
                   className="h-6 rounded px-2 text-[11px]"
                   onClick={() => onChange(filters, l)}
                 >
-                  {l === "and" ? "且 AND" : "或 OR"}
+                  {l === "and" ? t("logicAnd") : t("logicOr")}
                 </Button>
               ))}
             </div>
@@ -148,7 +149,7 @@ export function FilterBar({
 
           {filters.length === 0 ? (
             <p className="text-[11px] text-muted-foreground">
-              无筛选 — 显示全部行。Agent 可用 queryRows 同样条件。
+              {t("noFiltersHint")}
             </p>
           ) : (
             <div className="flex flex-col gap-1.5">
@@ -185,7 +186,7 @@ export function FilterBar({
                         size="sm"
                         className="w-[120px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
                       >
-                        <SelectValue placeholder="列" />
+                        <SelectValue placeholder={t("columnPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         {visibleCols.map((c) => (
@@ -205,12 +206,12 @@ export function FilterBar({
                         size="sm"
                         className="w-[110px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
                       >
-                        <SelectValue placeholder="条件" />
+                        <SelectValue placeholder={t("opPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         {ops.map((op) => (
                           <SelectItem key={op} value={op}>
-                            {FILTER_OP_LABELS[op]}
+                            {t(`filterOps.${op}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -256,6 +257,7 @@ export function FilterValueInput({
   value: CellValue;
   onChange: (v: CellValue) => void;
 }) {
+  const { t } = useTranslation("table");
   if (column.type === "relation")
     return (
       <div className="w-44 shrink-0">
@@ -287,12 +289,12 @@ export function FilterValueInput({
           {current ? (
             <SelectChip option={current} />
           ) : (
-            <span className="text-muted-foreground">选择…</span>
+            <span className="text-muted-foreground">{t("selectEllipsis")}</span>
           )}
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__empty__">
-            <span className="text-muted-foreground">选择…</span>
+            <span className="text-muted-foreground">{t("selectEllipsis")}</span>
           </SelectItem>
           {options.map((o) => (
             <SelectItem key={o.id} value={o.id} className="pl-8">
@@ -317,8 +319,8 @@ export function FilterValueInput({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__empty__">—</SelectItem>
-          <SelectItem value="1">勾选</SelectItem>
-          <SelectItem value="0">未勾选</SelectItem>
+          <SelectItem value="1">{t("checked")}</SelectItem>
+          <SelectItem value="0">{t("unchecked")}</SelectItem>
         </SelectContent>
       </Select>
     );
@@ -337,7 +339,7 @@ export function FilterValueInput({
         onChange={(e) =>
           onChange(e.target.value === "" ? null : Number(e.target.value))
         }
-        placeholder="数字"
+        placeholder={t("numberPlaceholder")}
       />
     );
   }
@@ -362,7 +364,7 @@ export function FilterValueInput({
       className="w-[160px] shrink-0"
       value={typeof value === "string" ? value : ""}
       onChange={(e) => onChange(e.target.value || null)}
-      placeholder="值"
+      placeholder={t("valuePlaceholder")}
     />
   );
 }
