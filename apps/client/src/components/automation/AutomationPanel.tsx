@@ -1,5 +1,5 @@
 import { changedFilterOperator, filterOpsForColumn } from "@/lib/filter-value";
-import { FilterValueInput } from "@/components/table/FilterBar";
+import { FILTER_CONTROL_CLASS_NAME, FilterValueInput } from "@/components/table/FilterBar";
 import { FormFieldControl } from "@/components/form/FormFieldControls";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
@@ -586,6 +586,7 @@ export function AutomationEditor({
                   columns.find((c) => c.id === trigger.columnId) && (
                     <div className="min-w-36 flex-1">
                       <FormFieldControl
+                        size="sm"
                         column={columns.find((c) => c.id === trigger.columnId)!}
                         value={trigger.toValue}
                         onChange={(value) =>
@@ -727,7 +728,7 @@ export function AutomationEditor({
                           );
                         }}
                       >
-                        <SelectTrigger className="h-8 w-[120px] bg-background text-xs">
+                        <SelectTrigger size="sm" className={FILTER_CONTROL_CLASS_NAME}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -752,7 +753,7 @@ export function AutomationEditor({
                           )
                         }
                       >
-                        <SelectTrigger className="h-8 w-[100px] bg-background text-xs">
+                        <SelectTrigger size="sm" className={FILTER_CONTROL_CLASS_NAME}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -907,6 +908,7 @@ export function AutomationEditor({
                       {columns.find((c) => c.id === action.columnId) && (
                         <div className="min-w-40 flex-1">
                           <FormFieldControl
+                            size="sm"
                             column={
                               columns.find((c) => c.id === action.columnId)!
                             }

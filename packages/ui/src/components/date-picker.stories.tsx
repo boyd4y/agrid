@@ -17,6 +17,7 @@ export default meta;
 type Story = StoryObj<typeof DatePicker>;
 
 export const Default: Story = {};
+export const FormSize: Story = { args: { size: "default" } };
 export const Empty: Story = { args: { value: null } };
 export const CustomFormat: Story = { args: { dateFormat: "MMM D, YYYY" } };
 export const Localized: Story = { args: { locale: zhCN, labels: { pickDate: "选择日期", clear: "清空", empty: "空" } } };

@@ -64,7 +64,19 @@ try {
     return JSON.stringify(actual) === JSON.stringify(ids.sort());
   }, expected.map(row => row.id));
   const filterValue = condition.getByTestId('filter-value');
-  const assertType = async type => assert.equal(await filterValue.getAttribute('data-filter-type'), type);
+  const assertType = async type => {
+    assert.equal(await filterValue.getAttribute('data-filter-type'), type);
+    const sizes = await condition.evaluate(row => {
+      const value = row.querySelector('[data-testid="filter-value"]');
+      const target = value.matches('button,input') ? value : value.querySelector('button,input');
+      return [...Array.from(row.querySelectorAll(':scope > button[role="combobox"]')).slice(0, 2), target].map(node => {
+        const box = node.getBoundingClientRect();
+        return { width: box.width, height: box.height };
+      });
+    });
+    assert.equal(sizes.length, 3);
+    for (const size of sizes) assert.deepEqual(size, { width: 176, height: 32 }, `${type} uses the same compact control size`);
+  };
 
   await chooseColumn(person); await assertType('person');
   await filterValue.getByRole('button').click();

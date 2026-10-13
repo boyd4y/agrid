@@ -1,6 +1,6 @@
 import { RelationPicker } from "./RelationPicker";
 import { useEffect, useRef, useState } from "react";
-import { FormFieldControl } from "@/components/form/FormFieldControls";
+import { PersonControl } from "@/components/form/FormFieldControls";
 import { useMemberOptions } from "@/hooks/useMemberOptions";
 import {
   changedFilterOperator,
@@ -31,6 +31,8 @@ import {
   type FilterLogic,
   type FilterOp,
 } from "@tabdo/shared";
+
+export const FILTER_CONTROL_CLASS_NAME = "w-44 max-w-full min-w-0 shrink-0";
 
 type Props = {
   columns: ColumnDef[];
@@ -200,7 +202,7 @@ export function FilterBar({
                       <SelectTrigger
                         size="sm"
                         aria-label={t("columnPlaceholder")}
-                        className="w-[120px] shrink-0"
+                        className={FILTER_CONTROL_CLASS_NAME}
                       >
                         <SelectValue placeholder={t("columnPlaceholder")} />
                       </SelectTrigger>
@@ -223,7 +225,7 @@ export function FilterBar({
                       <SelectTrigger
                         size="sm"
                         aria-label={t("opPlaceholder")}
-                        className="w-[110px] shrink-0"
+                        className={FILTER_CONTROL_CLASS_NAME}
                       >
                         <SelectValue placeholder={t("opPlaceholder")} />
                       </SelectTrigger>
@@ -289,7 +291,6 @@ export function FilterValueInput({
   if (type === "person")
     return (
       <PersonFilterInput
-        column={column}
         value={value}
         onChange={onChange}
         label={label}
@@ -298,11 +299,12 @@ export function FilterValueInput({
   if (type === "relation")
     return (
       <div
-        className="w-44 shrink-0"
+        className={FILTER_CONTROL_CLASS_NAME}
         data-testid="filter-value"
         data-filter-type={type}
       >
         <RelationPicker
+          size="sm"
           column={{
             ...column,
             config: {
@@ -337,7 +339,7 @@ export function FilterValueInput({
       >
         <SelectTrigger
           size="sm"
-          className="w-44 shrink-0"
+          className={FILTER_CONTROL_CLASS_NAME}
           aria-label={label}
           data-testid="filter-value"
           data-filter-type={type}
@@ -369,7 +371,7 @@ export function FilterValueInput({
       >
         <SelectTrigger
           size="sm"
-          className="w-32 shrink-0"
+          className={FILTER_CONTROL_CLASS_NAME}
           aria-label={label}
           data-testid="filter-value"
           data-filter-type={type}
@@ -392,11 +394,12 @@ export function FilterValueInput({
   if (type === "date")
     return (
       <div
-        className="w-44 shrink-0"
+        className={FILTER_CONTROL_CLASS_NAME}
         data-testid="filter-value"
         data-filter-type={type}
       >
         <DatePicker
+          className="w-full min-w-0"
           value={typeof value === "string" ? value : null}
           onChange={onChange}
           dateFormat={column.config?.dateFormat ?? "YYYY-MM-DD"}
@@ -407,7 +410,7 @@ export function FilterValueInput({
   return (
     <Input
       size="sm"
-      className="w-44 shrink-0"
+      className={FILTER_CONTROL_CLASS_NAME}
       aria-label={label}
       data-testid="filter-value"
       data-filter-type={type}
@@ -419,12 +422,10 @@ export function FilterValueInput({
 }
 
 function PersonFilterInput({
-  column,
   value,
   onChange,
   label,
 }: {
-  column: ColumnDef;
   value: CellValue;
   onChange: (value: CellValue) => void;
   label: string;
@@ -432,13 +433,13 @@ function PersonFilterInput({
   const members = useMemberOptions();
   return (
     <div
-      className="w-44 shrink-0"
+      className={FILTER_CONTROL_CLASS_NAME}
       data-testid="filter-value"
       data-filter-type="person"
     >
-      <FormFieldControl
-        column={column}
-        value={value}
+      <PersonControl
+        size="sm"
+        value={typeof value === "string" ? value : null}
         onChange={onChange}
         members={members}
         placeholder={label}
@@ -472,7 +473,7 @@ function NumberFilterInput({
     <Input
       size="sm"
       inputMode="decimal"
-      className="w-32 shrink-0"
+      className={FILTER_CONTROL_CLASS_NAME}
       aria-label={label}
       aria-invalid={invalid}
       title={invalid ? t("invalidNumber") : undefined}

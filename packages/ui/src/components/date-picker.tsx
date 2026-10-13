@@ -33,6 +33,7 @@ type Props = {
   embedded?: boolean;
   className?: string;
   placeholder?: string;
+  size?: "default" | "sm";
 };
 
 /**
@@ -48,6 +49,7 @@ export function DatePicker({
   embedded = false,
   className,
   placeholder,
+  size = "sm",
   labels: suppliedLabels,
   locale,
 }: Props) {
@@ -178,15 +180,15 @@ export function DatePicker({
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size={size}
               className={cn(
-                "h-8 justify-start gap-2 font-normal",
+                "min-w-0 justify-start gap-2 font-normal",
                 !value && "text-muted-foreground",
                 className
               )}
             >
               <CalendarIcon className="h-3.5 w-3.5 opacity-60" />
-              {value ? formatDateDisplay(value, dateFormat) : placeholder ?? labels.pickDate}
+              <span className="min-w-0 truncate">{value ? formatDateDisplay(value, dateFormat) : placeholder ?? labels.pickDate}</span>
             </Button>
           </PopoverTrigger>
           {content}

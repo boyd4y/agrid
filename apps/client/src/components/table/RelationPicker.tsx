@@ -69,6 +69,7 @@ export function RelationPicker({
   onUpdated,
   embedded = false,
   onClose,
+  size = "default",
 }: {
   column: ColumnDef;
   value: string[];
@@ -79,6 +80,7 @@ export function RelationPicker({
   onUpdated?: (row: RowData) => void;
   embedded?: boolean;
   onClose?: () => void;
+  size?: "default" | "sm";
 }) {
   const { t } = useTranslation("table");
   const [open, setOpen] = useState(embedded),
@@ -241,7 +243,8 @@ export function RelationPicker({
           <Button
             type="button"
             variant="outline"
-            className="h-auto min-h-10 w-full justify-between font-normal"
+            size={size}
+            className="w-full justify-between font-normal"
           >
             <span className="min-w-0 truncate">
               {selectedRecords.length

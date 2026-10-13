@@ -29,6 +29,7 @@ type ControlProps = {
   settings?: FormQuestionSettings;
   /** Larger Typeform-style controls */
   variant?: "default" | "typeform";
+  size?: "default" | "sm";
 };
 
 export function FormFieldControl({
@@ -40,6 +41,7 @@ export function FormFieldControl({
   members = [],
   settings,
   variant = "default",
+  size = "default",
 }: ControlProps) {
   const tf = variant === "typeform";
 
@@ -59,7 +61,7 @@ export function FormFieldControl({
     );
   }
 
-  if(column.type==="relation")return <RelationPicker column={column} value={Array.isArray(value)?value:[]} onChange={onChange}/>;
+  if(column.type==="relation")return <RelationPicker column={column} value={Array.isArray(value)?value:[]} onChange={onChange} size={size}/>;
   if (column.type === "checkbox") {
     const agree =
       settings?.kind === "checkbox" ? settings.agreeLabel : undefined;
@@ -95,6 +97,7 @@ export function FormFieldControl({
     }
     return (
       <SelectControl
+        size={size}
         options={column.config?.options ?? []}
         value={typeof value === "string" ? value : null}
         onChange={onChange}
@@ -122,6 +125,7 @@ export function FormFieldControl({
     }
     return (
       <MultiSelectControl
+        size={size}
         options={column.config?.options ?? []}
         value={Array.isArray(value) ? value : []}
         onChange={onChange}
@@ -134,6 +138,7 @@ export function FormFieldControl({
   if (column.type === "person") {
     return (
       <PersonControl
+        size={size}
         members={members}
         value={typeof value === "string" ? value : null}
         onChange={onChange}
@@ -146,6 +151,7 @@ export function FormFieldControl({
   if (column.type === "date") {
     return (
       <DatePicker
+        size={size}
         value={typeof value === "string" ? value : null}
         dateFormat={column.config?.dateFormat ?? "YYYY-MM-DD"}
         onChange={(v) => onChange(v)}
@@ -160,6 +166,7 @@ export function FormFieldControl({
     return (
       <Input
         inputMode="decimal"
+        size={size}
         className={cn(
           "tabular-nums",
           tf &&
@@ -208,6 +215,7 @@ export function FormFieldControl({
   return (
     <Input
       type={inputMode === "email" ? "email" : inputMode === "url" ? "url" : "text"}
+      size={size}
       inputMode={inputMode === "email" ? "email" : inputMode === "url" ? "url" : "text"}
       value={typeof value === "string" ? value : value == null ? "" : String(value)}
       placeholder={placeholder}
@@ -281,12 +289,14 @@ function SelectControl({
   onChange,
   placeholder,
   typeform,
+  size,
 }: {
   options: SelectOption[];
   value: string | null;
   onChange: (v: CellValue) => void;
   placeholder?: string;
   typeform?: boolean;
+  size?: "default" | "sm";
 }) {
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.id === value);
@@ -296,8 +306,9 @@ function SelectControl({
         <Button
           type="button"
           variant="outline"
+          size={size}
           className={cn(
-            "h-9 w-full justify-between font-normal",
+            "w-full justify-between font-normal",
             typeform &&
               "h-12 border-[color-mix(in_srgb,var(--form-answer)_25%,transparent)] bg-transparent text-[var(--form-answer)]"
           )}
@@ -347,12 +358,14 @@ function MultiSelectControl({
   onChange,
   placeholder,
   typeform,
+  size,
 }: {
   options: SelectOption[];
   value: string[];
   onChange: (v: CellValue) => void;
   placeholder?: string;
   typeform?: boolean;
+  size?: "default" | "sm";
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.filter((o) => value.includes(o.id));
@@ -366,8 +379,10 @@ function MultiSelectControl({
         <Button
           type="button"
           variant="outline"
+          size={size}
           className={cn(
-            "h-auto min-h-9 w-full justify-between py-1.5 font-normal",
+            "h-auto w-full justify-between py-1.5 font-normal",
+            size === "sm" ? "min-h-8" : "min-h-9",
             typeform &&
               "min-h-12 border-[color-mix(in_srgb,var(--form-answer)_25%,transparent)] bg-transparent text-[var(--form-answer)]"
           )}
@@ -412,18 +427,20 @@ function MultiSelectControl({
   );
 }
 
-function PersonControl({
+export function PersonControl({
   members,
   value,
   onChange,
   placeholder,
   typeform,
+  size = "default",
 }: {
   members: MemberOption[];
   value: string | null;
   onChange: (v: CellValue) => void;
   placeholder?: string;
   typeform?: boolean;
+  size?: "default" | "sm";
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -440,24 +457,25 @@ function PersonControl({
         <Button
           type="button"
           variant="outline"
+          size={size}
           className={cn(
-            "h-9 w-full justify-between font-normal",
+            "w-full justify-between font-normal",
             typeform &&
               "h-12 border-[color-mix(in_srgb,var(--form-answer)_25%,transparent)] bg-transparent text-[var(--form-answer)]"
           )}
           style={typeform ? { borderRadius: "var(--form-radius)" } : undefined}
         >
           {current ? (
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex min-w-0 items-center gap-1.5">
               {current.kind === "agent" ? (
                 <Bot className="h-3.5 w-3.5 text-agent" />
               ) : (
                 <User className="h-3.5 w-3.5 opacity-60" />
               )}
-              {current.name}
+              <span className="truncate">{current.name}</span>
             </span>
           ) : (
-            <span className="opacity-60">{placeholder ?? i18n.t("form:selectMember")}</span>
+            <span className="truncate opacity-60">{placeholder ?? i18n.t("form:selectMember")}</span>
           )}
           <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </Button>
