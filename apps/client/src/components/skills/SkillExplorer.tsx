@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Check, ChevronRight, Code2, Copy, FileText, Folder } from "lucide-react";
 import type { SkillDocument, SkillFile } from "@tabdo/shared";
+import { Loader2, Save, X } from "lucide-react";
+import { api } from "@/lib/api";
 import { Button } from "@tabdo/ui/components/button";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+
+const CodeEditor = lazy(() => import("@tabdo/ui/components/code-editor").then(module => ({ default: module.CodeEditor })));
 
 type Node = { name: string; path: string; children: Node[]; file?: SkillFile };
 function tree(files: SkillFile[]) {
@@ -20,12 +24,27 @@ function tree(files: SkillFile[]) {
   return root.children;
 }
 
-export function SkillExplorer({ skill }: { skill: SkillDocument }) {
+export function SkillExplorer({ skill, canManage = false, onSaved }: { skill: SkillDocument; canManage?: boolean; onSaved?: (skill: SkillDocument) => void }) {
   const { t } = useTranslation("common");
   const files = [{ path: "SKILL.md", content: skill.document }, ...skill.files];
   const [path, setPath] = useState("SKILL.md");
   const [copied, setCopied] = useState(false);
-  const selected = files.find((file) => file.path === path) ?? files[0];
+  const [draft, setDraft] = useState<Record<string, string>>({}), [saving, setSaving] = useState(false), [error, setError] = useState<string | null>(null);
+  const alive = useRef(true), savingRef = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const canEdit = canManage && !skill.builtin;
+  const dirty = files.some(file => draft[file.path] !== undefined && draft[file.path] !== file.content);
+  const save = async () => {
+    if (!canEdit || !dirty || savingRef.current) return;
+    savingRef.current = true; setSaving(true); setError(null);
+    try {
+      const updated = await api.updateSkill(skill.id, draft["SKILL.md"] ?? skill.document, skill.version, skill.files.map(file => ({ ...file, content: draft[file.path] ?? file.content })));
+      if (alive.current) { setDraft({}); onSaved?.(updated); }
+    } catch (error) { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }
+    finally { savingRef.current = false; if (alive.current) setSaving(false); }
+  };
+  const original = files.find((file) => file.path === path) ?? files[0];
+  const selected = { ...original, content: draft[original.path] ?? original.content };
   const render = (nodes: Node[]) => nodes.map((node) => node.file ? <Button variant={selected.path === node.path ? "secondary" : "ghost"} size="sm" type="button" key={node.path} aria-pressed={selected.path === node.path} onClick={() => { setPath(node.path); setCopied(false); }} title={node.path} className="w-full justify-start">
     {/\.(py|js|ts|sh)$/.test(node.name) ? <Code2 data-icon="inline-start" /> : <FileText data-icon="inline-start" />}<span className="truncate">{node.name}</span>
   </Button> : <details open key={node.path} className="group/folder"><summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60"><ChevronRight className="size-3 shrink-0 transition-transform group-open/folder:rotate-90" /><Folder className="size-4 shrink-0 text-muted-foreground" /><span className="truncate">{node.name}</span></summary><div className="ml-3 border-l border-border pl-2">{render(node.children)}</div></details>);
@@ -35,9 +54,11 @@ export function SkillExplorer({ skill }: { skill: SkillDocument }) {
     </aside>
     <section aria-label={t("fileContent")} className="flex min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3"><span className="truncate font-mono text-xs" title={selected.path}>{selected.path}</span>
-        <div className="flex shrink-0 items-center gap-2"><span className="text-xs text-muted-foreground">{t("readonly")}</span><Button size="icon" variant="ghost" aria-label={copied ? t("copiedFile") : t("copyFile")} onClick={() => void navigator.clipboard.writeText(selected.content).then(() => setCopied(true)).catch(() => toast.error(t("copyFailed")))}>{copied ? <Check /> : <Copy />}</Button></div>
+        <div className="flex shrink-0 items-center gap-2"><span className="text-xs text-muted-foreground">{canEdit ? t("edit") : t("readonly")}</span><Button size="icon" variant="ghost" aria-label={copied ? t("copiedFile") : t("copyFile")} onClick={() => void navigator.clipboard.writeText(selected.content).then(() => setCopied(true)).catch(() => toast.error(t("copyFailed")))}>{copied ? <Check /> : <Copy />}</Button></div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto" tabIndex={0}><pre className="min-w-max py-4 font-mono text-[13px] leading-6">{selected.content.split("\n").map((line, index) => <div key={index} className="flex"><span aria-hidden className="sticky left-0 w-12 shrink-0 select-none bg-card pr-3 text-right text-muted-foreground/60">{index + 1}</span><code className="pr-6">{line || " "}</code></div>)}</pre></div>
+      <Suspense fallback={<p role="status" className="flex-1 p-4 text-sm text-muted-foreground">{t("loadingSkill")}</p>}><CodeEditor key={selected.path} filename={selected.path} value={selected.content} readOnly={!canEdit || saving} aria-label={`${t("fileContent")}: ${selected.path}`} className="min-h-80 flex-1 rounded-none border-0" onChange={content => { if (!canEdit || savingRef.current) return; setCopied(false); setDraft(previous => ({ ...previous, [selected.path]: content })); }} /></Suspense>
+      {error && <p role="alert" className="px-4 py-2 text-sm text-destructive">{error}</p>}
+      {canEdit && <div className="flex shrink-0 gap-2 border-t border-border px-4 py-3"><Button type="button" variant="outline" disabled={!dirty || saving} onClick={() => { setDraft({}); setError(null); }}><X data-icon="inline-start" />{t("cancel")}</Button><Button type="button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{t("save")}</Button></div>}
     </section>
   </div>;
 }
