@@ -1,5 +1,10 @@
 # tabdo identity
 
+## Positioning and use cases
+
+- [品牌定位与宣传文案](positioning.md)：AI 原生工作空间，Table → Do → AI；面向个人与小团队。
+- [四个可复现案例](use-cases.md)：资料创作、小组项目、每周复盘和专用邮件入站；包含 setup、用户吸引路径、当前功能覆盖与缺口。
+
 The selected mark is supplied by the user in `~/Downloads/tabdo-ai-logo-kit`. It has two blocks connected by an upward arrow. The original geometry, transparent background and colors are preserved.
 
 ## Assets
