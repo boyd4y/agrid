@@ -6,7 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA } from "@tabdo/shared";
+import { COLUMN_TYPES, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA } from "@tabdo/shared";
 import { callCommand, textResult } from "./client.js";
 
 const cellValue = z.union([
@@ -30,16 +30,7 @@ const filterOp = z.enum([
   "lte",
 ]);
 
-const columnType = z.enum([
-  "text",
-  "number",
-  "select",
-  "multi_select",
-  "date",
-  "checkbox",
-  "person",
-  "formula", "relation", "rollup",
-]);
+const columnType = z.enum(COLUMN_TYPES);
 
 const relationConfig=z.object({targetTableId:z.string().uuid(),limit:z.enum(["one","many"]).optional(),inverseName:z.string().optional(),inverseLimit:z.enum(["one","many"]).optional()});
 const rollupConfig=z.object({relationColumnId:z.string().uuid(),targetColumnId:z.string().uuid().optional(),operation:z.enum(["count","sum","average","min","max","earliest","latest"])});
@@ -200,13 +191,14 @@ server.registerTool(
       name: z.string().min(1),
       type: columnType,
       relation:relationConfig.optional(), rollup:rollupConfig.optional(),
+      file: z.object({ multiple: z.boolean().optional() }).strict().optional().describe("file字段单/多文件配置，值为已上传文件ID数组"),
       options: z.array(selectOption).optional(),
       formula: z.string().optional().describe("公式表达式，type=formula 时必填"),
       formulaResultType: formulaResultType.optional(),
       width: z.number().optional(),
     },
   },
-  async ({ tableId, name, type, options, formula, formulaResultType, width, relation, rollup }) =>
+  async ({ tableId, name, type, options, file, formula, formulaResultType, width, relation, rollup }) =>
     textResult(
       await callCommand("addColumn", {
         tableId,
@@ -215,6 +207,7 @@ server.registerTool(
         width,
         config: {
           ...(relation?{relation}:{}), ...(rollup?{rollup}:{}),
+          ...(file ? {file} : {}),
           ...(options ? { options } : {}),
           ...(formula !== undefined ? { formula, formulaResultType: formulaResultType ?? "auto" } : {}),
         },
@@ -242,12 +235,13 @@ server.registerTool(
       type: columnType.optional(),
       width: z.number().optional(),
       hidden: z.boolean().optional(),
+      file: z.object({ multiple: z.boolean().optional() }).strict().optional().describe("file字段单/多文件配置，值为已上传文件ID数组"),
       options: z.array(selectOption).optional(),
       formula: z.string().optional(),
       formulaResultType: formulaResultType.optional(),
     },
   },
-  async ({ columnId, name, type, width, hidden, options, formula, formulaResultType }) =>
+  async ({ columnId, name, type, width, hidden, options, file, formula, formulaResultType }) =>
     textResult(
       await callCommand("updateColumn", {
         columnId,
@@ -256,6 +250,7 @@ server.registerTool(
         width,
         hidden,
         config: {
+          ...(file ? {file} : {}),
           ...(options ? { options } : {}),
           ...(formula !== undefined ? { formula } : {}),
           ...(formulaResultType !== undefined ? { formulaResultType } : {}),

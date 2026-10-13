@@ -148,6 +148,13 @@
       "when": 1791862500000,
       "tag": "0020_view_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791862600000,
+      "tag": "0021_file_objects",
+      "breakpoints": true
     }
   ]
 }

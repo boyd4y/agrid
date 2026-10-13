@@ -27,7 +27,7 @@
     "test:harness:remote": "tsx test/harness/remote-smoke.ts",
     "test:skills": "tsx --test test/skills/*.test.ts",
     "typecheck:test": "tsc --project tsconfig.test.json",
-    "test": "pnpm typecheck:test && tsx --test test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/routes/*.test.ts"
+    "test": "pnpm typecheck:test && tsx --test test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/storage/*.test.ts test/routes/*.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.78",
@@ -38,6 +38,7 @@
     "@ai-sdk/openai": "^4.0.91",
     "@ai-sdk/sandbox-just-bash": "1.0.149",
     "@ai-sdk/sandbox-vercel": "1.0.149",
+    "@aws-sdk/client-s3": "^3.1150.0",
     "@better-auth/drizzle-adapter": "^1.7.7",
     "@hono/node-server": "^1.14.1",
     "@tabdo/shared": "workspace:*",

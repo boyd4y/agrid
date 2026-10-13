@@ -9,7 +9,8 @@
     "person": "Person",
     "formula": "Formula",
     "relation": "Relation",
-    "rollup": "Rollup"
+    "rollup": "Rollup",
+    "file": "File"
   },
   "formulaResult": {
     "auto": "Auto",
@@ -334,5 +335,13 @@
     "errProcessed": "Image is still too large after processing — try another"
   },
   "cardActionsNamed": "Card actions: {{title}}",
-  "rename": "Rename"
+  "rename": "Rename",
+  "files": {
+    "upload": "Upload files",
+    "uploading": "Uploading {{progress}}%",
+    "remove": "Remove {{name}}",
+    "multiple": "Allow multiple files",
+    "unavailable": "File unavailable · Retry",
+    "loading": "Loading files…"
+  }
 }

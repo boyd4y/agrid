@@ -225,6 +225,20 @@ export const columns = pgTable(
   (t) => [index("columns_table_sort_idx").on(t.tableId, t.sortOrder)]
 );
 
+/** Uploaded blobs are retained independently of cell references and editor drafts. */
+export const fileObjects = pgTable("file_objects", {
+  id: uuid("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").notNull().references(() => tables.id, { onDelete: "cascade" }),
+  columnId: uuid("column_id").notNull().references(() => columns.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  size: integer("size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  storageDriver: text("storage_driver").$type<"local" | "s3">().notNull(),
+  storageKey: text("storage_key").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [index("file_objects_org_idx").on(t.organizationId), index("file_objects_column_idx").on(t.columnId), uniqueIndex("file_objects_storage_idx").on(t.storageDriver, t.storageKey)]);
+
 export const rows = pgTable(
   "rows",
   {

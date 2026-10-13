@@ -24,6 +24,7 @@ export function RelatedRecordPanel() {
   const [stack, setStack] = useState<RelatedRecord[]>([]), [row, setRow] = useState<RecordData | null>(null);
   const [draft, setDraft] = useState<Record<string, CellValue>>({}), [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false), [saving, setSaving] = useState(false), [stale, setStale] = useState(false), [revision, setRevision] = useState(0);
+  const [pendingFiles, setPendingFiles] = useState<Set<string>>(new Set());
   const members = useMemberOptions(), wide = useMediaQuery("(min-width: 1024px)");
   const { aiOpen, setAiOpen, setRecordSheetOpen } = useAppShell();
   const record = stack.at(-1), visible = Boolean(record) && (wide || !aiOpen);
@@ -62,7 +63,7 @@ export function RelatedRecordPanel() {
     setDraft((previous) => { const next = { ...previous }; if (JSON.stringify(value) === JSON.stringify(row?.cells[column.id] ?? null)) delete next[column.id]; else next[column.id] = value; return next; });
   };
   const save = async () => {
-    if (!row || savingRef.current || !Object.keys(draft).length) return;
+    if (!row || savingRef.current || pendingFiles.size || !Object.keys(draft).length) return;
     const cells = { ...draft };
     for (const column of row.columns.filter((column) => column.type === "number" && Object.hasOwn(cells, column.id))) {
       const raw = String(cells[column.id] ?? "").trim();
@@ -103,7 +104,7 @@ export function RelatedRecordPanel() {
             const readOnly = ["formula", "rollup"].includes(column.type);
             return <Field key={column.id} data-record-field={column.id} data-disabled={saving || readOnly}>
               <FieldLabel className="flex items-center gap-2"><ColumnTypeIcon type={column.type} className="size-4" />{column.name}{readOnly && <span className="text-xs text-muted-foreground">{t("readonly")}</span>}</FieldLabel>
-              {readOnly ? <div className="rounded-md border border-border bg-muted p-2 text-sm"><CellDisplay column={column} value={value} relation={row.relations?.[column.id]} members={members} /></div> : <div aria-label={column.name} inert={saving}>{column.type === "number" ? <Input inputMode="decimal" aria-label={column.name} value={value == null ? "" : String(value)} aria-invalid={Boolean(error?.startsWith(column.name))} onChange={(event) => stage(column, event.target.value)} /> : column.type === "relation" ? <RelationPicker column={column} value={Array.isArray(value) ? value : []} records={row.relations?.[column.id]?.records} onChange={(value) => stage(column, value)} /> : <FormFieldControl column={column} value={value} members={members} onChange={(value) => stage(column, value)} />}</div>}
+              {readOnly ? <div className="rounded-md border border-border bg-muted p-2 text-sm"><CellDisplay column={column} value={value} relation={row.relations?.[column.id]} members={members} /></div> : <div aria-label={column.name} inert={saving}>{column.type === "number" ? <Input inputMode="decimal" aria-label={column.name} value={value == null ? "" : String(value)} aria-invalid={Boolean(error?.startsWith(column.name))} onChange={(event) => stage(column, event.target.value)} /> : column.type === "relation" ? <RelationPicker column={column} value={Array.isArray(value) ? value : []} records={row.relations?.[column.id]?.records} onChange={(value) => stage(column, value)} /> : <FormFieldControl column={column} value={value} members={members} onChange={(value) => stage(column, value)} onPendingChange={pending => setPendingFiles(previous => { const next = new Set(previous); if (pending) next.add(column.id); else next.delete(column.id); return next; })} />}</div>}
             </Field>;
           })}
         </FieldGroup>
@@ -111,7 +112,7 @@ export function RelatedRecordPanel() {
       <SheetFooter>
         {record && <Button variant="ghost" size="sm" className="mr-auto" disabled={saving} asChild><Link to={`/app/tables/${record.tableId}`} aria-disabled={saving} onClick={(event) => { if (savingRef.current) { event.preventDefault(); return; } close(); }}><ExternalLink />{t("openInTable")}</Link></Button>}
         <Button variant="outline" disabled={saving} onClick={close}><X />{t("cancel")}</Button>
-        <Button disabled={saving || !row || !Object.keys(draft).length} onClick={() => void save()}><Save />{saving ? t("saving") : t("saveChanges")}</Button>
+        <Button disabled={saving || pendingFiles.size > 0 || !row || !Object.keys(draft).length} onClick={() => void save()}><Save />{saving ? t("saving") : t("saveChanges")}</Button>
       </SheetFooter>
     </SheetContent>
   </Sheet>;

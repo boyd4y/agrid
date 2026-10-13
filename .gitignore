@@ -24,3 +24,6 @@ apps/client/screenshots/
 
 # Generated component documentation
 storybook-static/
+
+# Local uploaded objects (configure FILE_STORAGE_LOCAL_DIR for persistent deployment)
+data/files/

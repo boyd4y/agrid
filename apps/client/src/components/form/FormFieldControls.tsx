@@ -1,3 +1,4 @@
+import { FileDisplay, FileEditor } from "@/components/table/FileField";
 import { RelationPicker } from "@/components/table/RelationPicker";
 import { useState } from "react";
 import { Bot, Check, ChevronsUpDown, User } from "lucide-react";
@@ -23,6 +24,7 @@ type ControlProps = {
   column: ColumnDef;
   value: CellValue;
   onChange: (v: CellValue) => void;
+  onPendingChange?: (pending: boolean) => void;
   placeholder?: string;
   disabled?: boolean;
   members?: MemberOption[];
@@ -36,6 +38,7 @@ export function FormFieldControl({
   column,
   value,
   onChange,
+  onPendingChange,
   placeholder,
   disabled,
   members = [],
@@ -44,6 +47,8 @@ export function FormFieldControl({
   size = "default",
 }: ControlProps) {
   const tf = variant === "typeform";
+
+  if (column.type === "file") return disabled ? <FileDisplay value={value} /> : <FileEditor column={column} value={value} onChange={onChange} onPendingChange={onPendingChange} size={size} />;
 
   if (column.type === "formula" || column.type === "rollup" || disabled) {
     return (

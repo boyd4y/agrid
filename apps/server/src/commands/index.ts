@@ -3,6 +3,8 @@ export { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./ba
 import { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";
 export { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";
 import { readRow } from "./relation-reads.js";
+import { HTTPException } from "hono/http-exception";
+import { assertFileReferences } from "../storage/files.js";
 import {
   prepareRelationWrites,
   applyRelationWrites,
@@ -161,7 +163,12 @@ export async function updateCellsInTransaction(
     if (col.type === "formula" || col.type === "rollup")
       throw new Error(`计算列「${col.name}」只读`);
     const err = validateCell(col.type, value, col.config?.options);
-    if (err) throw new Error(`校验失败 (${col.name}): ${err}`);
+    if (err) {
+      const message = `校验失败 (${col.name}): ${err}`;
+      if (col.type === "file") throw new HTTPException(400, { message });
+      throw new Error(message);
+    }
+    if (col.type === "file") await assertFileReferences(tx, col, value);
   }
   const { plans, locked } = await prepareRelationWrites(
     tx,
@@ -306,7 +313,12 @@ async function addRowInTransaction(
     if (col.type === "formula" || col.type === "rollup")
       throw new Error(`公式列「${col.name}」只读，由表达式自动计算`);
     const err = validateCell(col.type, value, col.config?.options);
-    if (err) throw new Error(`校验失败 (${col.name}): ${err}`);
+    if (err) {
+      const message = `校验失败 (${col.name}): ${err}`;
+      if (col.type === "file") throw new HTTPException(400, { message });
+      throw new Error(message);
+    }
+    if (col.type === "file") await assertFileReferences(tx, col, value);
   }
   const [row] = await tx.insert(rows).values({
     tableId: input.tableId,

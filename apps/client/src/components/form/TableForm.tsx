@@ -58,6 +58,7 @@ function buildZod(
       case "checkbox":
         schema = z.boolean();
         break;
+      case "file":
       case "relation":
       case "multi_select":
         schema = z.array(z.string());
@@ -71,7 +72,7 @@ function buildZod(
         break;
     }
     if (f.required) {
-      if ((col.type === "multi_select" || col.type === "relation")) {
+      if ((col.type === "file" || col.type === "multi_select" || col.type === "relation")) {
         schema = z.array(z.string()).min(1, i18n.t("form:requiredField", { label }));
       } else if (col.type === "checkbox") {
         schema = z.boolean();
@@ -125,6 +126,7 @@ function defaultValues(
       case "checkbox":
         out[f.columnId] = false;
         break;
+      case "file":
       case "relation":
       case "multi_select":
         out[f.columnId] = [];
@@ -149,6 +151,7 @@ export function TableForm({
 }: Props) {
   const { t } = useTranslation("form");
   const members = useMemberOptions();
+  const [pendingFiles, setPendingFiles] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -215,6 +218,7 @@ export function TableForm({
   }, [table.id, view?.id, layout, config.theme?.preset]);
 
   const submitValues = async (values: Record<string, unknown>) => {
+    if (pendingFiles.size) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -314,6 +318,7 @@ export function TableForm({
                   column={col}
                   value={field.value as CellValue}
                   onChange={field.onChange}
+                  onPendingChange={pending => setPendingFiles(previous => { const next = new Set(previous); if (pending) next.add(col.id); else next.delete(col.id); return next; })}
                   placeholder={f.placeholder}
                   disabled={readOnly}
                   members={members}
@@ -345,6 +350,7 @@ export function TableForm({
     const progress = fields.length ? ((welcomeDone ? idx + 1 : 0) / fields.length) * 100 : 0;
 
     const advance = async () => {
+      if (pendingFiles.size) return;
       if (showWelcome) {
         setWelcomeDone(true);
         setStep(0);
@@ -442,7 +448,7 @@ export function TableForm({
                     </Button>
                     <Button
                       type="submit"
-                      disabled={submitting}
+                      disabled={submitting || pendingFiles.size > 0}
                       className="h-11 min-w-[7rem] px-5"
                       style={{
                         background: "var(--form-button)",
@@ -510,7 +516,7 @@ export function TableForm({
             <Button
               type="submit"
               className="h-11 w-full"
-              disabled={submitting}
+              disabled={submitting || pendingFiles.size > 0}
               style={{
                 background: "var(--form-button)",
                 color: "var(--form-button-text)",

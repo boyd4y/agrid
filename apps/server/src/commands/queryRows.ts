@@ -25,7 +25,7 @@ function isEmptySql(columnId: string, type: string, cols: ColumnDef[]): SQL {
   const t = cellTextExpr(columnId,cols);
   const col=cols.find(c=>c.id===columnId);
   if(type==="relation"&&col)return sql`NOT EXISTS(SELECT 1 FROM row_relations rr WHERE ${relationPredicate(col)})`;
-  if (type === "multi_select") {
+  if (type === "multi_select" || type === "file") {
     return sql`(
       ${rows.cells} -> ${columnId} IS NULL
       OR jsonb_typeof(${rows.cells} -> ${columnId}) = 'null'
@@ -93,7 +93,7 @@ function conditionSql(
       }
       return sql`${t} IS DISTINCT FROM ${String(v ?? "")}`;
     case "contains":
-      if (type === "multi_select") {
+      if (type === "multi_select" || type === "file") {
         const needle =
           typeof v === "string" ? v : Array.isArray(v) ? v[0] : null;
         if (needle == null) return sql`true`;
@@ -101,7 +101,7 @@ function conditionSql(
       }
       return sql`${t} ILIKE ${"%" + String(v ?? "") + "%"}`;
     case "not_contains":
-      if (type === "multi_select") {
+      if (type === "multi_select" || type === "file") {
         const needle =
           typeof v === "string" ? v : Array.isArray(v) ? v[0] : null;
         if (needle == null) return sql`true`;

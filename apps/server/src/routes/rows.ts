@@ -1,3 +1,4 @@
+import { HTTPException } from "hono/http-exception";
 import { Hono } from "hono";
 import { z } from "zod";
 import * as cmds from "../commands/index.js";
@@ -78,6 +79,7 @@ rowsRoute.get("/tables/:id/rows", async (c) => {
     });
     return c.json(page);
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
   }
 });
@@ -121,6 +123,7 @@ rowsRoute.post("/tables/:id/rows/query", async (c) => {
     });
     return c.json(page);
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
   }
 });
@@ -136,6 +139,7 @@ rowsRoute.post("/tables/:id/rows", async (c) => {
     const row = await cmds.addRow({ tableId, cells: body.cells, actorId: scope.actor.userId, organizationId: scope.organizationId });
     return c.json(row, 201);
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 404);
   }
 });
@@ -180,6 +184,7 @@ rowsRoute.patch("/rows/:id", async (c) => {
     }
     return c.json({ error: "无更新内容" }, 400);
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     const msg = e instanceof Error ? e.message : "失败";
     const status = msg.includes("版本冲突") ? 409 : 404;
     return c.json({ error: msg }, status);
@@ -197,6 +202,7 @@ rowsRoute.delete("/rows/:id", async (c) => {
       })
     );
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 404);
   }
 });

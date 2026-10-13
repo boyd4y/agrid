@@ -1,6 +1,6 @@
 # 测试与浏览器回归
 
-测试与源码按包平级：`apps/server/test/{ai,commands,queue,reports,skills,harness,routes}`、`packages/shared/test`、`packages/ui/test`、`apps/client/test`。生产 TypeScript 只编译 `src`；apps/server/shared 构建先清理 `dist`，避免旧编译测试残留。apps/server/shared 的 `tsconfig.test.json` 单独覆盖测试和其源码导入，检查时不输出文件。
+测试与源码按包平级：`apps/server/test/{ai,commands,queue,reports,skills,harness,storage,routes}`、`packages/shared/test`、`packages/ui/test`、`apps/client/test`。生产 TypeScript 只编译 `src`；apps/server/shared 构建先清理 `dist`，避免旧编译测试残留。apps/server/shared 的 `tsconfig.test.json` 单独覆盖测试和其源码导入，检查时不输出文件。
 
 ## 常规检查
 
@@ -56,7 +56,7 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 - `fields`：字段图标、HEX 校验/持久化、下拉颜色、取消、dark/light、报告汇总 Popover 不改变组件几何尺寸。
 - `run-recovery`：原始流请求在刷新时真实断开，服务端仍执行；持久化运行状态禁发、完成消息原位恢复、显式停止、官方 continuation 和消息内失败反馈；确认聊天没有执行历史入口。
 - `avatars`：本地 Notionists/Croodles 选择、批次与主题，成员头像暂存/取消/失败/保存恢复，bot 专用 bloub 配置与禁止上传，创建草稿及紧凑高度按钮可达。
-- `agent-tools`：三步创建与编辑左侧工具 Tab；native/platform 缺省开启、真实 API 保存/取消/刷新恢复、跨步骤和 Tab 草稿保留、搜索/目录错误重试、light/dark 和窄屏。主题截图等待输入颜色过渡完成，避免截到切换中间帧。
+- `agent-tools`：三步创建与编辑左侧工具 Tab；platform 缺省开启、native 由 Harness 管理、真实 API 保存/取消/刷新恢复、跨步骤和 Tab 草稿保留、搜索/目录错误重试、light/dark 和窄屏。主题截图等待输入颜色过渡完成，避免截到切换中间帧。
 - `platform-style`：Settings、Skill 列表/详情、Reports 列表/Builder、Automations 列表/来源选择的紧凑 light/dark 截图；有记录的报告刷新失败和自动化失败重试；Skill 文件选择、复制失败反馈与真实剪贴板；主题单选和侧栏偏好刷新恢复。
 - `kanban-drag`：整卡标题/正文的原生浏览器拖拽，Sheet 打开/关闭前后真实 PATCH 与状态持久化、无误开详情；卡片菜单控件不触发行拖拽；统一删除确认的取消/失败 toast/重试/删除刷新恢复。API 通知会刷新看板列，动作先等待数据稳定，再定位当前语义标题/正文，不依赖合成 drag 事件或过期卡片坐标。
 
@@ -91,7 +91,7 @@ pnpm --filter @tabdo/server exec tsx --test test/harness/journal-recovery.test.t
 
 ## 智能体工具设置
 
-`apps/server/test/harness/tool-settings.test.ts` 核对当前三种 adapter 目录与共享 ID；真实 Pi/HTTP provider 验证 native+host 工具过滤、禁用工具强制调用不执行、模型收到原生错误及 UI error 投影。`apps/server/test/routes/chat.test.ts` 另外验证目录权限与 Harness 兼容性、配置持久化和保留/清空、真实聊天读取配置、被拒绝的建表和计划调用不修改数据库且无 mutation 通知、刷新保留结构化错误。
+`apps/server/test/harness/tool-settings.test.ts` 核对当前三种 adapter 目录与共享 ID；真实 Pi/HTTP provider 验证平台工具过滤、旧 native/task 配置归一化后原生工具仍可调用、禁用工具强制调用不执行、模型收到原生错误及 UI error 投影。`apps/server/test/routes/chat.test.ts` 另外验证目录权限与 Harness 兼容性、配置持久化和保留/清空、真实聊天读取配置、被禁用的建表调用不修改数据库且无 mutation 通知、已移除计划工具没有实现、刷新保留结构化错误。
 
 ```bash
 DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
@@ -99,3 +99,7 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 ```
 
 上述 provider 为本地 HTTP fixture，执行者是实际官方 HarnessAgent/Pi，不是替代 agent loop；不代表 Codex/Claude 远程执行通过。
+
+## 文件存储
+
+本地与 S3 协议 fixture、失败清理和隔离数据库路由测试已纳入 server 常规测试入口，配置与精确范围见 [文件存储](file-storage.md)。真实远程对象服务仍需独立验收，测试不读取用户 S3 配置或文件。

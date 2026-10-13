@@ -1,4 +1,5 @@
 import { relationConfigSchema, rollupConfigSchema } from "../commands/relations.js";
+import { HTTPException } from "hono/http-exception";
 import { Hono } from "hono";
 import { z } from "zod";
 import { COLUMN_TYPES } from "../db/schema.js";
@@ -26,6 +27,7 @@ columnsRoute.post("/tables/:id/columns", async (c) => {
               })
             )
             .optional(),
+          file: z.object({ multiple: z.boolean().optional() }).strict().optional(),
           hidden: z.boolean().optional(),
           relation: relationConfigSchema.extend({relationId:z.string().uuid().optional(),direction:z.enum(["source","target"]).optional(),limit:z.enum(["one","many"]).optional(),inverseLimit:z.enum(["one","many"]).optional()}).optional(),
           rollup: rollupConfigSchema.optional(),
@@ -47,6 +49,7 @@ columnsRoute.post("/tables/:id/columns", async (c) => {
     });
     return c.json(col, 201);
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 404);
   }
 });
@@ -70,6 +73,7 @@ columnsRoute.patch("/columns/:id", async (c) => {
               })
             )
             .optional(),
+          file: z.object({ multiple: z.boolean().optional() }).strict().optional(),
           hidden: z.boolean().optional(),
           relation: relationConfigSchema.extend({relationId:z.string().uuid().optional(),direction:z.enum(["source","target"]).optional(),limit:z.enum(["one","many"]).optional(),inverseLimit:z.enum(["one","many"]).optional()}).optional(),
           rollup: rollupConfigSchema.optional(),
@@ -95,6 +99,7 @@ columnsRoute.patch("/columns/:id", async (c) => {
     });
     return c.json(updated);
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 404);
   }
 });
@@ -110,6 +115,7 @@ columnsRoute.delete("/columns/:id", async (c) => {
       })
     );
   } catch (e) {
+    if (e instanceof HTTPException) return c.json({ error: e.message }, e.status);
     return c.json({ error: e instanceof Error ? e.message : "失败" }, 404);
   }
 });

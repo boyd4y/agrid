@@ -2,6 +2,7 @@ import { z } from "zod";
 import { COLUMN_TYPES, type ColumnDef } from "./types.js";
 
 export const COLUMN_CONFIG_SCHEMA = z.object({
+  file: z.object({ multiple: z.boolean().optional() }).strict().optional(),
   options: z.array(z.object({ id: z.string(), label: z.string(), color: z.string().optional() })).optional(),
   hidden: z.boolean().optional(),
   formula: z.string().optional(),

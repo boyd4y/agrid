@@ -1,8 +1,8 @@
-import { Type, Hash, List, Tags, Calendar, CheckSquare, User, FunctionSquare, Link2, Sigma } from "lucide-react";
+import { Paperclip, Type, Hash, List, Tags, Calendar, CheckSquare, User, FunctionSquare, Link2, Sigma } from "lucide-react";
 import type { ColumnType } from "@/types/table";
 
 const icons = {
-  text: Type, number: Hash, select: List, multi_select: Tags, date: Calendar,
+  file: Paperclip, text: Type, number: Hash, select: List, multi_select: Tags, date: Calendar,
   checkbox: CheckSquare, person: User, formula: FunctionSquare, relation: Link2, rollup: Sigma,
 } satisfies Record<ColumnType, typeof Type>;
 

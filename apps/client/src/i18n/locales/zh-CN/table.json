@@ -9,7 +9,8 @@
     "person": "人员",
     "formula": "公式",
     "relation": "关联",
-    "rollup": "汇总"
+    "rollup": "汇总",
+    "file": "文件"
   },
   "formulaResult": {
     "auto": "自动",
@@ -334,5 +335,13 @@
     "errProcessed": "图片处理后仍过大，请换一张重试"
   },
   "cardActionsNamed": "卡片操作：{{title}}",
-  "rename": "重命名"
+  "rename": "重命名",
+  "files": {
+    "upload": "上传文件",
+    "uploading": "上传中 {{progress}}%",
+    "remove": "移除 {{name}}",
+    "multiple": "允许多个文件",
+    "unavailable": "文件不可用 · 重试",
+    "loading": "加载文件…"
+  }
 }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
+import { Switch } from "@tabdo/ui/components/switch";
 import { Label } from "@tabdo/ui/components/label";
 import {
   Select,
@@ -172,7 +173,8 @@ export function ColumnSettings({
             {saveError}
           </p>
         )}
-        {isFormula && (
+        {type === "file" && <Label className="flex items-center justify-between gap-2">{t("files.multiple")}<Switch checked={extraConfig.file?.multiple !== false} onCheckedChange={multiple => setExtraConfig({ ...extraConfig, file: { multiple } })} /></Label>}
+      {isFormula && (
           <div className="mb-3 flex flex-col gap-2">
             <Label className="block">{t("formulaExpression")}</Label>
             <Textarea

@@ -16,6 +16,8 @@ services:
       DB_POOL_MAX: 4
       WORKER_CONCURRENCY: 8
       QUEUE_GLOBAL_CONCURRENCY: 32
+    volumes:
+      - uploaded_files:/app/data/files
     stop_grace_period: 25s
     depends_on:
       postgres:

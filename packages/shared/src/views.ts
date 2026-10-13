@@ -41,6 +41,7 @@ export type FormQuestionSettings =
   | { kind: "date"; includeTime?: boolean }
   | { kind: "checkbox"; agreeLabel?: string }
   | { kind: "person"; multiple?: boolean }
+  | { kind: "file" }
   | { kind: "formula" };
 
 export type FormFieldConfig = {

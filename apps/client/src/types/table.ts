@@ -1,5 +1,6 @@
 import i18n from "@/i18n";
 export type ColumnType =
+  | "file"
   | "text"
   | "number"
   | "select"
@@ -58,6 +59,7 @@ export type RollupConfig = {
 export type RelatedRecord = { id: string; tableId: string; title: string };
 
 export type ColumnConfig = {
+  file?: { multiple?: boolean };
   relation?: RelationConfig;
   rollup?: RollupConfig;
   options?: SelectOption[];
@@ -120,7 +122,7 @@ export type QueryRowsPage = {
 };
 
 const COLUMN_TYPE_KEYS: ColumnType[] = [
-  "text", "number", "select", "multi_select", "date", "checkbox", "person", "formula", "relation", "rollup",
+  "file", "text", "number", "select", "multi_select", "date", "checkbox", "person", "formula", "relation", "rollup",
 ];
 
 /** Live labels — reads current i18n language. Prefer iterating COLUMN_TYPE_KEYS for menus. */

@@ -97,7 +97,31 @@ export type MemberOption = {
 async function relationCommand<T>(command:string,input:unknown){
  const result=await request<{result:T}>("/api/commands",{method:"POST",body:JSON.stringify({command,input})});return result.result;
 }
+/** Multipart must leave Content-Type to the browser so its boundary stays intact. */
+function uploadFiles(tableId: string, columnId: string, files: File[], onProgress?: (percent: number) => void): Promise<{ files: import("@tabdo/shared").StoredFile[] }> {
+  return new Promise((resolve, reject) => {
+    const body = new FormData();
+    for (const file of files) body.append("files", file);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/tables/${encodeURIComponent(tableId)}/columns/${encodeURIComponent(columnId)}/files`);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress?.(Math.round(event.loaded / event.total * 100)); };
+    xhr.onerror = () => reject(new Error(i18n.t("errors:network")));
+    xhr.onabort = () => reject(new Error(i18n.t("errors:network")));
+    xhr.onload = () => {
+      let response: { files: import("@tabdo/shared").StoredFile[]; error?: string };
+      try { response = JSON.parse(xhr.responseText); }
+      catch { reject(new Error(i18n.t("errors:requestFailed", { status: xhr.status }))); return; }
+      if (xhr.status < 200 || xhr.status >= 300) { reject(new Error(response.error || i18n.t("errors:requestFailed", { status: xhr.status }))); return; }
+      resolve(response);
+    };
+    xhr.send(body);
+  });
+}
 export const api = {
+  uploadFiles,
+  getFiles: (ids: string[]) => request<{ files: import("@tabdo/shared").StoredFile[] }>(`/api/files?ids=${encodeURIComponent(ids.join(","))}`),
+  fileDownloadUrl: (id: string) => `/api/files/${encodeURIComponent(id)}/download`,
   getAgentTools: (harness: "pi" | "codex" | "claude", signal?: AbortSignal) => request<{ harness: string; supportsFiltering: boolean; tools: import("@tabdo/shared").AgentToolCatalogItem[] }>(`/api/members/agents/tools?harness=${harness}`, { signal }),
   listAgentRuns: (threadId: string, signal?: AbortSignal) => request<{ runs: import("@tabdo/shared").AgentRunSummary[] }>(`/api/threads/${threadId}/runs`, { signal }),
   listAgentRunEvents: (threadId: string, runId: string, signal?: AbortSignal) => request<{ events: import("@tabdo/shared").AgentRunEvent[] }>(`/api/threads/${threadId}/runs/${runId}/events`, { signal }),

@@ -180,6 +180,7 @@ export function createTableTools(
           tableId: z.string().uuid().optional(),
           name: z.string().min(1),
           type: z.enum(COLUMN_TYPES),
+          file: z.object({ multiple: z.boolean().optional() }).strict().optional().describe("type=file：multiple=false仅允许单文件；文件值为已上传文件ID数组"),
           options: z
             .array(
               z.object({
@@ -198,7 +199,7 @@ export function createTableTools(
             .optional(),
         })
       ),
-      execute: async ({ tableId, name, type, options, formula, formulaResultType, relation, rollup }) => {
+      execute: async ({ tableId, name, type, options, file, formula, formulaResultType, relation, rollup }) => {
         const id = tableId || defaultTableId;
         if (!id) throw new Error("缺少 tableId");
         return cmds.addColumn({
@@ -207,6 +208,7 @@ export function createTableTools(
           type,
           config: {
             ...(relation ? {relation} : {}), ...(rollup ? {rollup} : {}),
+            ...(file ? { file } : {}),
             ...(options ? { options } : {}),
             ...(formula !== undefined
               ? { formula, formulaResultType: formulaResultType ?? "auto" }
@@ -326,6 +328,7 @@ export function createTableTools(
           type: z.enum(COLUMN_TYPES).optional(),
           width: z.number().optional(),
           hidden: z.boolean().optional(),
+          file: z.object({ multiple: z.boolean().optional() }).strict().optional().describe("type=file：multiple=false仅允许单文件；文件值为已上传文件ID数组"),
           options: z
             .array(
               z.object({
@@ -348,6 +351,7 @@ export function createTableTools(
         width,
         hidden,
         options,
+        file,
         formula,
         formulaResultType,
       }) =>
@@ -358,6 +362,7 @@ export function createTableTools(
           width,
           hidden,
           config: {
+            ...(file ? { file } : {}),
             ...(options ? { options } : {}),
             ...(formula !== undefined ? { formula } : {}),
             ...(formulaResultType !== undefined ? { formulaResultType } : {}),

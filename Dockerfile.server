@@ -17,6 +17,8 @@ RUN corepack enable
 WORKDIR /app
 COPY --from=build /app /app
 ENV NODE_ENV=production
+RUN mkdir -p /app/data/files && chown node:node /app/data/files
+VOLUME ["/app/data/files"]
 USER node
 WORKDIR /app/apps/server
 CMD ["node", "dist/index.js"]

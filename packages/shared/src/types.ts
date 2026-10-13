@@ -3,6 +3,7 @@ export const COLUMN_TYPES = [
   "number",
   "select",
   "multi_select",
+  "file",
   "date",
   "checkbox",
   "person",
@@ -59,7 +60,11 @@ export type RollupConfig = {
 };
 export type RelatedRecord = { id: string; tableId: string; title: string };
 
+export type StoredFile = { id: string; name: string; size: number; mimeType: string; createdAt: string };
+
 export type ColumnConfig = {
+  /** File cells store uploaded file IDs; multiple defaults to true. */
+  file?: { multiple?: boolean };
   relation?: RelationConfig;
   rollup?: RollupConfig;
   options?: SelectOption[];
@@ -271,6 +276,7 @@ export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
   number: "数字",
   select: "单选",
   multi_select: "多选",
+  file: "文件",
   date: "日期",
   checkbox: "勾选",
   person: "人员",

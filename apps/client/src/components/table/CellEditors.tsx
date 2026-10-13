@@ -1,3 +1,4 @@
+import { FileDisplay, FileCellEditor } from "./FileField";
 import { MemberAvatar } from "@/components/members/MemberAvatar";
 import { MemberChip } from "@/components/members/MemberChip";
 import { RelationPicker, RelationTags } from "./RelationPicker";
@@ -21,7 +22,7 @@ import i18n from "@/i18n";
 type EditorProps = {
   column: ColumnDef;
   value: CellValue;
-  onCommit: (value: CellValue) => void;
+  onCommit: (value: CellValue) => void | Promise<void>;
   onCancel: () => void;
   members?: MemberOption[];
   row?: import("@/types/table").RowData;
@@ -111,6 +112,8 @@ export function CellDisplay({
   const options = column.config?.options ?? [];
 
   switch (column.type) {
+    case "file":
+      return <FileDisplay value={value} />;
     case "relation":
       return (
         <RelationTags
@@ -227,6 +230,7 @@ export function CellEditor({
   row,
   onRowUpdated,
 }: EditorProps) {
+  if (column.type === "file") return <FileCellEditor column={column} value={value} onChange={onCommit} onClose={onCancel} />;
   if (column.type === "relation")
     return (
       <RelationPicker

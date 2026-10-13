@@ -24,6 +24,7 @@ import { Button } from "@tabdo/ui/components/button";
 import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
+import { Switch } from "@tabdo/ui/components/switch";
 import { Label } from "@tabdo/ui/components/label";
 import {
   Select,
@@ -169,8 +170,14 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
     columnId: string,
     value: CellValue,
   ) => {
-    setEditing(null);
     const col = table.columns.find((c) => c.id === columnId);
+    if (col?.type === "file") {
+      // Uploads stay in the editor until the row PATCH succeeds, and retry reuses the uploaded IDs.
+      const updated = await api.patchRow(row.id, { cell: { columnId, value }, expectedVersion: row.version });
+      windowed.upsertRow(updated);
+      return;
+    }
+    setEditing(null);
     if (col) {
       const err = validateCell(col.type, value, col.config?.options);
       if (err) {
@@ -570,6 +577,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                 columns={table.columns}
               />
             )}
+            {newColType === "file" && <Label className="mb-3 flex items-center justify-between gap-2">{t("files.multiple")}<Switch checked={newColConfig.file?.multiple !== false} onCheckedChange={multiple => setNewColConfig({ ...newColConfig, file: { multiple } })} /></Label>}
             {newColType === "formula" && (
               <div className="mb-4">
                 <Label className="mb-1 block">{t("formulaLabel")}</Label>
@@ -725,7 +733,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                             onRowUpdated={windowed.upsertRow}
                             value={value}
                             members={members}
-                            onCommit={(v) => void commitCell(row, col.id, v)}
+                            onCommit={(v) => commitCell(row, col.id, v)}
                             onCancel={() => setEditing(null)}
                           />
                         ) : (

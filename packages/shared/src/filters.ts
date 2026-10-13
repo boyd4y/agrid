@@ -47,6 +47,8 @@ export function filterTypeForColumn(column: ColumnDef, comparisonValue?: CellVal
 
 export function opsForType(type: ColumnType | string): FilterOp[] {
   switch (type) {
+    case "file":
+      return ["is_empty", "is_not_empty"];
     case "number":
       return [
         "eq",
@@ -269,6 +271,13 @@ export function validateCell(
   value: CellValue,
   options?: { id: string }[],
 ): string | null {
+  if (type === "file") {
+    if (value === null || value === undefined) return null;
+    if (!Array.isArray(value) || value.length > 100 || value.some(id => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))
+      return "必须是已上传的文件 ID 数组（最多100个）";
+    if (new Set(value).size !== value.length) return "文件不能重复";
+    return null;
+  }
   if (value === null || value === undefined || value === "") return null;
   switch (type) {
     case "rollup":

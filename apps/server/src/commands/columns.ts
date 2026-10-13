@@ -1,9 +1,10 @@
+import { HTTPException } from "hono/http-exception";
 import { and, asc, eq, gt, inArray, max, or, sql } from "drizzle-orm";
 import { db, type Transaction } from "../db/index.js";
 import { columns, rows, tables, tableRelations, COLUMN_TYPES } from "../db/schema.js";
 import {
   BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA,
-  validateCell, type AddColumnInput, type UpdateColumnInput, type DeleteColumnInput,
+  COLUMN_CONFIG_SCHEMA, validateCell, type AddColumnInput, type UpdateColumnInput, type DeleteColumnInput,
   type BatchAddColumnsInput, type BatchUpdateColumnsInput, type BatchDeleteColumnsInput,
   type BatchColumnsResult, type BatchDeleteColumnsResult, type CellValue,
 } from "@tabdo/shared";
@@ -35,6 +36,7 @@ async function addColumnInTransaction(tx: Transaction, input: AddColumnInput & S
   if (!(COLUMN_TYPES as readonly string[]).includes(type)) throw new Error(`不支持的列类型: ${type}`);
   if (type === "relation") return createRelationColumnInTransaction(tx, input);
   let nextConfig = { ...(config ?? {}) };
+  if (type === "file") nextConfig.file = COLUMN_CONFIG_SCHEMA.shape.file.parse(nextConfig.file);
   if (type === "rollup") nextConfig.rollup = await validateRollup(tx, tableId, config?.rollup);
   if (type === "formula") {
     assertFormulaConfig(nextConfig, await loadTableColumns(tableId, tx));
@@ -100,6 +102,14 @@ async function updateColumnInTransaction(tx: Transaction, input: UpdateColumnInp
   const config = { ...(column.config ?? {}), ...(input.config ?? {}), ...(input.hidden !== undefined ? { hidden: input.hidden } : {}) };
   if (input.type && !(COLUMN_TYPES as readonly string[]).includes(input.type)) throw new Error(`不支持的列类型: ${input.type}`);
   const type = input.type ?? column.type;
+  if (type === "file") {
+    config.file = COLUMN_CONFIG_SCHEMA.shape.file.parse(config.file);
+    if (config.file?.multiple === false) {
+      const [multiple] = await tx.select({ id: rows.id }).from(rows).where(and(eq(rows.tableId, column.tableId),
+        sql`CASE WHEN jsonb_typeof(${rows.cells} -> ${column.id}) = 'array' THEN jsonb_array_length(${rows.cells} -> ${column.id}) > 1 ELSE false END`)).limit(1);
+      if (multiple) throw new HTTPException(400, { message: "已有记录包含多个文件，请先移除多余文件再改为单文件" });
+    }
+  }
   if (type !== column.type && (["relation", "rollup"].includes(type) || ["relation", "rollup"].includes(column.type)))
     throw new Error("关联和汇总字段不能直接转换类型，请创建新字段");
   if (type !== column.type) await assertNoRollupDependency([column.id], tx);

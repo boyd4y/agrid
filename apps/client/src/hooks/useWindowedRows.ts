@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/auth-client";
 import type { RowData } from "@/types/table";
 import type { FilterCondition, FilterLogic } from "@tabdo/shared";
 import { DEFAULT_PAGE_SIZE, isFilterConditionComplete } from "@tabdo/shared";
@@ -28,6 +29,8 @@ export function useWindowedRows({
   pageSize = DEFAULT_PAGE_SIZE,
   refreshToken,
 }: Options) {
+  const { data: session } = useSession();
+  const identity = `${session?.user.id ?? ""}:${session?.session.activeOrganizationId ?? ""}`;
   const [totalMatched, setTotalMatched] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,17 +42,26 @@ export function useWindowedRows({
   const loadedPages = useRef(new Set<number>());
   const inFlight = useRef(new Set<number>());
   const queryKey = useRef("");
+  const datasetKey = useRef("");
   const generation = useRef(0);
   const cursorsByPage = useRef<Map<number, string | null>>(new Map([[0, null]]));
 
   const resetAndLoadFirst = useCallback(async () => {
     const activeFilters = filters.filter(isFilterConditionComplete);
-    const key = JSON.stringify({ tableId, filters: activeFilters, filterLogic, sort, pageSize, generation: ++generation.current });
+    const dataset = JSON.stringify({ identity, tableId, filters: activeFilters, filterLogic, sort, pageSize });
+    const preserveRows = datasetKey.current === dataset;
+    datasetKey.current = dataset;
+    const key = JSON.stringify({ dataset, generation: ++generation.current });
     queryKey.current = key;
     loadedPages.current = new Set();
-    inFlight.current = new Set();
+    inFlight.current = new Set([0]);
     cursorsByPage.current = new Map([[0, null]]);
-    rowsRef.current = [];
+    // Same-query refreshes must not unmount editors with an upload/save draft.
+    // A new identity, table or query must never display the previous dataset.
+    if (!preserveRows) {
+      rowsRef.current = [];
+      setTotalMatched(0);
+    }
     setLoading(true);
     setError(null);
     try {
@@ -64,7 +76,8 @@ export function useWindowedRows({
       if (queryKey.current !== key) return;
       const total = page.totalMatched ?? page.rows.length;
       setTotalMatched(total);
-      rowsRef.current = new Array(total);
+      rowsRef.current = preserveRows ? rowsRef.current.slice(0, total) : new Array(total);
+      rowsRef.current.length = total;
       for (let i = 0; i < page.rows.length; i++) {
         rowsRef.current[i] = page.rows[i];
       }
@@ -78,9 +91,12 @@ export function useWindowedRows({
         setError(e instanceof Error ? e.message : i18n.t("common:loadFailed"));
       }
     } finally {
-      if (queryKey.current === key) setLoading(false);
+      if (queryKey.current === key) {
+        inFlight.current.delete(0);
+        setLoading(false);
+      }
     }
-  }, [tableId, filters, filterLogic, sort, pageSize, refreshToken]);
+  }, [identity, tableId, filters, filterLogic, sort, pageSize, refreshToken]);
 
   useEffect(() => {
     void resetAndLoadFirst();
