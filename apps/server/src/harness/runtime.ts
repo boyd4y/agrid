@@ -86,6 +86,8 @@ export function createNativeAgent(options: {
       throw new HTTPException(400, {
         message: "自定义 Pi 提供商需要配置模型 ID",
       });
+    const maxTokens = options.piModel?.maxTokens ?? (Number(env.PI_MAX_OUTPUT_TOKENS) || DEFAULT_PI_OUTPUT_TOKENS);
+    const maxTokensField = openRouterKey ? "max_tokens" : "max_completion_tokens";
     harness = createPi({
       // An explicit environment disables native subscription discovery on the server.
       auth: {},
@@ -125,10 +127,15 @@ export function createNativeAgent(options: {
               input: ["text"],
               reasoning: options.piModel?.reasoning ?? false,
               contextWindow: options.piModel?.contextWindow ?? (Number(env.PI_CONTEXT_WINDOW) || 32768),
-              maxTokens: options.piModel?.maxTokens ?? (Number(env.PI_MAX_OUTPUT_TOKENS) || DEFAULT_PI_OUTPUT_TOKENS),
-              // Dynamic OpenRouter routes skip Pi's model.reasoning branch;
-              // pass the official provider sampling setting explicitly.
-              ...(openRouterKey ? { samplingParams: { reasoning: { enabled: false, effort: "none" } } } : {}),
+              maxTokens,
+              compat: { maxTokensField },
+              // Pi estimates input tokens before provider serialization and can
+              // clamp this to 1 against advisory/missing context metadata. The
+              // official sampling parameters preserve the chosen output cap;
+              // the provider remains authoritative for actual context overflow.
+              samplingParams: { [maxTokensField]: maxTokens,
+                ...(openRouterKey ? { reasoning: { enabled: false, effort: "none" } } : {}),
+              },
               cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             },
           ],

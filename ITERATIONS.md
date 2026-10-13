@@ -237,3 +237,5 @@
 待推进：按shadcn monorepo抽取@tabdo/ui和独立Storybook；分类图标选择器与组织主题入口对齐；核查原生模型输出预算被限制为1 token的原因。
 
 2026-10-13 侧栏入口对齐：外观菜单与组织导航复用同一padding、gap、text-sm和20px图标槽，展开/折叠一致；设置入口改为实际齿轮图标。客户端类型检查通过。
+
+2026-10-13 1-token预算修复：本机真实Pi SDK复现长输入在缺少context目录时被安全估算将16384压为1；改用官方provider samplingParams显式保留已配置输出预算、compat统一预算字段，继续尊重目录真实output cap，由provider报告实际context溢出。未知模型16384、目录cap2048、自定义Pi16384三个原生SSE场景通过；相关7项回归与服务端生产/测试类型检查通过。未读取用户prompt或真实Run、未调用用户模型或新增重试/续接拦截。
