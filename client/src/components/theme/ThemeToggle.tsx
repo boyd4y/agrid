@@ -3,15 +3,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuRadio
 import { Button } from "@/components/ui/button";
 import { useTheme, type Theme } from "./theme-provider";
 import { cn } from "@/lib/utils";
-
-const options = [
-  { value: "light", label: "浅色", icon: Sun },
-  { value: "dark", label: "深色", icon: Moon },
-  { value: "system", label: "跟随系统", icon: Monitor },
-] as const;
+import { useTranslation } from "react-i18next";
 
 export function ThemeToggle({ expanded = false }: { expanded?: boolean }) {
+  const { t } = useTranslation("app");
   const { theme, setTheme } = useTheme();
+  const options = [
+    { value: "light" as const, label: t("theme.light"), icon: Sun },
+    { value: "dark" as const, label: t("theme.dark"), icon: Moon },
+    { value: "system" as const, label: t("theme.system"), icon: Monitor },
+  ];
   const current = options.find((option) => option.value === theme)!;
   const Icon = current.icon;
 
@@ -22,11 +23,11 @@ export function ThemeToggle({ expanded = false }: { expanded?: boolean }) {
           variant="ghost"
           size={expanded ? "sm" : "icon"}
           className={cn(expanded && "w-full justify-start px-2.5")}
-          aria-label={`切换外观，当前${current.label}`}
-          title={`外观：${current.label}`}
+          aria-label={t("shell.themeCurrent", { label: current.label })}
+          title={t("shell.themeTitle", { label: current.label })}
         >
           <Icon data-icon="inline-start" />
-          {expanded && <span>外观 · {current.label}</span>}
+          {expanded && <span>{t("shell.theme")} · {current.label}</span>}
         </Button>
       </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

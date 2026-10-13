@@ -33,7 +33,8 @@
       "@tabdo/shared/*": [
         "../shared/src/*"
       ]
-    }
+    },
+    "resolveJsonModule": true
   },
   "include": [
     "src"

@@ -1,0 +1,17 @@
+{
+  "network": "Network error. Please try again.",
+  "systemUnavailable": "Service temporarily unavailable. Please try again later.",
+  "requestFailed": "Request failed {{status}}",
+  "loadFailed": "Failed to load",
+  "listLoadFailed": "Could not load the list",
+  "listLoadFailedNamed": "Could not load {{name}}",
+  "tablesListToast": "Could not load tables right now",
+  "createTableFailed": "Failed to create table",
+  "createTableFailedRetry": "Failed to create table. Please try again.",
+  "membersLoadFailed": "Failed to load members",
+  "agentsLoadFailed": "Failed to load agents",
+  "avatarSaveFailed": "Failed to save avatar",
+  "inviteFailed": "Invitation failed",
+  "pinFailed": "Failed to pin",
+  "genericRetry": "Something went wrong. Please try again."
+}

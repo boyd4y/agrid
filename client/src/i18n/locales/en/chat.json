@@ -1,0 +1,38 @@
+{
+  "suggestions": {
+    "createTable": {
+      "title": "Create a table",
+      "label": "Generate tables and fields from your needs",
+      "prompt": "Create a sales CRM table with customer, stage, owner, and next follow-up date."
+    },
+    "createForm": {
+      "title": "Build a form",
+      "label": "Collect data straight into a table",
+      "prompt": "Help me build a data-collection form. Confirm which table to use first."
+    },
+    "organize": {
+      "title": "Organize data",
+      "label": "Query, filter, and update rows",
+      "prompt": "Help me organize data. Confirm the table, then inspect fields and the first few rows."
+    },
+    "automation": {
+      "title": "Set up automation",
+      "label": "Trigger on conditions and update fields",
+      "prompt": "Set up an automation: when status becomes Done, check the Completed checkbox."
+    }
+  },
+  "threadList": "Conversations",
+  "expandThreads": "Expand conversation list",
+  "collapseThreads": "Collapse conversation list",
+  "loadingAgents": "Loading agents…",
+  "noAgentSelected": "No agent selected",
+  "expandPreview": "Expand work panel",
+  "collapsePreview": "Collapse work panel",
+  "noAgentsTitle": "No agents yet",
+  "noAgentsDescription": "Create an agent to start chatting, organizing data, and setting up automations.",
+  "goCreateAgent": "Create an agent",
+  "agentRunFailed": "Agent run failed",
+  "stopBeforeSwitch": "Stop the current run before switching agents",
+  "switchAgentFailed": "Failed to switch agent",
+  "defaultModel": "Default model"
+}

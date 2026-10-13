@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { APP_NAVIGATION, type AppPageKey } from "./app-navigation";
 
@@ -28,11 +29,12 @@ export function AppPageHeader({ page, title, description, children, className }:
   children?: ReactNode;
   className?: string;
 }) {
-  const { label, icon: Icon } = APP_NAVIGATION[page];
+  const { t } = useTranslation("app");
+  const { labelKey, icon: Icon } = APP_NAVIGATION[page];
   return (
     <header className={cn("flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-6 py-6 md:px-10", className)}>
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Icon className="h-5 w-5 shrink-0 text-muted-foreground" />{title ?? label}</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Icon className="h-5 w-5 shrink-0 text-muted-foreground" />{title ?? t(labelKey)}</h1>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children && <div className="flex shrink-0 items-center gap-2">{children}</div>}

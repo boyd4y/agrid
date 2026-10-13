@@ -9,6 +9,7 @@ import { AiToggle } from "@/components/shell/AiToggle";
 import { notifyDataChanged, subscribeDataChanges } from "@/lib/data-changes";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import i18n from "@/i18n";
 import type { TableMeta } from "@/types/table";
 
 export type AppOutletContext = {
@@ -45,7 +46,7 @@ function AppShellInner() {
       const list = await api.listTables();
       if (version === tableListRequest.current) setTables(list);
     } catch (e) {
-      if (version === tableListRequest.current) toast.error(e instanceof Error ? e.message : "表格列表暂时无法加载", { id: "table-list-load" });
+      if (version === tableListRequest.current) toast.error(e instanceof Error ? e.message : i18n.t("errors:tablesListToast"), { id: "table-list-load" });
     } finally {
       if (version === tableListRequest.current) setTablesLoading(false);
     }
@@ -62,13 +63,13 @@ function AppShellInner() {
   }, [tableMatch?.params.tableId, setActiveTableId]);
 
   const createTable = useCallback(async () => {
-    const name = `新表格 ${tables.length + 1}`;
+    const name = i18n.t("app:tables.newTableName", { n: tables.length + 1 });
     try {
       const t = await api.createTable(name);
       setTables((prev) => [...prev, t]);
       navigate(`/app/tables/${t.id}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "创建表格失败，请重试");
+      toast.error(e instanceof Error ? e.message : i18n.t("errors:createTableFailedRetry"));
     }
   }, [tables.length, navigate]);
 

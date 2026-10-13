@@ -1,0 +1,23 @@
+{
+  "loading": "加载中…",
+  "retry": "重试",
+  "reload": "重新加载",
+  "cancel": "取消",
+  "save": "保存",
+  "delete": "删除",
+  "create": "新建",
+  "edit": "编辑",
+  "search": "搜索",
+  "close": "关闭",
+  "confirm": "确认",
+  "back": "返回",
+  "more": "加载更多",
+  "enabled": "已启用",
+  "disabled": "已停用",
+  "user": "用户",
+  "language": "语言",
+  "languageZh": "中文",
+  "languageEn": "English",
+  "modKey": "⌘",
+  "modKeyCtrl": "Ctrl"
+}

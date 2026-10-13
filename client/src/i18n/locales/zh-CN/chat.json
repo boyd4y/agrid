@@ -1,0 +1,38 @@
+{
+  "suggestions": {
+    "createTable": {
+      "title": "创建表格",
+      "label": "根据需求生成表格与字段",
+      "prompt": "帮我创建一张销售 CRM 表格，包含客户、阶段、负责人和下次跟进日期。"
+    },
+    "createForm": {
+      "title": "制作表单",
+      "label": "收集数据，直接写入表格",
+      "prompt": "帮我制作一个数据收集表单，先确认要使用的表格。"
+    },
+    "organize": {
+      "title": "整理数据",
+      "label": "查询、筛选和更新数据",
+      "prompt": "帮我整理数据，先确认要使用的表格，再查看字段和前几行数据。"
+    },
+    "automation": {
+      "title": "配置自动化",
+      "label": "条件触发，自动更新字段",
+      "prompt": "帮我配置自动化：状态变为已完成时，将已完成复选框设为勾选。"
+    }
+  },
+  "threadList": "对话列表",
+  "expandThreads": "展开会话列表",
+  "collapseThreads": "收起会话列表",
+  "loadingAgents": "加载智能体…",
+  "noAgentSelected": "未选择智能体",
+  "expandPreview": "展开工作面板",
+  "collapsePreview": "收起工作面板",
+  "noAgentsTitle": "还没有智能体",
+  "noAgentsDescription": "创建一个智能体，开始对话、整理数据和配置自动化。",
+  "goCreateAgent": "去创建智能体",
+  "agentRunFailed": "智能体执行失败",
+  "stopBeforeSwitch": "请先停止当前执行，再切换智能体",
+  "switchAgentFailed": "切换智能体失败",
+  "defaultModel": "默认模型"
+}

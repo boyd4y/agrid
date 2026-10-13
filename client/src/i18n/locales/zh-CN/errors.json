@@ -1,0 +1,17 @@
+{
+  "network": "网络连接失败，请重试",
+  "systemUnavailable": "服务暂时不可用，请稍后重试",
+  "requestFailed": "请求失败 {{status}}",
+  "loadFailed": "加载失败",
+  "listLoadFailed": "列表未能加载",
+  "listLoadFailedNamed": "{{name}}列表未能加载",
+  "tablesListToast": "表格列表暂时无法加载",
+  "createTableFailed": "创建表格失败",
+  "createTableFailedRetry": "创建表格失败，请重试",
+  "membersLoadFailed": "成员加载失败",
+  "agentsLoadFailed": "智能体加载失败",
+  "avatarSaveFailed": "头像保存失败",
+  "inviteFailed": "邀请失败",
+  "pinFailed": "置顶失败",
+  "genericRetry": "出了点问题，请重试。"
+}

@@ -1,16 +1,16 @@
-import { NiGrid, NiSparkles, NiUsers, NiZap } from "@/components/icons";
-import { BookOpen, ChartNoAxesCombined, Settings } from "lucide-react";
+import { NiBook, NiBot, NiGrid, NiSettings, NiUsers, NiZap } from "@/components/icons";
+import { ChartNoAxesCombined, MessageSquare } from "lucide-react";
 
-/** Sidebar and page headers share the same menu names and icon components. */
+/** Sidebar and page headers share the same menu keys and icon components. Labels come from i18n `app:nav.*`. */
 export const APP_NAVIGATION = {
-  ai: { to: "/app", label: "AI", icon: NiSparkles },
-  tables: { to: "/app/tables", label: "表格", icon: NiGrid },
-  automations: { to: "/app/automations", label: "自动化", icon: NiZap },
-  reports: { to: "/app/reports", label: "报告", icon: ChartNoAxesCombined },
-  members: { to: "/app/members", label: "成员", icon: NiUsers },
-  agents: { to: "/app/agents", label: "智能体", icon: NiSparkles },
-  skills: { to: "/app/skills", label: "Skill", icon: BookOpen },
-  settings: { to: "/app/settings", label: "设置", icon: Settings },
+  ai: { to: "/app", labelKey: "nav.ai", icon: MessageSquare },
+  tables: { to: "/app/tables", labelKey: "nav.tables", icon: NiGrid },
+  automations: { to: "/app/automations", labelKey: "nav.automations", icon: NiZap },
+  reports: { to: "/app/reports", labelKey: "nav.reports", icon: ChartNoAxesCombined },
+  members: { to: "/app/members", labelKey: "nav.members", icon: NiUsers },
+  agents: { to: "/app/agents", labelKey: "nav.agents", icon: NiBot },
+  skills: { to: "/app/skills", labelKey: "nav.skills", icon: NiBook },
+  settings: { to: "/app/settings", labelKey: "nav.settings", icon: NiSettings },
 } as const;
 
 export type AppPageKey = keyof typeof APP_NAVIGATION;

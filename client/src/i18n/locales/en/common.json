@@ -1,0 +1,23 @@
+{
+  "loading": "Loading…",
+  "retry": "Retry",
+  "reload": "Reload",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "create": "New",
+  "edit": "Edit",
+  "search": "Search",
+  "close": "Close",
+  "confirm": "Confirm",
+  "back": "Back",
+  "more": "Load more",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "user": "User",
+  "language": "Language",
+  "languageZh": "中文",
+  "languageEn": "English",
+  "modKey": "⌘",
+  "modKeyCtrl": "Ctrl"
+}
