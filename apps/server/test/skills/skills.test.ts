@@ -89,7 +89,7 @@ test("agent creation and editing persist persona and assigned skills, with runti
   assert.ok(context.skills[0].files?.some((file) => file.path === "scripts/summarize-csv.py"));
   const read = context.tools.read_skill.execute! as (input: { name: string; path?: string }, options: any) => Promise<any>;
   const options = { toolCallId: "read-skill-test", messages: [] };
-  const instructions = await read({ name: "report" }, options); assert.match(instructions.content, /业务问题/);
+  const instructions = await read({ name: "report" }, options); assert.match(instructions.content, /来源范围和统计口径/);
   assert.match((await read({ name: "report", path: "scripts/summarize-csv.py" }, options)).content, /csv.DictReader/);
   await assert.rejects(read({ name: "table" }, options), /未分配/);
   await assert.rejects(read({ name: "form" }, options), /未分配/);

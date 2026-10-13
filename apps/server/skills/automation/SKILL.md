@@ -1,23 +1,25 @@
 ---
 name: automation
-description: 将业务事件转化为独立自动化，设计触发、条件和动作，验证真实执行及失败处理。
+description: 在表格变化、Webhook、收到邮件或定时发生时，持续执行数据操作或指定智能体任务，设计规则并核对执行结果。
 ---
-# 自动化工作流
+# 让后续事件推进工作
 
-先明确业务事件、目标效果、作用范围和失败时的处理办法。用户希望未来事件发生时持续自动处理，才需要创建自动化；不要把不确定的判断写成永久执行规则。
+适用于“以后每次发生时都做”或定时任务。输入是事件来源、目标效果、条件、目标数据或智能体；输出是保存的自动化规则及实际执行状态。一次性整理、导入或生成 mock 数据使用 table 的 batch_*，数量多不代表需要持续规则。
 
-按来源 → 触发 → 条件 → 动作 → 验证设计规则。优先选择精确触发，再用条件控制范围；检查动作是否会产生新的相同事件，避免自触发循环。动作需要外部效果时，应确认工具真实支持该能力。
+## 来源到执行
 
-需要验证真实执行时按 references/testing.md 操作。
+1. 确认事件确实可到达：表格需真实 tableId；Webhook 需已创建的 endpointId；AgentMail 需已连接账户及订阅邮箱；定时需五段 cron 和明确 IANA 时区。来源与触发的对应关系见 [references/sources-and-bindings.md](references/sources-and-bindings.md)。外部连接与密钥由设置 UI 配置，不编造 ID、密钥或工具。
+2. 明确范围：表格来源用真实字段条件；其他来源用事件路径条件，不能要求不存在的触发 rowId。只监听所需状态或变化，不为不确定判断建立永久规则。
+3. 选择确定的数据操作或智能体任务。数据动作用 {type:"command",command,input}，命令名为共享 schema 的 camelCase，不是工具的 snake_case；字段和值仍遵守 table 技能。run_agent 必须指定实际 agentUserId 和具体 prompt，不能把普通字段更新说成 AI 调用。
+4. 创建规则后读取 list_automations 核对来源、条件、动作与 enabled。可按 tableId 筛选；无表格来源无需绑定表。需要从事件或前序动作取值时读绑定参考。
+5. 按 [references/testing.md](references/testing.md) 引发可识别的事件并查看 list_automation_runs。保存成功、已排队、原生 Agent 完成和数据写入完成是不同结果。
 
-一次性导入、批量修改、生成100条mock数据都属于表格记录操作，使用batch_*工具。数量多不意味着需要自动化。
+## 场景与组合
 
-自动化是独立资源。先确定来源表格，再用 get_table 获取字段和单选选项的 UUID。
+读 [references/workflows.md](references/workflows.md) 选择流程：报名表新增后整理字段，收到邮件后建立记录，或每周让指定智能体检查项目。先用 table 准备目标结构，用 form 收集资料，用 report 看结果；只配置用户需要的持续部分。
 
-- row_created：新增记录时触发。
-- field_changed：指定字段变化时触发，可配置目标值。
-- enter_status：进入指定选项状态时触发，optionId 必须来自来源字段选项。
+## 失败与边界
 
-使用 create_automation / update_automation，给规则清晰名称。条件与动作引用来源表格字段。当前字段动作使用 update_field，值必须符合字段类型。不要把普通字段动作误写为 AI 调用。
+多步动作按顺序提交，后一步失败不撤销已经完成的前一步。核对执行记录与实际数据后修正规则，不重复发送有副作用的事件来“试试”。原生 Agent waiting_input 时打开关联对话回答；unknown 表示结果尚不确定，查看原对话，不重新创建同一任务替代恢复。
 
-避免动作反复触发自身。需要测试时使用明确的测试记录；查看 list_automation_runs 区分配置成功、已排队和执行成功。删除规则用 delete_automation，仅在用户要求时执行。
+当前邮件集成仅入站，不能发送/回复邮件或下载附件；附件元数据不代表已读取内容。定时执行需要服务端 worker 运行，不能承诺浏览器关闭后本机已停止服务仍执行。规划和提问由真实 Harness 原生能力提供，不创建平台 goal/plan 门禁，也不另写 Agent 工具循环。

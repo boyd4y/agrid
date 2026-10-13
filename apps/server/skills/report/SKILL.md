@@ -1,22 +1,25 @@
 ---
 name: report
-description: 创建多组件报告页面，添加图表、指标和文字，查询真实来源数据并调整布局。
+description: 将阅读清单、项目进度或收集结果变成报告页面，明确来源和统计口径，制作指标、图表与说明并核对真实数据。
 ---
-# 报告页面
+# 用报告回答问题
 
-先明确报告给谁看、要回答什么业务问题，再选统计口径和页面结构。优先用少量指标给出整体情况，再用图表解释差异或趋势，最后用文字注明来源、范围和限制。不要为了使用某个图表而编造业务问题。
+适用于了解数量、分布、金额或随时间的变化。输入是用户想回答的问题、真实来源表和统计口径；输出是保存的报告页面及数据核对结果。先确定来源范围和统计口径，再选图表，避免为图表编造结论。
 
-同一页面的指标和图表需要一致的口径；不同来源要明确标注。当前报告工具不支持的筛选、联表或时间范围不能假装已应用。数据缺失时说明缺少什么，避免用零掩盖空值。
+## 从问题到可检查的页面
 
-统计方式、空值和截断处理见 references/metrics.md；处理用户明确提供的 CSV 导出时，可在具备 Python 的执行环境运行 scripts/summarize-csv.py。不要把 CSV 脚本结果当作产品数据库的实时汇总。
+1. 读取来源表定义，确认字段类型与范围。例如“阅读清单有多少本、各状态分布如何”可使用总体 count 指标和按状态 count 图表。
+2. 明确是否统计完整来源表。当前组件 query 没有筛选、联表或时间范围配置；query_rows 的 filters 和当前 UI 筛选不会自动应用到报告。若问题需要这些能力，说明边界，不能将全表统计标成“本月”或“仅未完成”。
+3. create_report 创建页面，添加少量 metric、chart 和 text 组件。各组件可以来自不同表，但需标明来源；字段要求、空值与截断见 [references/metrics.md](references/metrics.md)。
+4. 按 [references/layout-and-charts.md](references/layout-and-charts.md) 选择图表和布局。用文字注明口径、缺失信息和比较限制，不把没有流程顺序的分布说成转化漏斗。
+5. get_report_data 检查每个组件的 data / error、totalRows 和 truncated，再读取 get_report 核对保存配置。分别说明页面已保存、数据已核对或哪些组件仍缺来源，避免把缺失当零。
 
-报告是页面，不是单个图表。用 create_report 创建，再用 add_report_widget 添加 chart、metric、text 组件。每个组件可有独立来源表格。
+## 修改与恢复
 
-1. get_table 确认来源字段。chart 需要分组字段；sum / average 需要数值字段，count 不需要数值字段。
-2. 用指标卡展示总数或金额，用图表展示分组分布或时间趋势，用文字说明口径。标题说明统计内容，不暴露 SQL。
-3. 报告是可拖动和缩放的 Dashboard。layout={x,y,w,h} 使用12列网格；w 为3..12，h 为4..30，x+w≤12，组件不得重叠。省略布局时自动找到空位；width/columns 只决定默认宽度。set_report_layout 原子修改全部位置，reorder_report_widgets 重新纵向排列，均必须包含全部组件 UUID。
-4. 图表可选 bar/bar-horizontal/line/area/pie/donut/radar/radial/scatter/funnel/treemap。比例类图表不能使用负数。散点图比较各分组记录数（横轴）与汇总值（纵轴），不是原始记录的双数值散点。漏斗保持来源分组顺序，不能把非流程分布说成转化率。
-5. 修改前 get_report 获取当前版本和组件；update_report 修改页面信息，update_report_widget 修改具体组件，不覆盖无关组件。
-6. 用 get_report_data 检查真实汇总结果。无来源、删除字段、空值和截断都应说明，不能编造统计。
+修改前 get_report 取得当前组件 ID 和配置；update_report_widget 是完整组件替换，保留该组件仍需要的 query、标题和布局。其他组件不随意覆盖。布局冲突时重新读取全部位置再调整；字段被删除时修复对应组件来源，不编造旧结果。删除组件或页面不删除来源数据，按用户要求操作。
 
-删除组件用 delete_report_widget；删除整个页面用 delete_report，仅在用户明确要求时进行。不会删除来源数据。
+需要准备或清理来源接 table；需要持续收集接 form；需要未来事件更新数据接 automation。报告本身查询真实来源，不需要创建定时规则才能刷新数据。
+
+## 已提供 CSV 的离线分析
+
+用户明确提供可读取的 CSV 文件、且执行环境确实有 Python 时，可运行 scripts/summarize-csv.py；用法见统计参考。读取脚本不等于执行，平台文件 UUID 或邮件附件元数据也不代表文件已进入执行环境。Python 不可用时使用产品聚合或说明限制，不声称脚本已运行。离线结果不会自动成为报告的实时来源。
