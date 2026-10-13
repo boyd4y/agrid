@@ -146,7 +146,9 @@
   "directory": {
     "loadingLabel": "加载{{label}}",
     "count": "{{count}} 个{{label}}",
-    "loadFailed": "加载失败"
+    "loadFailed": "加载失败",
+    "searchAria": "搜索{{label}}",
+    "searchPlaceholder": "搜索{{label}}"
   },
   "preview": {
     "table": "表格",

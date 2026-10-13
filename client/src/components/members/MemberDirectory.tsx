@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { Search, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ListErrorState } from "@/components/shell/ListErrorState";
 import { MemberAvatar } from "./MemberAvatar";
 import type { MemberOption } from "@/lib/api";
 
@@ -10,16 +11,17 @@ export function MemberDirectory({ label, count, query, onQueryChange, loading, e
   label: string; count: number; query: string; onQueryChange: (query: string) => void;
   loading: boolean; error: string | null; onRetry: () => void; empty?: ReactNode; children: ReactNode;
 }) {
+  const { t } = useTranslation(["app", "common"]);
   return <div className="flex w-full max-w-6xl flex-1 flex-col gap-5" data-testid="member-directory">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <label className="relative w-full max-w-sm">
         <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input aria-label={`搜索${label}`} placeholder={`搜索${label}`} className="pl-9" value={query} disabled={loading && count === 0} onChange={(e) => onQueryChange(e.target.value)} />
+        <Input aria-label={t("directory.searchAria", { label })} placeholder={t("directory.searchPlaceholder", { label })} className="pl-9" value={query} disabled={loading && count === 0} onChange={(e) => onQueryChange(e.target.value)} />
       </label>
-      <p className="text-sm text-muted-foreground">{loading ? "加载中…" : error ? "加载失败" : `${count} 个${label}`}</p>
+      <p className="text-sm text-muted-foreground">{loading ? t("common:loading") : error ? t("directory.loadFailed") : t("directory.count", { count, label })}</p>
     </div>
-    {loading ? <div role="status" aria-label={`加载${label}`} className="flex flex-col gap-3">{[0, 1, 2].map((id) => <Skeleton key={id} className="h-28 w-full" />)}</div>
-      : error ? <div className="flex flex-1 flex-col items-center justify-center gap-3"><p role="alert" className="text-sm text-muted-foreground">{error}</p><Button variant="outline" onClick={onRetry}><RefreshCw data-icon="inline-start" />重新加载</Button></div>
+    {loading ? <div role="status" aria-label={t("directory.loadingLabel", { label })} className="flex flex-col gap-3">{[0, 1, 2].map((id) => <Skeleton key={id} className="h-28 w-full" />)}</div>
+      : error ? <ListErrorState title={t("directory.loadFailed")} description={error} onRetry={onRetry} />
       : empty ?? <ul className="divide-y rounded-xl border bg-card">{children}</ul>}
   </div>;
 }

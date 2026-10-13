@@ -146,7 +146,9 @@
   "directory": {
     "loadingLabel": "Loading {{label}}",
     "count": "{{count}} {{label}}",
-    "loadFailed": "Failed to load"
+    "loadFailed": "Failed to load",
+    "searchAria": "Search {{label}}",
+    "searchPlaceholder": "Search {{label}}"
   },
   "preview": {
     "table": "Table",

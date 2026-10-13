@@ -8,58 +8,60 @@ import { Button } from "@/components/ui/button";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import type { AppOutletContext } from "@/layouts/AppShell";
+import { useTranslation } from "react-i18next";
 
 export function TablesPage() {
+  const { t } = useTranslation(["app", "common"]);
   const { tables, createTable, tablesLoading, notifyTableMutated } =
     useOutletContext<AppOutletContext>();
 
   return (
     <AppPage header={
-      <AppPageHeader page="tables" description="管理表格、字段与数据视图。">
+      <AppPageHeader page="tables" description={t("tables.description")}>
         <DataRefreshButton onRefresh={notifyTableMutated} />
         <Button onClick={() => void createTable()}>
           <NiPlus className="h-4 w-4" />
-          新建
+          {t("tables.new")}
         </Button>
       </AppPageHeader>
     }>
 
       {tablesLoading ? (
-        <p className="text-sm text-muted-foreground">加载中…</p>
+        <p className="text-sm text-muted-foreground">{t("common:loading")}</p>
       ) : tables.length === 0 ? (
         <AppEmptyState
           className="flex-1"
           illustration={NOTIOLY.painting}
-          title="还没有表格"
-          description="创建第一张表格，开始整理你的数据。"
+          title={t("tables.emptyTitle")}
+          description={t("tables.emptyDescription")}
           action={<Button size="sm" onClick={() => void createTable()}>
             <NiPlus className="h-4 w-4" />
-            新建表格
+            {t("tables.newTable")}
           </Button>}
         />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-3">
-          {tables.map((t) => (
+          {tables.map((table) => (
             <div
-              key={t.id}
+              key={table.id}
               className="rounded-xl border border-border bg-background p-4 shadow-[0_8px_24px_rgba(55,53,47,0.04)] transition hover:bg-muted/40"
             >
               <div className="flex items-start gap-1">
               <Link
-                to={`/app/tables/${t.id}`}
+                to={`/app/tables/${table.id}`}
                 className="flex min-w-0 flex-1 items-start gap-3"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <TableIcon name={t.icon} className="h-4 w-4 text-primary" />
+                  <TableIcon name={table.icon} className="h-4 w-4 text-primary" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{t.name}</div>
+                  <div className="truncate font-medium">{table.name}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {t.description || "多维表格"}
+                    {table.description || t("tables.defaultDescription")}
                   </div>
                 </div>
               </Link>
-              <TableActions table={t} />
+              <TableActions table={table} />
               </div>
             </div>
           ))}

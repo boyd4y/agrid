@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import i18n from "@/i18n";
 import { announceApiWrite } from "./data-changes";
 import type {
   CellValue,
@@ -32,28 +33,40 @@ function announceAgentChange<T>(result: T): T {
   return result;
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export type ApiRequestInit = RequestInit & {
+  /** When true, toast 5xx. Default: toast only for non-GET (mutations). List pages use ListErrorState instead. */
+  errorToast?: boolean;
+};
+
+async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
+  const { errorToast, ...fetchInit } = init ?? {};
+  const method = (fetchInit.method ?? "GET").toUpperCase();
+  const shouldToast =
+    errorToast ?? (method !== "GET" && method !== "HEAD");
   const res = await fetch(url, {
-    ...init,
+    ...fetchInit,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
+      ...(fetchInit.headers ?? {}),
     },
   }).catch((error: unknown) => {
     if (error instanceof Error && error.name === "AbortError") throw error;
-    const message = "网络连接失败，请重试";
+    const message = i18n.t("errors:network");
     toast.error(message, { id: "api-network-error" });
     throw new Error(message, { cause: error });
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    const message = res.status >= 500 ? "服务暂时不可用，请稍后重试" : err.error || `请求失败 ${res.status}`;
-    if (res.status >= 500) toast.error(message, { id: "api-system-error" });
+    const message =
+      res.status >= 500
+        ? i18n.t("errors:systemUnavailable")
+        : err.error || i18n.t("errors:requestFailed", { status: res.status });
+    if (res.status >= 500 && shouldToast) toast.error(message, { id: "api-system-error" });
     throw new Error(message);
   }
   const result = await res.json() as T;
-  announceApiWrite(url, init, result);
+  announceApiWrite(url, fetchInit, result);
   return result;
 }
 

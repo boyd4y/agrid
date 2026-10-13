@@ -2,6 +2,7 @@ import { FilterValueInput } from "@/components/table/FilterBar";
 import { FormFieldControl } from "@/components/form/FormFieldControls";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
+import { ListErrorState } from "@/components/shell/ListErrorState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Zap, History, X, Save, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -246,9 +247,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
       </div>
 
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
-          {error}
-        </div>
+        <ListErrorState className="min-h-0 rounded-md border border-border py-6" title={error} />
       )}
       {loading && <p className="text-xs text-muted-foreground">加载中…</p>}
       {!loading && rules.length === 0 && !editing && (
@@ -469,9 +468,7 @@ export function AutomationEditor({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 py-4">
           {error && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
-              {error}
-            </div>
+            <ListErrorState className="min-h-0 rounded-md border border-border py-4" title={error} />
           )}
 
           <div className="flex items-center gap-3">
@@ -493,7 +490,7 @@ export function AutomationEditor({
 
           {/* WHEN */}
           <section className="rounded-lg border border-border bg-muted/40 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-warning">
+            <div className="mb-2 text-xs font-semibold text-warning">
               当
             </div>
             <Select
@@ -642,7 +639,7 @@ export function AutomationEditor({
           {/* IF */}
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-xs font-semibold uppercase tracking-wide text-primary">
+              <div className="text-xs font-semibold text-primary">
                 如果
               </div>
               <div className="flex items-center gap-2">
@@ -792,7 +789,7 @@ export function AutomationEditor({
           {/* THEN */}
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
-              <div className="text-xs font-semibold uppercase tracking-wide text-success">
+              <div className="text-xs font-semibold text-success">
                 就
               </div>
               <Button
