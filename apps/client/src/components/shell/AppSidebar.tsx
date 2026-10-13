@@ -20,9 +20,7 @@ import { BRAND } from "@/lib/brand";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTranslation } from "react-i18next";
 import { APP_NAVIGATION } from "./app-navigation";
-
-const SIDEBAR_ROW = "flex min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors";
-const SIDEBAR_ICON = "h-5 w-5 shrink-0";
+import { SIDEBAR_ICON, SIDEBAR_ROW } from "./sidebar-styles";
 
 type Props = {
   tables: TableMeta[];
@@ -247,9 +245,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
             collapsed={sidebarCollapsed}
           />
           <NavItem {...nav("skills")} collapsed={sidebarCollapsed} />
-          <div className={cn(sidebarCollapsed && "flex justify-center")}>
-            <ThemeToggle expanded={!sidebarCollapsed} />
-          </div>
+          <ThemeToggle sidebar expanded={!sidebarCollapsed} />
         </div>
 
         {sidebarCollapsed ? (
