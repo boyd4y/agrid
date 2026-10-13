@@ -19,27 +19,29 @@ import { api, type MemberOption } from "@/lib/api";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 
-function MemberAvatarEditor({ member }: { member: MemberOption }) {
+function MemberAvatarEditor({ member, open, onOpenChange, onLockChange }: { member: MemberOption; open: boolean; onOpenChange: (open: boolean) => void; onLockChange: (locked: boolean) => void }) {
   const { t } = useTranslation(["app", "common", "errors"]);
-  const [open, setOpen] = useState(false), [image, setImage] = useState(member.image ?? null);
+  const [image, setImage] = useState(member.image ?? null);
   const [busy, setBusy] = useState(false), [processing, setProcessing] = useState(false), [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
+  // Reset only on opening; a background directory refresh must keep the active draft.
+  useEffect(() => { if (open) { setImage(member.image ?? null); setError(null); } }, [open, member.id]);
   const save = async () => {
     if (submitting.current || processing || image === (member.image ?? null)) return;
-    submitting.current = true; setBusy(true); setError(null);
-    try { await api.updateMemberAvatar(member.id, image); toast.success(t("members.avatarSaved")); setOpen(false); }
+    submitting.current = true; setBusy(true); onLockChange(true); setError(null);
+    try { await api.updateMemberAvatar(member.id, image); toast.success(t("members.avatarSaved")); onOpenChange(false); }
     catch (e) { setError(e instanceof Error ? e.message : t("errors:avatarSaveFailed")); }
-    finally { submitting.current = false; setBusy(false); }
+    finally { submitting.current = false; setBusy(false); onLockChange(false); }
   };
-  return <Popover open={open} onOpenChange={(next) => { if (!busy && !processing) { if (next) { setImage(member.image ?? null); setError(null); } setOpen(next); } }}>
+  return <Popover open={open} onOpenChange={(next) => { if (!busy && !processing) onOpenChange(next); }}>
     <PopoverTrigger asChild><Button variant="outline" size="sm" aria-label={t("members.editAvatarAria", { name: member.name })}><ImagePlus data-icon="inline-start" />{t("members.changeAvatar")}</Button></PopoverTrigger>
     <PopoverContent className="w-96 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" align="end" aria-label={t("members.editAvatarPopover")}>
       <div className="flex flex-col gap-4">
-        <AvatarPicker name={member.name} image={image} onChange={setImage} disabled={busy} onProcessingChange={setProcessing} />
+        <AvatarPicker name={member.name} image={image} onChange={setImage} disabled={busy} onProcessingChange={(next) => { setProcessing(next); onLockChange(next); }} />
         {error && <FieldError role="alert">{error}</FieldError>}
         <Separator />
         <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" disabled={busy || processing} onClick={() => setOpen(false)}><X data-icon="inline-start" />{t("common:cancel")}</Button>
+          <Button variant="outline" size="sm" disabled={busy || processing} onClick={() => onOpenChange(false)}><X data-icon="inline-start" />{t("common:cancel")}</Button>
           <Button size="sm" disabled={busy || processing || image === (member.image ?? null)} onClick={() => void save()}>{busy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{t("common:save")}</Button>
         </div>
       </div>
@@ -53,6 +55,8 @@ export function MembersPage() {
   const [members, setMembers] = useState<MemberOption[]>([]), [loading, setLoading] = useState(true), [loadError, setLoadError] = useState<string | null>(null);
   const [actor, setActor] = useState<{ userId: string; role: string } | null>(null), [query, setQuery] = useState("");
   const [showInvite, setShowInvite] = useState(false), [email, setEmail] = useState(""), [busy, setBusy] = useState(false), [inviteError, setInviteError] = useState<string | null>(null);
+  const [avatarMemberId, setAvatarMemberId] = useState<string | null>(null);
+  const avatarLocked = useRef(false);
   const requestId = useRef(0), submitting = useRef(false);
   const canManage = actor && ["owner", "admin"].includes(actor.role);
   const roleLabel = (role: string) =>
@@ -92,8 +96,9 @@ export function MembersPage() {
         empty={!members.length ? <AppEmptyState data-testid="members-empty" className="flex-1" illustration={NOTIOLY.collaborate} title={t("members.emptyTitle")} description={t("members.emptyDescription")} action={invite} />
           : !visible.length ? <AppEmptyState className="flex-1" illustration={NOTIOLY.collaborate} title={t("members.noMatchTitle")} description={t("members.noMatchDescription")} /> : undefined}>
         {pagination.items.map((member) => <MemberDirectoryRow key={member.id} member={member} description={member.email}
+          onOpen={(canManage || member.userId === actor?.userId) ? () => { if (!avatarLocked.current) setAvatarMemberId(member.id); } : undefined}
           metadata={<Badge variant="outline">{roleLabel(member.role)}</Badge>}
-          action={(canManage || member.userId === actor?.userId) && <MemberAvatarEditor member={member} />} />)}
+          action={(canManage || member.userId === actor?.userId) && <MemberAvatarEditor member={member} open={avatarMemberId === member.id} onOpenChange={(open) => { if (open && avatarLocked.current && avatarMemberId !== member.id) return; setAvatarMemberId(open ? member.id : null); }} onLockChange={(locked) => { avatarLocked.current = locked; }} />} />)}
       </MemberDirectory>
       <DialogContent className="max-w-md" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader><DialogTitle>{t("members.inviteTitle")}</DialogTitle><DialogDescription>{t("members.inviteDescription")}</DialogDescription></DialogHeader>

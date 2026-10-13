@@ -59,7 +59,7 @@ export function AgentsPage() {
               const sandbox = persona?.runtime === "sandbox" || (!persona?.runtime && harness !== "pi");
               const skills = enabledNames.filter((name) => !persona?.skillNames || persona.skillNames.includes(name));
               return <MemberDirectoryRow key={agent.id} member={agent}
-                title={canManage ? <Link className="rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring" to={`/app/agents/${agent.id}/edit`}>{agent.name}</Link> : agent.name}
+                to={canManage ? `/app/agents/${agent.id}/edit` : undefined}
                 description={persona?.systemPrompt || t("agents.noPersona")}
                 metadata={<>
                     <Badge variant="outline" className="gap-1"><HarnessLogo id={harness} className="size-3" />{HARNESS_LABELS[harness].split(" ")[0]}</Badge>

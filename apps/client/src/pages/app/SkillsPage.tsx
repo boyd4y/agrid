@@ -36,10 +36,12 @@ export function SkillsPage() {
     {error && <ListErrorState className="min-h-0 py-4" title={error} onRetry={() => void load().catch((e: Error) => setError(e.message))} />}
     <div className="overflow-x-auto rounded-xl border border-border">
       <table className="w-full text-left text-sm">
-        <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">{t("skills.colSkill")}</th><th className="px-4 py-3 font-medium">{t("skills.colPurpose")}</th><th className="whitespace-nowrap px-4 py-3 font-medium">{t("skills.colFiles")}</th><th className="px-4 py-3 font-medium">{t("skills.colEnabled")}</th><th className="w-12"><span className="sr-only">{t("skills.viewDetails")}</span></th></tr></thead>
+        <thead className="border-b border-border bg-muted/40 text-xs text-muted-foreground"><tr><th colSpan={3} className="px-4 py-3 font-medium"><div className="grid grid-cols-[minmax(8rem,1fr)_minmax(13rem,2fr)_3rem] items-center gap-4"><span>{t("skills.colSkill")}</span><span>{t("skills.colPurpose")}</span><span>{t("skills.colFiles")}</span></div></th><th className="px-4 py-3 font-medium">{t("skills.colEnabled")}</th><th className="w-12"><span className="sr-only">{t("skills.viewDetails")}</span></th></tr></thead>
         <tbody className="divide-y divide-border">{pagination.items.map((skill) => <tr key={skill.id} className="group hover:bg-muted/30">
-          <td className="px-4 py-4"><Link to={`/app/skills/${encodeURIComponent(skill.id)}`} className="font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{skill.name}</Link><p className="mt-1 text-xs text-muted-foreground">{skill.builtin ? t("skills.builtin") : t("skills.workspace")}</p></td>
-          <td className="min-w-52 max-w-2xl px-4 py-4 text-muted-foreground">{skill.description}</td><td className="px-4 py-4 tabular-nums">{skill.fileCount}</td>
+          <td colSpan={3} className="p-0"><Link to={`/app/skills/${encodeURIComponent(skill.id)}`} aria-label={skill.name} className="grid grid-cols-[minmax(8rem,1fr)_minmax(13rem,2fr)_3rem] items-center gap-4 px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+            <div className="min-w-0"><span className="font-medium">{skill.name}</span><p className="mt-1 text-xs text-muted-foreground">{skill.builtin ? t("skills.builtin") : t("skills.workspace")}</p></div>
+            <span className="text-muted-foreground">{skill.description}</span><span className="tabular-nums">{skill.fileCount}</span>
+          </Link></td>
           <td className="px-4 py-4"><Switch aria-label={t("skills.enableAria", { name: skill.name })} checked={skill.enabled} disabled={!library.canManage || busy !== null} onCheckedChange={(enabled) => void toggle(skill, enabled)} /></td>
           <td className="pr-4"><Button asChild size="icon" variant="ghost"><Link to={`/app/skills/${encodeURIComponent(skill.id)}`} aria-label={t("skills.viewAria", { name: skill.name })}><ChevronRight /></Link></Button></td>
         </tr>)}</tbody>

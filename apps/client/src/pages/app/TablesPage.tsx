@@ -3,11 +3,12 @@ import { Search } from "lucide-react";
 import { Input } from "@tabdo/ui/components/input";
 import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListPagination } from "@/components/controls/list-pagination";
+import { ListItemLink } from "@/components/controls/list-item-link";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { TableIcon } from "@/components/table/TableIcon";
 import { TableActions } from "@/components/table/TableActions";
-import { Link, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import { NiPlus } from "@/components/icons";
 import { Button } from "@tabdo/ui/components/button";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
@@ -57,13 +58,11 @@ export function TablesPage() {
             <div
               key={table.id}
               data-testid="table-list-item"
-              className="rounded-xl border border-border bg-background p-4 shadow-[0_8px_24px_rgba(55,53,47,0.04)] transition hover:bg-muted/40"
+              className="relative rounded-xl border border-border bg-background p-4 shadow-[0_8px_24px_rgba(55,53,47,0.04)] transition hover:bg-muted/40"
             >
+              <ListItemLink to={`/app/tables/${table.id}`} label={table.name} />
               <div className="flex items-start gap-1">
-              <Link
-                to={`/app/tables/${table.id}`}
-                className="flex min-w-0 flex-1 items-start gap-3"
-              >
+              <div className="flex min-w-0 flex-1 items-start gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <TableIcon name={table.icon} className="h-4 w-4 text-primary" />
                 </span>
@@ -73,8 +72,8 @@ export function TablesPage() {
                     {table.description || t("tables.defaultDescription")}
                   </div>
                 </div>
-              </Link>
-              <TableActions table={table} />
+              </div>
+              <div className="relative z-10 shrink-0"><TableActions table={table} /></div>
               </div>
             </div>
           ))}

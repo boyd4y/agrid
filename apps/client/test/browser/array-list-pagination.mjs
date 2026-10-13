@@ -58,6 +58,7 @@ try {
   assert.equal(await page.locator('#sidebar-my-tables a').count(), 21, 'sidebar still receives all tables');
   await pager.getByRole('button', { name: '下一页', exact: true }).click(); await countRows('[data-testid=table-list-item]', 1);
   await page.getByTestId('table-list-item').getByRole('button').click();
+  assert.equal(new URL(page.url()).pathname, '/app/tables', 'the independent table menu does not navigate');
   await page.getByRole('button', { name: '删除表格', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await countRows('[data-testid=table-list-item]', 20);
@@ -69,6 +70,54 @@ try {
   await page.goto(`${frontend}/app/members`); await countRows('[data-testid=member-directory-row]', 20); await aligned();
   await pager.getByRole('button', { name: '下一页', exact: true }).scrollIntoViewIfNeeded();
   const footer = await pager.boundingBox(); assert(footer.y >= 0 && footer.y + footer.height <= 650, 'outer page scrolling reaches pagination');
+  // Main item surfaces navigate through native sibling links; actions remain independent.
+  const source = (await api('/tables'))[0];
+  const column = await api(`/tables/${source.id}/columns`, { name: 'Title', type: 'text' });
+  const rule = await api(`/tables/${source.id}/automations`, { name: 'Navigation automation', enabled: false, trigger: { type: 'row_created' }, actions: [{ type: 'update_field', columnId: column.id, value: 'Fixture' }] });
+  const report = await api('/reports', { name: 'Navigation report', columns: 1, widgets: [{ id: crypto.randomUUID(), type: 'text', title: 'Note', width: 'full', content: 'Fixture' }] });
+  const items = [
+    { path: 'tables', selector: '[data-testid=table-list-item]' },
+    { path: 'automations', selector: '[data-testid=automation-list-item]' },
+    { path: 'reports', selector: '[data-testid=report-list-item]' },
+    { path: 'agents', selector: '[data-testid=member-directory-row]' },
+  ];
+  for (const scenario of items) {
+    await page.goto(`${frontend}/app/${scenario.path}`);
+    const item = page.locator(scenario.selector).first(); await item.waitFor();
+    const link = item.locator(':scope > a').first(); await link.waitFor();
+    const href = await link.getAttribute('href'); assert(href.startsWith(`/app/${scenario.path}/`));
+    assert.equal(await item.locator('a button, button a, a a').count(), 0, 'navigation never contains another interactive control');
+    await link.hover(); assert.equal(await item.locator('h2, .font-medium').first().evaluate(node => getComputedStyle(node).textDecorationLine), 'none', 'titles remain plain even on hover');
+    if (scenario.path === 'reports') {
+      await item.getByRole('button').click(); await page.getByRole('alertdialog').waitFor();
+      assert.equal(new URL(page.url()).pathname, '/app/reports', 'report deletion does not follow the card link');
+      await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click();
+    } else if (scenario.path === 'automations') {
+      await item.getByRole('button').click(); await page.getByRole('menuitem', { name: '删除规则', exact: true }).waitFor();
+      assert.equal(new URL(page.url()).pathname, '/app/automations', 'automation menu does not follow the row link');
+      await page.keyboard.press('Escape');
+    }
+    if (scenario.path === 'agents') { await link.focus(); await page.keyboard.press('Enter'); }
+    else await item.click({ position: { x: 8, y: 8 } });
+    await page.waitForURL(frontend + href);
+  }
+  await page.goto(`${frontend}/app/skills`);
+  const skillRow = page.locator('tbody > tr').filter({ has: page.getByRole('link', { name: 'pagination-skill-01', exact: true }) });
+  const skillLink = skillRow.getByRole('link', { name: 'pagination-skill-01', exact: true }); await skillLink.waitFor();
+  const skillHref = await skillLink.getAttribute('href');
+  assert.equal(await skillLink.locator('button, [role=switch]').count(), 0);
+  await skillRow.getByRole('switch').click();
+  await page.waitForFunction(() => [...document.querySelectorAll('tbody tr')].find(row => row.textContent.includes('pagination-skill-01'))?.querySelector('[role=switch]')?.getAttribute('aria-checked') === 'false');
+  assert.equal(new URL(page.url()).pathname, '/app/skills', 'skill switching remains separate from navigation');
+  await skillLink.focus(); await page.keyboard.press('Enter'); await page.waitForURL(frontend + skillHref);
+  await page.goto(`${frontend}/app/members`);
+  const memberRow = page.getByTestId('member-directory-row').first(); await memberRow.waitFor();
+  await memberRow.click({ position: { x: 8, y: 8 } });
+  const avatarEditor = page.getByRole('dialog', { name: '编辑成员头像', exact: true }); await avatarEditor.waitFor();
+  assert.equal(new URL(page.url()).pathname, '/app/members', 'member main area uses its existing avatar editor');
+  await avatarEditor.getByRole('button', { name: '取消', exact: true }).click(); await avatarEditor.waitFor({ state: 'detached' });
+  await memberRow.locator('div.relative').getByRole('button').click(); await avatarEditor.waitFor();
+  await page.keyboard.press('Escape'); await avatarEditor.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
-  console.log('PASS four real array lists: 20/page, full-list search/reset, empty search, last-page delete clamp, complete sidebar/member API, 1024px header/content alignment and 700px scroll; no screenshots/model calls');
+  console.log('PASS four real array lists: 20/page, full-list search/reset, empty search, last-page delete clamp, complete sidebar/member API, 1024px header/content alignment and 700px scroll, native whole-item navigation/plain titles/independent actions/member Popover; no screenshots/model calls');
 } finally { await db.end(); await fixture.close(); }
