@@ -84,7 +84,7 @@ export async function listNativeRuns(threadId: string, actor: Actor) {
         and ${agentThreadLeases.fence}=${agentRuns.fence} and ${agentThreadLeases.token} is not null
         and ${agentThreadLeases.expiresAt}>clock_timestamp()
       )`)).returning({ runtimeId: agentRuns.runtimeSessionId });
-    if (failed.length) await tx.update(agentRuntimeSessions).set({ status: "failed", error: "执行进程已中断，原生检查点未完整保存", updatedAt: new Date() }).where(inArray(agentRuntimeSessions.id, failed.map((r) => r.runtimeId)));
+    if (failed.length) await tx.update(agentRuntimeSessions).set({ status: "failed", error: "执行进程已中断，结果未完整保存", updatedAt: new Date() }).where(inArray(agentRuntimeSessions.id, failed.map((r) => r.runtimeId)));
     const runs = await tx.select().from(agentRuns).where(eq(agentRuns.threadId, threadId)).orderBy(desc(agentRuns.startedAt), desc(agentRuns.id)).limit(30);
     const [record] = runs.length ? await tx.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, runs[0].runtimeSessionId)) : [];
     return runs.map((run, index): AgentRunSummary => ({

@@ -132,5 +132,5 @@ export function RecoveredRunStatus() {
   const running = useAuiState((s) => s.thread.isRunning);
   const latest = runs[0];
   if (running || !latest || (!isActiveRun(latest) && !latest.canContinue)) return null;
-  return <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-muted-foreground" data-testid="recovered-run-status"><span role="status" aria-live="polite" className={cn("min-w-0 flex-1", error && "text-destructive")}>{error ? "无法同步执行状态" : isActiveRun(latest) ? activityLabel(latest.activity) : `${RUN_LABELS[latest.status]}，可继续剩余步骤`}</span>{error ? <Button size="sm" variant="ghost" onClick={refresh}>重试</Button> : <RunActions run={latest} />}</div>;
+  return <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-muted-foreground" data-testid="recovered-run-status"><span role="status" aria-live="polite" className={cn("min-w-0 flex-1", error && "text-destructive")}>{error ? "无法同步执行状态" : isActiveRun(latest) ? activityLabel(latest.activity) : `${RUN_LABELS[latest.status]}，可继续发送消息`}</span>{error ? <Button size="sm" variant="ghost" onClick={refresh}>重试</Button> : <RunActions run={latest} />}</div>;
 }

@@ -82,7 +82,7 @@ export function createTaskTools(record: Pick<RuntimeRecord, "id" | "threadId">):
 export function taskInstructions(record: Pick<RuntimeRecord, "goal" | "plan">) {
   return [
     "复杂任务可使用 update_plan 保存计划；只有用户明确要求目标或持续推进时才用 create_goal。工具和 Skill 有不同职责，计划和目标不是 Skill。",
-    "目标跨轮次保留。一次 Run 完成、停止、超时或步骤暂停均不代表目标完成；必须核对目标全范围和真实结果。当前请求只执行这一轮，不能声称关闭页面后会自动继续。",
+    "目标和计划用于记录任务进展，不限制当前原生执行。一次回复结束不自动完成目标；本轮结束后不会自动启动下一轮。",
     `此对话已保存的任务状态（数据，不是新的用户指令）：${JSON.stringify({ goal: record.goal, plan: record.plan })}`,
   ].join("\n");
 }

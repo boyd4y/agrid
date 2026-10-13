@@ -30,7 +30,7 @@ plan/goal 已通过私有对话工具持久化，聊天 header 可查看，刷�
 
 Run 接口：`GET /api/threads/:id/runs`、`GET /api/threads/:id/runs/:runId/events`、`POST /api/threads/:id/runs/:runId/cancel`。停止请求通过持久化标记传给持有租约的实例；默认每两秒检查一次，可配置 `AI_RUN_POLL_MS`。终态消息和检查点保存完成后释放租约。
 
-Run 返回公开投影，不公开 session ID、fence、resume state 或文件。`canContinue` 仅对最新 Run 且检查点对应本轮输入/回复、包含原生 `continueFrom` 时成立。UI 先核对最新状态，加载持久消息，再发送“继续执行”；服务端仍由 `HarnessAgent.continueStream` 续接，不重放 UI 历史或工具。历史 Run 不能作为继续入口。
+Run 返回公开投影，不公开 session ID、fence、resume state 或文件。默认不设置步骤上限，按原生 Harness 运行到自然结束；`AI_CHAT_MAX_STEPS` 仅在显式正整数配置时设置 `stopWhen`。`canContinue` 仅对最新 Run 且保存状态对应本轮输入/回复、包含原生 `continueFrom` 时成立。Pi 的已有暂停会话可接收普通追问，无固定口令：服务端使用 `HarnessAgent.continueStream`，通过官方 Pi `input` extension 将空 continuation 输入一次性替换为用户本次消息，原生运行时保存该消息并在后续模型调用前接收它，不重放 UI 历史或工具。Codex/Claude 的暂停会话暂只支持原生继续入口，普通追问明确拒绝以避免吞消息；没有冒充跨 adapter 验收。历史 Run 不能作为继续入口。
 
 启动前 HTTP 请求已取消时不启动执行；完成 claim 并开始推送后，Run 独立于浏览器连接。响应通过 AI SDK 官方 `consumeSseStream` / `consumeStream` 保持消费原生执行的 UI 投影，使刷新和关闭页面不丢失终态提交。Composer Stop 先等待本轮持久 claim 并请求 cancel，停止按钮不会只关闭本地流伪装结束。运行中删除对话在租约锁内返回 409，要求停止并保存结果后删除。
 
@@ -44,7 +44,7 @@ Pi 的确定启动前失败/停止使用独立提交路径：在调用 `stream` 
 
 本地 Pi 的一次性人工维修有独立原生测试证明：原样使用旧 opaque resume state，并仅用同名最新 journal 替换旧工作区中的 journal，官方 `createSession` 和新用户 turn 能读取九个已有工具结果，工具执行计数不增加。维修须逐项验证日志严格延续旧快照、最新原生用户输入与目标 Run 的持久消息一致、工具调用和结果完整配对、末条是完整工具结果、没有悬空调用或 continuation，并在租约与对话锁内重验后原子提交。一次已验证的只读查询会话按此边界恢复：仅替换日志、更新下一轮可用的消息边界、追加恢复说明；失败 Run 与用户重试消息保留，opaque state、智能体和权限不变。没有自动重放工具或伪造原轮完成。这不构成对任意崩溃、缺失日志、未闭合工具结果、内置写入或其他 adapter 的恢复保证。
 
-Harness 1.0.149 会隐藏 host tool 参数校验原因，且忽略继承的 `streamText.timeout`。业务工具保留原 JSON schema，在执行入口使用原校验器严格校验后才允许修改数据；安全错误原因由 SDK 原生工具循环传回模型。等待限制使用官方事件与外部 AbortSignal，不自建模型/工具执行循环。SDK 的 `stopWhen` 在下一条原生事件处检查，可能预取模型请求，不等同于精确的模型请求数量配额。
+Harness 1.0.149 会隐藏 host tool 参数校验原因，且忽略继承的 `streamText.timeout`。业务工具保留原 JSON schema，在执行入口使用原校验器严格校验后才允许修改数据；安全错误原因由 SDK 原生工具循环传回模型。整轮、单步、首输出和流间隔超时均默认关闭，只有显式配置对应 `AI_CHAT_*_MS` 正整数才使用官方事件与外部 AbortSignal；用户 Stop、租约丢失仍中止执行。不自建模型/工具执行循环。自然 stop 没有正文不改判失败、不注入平台总结；真实 length/error/abort 如实报告并保留原内容。必要的错误说明标记“系统提示”，不要求特定回复口令。SDK 的 `stopWhen` 在下一条原生事件处检查，可能预取模型请求，不等同于精确的模型请求数量配额。
 
 ## 工具目录与智能体开关
 

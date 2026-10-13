@@ -59,6 +59,7 @@ export function createNativeChatStream(options: {
       let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: InMemoryFs | undefined;
       let step = 0, completedTools = 0, activity: ChatActivity | undefined, errorText: string | undefined;
       let piCompletion: PiCompletion | undefined;
+      let piContinuationInput: string | undefined;
       let streamedStep = 0, modelActive = false, expectedOutputStep = 1;
       let cancelled = false, timedOut = false, lostLease = false, closed = false;
       // Set before calling the SDK, not from callbacks or completed-tool counts.
@@ -77,18 +78,19 @@ export function createNativeChatStream(options: {
         if (signal.aborted) return;
         timedOut = true;timeoutReason = reason;control.abort(new DOMException(reason, "TimeoutError"));
       };
+      const deadline = (ms: number | undefined, reason: string) => ms === undefined ? undefined : setTimeout(() => abortTimeout(reason), ms);
       // Harness 1.0.149 discards the inherited streamText timeout option.
       // Use its official lifecycle/stream events to bound the AbortSignal instead.
-      const timeout = setTimeout(() => abortTimeout("本轮执行超时"), limits.timeout.totalMs);
+      const timeout = deadline(limits.timeout.totalMs, "本轮执行超时");
       const clearModelDeadlines = () => { clearTimeout(firstOutputDeadline);clearTimeout(chunkDeadline); };
       const waitForModelOutput = (nextStep: number) => {
         clearModelDeadlines();modelActive = true;expectedOutputStep = nextStep;
-        firstOutputDeadline = setTimeout(() => abortTimeout("模型首个输出等待超时"), limits.timeout.firstChunkMs);
+        firstOutputDeadline = deadline(limits.timeout.firstChunkMs, "模型首个输出等待超时");
       };
       const modelOutput = () => {
         if (!modelActive || streamedStep !== expectedOutputStep) return;
         clearTimeout(firstOutputDeadline);clearTimeout(chunkDeadline);
-        chunkDeadline = setTimeout(() => abortTimeout("模型输出流超时"), limits.timeout.chunkMs);
+        chunkDeadline = deadline(limits.timeout.chunkMs, "模型输出流超时");
       };
       const pollMs = Math.max(200, Math.min(10_000, Number(process.env.AI_RUN_POLL_MS) || 2000));
       const heartbeat = setInterval(async () => {
@@ -125,7 +127,7 @@ export function createNativeChatStream(options: {
       });
       const lifecycle: NonNullable<Parameters<typeof createNativeAgent>[0]["lifecycle"]> = {
         onStart: async () => { await report("waiting-model"); },
-        onStepStart: async ({ stepNumber }) => { clearTimeout(stepDeadline);stepDeadline = setTimeout(() => abortTimeout("本轮步骤执行超时"), limits.timeout.stepMs);step = stepNumber + 1;await report("waiting-model"); },
+        onStepStart: async ({ stepNumber }) => { clearTimeout(stepDeadline);stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");step = stepNumber + 1;await report("waiting-model"); },
         onLanguageModelCallStart: async () => { waitForModelOutput(step);await report("waiting-model"); },
         onLanguageModelCallEnd: () => { modelActive = false;clearModelDeadlines(); },
         onToolExecutionStart: async ({ toolCall }) => { modelActive = false;clearModelDeadlines();activeTools.set(toolCall.toolCallId, toolCall.toolName);await report("tool", toolCall.toolName); },
@@ -150,7 +152,7 @@ export function createNativeChatStream(options: {
           // the wait between native steps as well as the visible output stream.
           if (toolResults.length) {
             waitForModelOutput(step + 1);
-            stepDeadline = setTimeout(() => abortTimeout("本轮步骤执行超时"), limits.timeout.stepMs);
+            stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");
           }
         },
       };
@@ -188,8 +190,8 @@ export function createNativeChatStream(options: {
         errorText = chatErrorText(error);
         cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
         const uninvoked = !invocationStarted && safeStartupState;
-        const text = uninvoked ? `${cancelled ? "本轮已停止" : `本轮未能启动：${errorText}`}。本轮没有执行操作，可以重新发送消息。`
-          : `本轮未能完成：${errorText}。已提交的数据修改会保留，请核对后再继续。`;
+        const text = uninvoked ? `系统提示：${cancelled ? "本轮已停止" : `本轮未能启动：${errorText}`}。本轮没有执行操作，可以重新发送消息。`
+          : `系统提示：本轮未能完成：${errorText}。已提交的数据修改会保留。`;
         const message: UIMessage = { id: options.run.assistantMessageId, role: "assistant", parts: [{ type: "text", text }] };
         if (uninvoked) {
           await phaseWrites;
@@ -220,8 +222,13 @@ export function createNativeChatStream(options: {
         const agent = createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
           instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
           runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
-          stopWhen: stepCountIs(limits.steps),
+          stopWhen: limits.steps === undefined ? undefined : stepCountIs(limits.steps),
           onPiMessageEnd: (completion) => { piCompletion = completion; },
+          consumePiContinuationInput: () => {
+            const text = piContinuationInput;
+            piContinuationInput = undefined;
+            return text;
+          },
         });
         let opened: Awaited<ReturnType<typeof openNativeSandbox>>;
         try { opened = await openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
@@ -239,25 +246,26 @@ export function createNativeChatStream(options: {
           throw error;
         }
         const continuing = session.hasUnfinishedTurn();
-        if (continuing && !/^(继续|继续执行|continue)$/i.test(options.prompt.trim())) throw new Error("上一轮尚未完成，请先发送“继续执行”恢复原生 turn");
+        if (continuing && options.harness === "pi") piContinuationInput = options.prompt;
+        else if (continuing && !/^(继续|继续执行|continue)$/i.test(options.prompt.trim())) throw new Error("此 Harness 的暂停会话暂时只支持继续执行；请新建对话发送其他消息");
         waitForModelOutput(1);
-        stepDeadline = setTimeout(() => abortTimeout("本轮步骤执行超时"), limits.timeout.stepMs);
+        stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");
         if (await runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
         signal.throwIfAborted();
         invocationStarted = true;
         const result = continuing ? await agent.continueStream({ session, abortSignal: signal }) : await agent.stream({ session, prompt: options.prompt, abortSignal: signal });
-        let finalStepHasText = false, terminalWritten = false;
+        let terminalWritten = false;
         const terminalText = (controller: TransformStreamDefaultController<TextStreamPart<ToolSet>>, text: string) => {
           terminalWritten = true;
           controller.enqueue({ type: "text-start", id: "run-note" });
-          controller.enqueue({ type: "text-delta", id: "run-note", text: `\n\n${text}` });
+          controller.enqueue({ type: "text-delta", id: "run-note", text: `\n\n系统提示：${text}` });
           controller.enqueue({ type: "text-end", id: "run-note" });
         };
         const stream = result.stream.pipeThrough(projectErrors()).pipeThrough(normalizeChatToolErrors()).pipeThrough(new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
           async transform(part, controller) {
-            if (part.type === "start-step") { streamedStep++;finalStepHasText = false; }
+            if (part.type === "start-step") streamedStep++;
             if (["text-delta", "reasoning-delta", "tool-input-delta"].includes(part.type)) modelOutput();
-            if (part.type === "text-delta" && part.text.trim()) { finalStepHasText = true;await report("writing"); }
+            if (part.type === "text-delta" && part.text.trim()) await report("writing");
             if (part.type === "reasoning-delta") await report("reasoning");
             if (part.type === "finish" || part.type === "abort" || part.type === "error") { modelActive = false;clearModelDeadlines();clearTimeout(stepDeadline); }
             if (part.type === "error") errorText = chatErrorText(part.error);
@@ -270,15 +278,10 @@ export function createNativeChatStream(options: {
             if (part.type === "finish" && piCompletion?.finishReason === "length" && !terminalWritten) {
               const usage = piCompletion.outputTokens ? `（${piCompletion.outputTokens} token${piCompletion.reasoningTokens ? `，其中推理 ${piCompletion.reasoningTokens}` : ""}）` : "";
               errorText = `本轮达到模型输出上限${usage}，回答尚未完成`;
-              terminalText(controller, `${errorText}。已生成的内容和工具结果已保留。可以发送“继续回答”，或缩小本次问题的范围。`);
+              terminalText(controller, `${errorText}。已生成的内容和工具结果已保留。`);
             }
-            if (part.type === "finish" && !finalStepHasText && !terminalWritten) {
-              if (session!.hasUnfinishedTurn()) terminalText(controller, "本轮已暂停，已有工具结果已保留。发送“继续执行”继续剩余步骤。");
-              else {
-                errorText ||= "模型未返回正文，本轮未完成";
-                terminalText(controller, `${errorText}。已完成的工具结果会保留。`);
-              }
-            }
+            // A natural native stop can contain tools/reasoning without prose.
+            // Do not invent a failure or an assistant summary for that result.
             controller.enqueue(part);
           },
         }));

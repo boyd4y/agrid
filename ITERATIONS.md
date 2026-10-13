@@ -217,3 +217,5 @@
 2026-10-13 品牌与认证页面收尾：用户进一步明确面向个人和小团队，CRM 只是案例，最终定位为“AI 原生工作空间”，主文案“让想法，动起来。”；首页、登录/注册、SEO、PRODUCT/README 与品牌文档已统一。认证布局与左侧品牌矢量图已重做，旧人物/纸张插画不再用于认证页；表单使用共享 Field、输入标签、加载反馈与重复提交保护，原认证流程保留。桌面深浅主题真实浏览器检查无页面异常。按用户要求清理 screenshots 及临时浏览器产物并加入忽略项，保留测试代码和验证记录；本轮不再新增截图。
 
 2026-10-13 推理耗尽输出预算修复：只读核对实际原生结束原因，末轮length且output=reasoning=8192、text0；前轮正文也length，被旧逻辑误completed。官方Pi samplingParams显式使thinking off进入OpenRouter请求，默认输出预算16384并保留模型目录cap、nullable fallback修复；官方message_end观察末条assistant原始原因/usage，在metadata保存，length保留正文且明确标为未完成。真实native本机SSE覆盖reasoning-only/partial/normal stop，独立test DB验证失败持久化与下一输入续接，工具执行仍一次。未调用用户模型、未修改用户历史、不生成截图。
+
+2026-10-13 Agent Run 额外干预审核整改：实际暂停是平台默认16步限制导致（16模型steps、13成功tools），非模型主动停止。已按先列清单再整改流程记录 `docs/agent-run-audit.md`。默认步骤和四类超时限制全部关闭，仅显式配置才启用；Pi官方continuation/input extension接受普通追问，真实新输入进入原生provider历史，不吞消息/不重放工具。自然stop无正文不再改判failed或合成助手总结；真实length/error/abort保留并标为系统提示，删除固定下一步口令。移除原生聊天重做、旧消息编辑、分支切换入口，保留复制/导出/用户停止，恢复文案不预设原任务方向；简化任务和机械查询指令。权限、租约、防重放、原生保存一致性保留。隔离测试DB和本机原生SSE：routes10项（含用户主动停止）、startup-boundary2项、output-limit2项通过；生产/测试server类型检查和client类型检查通过，17次工具往返自然完成、空正文真实工具持久化后普通追问不重放均验证。未调用用户模型、未改用户历史、不生成截图；Codex/Claude已暂停会话改方向与远程真实运行仍明确为能力边界。

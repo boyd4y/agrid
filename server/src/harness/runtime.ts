@@ -55,6 +55,7 @@ export function createNativeAgent(options: {
   lifecycle?: Pick<NativeAgentSettings, "onStart" | "onStepStart" | "onLanguageModelCallStart" | "onLanguageModelCallEnd" | "onToolExecutionStart" | "onToolExecutionEnd" | "onStepEnd" | "onEnd">;
   stopWhen?: NativeAgentSettings["stopWhen"];
   onPiMessageEnd?: (completion: PiCompletion) => void;
+  consumePiContinuationInput?: () => string | undefined;
 }): NativeAgent {
   const env = options.env ?? process.env;
   if (options.mode === "local" && options.harness !== "pi")
@@ -90,10 +91,16 @@ export function createNativeAgent(options: {
       auth: {},
       reattachInProcess: false,
       thinkingLevel: "off",
-      // Observe the native result: harness-pi 1.0.151 normalizes length to stop.
-      // This hook neither modifies messages nor starts an additional model turn.
-      extensionFactories: options.onPiMessageEnd ? [(pi) => {
-        pi.on("message_end", (event) => {
+      extensionFactories: options.onPiMessageEnd || options.consumePiContinuationInput ? [(pi) => {
+        // continueStream resumes Pi with an empty input. Its official input hook
+        // submits the current follow-up as a native user message before execution.
+        if (options.consumePiContinuationInput) pi.on("input", (event) => {
+          if (event.text !== "") return { action: "continue" };
+          const text = options.consumePiContinuationInput!();
+          return text === undefined ? { action: "continue" } : { action: "transform", text };
+        });
+        // Observe the native result: harness-pi 1.0.151 normalizes length to stop.
+        if (options.onPiMessageEnd) pi.on("message_end", (event) => {
           if (event.message.role !== "assistant") return;
           options.onPiMessageEnd!({
             finishReason: event.message.stopReason,

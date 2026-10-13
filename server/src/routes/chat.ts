@@ -139,7 +139,7 @@ chatRoute.post("/", async (c) => {
       "你是 tabdo 的 AI 助手，使用产品内置 tools 完成操作。",
     "Agent-first：用户用对话建表、列、自动化、公式；表格 Grid/看板仍是核心数据视图，功能不削减。",
     "内置工具覆盖表格、行列、看板、表单、自动化和报告页面。只使用实际提供的工具，不要宣称完成工具不支持的操作。",
-    "改单元格、增删行列、看板移卡前，先 get_table 拿列定义，再用 query_rows（窗口/游标，禁止全表）取行。",
+    "修改数据时使用真实表格、字段与记录 ID；缺少上下文时按需用 get_table 和 query_rows 查询，不重复读取已确认的信息。查询使用窗口或游标。",
     "select 列必须传选项 id（如 todo/doing/done），不要传中文 label。",
     "创建表格间关联字段使用 add_column：type=relation，relation 配置目标表和可选反向字段。add_relation / set_relation / remove_relation 只绑定或解除已有字段的记录关联，columnId 必须是字段 UUID，recordIds 必须是目标记录 UUID 数组。工具失败时根据错误原因修正，未成功的操作不得宣称已完成。",
     "报告是包含多个图表、数字和文字组件的页面。先 create_report 创建页面，再 add_report_widget 添加组件；修改前 get_report 获取组件ID，get_report_data 验证实际数据。各组件可使用不同来源，不能把字段名称当字段UUID。",
@@ -158,7 +158,7 @@ chatRoute.post("/", async (c) => {
   try {
     const record = await prepareRuntimeRecord(lease, actor, { profileId: profile.id, harness, mode });
     c.req.raw.signal.throwIfAborted();
-    if (record.resumeState?.continueFrom && !/^(继续|继续执行|continue)$/i.test(lastText.trim())) throw new HTTPException(409, { message: "上一轮尚未完成，请发送“继续执行”恢复；不会重复已完成的工具" });
+    if (record.harness !== "pi" && record.resumeState?.continueFrom && !/^(继续|继续执行|continue)$/i.test(lastText.trim())) throw new HTTPException(409, { message: "此 Harness 的暂停会话暂时只支持继续执行；请新建对话发送其他消息" });
     const run = await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: messages[index - 1]?.id ?? null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
     return createUIMessageStreamResponse({ stream: createNativeChatStream({
       actor, lease, record, run, harness, modelId, piModel, instructions: `${system}\n${taskInstructions(record)}`, agentsDocument,

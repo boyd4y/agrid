@@ -483,12 +483,14 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
   }
 });
 
-test("native step limit suspends a turn and official continuation resumes without replaying tools", { timeout: 15_000 }, async () => {
+test("native step limit suspends a turn and ordinary follow-up officially resumes without replaying tools", { timeout: 15_000 }, async () => {
   let requests = 0, continuing = false;
+  const nativeRequests: { messages: { role: string; content: unknown }[] }[] = [];
   const tableName = `Continuation-${randomUUID()}`;
   const provider = createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
-    for await (const _chunk of request) { /* drain */ }
+    let raw = "";for await (const chunk of request) raw += chunk;
+    nativeRequests.push(JSON.parse(raw));
     requests++;
     response.writeHead(200, { "Content-Type": "text/event-stream" });
     const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "continue-test", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
@@ -507,18 +509,21 @@ test("native step limit suspends a turn and official continuation resumes withou
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const initialUser = { id: "continue-user-1", role: "user", parts: [{ type: "text", text: "创建并列出表格，然后说明结果" }] };
     const initial = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [initialUser] });
-    assert.equal(initial.status, 200);assert.match(await initial.text(), /本轮已暂停/);
+    assert.equal(initial.status, 200);const pausedStream = await initial.text();
+    assert(!pausedStream.includes("达到配置的 2 步上限") && !pausedStream.includes("本轮已暂停") && !pausedStream.includes('"id":"run-note"'), "native suspension does not synthesize assistant text");
     const pausedRequests = requests;assert(pausedRequests >= 2 && pausedRequests <= 3);
     const history = await loadMessages(thread.id, actor());
     const before = await (await req(`/threads/${thread.id}/runs`)).json();assert.equal(before.runs[0].status, "suspended");
     assert.equal(before.runs[0].canContinue, true);
     const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));assert(checkpoint.resumeState?.continueFrom);
     const reply = { id: history.headId, ...history.messages[1].content };
-    const different = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [initialUser, reply, { id: "different-user", role: "user", parts: [{ type: "text", text: "开始另一个任务" }] }] });
-    assert.equal(different.status, 409);assert.equal(requests, pausedRequests);
     continuing = true;
-    const resumed = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [initialUser, reply, { id: "continue-user-2", role: "user", parts: [{ type: "text", text: "继续执行" }] }] });
+    const followUp = "请补充刚才表格的查询结果，并说明统计口径";
+    const resumed = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [initialUser, reply, { id: "continue-user-2", role: "user", parts: [{ type: "text", text: followUp }] }] });
     assert.equal(resumed.status, 200);assert.match(await resumed.text(), /继续执行完成/);assert.equal(requests, pausedRequests + 1);
+    const nativeUsers = nativeRequests.at(-1)!.messages.filter((message) => message.role === "user");
+    assert(JSON.stringify(nativeUsers.at(-1)?.content).includes(followUp), `ordinary follow-up is passed to the native provider rather than discarded: ${JSON.stringify(nativeUsers)}`);
+    assert(JSON.stringify(nativeRequests.at(-1)).includes(tableName));
     const after = await (await req(`/threads/${thread.id}/runs`)).json();assert.equal(after.runs[0].status, "completed");assert.equal(after.runs.length, 2);
     assert(after.runs.every((run: { canContinue: boolean }) => !run.canContinue));
     const tables = await (await req("/tables")).json();assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1);
@@ -530,7 +535,48 @@ test("native step limit suspends a turn and official continuation resumes withou
   }
 });
 
-test("Pi keeps a real output budget for long context and marks reasoning-only endings failed", async () => {
+test("default native tool loop completes seventeen tool steps without a hidden pause", { timeout: 20_000 }, async () => {
+  const calls: { messages: { role: string; content: unknown }[] }[] = [];
+  const provider = createServer(async (request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
+    }
+    let raw = "";for await (const chunk of request) raw += chunk;
+    calls.push(JSON.parse(raw));
+    response.writeHead(200, { "Content-Type": "text/event-stream" });
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "unbounded-steps", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    write({ role: "assistant" });
+    if (calls.length <= 17) {
+      write({ tool_calls: [{ index: 0, id: `unbounded-${calls.length}`, type: "function", function: { name: "list_tables", arguments: "{}" } }] });write({}, "tool_calls");
+    } else { write({ content: "十七次真实工具查询已完成，没有隐藏的步骤暂停。" });write({}, "stop"); }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
+  const address = provider.address();assert(address && typeof address !== "string");
+  const previousURL = process.env.OPENROUTER_BASE_URL, previousSteps = process.env.AI_CHAT_MAX_STEPS;
+  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-unbounded-provider";
+  delete process.env.AI_CHAT_MAX_STEPS;
+  try {
+    const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
+    const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "unbounded-user", role: "user", parts: [{ type: "text", text: "连续核对十七次表格目录，再说明完成情况" }] }] });
+    assert.equal(response.status, 200);const stream = await response.text();
+    assert.match(stream, /十七次真实工具查询已完成/);assert(!stream.includes("本轮已暂停"));
+    assert.equal(calls.length, 18, "seventeen actual tool round trips reach the final text request");
+    assert.equal(calls.at(-1)!.messages.filter((message) => message.role === "tool").length, 17);
+    assert(stream.includes('"completedTools":17'), "all seventeen tool executions completed successfully");
+    const runs = await (await req(`/threads/${thread.id}/runs`)).json();
+    assert.equal(runs.runs[0].status, "completed");assert.equal(runs.runs[0].canContinue, false);
+    const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
+    assert(checkpoint.resumeState);assert(!checkpoint.resumeState.continueFrom);
+  } finally {
+    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    if (previousSteps === undefined) delete process.env.AI_CHAT_MAX_STEPS;else process.env.AI_CHAT_MAX_STEPS = previousSteps;
+    provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
+});
+
+test("Pi keeps a real output budget for long context and reports actual length endings as output-limit failures", async () => {
   const budgets: number[] = [];
   const provider = createServer(async (request, response) => {
     if (request.method === "GET") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
@@ -556,14 +602,71 @@ test("Pi keeps a real output budget for long context and marks reasoning-only en
     assert.deepEqual(budgets, [8192, 8192], "native SDK must not clamp a long context to a one-token reply");
     const history = await loadMessages(thread.id, actor());
     const second = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [first, { id: history.headId, ...history.messages[1].content }, { id: "budget-user-2", role: "user", parts: [{ type: "text", text: "继续说明" }] }] });
-    assert.match(await second.text(), /模型未返回正文，本轮未完成/);
+    assert.match(await second.text(), /系统提示：.*模型输出上限/);
     const runs = (await (await req(`/threads/${thread.id}/runs`)).json()).runs;
-    assert.equal(runs[0].status, "failed");assert.match(runs[0].error, /未返回正文/);assert.equal(runs[1].status, "completed");
+    assert.equal(runs[0].status, "failed");assert.match(runs[0].error, /输出上限/);assert.equal(runs[1].status, "completed");
     assert.equal(budgets[2], 8192);
-    const persisted = await loadMessages(thread.id, actor());assert.match(JSON.stringify(persisted.messages.at(-1)?.content), /模型未返回正文/);
+    const persisted = await loadMessages(thread.id, actor());assert.match(JSON.stringify(persisted.messages.at(-1)?.content), /模型输出上限/);
   } finally {
     process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
     if (previousBudget === undefined) delete process.env.PI_MAX_OUTPUT_TOKENS;else process.env.PI_MAX_OUTPUT_TOKENS = previousBudget;
+    provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
+});
+
+test("natural empty stop completes with real tool results and a new input does not replay the tool", { timeout: 15_000 }, async () => {
+  const calls: { messages: { role: string; content: unknown }[] }[] = [];
+  const tableName = `Empty-stop-${randomUUID()}`;
+  const provider = createServer(async (request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
+    }
+    let raw = "";for await (const chunk of request) raw += chunk;
+    calls.push(JSON.parse(raw));response.writeHead(200, { "Content-Type": "text/event-stream" });
+    const write = (delta: unknown, finish_reason: string | null = null, usage?: unknown) => response.write(`data: ${JSON.stringify({ id: "empty-stop", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }], ...(usage ? { usage } : {}) })}\n\n`);
+    write({ role: "assistant" });
+    if (calls.length === 1) {
+      write({ tool_calls: [{ index: 0, id: "empty-stop-create", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] });write({}, "tool_calls");
+    } else if (calls.length === 2) {
+      write({ reasoning_content: "The actual tool result has been verified." });
+      write({}, "stop", { prompt_tokens: 100, completion_tokens: 12, total_tokens: 112, completion_tokens_details: { reasoning_tokens: 12 } });
+    } else { write({ content: "沿用已保存的表格，补充说明。" });write({}, "stop"); }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
+  const address = provider.address();assert(address && typeof address !== "string");
+  const previousURL = process.env.OPENROUTER_BASE_URL;
+  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-empty-stop-provider";
+  try {
+    const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
+    const initialUser = { id: "empty-stop-user-1", role: "user", parts: [{ type: "text", text: "创建表格并核对真实结果" }] };
+    const first = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [initialUser] });
+    assert.equal(first.status, 200);const stream = await first.text();
+    assert.equal(calls.length, 2);assert(stream.includes('"toolCallId":"empty-stop-create"'));
+    assert(!stream.includes('"type":"text-delta"'), "natural stop without prose receives no platform summary");
+    assert(!stream.includes("未返回正文") && !stream.includes("系统提示") && !stream.includes("本轮未完成"));
+    const firstRuns = await (await req(`/threads/${thread.id}/runs`)).json();
+    assert.equal(firstRuns.runs[0].status, "completed");assert.equal(firstRuns.runs[0].error, null);assert.equal(firstRuns.runs[0].canContinue, false);
+    const history = await loadMessages(thread.id, actor()), assistant = history.messages.at(-1)!;
+    const persistedParts: unknown = assistant.content.parts;
+    assert(Array.isArray(persistedParts), "durable assistant has native message parts");
+    const parts = persistedParts as { type: string; state?: string }[];
+    assert(!parts.some((part) => part.type === "text"), "durable assistant preserves tools/reasoning without synthetic prose");
+    assert(parts.some((part) => part.type === "tool-create_table" && part.state === "output-available"));
+    const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
+    assert(checkpoint.resumeState);assert(!checkpoint.resumeState.continueFrom);
+    const followUp = "请解释刚才已保存表格的用途，不要再次创建";
+    const next = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [...history.messages.map((message) => ({ id: message.id, ...message.content })), { id: "empty-stop-user-2", role: "user", parts: [{ type: "text", text: followUp }] }] });
+    assert.equal(next.status, 200);assert.match(await next.text(), /沿用已保存的表格/);assert.equal(calls.length, 3);
+    assert(JSON.stringify(calls[2].messages).includes(tableName));
+    assert(JSON.stringify(calls[2].messages.filter((message) => message.role === "user").at(-1)?.content).includes(followUp));
+    const tables = await (await req("/tables")).json();
+    assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1, "the committed tool is not replayed after an empty stop");
+    const runs = await (await req(`/threads/${thread.id}/runs`)).json();
+    assert.equal(runs.runs.length, 2);assert(runs.runs.every((run: { status: string }) => run.status === "completed"));
+  } finally {
+    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
 });

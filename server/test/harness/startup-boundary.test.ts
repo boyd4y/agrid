@@ -123,17 +123,23 @@ test("Pi startup failures and early cancellation retain native state and allow o
     assert.match(nativeHistory, /FIRST_ACTUAL_NATIVE_INPUT/);assert.match(nativeHistory, /committed/);assert.match(nativeHistory, /ONLY_THIS_NEW_INPUT/);
     assert(!nativeHistory.includes("NEVER_SUBMITTED"));assert.equal(mutations, 1);
 
-    // Restored unfinished sessions must retain continuation, including rejection after createSession.
+    // Restored unfinished sessions accept an actual follow-up through official
+    // continuation instead of requiring a fixed command or replaying old tools.
     mode = "suspend";inMode = 0;
-    const suspendedThread = await newThread(), suspended = await prepare(suspendedThread, "SUSPENDED_NATIVE_INPUT");await consume(suspended, tools);
+    const suspendedThread = await newThread(), suspended = await prepare(suspendedThread, "SUSPENDED_NATIVE_INPUT");
+    const suspendedChunks = await consume(suspended, tools);
+    assert(!suspendedChunks.includes('"id":"run-note"') && !suspendedChunks.includes("达到配置的 2 步上限"), "suspension preserves native results without inserting assistant prose");
     const suspendedState = await runtime(suspendedThread);assert(suspendedState.resumeState?.continueFrom);assert.equal(mutations, 2);
     const pausedCalls = calls.length;
-    const wrong = await prepare(suspendedThread, "NEVER_SUBMITTED_WRONG_PROMPT");assert.match(await consume(wrong, tools), /尚未完成/);
-    record = await runtime(suspendedThread);assert.deepEqual(record.resumeState, suspendedState.resumeState);assert.deepEqual(record.workspace, suspendedState.workspace);assert.equal(calls.length, pausedCalls);
     assert.equal((await listNativeRuns(suspendedThread, actor))[0].canContinue, true);
     mode = "continued";inMode = 0;
-    await consume(await prepare(suspendedThread, "继续执行"), tools);
-    assert.equal(mutations, 2);assert(!JSON.stringify(calls.at(-1)).includes("NEVER_SUBMITTED_WRONG_PROMPT"));
+    const followUp = "FOLLOW_UP_INCLUDE_THE_VERIFIED_TOTAL_AND_EXPLAIN_THE_SCOPE";
+    assert.match(await consume(await prepare(suspendedThread, followUp), tools), /Native result retained/);
+    assert.equal(calls.length, pausedCalls + 1);assert.equal(mutations, 2);
+    const continuedUsers = calls.at(-1)!.messages.filter((message) => message.role === "user");
+    assert(JSON.stringify(continuedUsers.at(-1)?.content).includes(followUp), `official continuation receives the actual follow-up, not an empty input: ${JSON.stringify(continuedUsers)}`);
+    assert(JSON.stringify(calls.at(-1)).includes("SUSPENDED_NATIVE_INPUT"));
+    assert(JSON.stringify(calls.at(-1)).includes("committed"));
     assert.equal((await listNativeRuns(suspendedThread, actor))[0].status, "completed");
   } finally {
     process.env.PI_API_KEY = "";process.env.PI_BASE_URL = "";
