@@ -66,7 +66,7 @@ pnpm dev               # :5173 前端 + :3001 API
 
 | | |
 |--|--|
-| email | `demo@agrid.app` |
+| email | `demo@tabdo.ai` |
 | password | `Demo1234!` |
 
 幂等：已存在则刷新密码并确保工作区成员关系。

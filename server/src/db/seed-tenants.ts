@@ -26,7 +26,7 @@ import {
   DEMO_ORG_SLUG,
 } from "./seed-demo.js";
 
-export const TENANT_B_EMAIL = "acme@agrid.app";
+export const TENANT_B_EMAIL = "acme@tabdo.ai";
 export const TENANT_B_PASSWORD = "Acme1234!";
 export const TENANT_B_ORG_SLUG = "acme-workspace";
 export const TENANT_B_ORG_NAME = "Acme Workspace";
