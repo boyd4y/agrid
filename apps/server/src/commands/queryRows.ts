@@ -14,6 +14,7 @@ import {
   type ColumnDef,
   type CellValue,
   isFilterConditionComplete,
+  filterTypeForColumn,
 } from "@tabdo/shared";
 
 const UNGROUPED = "__none__";
@@ -38,6 +39,10 @@ function isEmptySql(columnId: string, type: string, cols: ColumnDef[]): SQL {
   if (type === "checkbox") {
     return sql`(${t} IS NULL OR ${t} = '' OR ${t} = 'false')`;
   }
+  if (type === "formula") {
+    // Auto formula rows may contain booleans or text; only native JSON false is unchecked.
+    return sql`(${t} IS NULL OR ${t} = '' OR (jsonb_typeof(${rows.cells} -> ${columnId}) = 'boolean' AND ${t} = 'false'))`;
+  }
   return sql`(${t} IS NULL OR ${t} = '')`;
 }
 
@@ -49,8 +54,15 @@ function conditionSql(
   const col = colMap.get(f.columnId);
   if (!col) return null;
   const cols=[...colMap.values()];
-  const type = col.type==="rollup" ? (["earliest","latest"].includes(col.config.rollup?.operation??"")?"date":"number") : col.type;
-  const t = cellTextExpr(f.columnId,cols);
+  const type = filterTypeForColumn(col, f.value);
+  const raw = cellTextExpr(f.columnId,cols);
+  // Computation failures are visible cell values, but cannot be compared as dates/numbers.
+  const t = col.type === "formula" && type === "date"
+    ? sql`CASE WHEN ${raw} LIKE '#ERR:%' THEN NULL ELSE ${raw} END`
+    : raw;
+  const numeric = col.type === "formula"
+    ? sql`CASE WHEN ${raw} ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' THEN (${raw})::numeric ELSE NULL END`
+    : sql`(${t})::numeric`;
   if(type==="relation"&&["eq","neq","contains","not_contains"].includes(f.op)){
     const id=Array.isArray(f.value)?f.value[0]:f.value;
     if(typeof id!=="string"||! /^[0-9a-f-]{36}$/i.test(id))return sql`false`;
@@ -72,12 +84,12 @@ function conditionSql(
           : sql`(${t} IS NULL OR ${t} = '' OR ${t} = 'false' OR ${t} = '0')`;
       }
       if (type === "number") {
-        return sql`(${t})::numeric = ${Number(v)}::numeric`;
+        return sql`${numeric} = ${Number(v)}::numeric`;
       }
       return sql`${t} = ${String(v ?? "")}`;
     case "neq":
       if (type === "number") {
-        return sql`(${t})::numeric IS DISTINCT FROM ${Number(v)}::numeric`;
+        return sql`${numeric} IS DISTINCT FROM ${Number(v)}::numeric`;
       }
       return sql`${t} IS DISTINCT FROM ${String(v ?? "")}`;
     case "contains":
@@ -108,10 +120,10 @@ function conditionSql(
         return sql`${t} <= ${sv}`;
       }
       const n = Number(v);
-      if (f.op === "gt") return sql`(${t})::numeric > ${n}::numeric`;
-      if (f.op === "gte") return sql`(${t})::numeric >= ${n}::numeric`;
-      if (f.op === "lt") return sql`(${t})::numeric < ${n}::numeric`;
-      return sql`(${t})::numeric <= ${n}::numeric`;
+      if (f.op === "gt") return sql`${numeric} > ${n}::numeric`;
+      if (f.op === "gte") return sql`${numeric} >= ${n}::numeric`;
+      if (f.op === "lt") return sql`${numeric} < ${n}::numeric`;
+      return sql`${numeric} <= ${n}::numeric`;
     }
     default:
       return null;

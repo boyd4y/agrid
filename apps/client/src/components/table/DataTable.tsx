@@ -49,6 +49,7 @@ import type {
 import { COLUMN_TYPE_LABELS } from "@/types/table";
 import {
   validateCell,
+  isFilterConditionComplete,
   type FilterCondition,
   type FilterLogic,
 } from "@tabdo/shared";
@@ -112,6 +113,14 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
   });
 
 
+
+  // Keep the unfiltered sample stable while filtering, including queries with no matches.
+  const filterSamples = useRef<{ tableId: string; rows: RowData[] }>({ tableId: table.id, rows: [] });
+  if (filterSamples.current.tableId !== table.id) filterSamples.current = { tableId: table.id, rows: [] };
+  if (!windowed.loading && !filters.some(isFilterConditionComplete)) {
+    const samples = windowed.rowsSnapshot();
+    if (samples.length) filterSamples.current.rows = samples;
+  }
 
   const updateLocal = useCallback(
     (next: FullTable) => onChange(next),
@@ -351,6 +360,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
 
       <div className="shrink-0">
         <FilterBar
+          sampleRows={filterSamples.current.rows}
           columns={sortedCols}
           filters={filters}
           filterLogic={filterLogic}

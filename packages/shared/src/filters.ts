@@ -32,6 +32,19 @@ export type TableQuery = {
   hiddenColumnIds?: string[];
 };
 
+/** Resolve computed filter comparisons without treating dates/booleans as numbers. */
+export function filterTypeForColumn(column: ColumnDef, comparisonValue?: CellValue): ColumnType | string {
+  if (column.type === "rollup") return ["earliest", "latest"].includes(column.config.rollup?.operation ?? "") ? "date" : "number";
+  if (column.type !== "formula") return column.type;
+  const declared = column.config.formulaResultType;
+  if (declared && declared !== "auto") return declared;
+  // Auto formulas preserve their native value; typed comparisons identify the scalar kind.
+  if (typeof comparisonValue === "boolean") return "checkbox";
+  if (typeof comparisonValue === "number") return "number";
+  if (typeof comparisonValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(comparisonValue)) return "date";
+  return "formula";
+}
+
 export function opsForType(type: ColumnType | string): FilterOp[] {
   switch (type) {
     case "number":
@@ -118,9 +131,9 @@ function matchCondition(
 ): boolean {
   switch (op) {
     case "is_empty":
-      return isEmpty(cell);
+      return isEmpty(cell) || (type === "checkbox" && cell === false);
     case "is_not_empty":
-      return !isEmpty(cell);
+      return !(isEmpty(cell) || (type === "checkbox" && cell === false));
     case "eq":
       if (type === "checkbox") return Boolean(cell) === Boolean(value);
       if (Array.isArray(cell)) return false;
@@ -160,6 +173,7 @@ function matchCondition(
     case "gte":
     case "lt":
     case "lte": {
+      if (typeof cell === "string" && cell.startsWith("#ERR:")) return false;
       const a = type === "date" ? String(cell ?? "") : Number(cell);
       const b = type === "date" ? String(value ?? "") : Number(value);
       if (
@@ -207,14 +221,7 @@ export function applyFilters(
       const checks = filters.map((f) => {
         const col = colMap[f.columnId];
         if (!col) return true;
-        const type =
-          col.type === "rollup"
-            ? ["earliest", "latest"].includes(
-                col.config.rollup?.operation ?? "",
-              )
-              ? "date"
-              : "number"
-            : col.type;
+        const type = filterTypeForColumn(col, filterNeedsValue(f.op) ? f.value : row.cells[f.columnId]);
         return matchCondition(
           row.cells[f.columnId] ?? null,
           f.op,

@@ -11,6 +11,7 @@ import chatZh from "./locales/zh-CN/chat.json";
 import docsZh from "./locales/zh-CN/docs.json";
 import marketingZh from "./locales/zh-CN/marketing.json";
 import authZh from "./locales/zh-CN/auth.json";
+import filtersZh from "./locales/zh-CN/filters.json";
 import tableZh from "./locales/zh-CN/table.json";
 import formZh from "./locales/zh-CN/form.json";
 import automationZh from "./locales/zh-CN/automation.json";
@@ -24,6 +25,7 @@ import chatEn from "./locales/en/chat.json";
 import docsEn from "./locales/en/docs.json";
 import marketingEn from "./locales/en/marketing.json";
 import authEn from "./locales/en/auth.json";
+import filtersEn from "./locales/en/filters.json";
 import tableEn from "./locales/en/table.json";
 import formEn from "./locales/en/form.json";
 import automationEn from "./locales/en/automation.json";
@@ -89,6 +91,7 @@ void i18n.use(initReactI18next).init({
       marketing: marketingZh,
       auth: authZh,
       table: tableZh,
+      filters: filtersZh,
       form: formZh,
       automation: automationZh,
       reports: reportsZh,
@@ -104,6 +107,7 @@ void i18n.use(initReactI18next).init({
       marketing: marketingEn,
       auth: authEn,
       table: tableEn,
+      filters: filtersEn,
       form: formEn,
       automation: automationEn,
       reports: reportsEn,
@@ -113,7 +117,7 @@ void i18n.use(initReactI18next).init({
   lng: initial,
   fallbackLng: "zh-CN",
   defaultNS: "common",
-  ns: ["icons", "common", "errors", "app", "chat", "docs", "marketing", "auth", "table", "form", "automation", "reports", "agents"],
+  ns: ["icons", "common", "errors", "app", "chat", "docs", "marketing", "auth", "table", "filters", "form", "automation", "reports", "agents"],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

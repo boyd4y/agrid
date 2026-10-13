@@ -1,3 +1,4 @@
+import { changedFilterOperator, filterOpsForColumn } from "@/lib/filter-value";
 import { FilterValueInput } from "@/components/table/FilterBar";
 import { FormFieldControl } from "@/components/form/FormFieldControls";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
@@ -19,11 +20,10 @@ import {
   SelectValue,
 } from "@tabdo/ui/components/select";
 import { api, type MemberOption } from "@/lib/api";
-import type { ColumnDef, CellValue, FullTable } from "@/types/table";
+import type { ColumnDef, CellValue, FullTable, RowData } from "@/types/table";
 import {
   FILTER_OP_LABELS,
   filterNeedsValue,
-  opsForType,
   type AutomationAction,
   type AutomationRule,
   type AutomationRun,
@@ -400,6 +400,18 @@ export function AutomationEditor({
   onSaved,
 }: EditorProps) {
   const { t } = useTranslation("automation");
+  const [sampleRows, setSampleRows] = useState<RowData[]>([]);
+  const needsFormulaSamples = columns.some(column => column.type === "formula" && (!column.config.formulaResultType || column.config.formulaResultType === "auto"));
+  useEffect(() => {
+    let disposed = false;
+    setSampleRows([]);
+    if (needsFormulaSamples) {
+      void api.queryRowsPage(tableId)
+        .then(page => { if (!disposed) setSampleRows(page.rows); })
+        .catch(() => { /* Declared types remain available without samples. */ });
+    }
+    return () => { disposed = true; };
+  }, [tableId, needsFormulaSamples]);
   const [name, setName] = useState(initial?.name ?? t("newAutomation"));
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [trigger, setTrigger] = useState<AutomationTrigger>(
@@ -672,7 +684,7 @@ export function AutomationEditor({
                       {
                         id: newId("c"),
                         columnId: col.id,
-                        op: opsForType(col.type)[0],
+                        op: filterOpsForColumn(col, sampleRows)[0],
                         value: null,
                       },
                     ]);
@@ -691,7 +703,7 @@ export function AutomationEditor({
               <div className="space-y-2">
                 {conditions.map((c) => {
                   const col = columns.find((x) => x.id === c.columnId);
-                  const ops = opsForType(col?.type ?? "text");
+                  const ops = filterOpsForColumn(col, sampleRows);
                   return (
                     <div
                       key={c.id}
@@ -707,7 +719,7 @@ export function AutomationEditor({
                                 ? {
                                     ...f,
                                     columnId,
-                                    op: opsForType(nc?.type ?? "text")[0],
+                                    op: filterOpsForColumn(nc, sampleRows)[0],
                                     value: null,
                                   }
                                 : f,
@@ -735,7 +747,7 @@ export function AutomationEditor({
                         onValueChange={(op) =>
                           setConditions((prev) =>
                             prev.map((f) =>
-                              f.id === c.id ? { ...f, op: op as FilterOp } : f,
+                              f.id === c.id ? { ...f, ...changedFilterOperator(op as FilterOp) } : f,
                             ),
                           )
                         }
@@ -753,6 +765,8 @@ export function AutomationEditor({
                       </Select>
                       {filterNeedsValue(c.op) && col && (
                         <FilterValueInput
+                          key={`${c.columnId}:${c.op}`}
+                          sampleRows={sampleRows}
                           column={
                             columns.find((column) => column.id === c.columnId)!
                           }

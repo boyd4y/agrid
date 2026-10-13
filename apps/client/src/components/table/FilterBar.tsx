@@ -1,5 +1,13 @@
 import { RelationPicker } from "./RelationPicker";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { FormFieldControl } from "@/components/form/FormFieldControls";
+import { useMemberOptions } from "@/hooks/useMemberOptions";
+import {
+  changedFilterOperator,
+  filterOpsForColumn,
+  filterValueType,
+  parseFilterNumber,
+} from "@/lib/filter-value";
 import { Plus, Trash2, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
@@ -7,6 +15,7 @@ import { DatePicker } from "@/components/controls/date-picker";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -17,7 +26,7 @@ import { useTranslation } from "react-i18next";
 import {
   filterNeedsValue,
   isFilterConditionComplete,
-  opsForType,
+  type RowData,
   type FilterCondition,
   type FilterLogic,
   type FilterOp,
@@ -30,6 +39,7 @@ type Props = {
   onChange: (filters: FilterCondition[], logic: FilterLogic) => void;
   /** Default collapsed to reduce density; expands when filters exist or user opens. */
   defaultOpen?: boolean;
+  sampleRows?: RowData[];
 };
 
 export function FilterBar({
@@ -38,6 +48,7 @@ export function FilterBar({
   filterLogic,
   onChange,
   defaultOpen = false,
+  sampleRows = [],
 }: Props) {
   const { t } = useTranslation("table");
   const [open, setOpen] = useState(defaultOpen || filters.length > 0);
@@ -54,7 +65,7 @@ export function FilterBar({
   const add = () => {
     const col = visibleCols[0];
     if (!col) return;
-    const op = opsForType(col.type)[0];
+    const op = filterOpsForColumn(col, sampleRows)[0];
     setOpen(true);
     onChange(
       [
@@ -71,7 +82,7 @@ export function FilterBar({
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-border bg-muted/60 px-3 py-2 outline-none ring-0 focus-within:outline-none focus-within:ring-0 [&_*]:outline-none">
+    <div className="mb-3 rounded-lg border border-border bg-muted/60 px-3 py-2">
       <div className="flex items-center gap-2">
         <Button
           type="button"
@@ -156,12 +167,13 @@ export function FilterBar({
               {filters.map((f, idx) => {
                 const col =
                   columns.find((c) => c.id === f.columnId) ?? visibleCols[0];
-                const ops = opsForType(col?.type ?? "text");
+                const ops = filterOpsForColumn(col, sampleRows);
                 const needsValue = filterNeedsValue(f.op);
                 return (
                   <div
                     key={f.id}
-                    className="flex flex-nowrap items-center gap-1.5 overflow-x-auto"
+                    data-testid="filter-condition"
+                    className="flex flex-wrap items-center gap-1.5"
                   >
                     {idx > 0 ? (
                       <span className="w-8 text-center text-[10px] font-medium uppercase text-muted-foreground">
@@ -174,7 +186,10 @@ export function FilterBar({
                       value={f.columnId}
                       onValueChange={(v) => {
                         const nextCol = columns.find((c) => c.id === v)!;
-                        const nextOp = opsForType(nextCol.type)[0];
+                        const nextOp = filterOpsForColumn(
+                          nextCol,
+                          sampleRows,
+                        )[0];
                         update(f.id, {
                           columnId: v,
                           op: nextOp,
@@ -184,40 +199,48 @@ export function FilterBar({
                     >
                       <SelectTrigger
                         size="sm"
-                        className="w-[120px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
+                        aria-label={t("columnPlaceholder")}
+                        className="w-[120px] shrink-0"
                       >
                         <SelectValue placeholder={t("columnPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {visibleCols.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
+                        <SelectGroup>
+                          {visibleCols.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                     <Select
                       value={f.op}
                       onValueChange={(v) =>
-                        update(f.id, { op: v as FilterOp, value: null })
+                        update(f.id, changedFilterOperator(v as FilterOp))
                       }
                     >
                       <SelectTrigger
                         size="sm"
-                        className="w-[110px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
+                        aria-label={t("opPlaceholder")}
+                        className="w-[110px] shrink-0"
                       >
                         <SelectValue placeholder={t("opPlaceholder")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {ops.map((op) => (
-                          <SelectItem key={op} value={op}>
-                            {t(`filterOps.${op}`)}
-                          </SelectItem>
-                        ))}
+                        <SelectGroup>
+                          {ops.map((op) => (
+                            <SelectItem key={op} value={op}>
+                              {t(`filterOps.${op}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                     {needsValue && col && (
                       <FilterValueInput
+                        key={`${col.id}:${f.op}`}
+                        sampleRows={sampleRows}
                         column={col}
                         value={f.value ?? null}
                         onChange={(v) => update(f.id, { value: v })}
@@ -252,15 +275,33 @@ export function FilterValueInput({
   column,
   value,
   onChange,
+  sampleRows = [],
 }: {
   column: ColumnDef;
   value: CellValue;
   onChange: (v: CellValue) => void;
+  sampleRows?: Pick<RowData, "cells">[];
 }) {
   const { t } = useTranslation("table");
-  if (column.type === "relation")
+  const { t: tf } = useTranslation("filters");
+  const type = filterValueType(column, sampleRows);
+  const label = tf("valueFor", { name: column.name });
+  if (type === "person")
     return (
-      <div className="w-44 shrink-0">
+      <PersonFilterInput
+        column={column}
+        value={value}
+        onChange={onChange}
+        label={label}
+      />
+    );
+  if (type === "relation")
+    return (
+      <div
+        className="w-44 shrink-0"
+        data-testid="filter-value"
+        data-filter-type={type}
+      >
         <RelationPicker
           column={{
             ...column,
@@ -269,22 +310,37 @@ export function FilterValueInput({
               relation: { ...column.config.relation!, limit: "one" },
             },
           }}
-          value={typeof value === "string" ? [value] : []}
+          value={
+            typeof value === "string"
+              ? [value]
+              : Array.isArray(value)
+                ? value.slice(0, 1)
+                : []
+          }
           onChange={(ids) => onChange(ids[0] ?? null)}
         />
       </div>
     );
-  if (column.type === "select" || column.type === "multi_select") {
+  if (type === "select" || type === "multi_select") {
     const options = column.config?.options ?? [];
-    const current = options.find((o) => o.id === value);
+    const selected =
+      typeof value === "string"
+        ? value
+        : Array.isArray(value)
+          ? value[0]
+          : null;
+    const current = options.find((o) => o.id === selected);
     return (
       <Select
-        value={typeof value === "string" && value ? value : "__empty__"}
+        value={selected || "__empty__"}
         onValueChange={(v) => onChange(v === "__empty__" ? null : v)}
       >
         <SelectTrigger
           size="sm"
-          className="h-8 w-[160px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-ring data-[state=open]:!ring-1 data-[state=open]:!ring-ring"
+          className="w-44 shrink-0"
+          aria-label={label}
+          data-testid="filter-value"
+          data-filter-type={type}
         >
           {current ? (
             <SelectChip option={current} />
@@ -293,19 +349,19 @@ export function FilterValueInput({
           )}
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__empty__">
-            <span className="text-muted-foreground">{t("selectEllipsis")}</span>
-          </SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o.id} value={o.id} className="pl-8">
-              <SelectChip option={o} />
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            <SelectItem value="__empty__">{t("selectEllipsis")}</SelectItem>
+            {options.map((option) => (
+              <SelectItem key={option.id} value={option.id}>
+                <SelectChip option={option} />
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     );
   }
-  if (column.type === "checkbox") {
+  if (type === "checkbox")
     return (
       <Select
         value={value === true ? "1" : value === false ? "0" : "__empty__"}
@@ -313,58 +369,122 @@ export function FilterValueInput({
       >
         <SelectTrigger
           size="sm"
-          className="w-[100px] shrink-0 !ring-0 focus-visible:!ring-1 focus-visible:!ring-[rgba(55,53,47,0.14)] data-[state=open]:!ring-1 data-[state=open]:!ring-[rgba(55,53,47,0.14)]"
+          className="w-32 shrink-0"
+          aria-label={label}
+          data-testid="filter-value"
+          data-filter-type={type}
         >
           <SelectValue placeholder="—" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__empty__">—</SelectItem>
-          <SelectItem value="1">{t("checked")}</SelectItem>
-          <SelectItem value="0">{t("unchecked")}</SelectItem>
+          <SelectGroup>
+            <SelectItem value="__empty__">—</SelectItem>
+            <SelectItem value="1">{t("checked")}</SelectItem>
+            <SelectItem value="0">{t("unchecked")}</SelectItem>
+          </SelectGroup>
         </SelectContent>
       </Select>
     );
-  }
-  if (
-    column.type === "number" ||
-    (column.type === "rollup" &&
-      !["earliest", "latest"].includes(column.config.rollup?.operation ?? ""))
-  ) {
+  if (type === "number")
     return (
-      <Input
-        size="sm"
-        inputMode="decimal"
-        className="w-28 shrink-0"
-        value={typeof value === "number" ? String(value) : ""}
-        onChange={(e) =>
-          onChange(e.target.value === "" ? null : Number(e.target.value))
-        }
-        placeholder={t("numberPlaceholder")}
-      />
+      <NumberFilterInput value={value} onChange={onChange} label={label} />
     );
-  }
-  if (
-    column.type === "date" ||
-    (column.type === "rollup" &&
-      ["earliest", "latest"].includes(column.config.rollup?.operation ?? ""))
-  ) {
+  if (type === "date")
     return (
-      <DatePicker
-        value={typeof value === "string" ? value : null}
-        onChange={(v) => onChange(v)}
-        dateFormat={column.config?.dateFormat ?? "YYYY-MM-DD"}
-        className="w-40 shrink-0"
-        placeholder={column.config?.dateFormat ?? "YYYY-MM-DD"}
-      />
+      <div
+        className="w-44 shrink-0"
+        data-testid="filter-value"
+        data-filter-type={type}
+      >
+        <DatePicker
+          value={typeof value === "string" ? value : null}
+          onChange={onChange}
+          dateFormat={column.config?.dateFormat ?? "YYYY-MM-DD"}
+          placeholder={label}
+        />
+      </div>
     );
-  }
   return (
     <Input
       size="sm"
-      className="w-[160px] shrink-0"
+      className="w-44 shrink-0"
+      aria-label={label}
+      data-testid="filter-value"
+      data-filter-type={type}
       value={typeof value === "string" ? value : ""}
       onChange={(e) => onChange(e.target.value || null)}
       placeholder={t("valuePlaceholder")}
+    />
+  );
+}
+
+function PersonFilterInput({
+  column,
+  value,
+  onChange,
+  label,
+}: {
+  column: ColumnDef;
+  value: CellValue;
+  onChange: (value: CellValue) => void;
+  label: string;
+}) {
+  const members = useMemberOptions();
+  return (
+    <div
+      className="w-44 shrink-0"
+      data-testid="filter-value"
+      data-filter-type="person"
+    >
+      <FormFieldControl
+        column={column}
+        value={value}
+        onChange={onChange}
+        members={members}
+        placeholder={label}
+      />
+    </div>
+  );
+}
+
+function NumberFilterInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: CellValue;
+  onChange: (value: CellValue) => void;
+  label: string;
+}) {
+  const { t } = useTranslation("filters");
+  const [draft, setDraft] = useState(
+    typeof value === "number" ? String(value) : "",
+  );
+  const emitted = useRef(value);
+  useEffect(() => {
+    if (!Object.is(value, emitted.current)) {
+      setDraft(typeof value === "number" ? String(value) : "");
+      emitted.current = value;
+    }
+  }, [value]);
+  const invalid = Boolean(draft.trim()) && parseFilterNumber(draft) === null;
+  return (
+    <Input
+      size="sm"
+      inputMode="decimal"
+      className="w-32 shrink-0"
+      aria-label={label}
+      aria-invalid={invalid}
+      title={invalid ? t("invalidNumber") : undefined}
+      data-testid="filter-value"
+      data-filter-type="number"
+      value={draft}
+      onChange={(event) => {
+        const raw = event.target.value;
+        setDraft(raw);
+        emitted.current = parseFilterNumber(raw);
+        onChange(emitted.current);
+      }}
     />
   );
 }

@@ -1,0 +1,4 @@
+{
+  "valueFor": "{{name}}的筛选值",
+  "invalidNumber": "请输入有限数字，支持负数和小数"
+}
