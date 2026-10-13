@@ -1,4 +1,6 @@
 import i18n from "@/i18n";
+import { normalizeColorHex } from "./color";
+export { normalizeColorHex } from "./color";
 /**
  * Select chip colors: soft pastel background + dark text.
  * Stored option.color may be a token name or a custom HEX color.
@@ -37,19 +39,22 @@ export const SELECT_COLORS: Record<SelectColorToken, SelectChipStyle> = {
   red: { background: "#ffe2dd", color: "#c4554d", swatch: "#e03e3e" },
 };
 
-/** Preset hexes for ColorPicker / new options (pastel backgrounds) */
-export const SELECT_COLOR_PRESETS = [
-  SELECT_COLORS.gray.background,
-  SELECT_COLORS.blue.background,
-  SELECT_COLORS.green.background,
-  SELECT_COLORS.yellow.background,
-  SELECT_COLORS.orange.background,
-  SELECT_COLORS.red.background,
-  SELECT_COLORS.purple.background,
-  SELECT_COLORS.pink.background,
-  SELECT_COLORS.brown.background,
-  SELECT_COLORS.default.background,
-] as const;
+/** Explicit names and vivid preset colors; persisted legacy tokens stay unchanged. */
+export const SELECT_COLOR_PALETTE: readonly { token: SelectColorToken; hex: string }[] = [
+  { token: "gray", hex: "#64748b" },
+  { token: "blue", hex: "#3b82f6" },
+  { token: "green", hex: "#22c55e" },
+  { token: "yellow", hex: "#facc15" },
+  { token: "orange", hex: "#f97316" },
+  { token: "red", hex: "#ef4444" },
+  { token: "purple", hex: "#8b5cf6" },
+  { token: "pink", hex: "#ec4899" },
+  { token: "brown", hex: "#a16207" },
+  { token: "default", hex: "#f1f1ef" },
+];
+
+/** HEX defaults for newly created select options. */
+export const SELECT_COLOR_PRESETS = SELECT_COLOR_PALETTE.map(({ hex }) => hex);
 
 /** Pastel bg → token (for seeds / picker values) */
 const PASTEL_BG: Record<string, SelectColorToken> = Object.fromEntries(
@@ -57,13 +62,6 @@ const PASTEL_BG: Record<string, SelectColorToken> = Object.fromEntries(
     ([token, s]) => [s.background.toLowerCase(), token]
   )
 );
-
-/** Accept CSS HEX in three or six digits. Never persist an incomplete input. */
-export function normalizeColorHex(input: string): string | null {
-  const hex = input.trim().replace(/^#/, "").toLowerCase();
-  if (/^[0-9a-f]{3}$/.test(hex)) return `#${[...hex].map((digit) => digit + digit).join("")}`;
-  return /^[0-9a-f]{6}$/.test(hex) ? `#${hex}` : null;
-}
 
 const SELECT_COLOR_KEYS: SelectColorToken[] = [
   "default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red",
