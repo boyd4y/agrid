@@ -1,6 +1,9 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
+import iconsZh from "./locales/zh-CN/icons.json";
+import iconsEn from "./locales/en/icons.json";
+
 import commonZh from "./locales/zh-CN/common.json";
 import errorsZh from "./locales/zh-CN/errors.json";
 import appZh from "./locales/zh-CN/app.json";
@@ -77,6 +80,7 @@ const initial = readStoredLocale();
 void i18n.use(initReactI18next).init({
   resources: {
     "zh-CN": {
+      icons: iconsZh,
       common: commonZh,
       errors: errorsZh,
       app: appZh,
@@ -91,6 +95,7 @@ void i18n.use(initReactI18next).init({
       agents: agentsZh,
     },
     en: {
+      icons: iconsEn,
       common: commonEn,
       errors: errorsEn,
       app: appEn,
@@ -108,7 +113,7 @@ void i18n.use(initReactI18next).init({
   lng: initial,
   fallbackLng: "zh-CN",
   defaultNS: "common",
-  ns: ["common", "errors", "app", "chat", "docs", "marketing", "auth", "table", "form", "automation", "reports", "agents"],
+  ns: ["icons", "common", "errors", "app", "chat", "docs", "marketing", "auth", "table", "form", "automation", "reports", "agents"],
   interpolation: { escapeValue: false },
   returnNull: false,
 });
