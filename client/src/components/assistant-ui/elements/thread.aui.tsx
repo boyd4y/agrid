@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
 import {
   ComposerAddAttachment,
   ComposerAttachments,
@@ -200,6 +201,7 @@ const ThreadRoot: FC<{
   dockComposer: boolean;
   composerDisabled: boolean;
 }> = ({ isEmpty, autoFocus, dockComposer, composerDisabled }) => {
+  const { t } = useTranslation("chat");
   const { Welcome = ThreadWelcome, RunStatus } = useContext(ThreadComponentsContext);
 
   return (
@@ -256,7 +258,7 @@ const ThreadRoot: FC<{
             <AuiIf condition={isNewChatView}>
               <ThreadSuggestions />
             </AuiIf>
-            <fieldset disabled={composerDisabled} className="min-w-0" aria-label="发送消息"><Composer autoFocus={autoFocus} /></fieldset>
+            <fieldset disabled={composerDisabled} className="min-w-0" aria-label={t("sendAria")}><Composer autoFocus={autoFocus} /></fieldset>
           </ThreadPrimitive.ViewportFooter>
         </div>
       </ThreadPrimitive.Viewport>
@@ -445,11 +447,12 @@ const ThreadLoadEarlier: FC = () => {
 };
 
 const ThreadScrollToBottom: FC = () => {
+  const { t } = useTranslation("chat");
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
-        tooltip="滚动到底部"
-        aria-label="滚动到底部"
+        tooltip={t("scrollToBottom")}
+        aria-label={t("scrollToBottom")}
         variant="outline"
         className="aui-thread-scroll-to-bottom absolute -top-12 z-10 size-9 self-center rounded-full border-border bg-background p-0 text-foreground shadow-sm hover:bg-accent disabled:invisible"
       >
@@ -460,10 +463,11 @@ const ThreadScrollToBottom: FC = () => {
 };
 
 const ThreadWelcome: FC = () => {
+  const { t } = useTranslation("chat");
   return (
     <div className="aui-thread-welcome-root mb-6 flex flex-col px-2">
       <p className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-2xl font-medium tracking-tight duration-200">
-        How can I help you today?
+        {t("welcomeMessage")}
       </p>
     </div>
   );
@@ -495,6 +499,7 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+  const { t } = useTranslation("chat");
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone asChild>
@@ -504,12 +509,12 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
         >
           <ComposerAttachments />
           <ComposerPrimitive.Input
-            placeholder="描述你想整理的数据或完成的操作…"
+            placeholder={t("composerPlaceholder")}
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
             rows={1}
             autoFocus={autoFocus}
             enterKeyHint="send"
-            aria-label="消息输入框"
+            aria-label={t("composerAria")}
           />
           <ComposerAction />
         </div>

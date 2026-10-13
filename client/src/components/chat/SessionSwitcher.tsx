@@ -1,6 +1,7 @@
 import { useMemo, useState, type FC } from "react";
 import { ChevronDown, MessageSquare, Plus } from "lucide-react";
 import { useAui, useAuiState } from "@assistant-ui/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,6 +24,7 @@ type Props = {
 };
 
 export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
+  const { t } = useTranslation(["chat", "common"]);
   const aui = useAui();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -30,6 +32,7 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const hasMore = useAuiState((s) => s.threads.hasMore);
   const loadingMore = useAuiState((s) => s.threads.isLoadingMore);
+  const newChat = t("newChat");
 
   const scoped = useMemo(() => {
     const list = threadItems.filter((t) => {
@@ -42,12 +45,12 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
     });
   }, [threadItems, resourceKey]);
 
-  const recent = scoped.filter((thread) => (thread.title || "新对话").toLowerCase().includes(search.trim().toLowerCase()));
+  const recent = scoped.filter((thread) => (thread.title || newChat).toLowerCase().includes(search.trim().toLowerCase()));
   const main = threadItems.find((t) => t.id === mainThreadId);
   const title =
     (main && readThreadResourceKey(main) === resourceKey
       ? main.title
-      : recent[0]?.title) || "新对话";
+      : recent[0]?.title) || newChat;
 
   const switchTo = (threadId: string) => {
     aui.threads.switchToThread(threadId);
@@ -70,8 +73,8 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
             size="sm"
             className="h-8 max-w-[11rem] shrink gap-1 px-1.5 text-[12px] font-normal"
             data-testid="chat-session-switcher"
-            title="切换会话"
-            aria-label="切换会话"
+            title={t("switchSession")}
+            aria-label={t("switchSession")}
           >
             <MessageSquare className="size-3.5 shrink-0 opacity-70" />
             <span className="min-w-0 flex-1 truncate text-left">{title}</span>
@@ -87,17 +90,17 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
           <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
             {resourceKeyLabel(resourceKey)}
           </p>
-          {scoped.length > 4 && <Input size="sm" type="search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="搜索会话" placeholder="搜索会话" className="mb-1" />}
+          {scoped.length > 4 && <Input size="sm" type="search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label={t("searchSessions")} placeholder={t("searchSessions")} className="mb-1" />}
           {recent.length === 0 ? (
             <p className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-              {search ? "没有匹配的会话" : "还没有会话，发一条消息开始"}
+              {search ? t("noMatchingSessions") : t("noSessionsYet")}
             </p>
           ) : (
             <ul className="max-h-[280px] overflow-y-auto">
-              {recent.map((t) => {
-                const active = t.id === mainThreadId;
+              {recent.map((thread) => {
+                const active = thread.id === mainThreadId;
                 return (
-                  <li key={t.id}>
+                  <li key={thread.id}>
                     <button
                       type="button"
                       className={cn(
@@ -106,14 +109,14 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
                       )}
                       data-testid="chat-session-item"
                       data-active={active ? "true" : "false"}
-                      onClick={() => switchTo(t.id)}
+                      onClick={() => switchTo(thread.id)}
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">
-                          {t.title || "新对话"}
+                          {thread.title || newChat}
                         </span>
                         <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                          {formatRelativeTime(t.lastMessageAt) || "暂无消息"}
+                          {formatRelativeTime(thread.lastMessageAt) || t("noMessagesYet")}
                         </span>
                       </span>
                     </button>
@@ -122,7 +125,7 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
               })}
             </ul>
           )}
-          {hasMore && <Button variant="ghost" size="sm" className="w-full" disabled={loadingMore} onClick={() => void aui.threads.loadMore()}>{loadingMore ? "加载中…" : "更多会话"}</Button>}
+          {hasMore && <Button variant="ghost" size="sm" className="w-full" disabled={loadingMore} onClick={() => void aui.threads.loadMore()}>{loadingMore ? t("common:loading") : t("moreSessions")}</Button>}
           <div className="mt-1 border-t border-border pt-1">
             <button
               type="button"
@@ -131,7 +134,7 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
               onClick={createNew}
             >
               <Plus className="size-3.5" />
-              新对话
+              {newChat}
             </button>
           </div>
         </PopoverContent>
@@ -142,8 +145,8 @@ export const SessionSwitcher: FC<Props> = ({ resourceKey, className }) => {
         variant="ghost"
         size="icon"
         className="size-8 shrink-0"
-        title="新对话"
-        aria-label="新对话"
+        title={newChat}
+        aria-label={newChat}
         data-testid="chat-session-new"
         onClick={() => {
           aui.threads.switchToNewThread();

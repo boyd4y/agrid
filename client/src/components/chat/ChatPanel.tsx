@@ -48,6 +48,7 @@ import { chatResourceKey } from "@/lib/chat-resource";
 import { ResourceScopedThreads } from "@/components/chat/ResourceScopedThreads";
 import { SessionSwitcher } from "@/components/chat/SessionSwitcher";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "react-i18next";
 import {
   createThreadAdapter,
   type ChatPageContext,
@@ -84,29 +85,6 @@ type RequestBody = {
   agentId: string | null;
   context: ChatPageContext;
 };
-
-const WELCOME_SUGGESTIONS = Suggestions([
-  {
-    title: "创建表格",
-    label: "根据需求生成表格与字段",
-    prompt: "帮我创建一张销售 CRM 表格，包含客户、阶段、负责人和下次跟进日期。",
-  },
-  {
-    title: "制作表单",
-    label: "收集数据，直接写入表格",
-    prompt: "帮我制作一个数据收集表单，先确认要使用的表格。",
-  },
-  {
-    title: "整理数据",
-    label: "查询、筛选和更新数据",
-    prompt: "帮我整理数据，先确认要使用的表格，再查看字段和前几行数据。",
-  },
-  {
-    title: "配置自动化",
-    label: "条件触发，自动更新字段",
-    prompt: "帮我配置自动化：状态变为已完成时，将已完成复选框设为勾选。",
-  },
-]);
 
 const AuiWelcome: FC = () => null;
 
@@ -200,6 +178,7 @@ function agentModel(a: MemberOption): string {
 
 export function ChatPanel(props: Props) {
   const { user, session } = useAuth();
+  
   return (
     <ScopedChatPanel
       key={`${user?.id}:${session?.activeOrganizationId}`}
@@ -234,6 +213,18 @@ function ScopedChatPanel({
   onTogglePreview,
   resourceKey: resourceKeyProp,
 }: Props) {
+  const { t, i18n } = useTranslation("chat");
+  const welcomeSuggestions = useMemo(
+    () =>
+      Suggestions(
+        (["createTable", "createForm", "organize", "automation"] as const).map((key) => ({
+          title: t(`suggestions.${key}.title`),
+          label: t(`suggestions.${key}.label`),
+          prompt: t(`suggestions.${key}.prompt`),
+        })),
+      ),
+    [t, i18n.language],
+  );
   const threadSidebarId = useId();
   const [threadListCollapsed, setThreadListCollapsed] = useState(() => {
     try {
@@ -367,7 +358,7 @@ function ScopedChatPanel({
         transport,
         onError: (error) => {
           streamMutated.current = false;
-          toast.error(error.message || "智能体执行失败");
+          toast.error(error.message || t("agentRunFailed"));
         },
         onData: (part) => {
           if (part.type === "data-chat-activity") {
@@ -406,8 +397,8 @@ function ScopedChatPanel({
   });
 
   const auiConfig = useMemo(
-    () => AuiConfig({ suggestions: WELCOME_SUGGESTIONS }),
-    [],
+    () => AuiConfig({ suggestions: welcomeSuggestions }),
+    [welcomeSuggestions],
   );
 
   const agentOptions: ModelOption[] = useMemo(
@@ -418,14 +409,14 @@ function ScopedChatPanel({
         return {
           id: a.id,
           name: a.name,
-          description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m === "__harness_default__" ? "默认模型" : m.replace(/^openrouter\//, "")}`,
+          description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m === "__harness_default__" ? t("defaultModel") : m.replace(/^openrouter\//, "")}`,
           keywords: [h, m, a.email],
           icon: (
             <MemberAvatar name={a.name} image={a.image} kind="agent" className="size-5" />
           ),
         };
       }),
-    [agents],
+    [agents, t],
   );
 
   const [showFloatingThreads, setShowFloatingThreads] = useState(false);
@@ -433,14 +424,14 @@ function ScopedChatPanel({
   const noAgents = !agentsLoading && agents.length === 0;
   const selectAgent = async (next: string) => {
     if (next === agentId) return;
-    if (runtime.thread.getState().isRunning) { toast.info("请先停止当前执行，再切换智能体");return; }
+    if (runtime.thread.getState().isRunning) { toast.info(t("stopBeforeSwitch"));return; }
     try {
       const remoteId = runtime.threads.mainItem.getState().remoteId;
-      if (remoteId && isActiveRun((await api.listAgentRuns(remoteId)).runs[0])) { toast.info("请先停止当前执行，再切换智能体"); return; }
+      if (remoteId && isActiveRun((await api.listAgentRuns(remoteId)).runs[0])) { toast.info(t("stopBeforeSwitch")); return; }
       if (runtime.thread.getState().messages.length) await runtime.threads.switchToNewThread();
       requestRef.current = { ...requestRef.current, agentId: next };
       setAgentId(next);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "切换智能体失败"); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : t("switchAgentFailed")); }
   };
 
   return (
@@ -468,7 +459,7 @@ function ScopedChatPanel({
                 "hidden w-56 shrink-0 border-r border-border bg-muted/30",
                 !threadListCollapsed && "@[640px]/chat:block",
               )}
-              aria-label="对话列表"
+              aria-label={t("threadList")}
               data-testid="chat-thread-sidebar"
             >
               <ThreadList resourceKey={resourceKey} />
@@ -493,10 +484,10 @@ function ScopedChatPanel({
                         setThreadListCollapsed((collapsed) => !collapsed)
                       }
                       aria-label={
-                        threadListCollapsed ? "展开会话列表" : "收起会话列表"
+                        threadListCollapsed ? t("expandThreads") : t("collapseThreads")
                       }
                       title={
-                        threadListCollapsed ? "展开会话列表" : "收起会话列表"
+                        threadListCollapsed ? t("expandThreads") : t("collapseThreads")
                       }
                       aria-expanded={!threadListCollapsed}
                       aria-controls={threadSidebarId}
@@ -523,11 +514,11 @@ function ScopedChatPanel({
 
                   {agentsLoading ? (
                     <span className="text-[12px] text-muted-foreground">
-                      加载智能体…
+                      {t("loadingAgents")}
                     </span>
                   ) : noAgents ? (
                     <span className="text-[12px] text-muted-foreground">
-                      未选择智能体
+                      {t("noAgentSelected")}
                     </span>
                   ) : agentId ? (
                     <ModelSelector
@@ -562,8 +553,8 @@ function ScopedChatPanel({
                     size="icon"
                     className="size-8 shrink-0"
                     onClick={onTogglePreview}
-                    aria-label={previewOpen ? "收起工作面板" : "展开工作面板"}
-                    title={previewOpen ? "收起工作面板" : "展开工作面板"}
+                    aria-label={previewOpen ? t("collapsePreview") : t("expandPreview")}
+                    title={previewOpen ? t("collapsePreview") : t("expandPreview")}
                     aria-expanded={previewOpen}
                     aria-controls="workspace-preview-panel"
                     data-testid="workspace-preview-toggle"
@@ -584,13 +575,13 @@ function ScopedChatPanel({
                   className="flex-1"
                   data-testid="chat-no-agents"
                   illustration={NOTIOLY.fastInternet}
-                  title="还没有智能体"
-                  description="创建一个智能体，开始对话、整理数据和配置自动化。"
+                  title={t("noAgentsTitle")}
+                  description={t("noAgentsDescription")}
                   action={
                     <Button asChild size="sm">
                       <Link to="/app/agents">
                         <Plus className="size-3.5" />
-                        去创建智能体
+                        {t("goCreateAgent")}
                       </Link>
                     </Button>
                   }

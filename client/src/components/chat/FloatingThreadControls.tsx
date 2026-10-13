@@ -1,5 +1,6 @@
 import { useAui } from "@assistant-ui/react";
 import { History, Plus, X } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 export function FloatingThreadControls({
   showThreads,
@@ -10,6 +11,7 @@ export function FloatingThreadControls({
   onShowThreads: (show: boolean) => void;
   onClose?: () => void;
 }) {
+  const { t } = useTranslation("chat");
   const aui = useAui();
   return (
     <div className="flex shrink-0 items-center gap-0.5">
@@ -18,10 +20,10 @@ export function FloatingThreadControls({
         variant="ghost"
         size="icon"
         className="size-8"
-        aria-label={showThreads ? "返回聊天" : "历史对话"}
+        aria-label={showThreads ? t("backToChat") : t("history")}
         aria-pressed={showThreads}
         onClick={() => onShowThreads(!showThreads)}
-        title="历史对话"
+        title={t("history")}
         data-testid="floating-thread-toggle"
       >
         <History className="size-4" />
@@ -31,8 +33,8 @@ export function FloatingThreadControls({
         variant="ghost"
         size="icon"
         className="size-8"
-        aria-label="新对话"
-        title="新对话"
+        aria-label={t("newChat")}
+        title={t("newChat")}
         onClick={() => {
           aui.threads.switchToNewThread();
           onShowThreads(false);
@@ -46,8 +48,8 @@ export function FloatingThreadControls({
         variant="ghost"
         size="icon"
         className="size-8"
-        aria-label="收起 AI 助手"
-        title="收起 AI 助手"
+        aria-label={t("collapseChat")}
+        title={t("collapseChat")}
         onClick={onClose}
       >
         <X className="size-4" />

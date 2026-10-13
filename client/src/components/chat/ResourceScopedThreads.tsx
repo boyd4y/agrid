@@ -8,13 +8,17 @@ import {
   setStoredThreadResource,
   threadResourceCustomUpdate,
 } from "@/lib/chat-resource";
+import i18n from "@/i18n";
 
 type Props = {
   resourceKey: ChatResourceKey;
 };
 
 function isEmptyUnboundTitle(title: string | undefined): boolean {
-  return !title || title === "新对话" || title === "New Chat";
+  if (!title) return true;
+  const zh = i18n.t("chat:newChat", { lng: "zh-CN" });
+  const en = i18n.t("chat:newChat", { lng: "en" });
+  return title === zh || title === en || title === "新对话" || title === "New Chat";
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AssistantModalPrimitive } from "@assistant-ui/react";
+import { useTranslation } from "react-i18next";
 import { useAppShell } from "@/context/AppShellContext";
 import { cn } from "@/lib/utils";
 export function FloatingAssistantFrame({
@@ -13,6 +14,7 @@ export function FloatingAssistantFrame({
   onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation("chat");
   const { recordSheetOpen } = useAppShell();
   if (!floating) return <>{children}</>;
   return (
@@ -32,10 +34,10 @@ export function FloatingAssistantFrame({
         onInteractOutside={(event) => event.preventDefault()}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
-        className="z-50 flex h-[620px] max-h-[calc(100dvh-6rem)] w-[440px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background text-foreground shadow-xl data-[state=closed]:hidden"
+        className="z-50 flex h-[620px] max-h-[calc(100dvh-6rem)] w-[440px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-xl data-[state=closed]:hidden"
         id="global-ai-panel"
         data-testid="global-ai-panel"
-        aria-label="AI 助手"
+        aria-label={t("conversation")}
       >
         {children}
       </AssistantModalPrimitive.Content>

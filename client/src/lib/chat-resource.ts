@@ -1,7 +1,10 @@
+import i18n from "@/i18n";
 /** Resource-scoped chat sessions (table / workspace / etc.). */
 
-const LAST_THREAD_KEY = "agrid.chat.lastThreadByResource";
-const THREAD_RESOURCE_KEY = "agrid.chat.threadResourceMap";
+const LAST_THREAD_KEY = "tabdo.chat.lastThreadByResource";
+const LAST_THREAD_KEY_LEGACY = "agrid.chat.lastThreadByResource";
+const THREAD_RESOURCE_KEY = "tabdo.chat.threadResourceMap";
+const THREAD_RESOURCE_KEY_LEGACY = "agrid.chat.threadResourceMap";
 
 export type ChatResourceKey = string;
 
@@ -18,18 +21,17 @@ export function chatResourceKey(opts: {
 }
 
 export function resourceKeyLabel(key: ChatResourceKey): string {
-  if (key.startsWith("report:")) return "与当前报告的对话";
-  if (key.startsWith("table:")) return "与当前表格的对话";
-  if (key === "workspace") return "工作区对话";
-  const labels: Record<string, string> = { tables: "表格列表的对话", automations: "自动化的对话", reports: "报告的对话", skills: "技能管理的对话", agents: "智能体管理的对话", members: "成员管理的对话", settings: "设置的对话" };
-  if (labels[key]) return labels[key];
-  return "当前资源的对话";
+  if (key.startsWith("report:")) return i18n.t("chat:resource.report");
+  if (key.startsWith("table:")) return i18n.t("chat:resource.table");
+  if (key === "workspace") return i18n.t("chat:resource.workspace");
+  const keys = ["tables", "automations", "reports", "skills", "agents", "members", "settings"] as const;
+  if ((keys as readonly string[]).includes(key)) return i18n.t(`chat:resource.${key}`);
+  return i18n.t("chat:resource.generic");
 }
 
-function readJsonMap(storageKey: string): Record<string, string> {
+function parseJsonMap(raw: string | null): Record<string, string> {
+  if (!raw) return {};
   try {
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     const out: Record<string, string> = {};
@@ -37,6 +39,24 @@ function readJsonMap(storageKey: string): Record<string, string> {
       if (typeof v === "string" && v) out[k] = v;
     }
     return out;
+  } catch {
+    return {};
+  }
+}
+
+function readJsonMap(storageKey: string, legacyKey?: string): Record<string, string> {
+  try {
+    const next = parseJsonMap(localStorage.getItem(storageKey));
+    if (Object.keys(next).length > 0 || localStorage.getItem(storageKey) !== null) {
+      return next;
+    }
+    if (!legacyKey) return {};
+    const prev = parseJsonMap(localStorage.getItem(legacyKey));
+    if (Object.keys(prev).length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(prev));
+      localStorage.removeItem(legacyKey);
+    }
+    return prev;
   } catch {
     return {};
   }
@@ -51,22 +71,22 @@ function writeJsonMap(storageKey: string, map: Record<string, string>) {
 }
 
 export function getLastThreadId(resourceKey: ChatResourceKey): string | null {
-  return readJsonMap(LAST_THREAD_KEY)[resourceKey] ?? null;
+  return readJsonMap(LAST_THREAD_KEY, LAST_THREAD_KEY_LEGACY)[resourceKey] ?? null;
 }
 
 export function setLastThreadId(resourceKey: ChatResourceKey, threadId: string) {
-  const map = readJsonMap(LAST_THREAD_KEY);
+  const map = readJsonMap(LAST_THREAD_KEY, LAST_THREAD_KEY_LEGACY);
   map[resourceKey] = threadId;
   writeJsonMap(LAST_THREAD_KEY, map);
 }
 
 /** Fallback map when assistant-ui custom metadata is missing (e.g. race before stamp). */
 export function getStoredThreadResource(threadId: string): string | null {
-  return readJsonMap(THREAD_RESOURCE_KEY)[threadId] ?? null;
+  return readJsonMap(THREAD_RESOURCE_KEY, THREAD_RESOURCE_KEY_LEGACY)[threadId] ?? null;
 }
 
 export function setStoredThreadResource(threadId: string, resourceKey: ChatResourceKey) {
-  const map = readJsonMap(THREAD_RESOURCE_KEY);
+  const map = readJsonMap(THREAD_RESOURCE_KEY, THREAD_RESOURCE_KEY_LEGACY);
   map[threadId] = resourceKey;
   writeJsonMap(THREAD_RESOURCE_KEY, map);
 }
@@ -97,12 +117,13 @@ export function formatRelativeTime(date: Date | undefined, now = Date.now()): st
   if (!date) return "";
   const diffMs = now - date.getTime();
   if (!Number.isFinite(diffMs)) return "";
-  if (diffMs < 60_000) return "刚刚";
+  if (diffMs < 60_000) return i18n.t("chat:relative.justNow");
   const mins = Math.floor(diffMs / 60_000);
-  if (mins < 60) return `${mins} 分钟前`;
+  if (mins < 60) return i18n.t("chat:relative.minutesAgo", { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} 小时前`;
+  if (hours < 24) return i18n.t("chat:relative.hoursAgo", { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} 天前`;
-  return date.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  if (days < 7) return i18n.t("chat:relative.daysAgo", { n: days });
+  const locale = i18n.language?.startsWith("en") ? "en" : "zh-CN";
+  return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }

@@ -22,6 +22,8 @@ import {
   SearchIcon,
   TrashIcon,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import {
   forwardRef,
   Fragment,
@@ -37,6 +39,7 @@ export const ThreadList: FC<{ resourceKey?: string; showNew?: boolean }> = ({
   resourceKey,
   showNew = true,
 }) => {
+  const { t } = useTranslation("chat");
   const [search, setSearch] = useState("");
 
   useEffect(() => setSearch(""), [resourceKey]);
@@ -52,8 +55,8 @@ export const ThreadList: FC<{ resourceKey?: string; showNew?: boolean }> = ({
           <ThreadListNew
             size="icon"
             className="size-8 shrink-0 justify-center px-0"
-            aria-label="新对话"
-            title="新对话"
+            aria-label={t("newChat")}
+            title={t("newChat")}
           >
             <PlusIcon className="size-4" />
           </ThreadListNew>
@@ -68,6 +71,7 @@ export const ThreadList: FC<{ resourceKey?: string; showNew?: boolean }> = ({
 };
 
 const ThreadListLoadMore: FC = () => {
+  const { t } = useTranslation(["chat", "common"]);
   const aui = useAui();
   const hasMore = useAuiState((s) => s.threads.hasMore);
   const loading = useAuiState((s) => s.threads.isLoadingMore);
@@ -79,7 +83,7 @@ const ThreadListLoadMore: FC = () => {
       disabled={loading}
       onClick={() => void aui.threads.loadMore()}
     >
-      {loading ? "加载中…" : "更多对话"}
+      {loading ? t("common:loading") : t("moreThreads")}
     </Button>
   );
 };
@@ -91,6 +95,7 @@ export const ThreadListSearch = forwardRef<
     onValueChange: (value: string) => void;
   }
 >(({ className, value, onValueChange, ...props }, ref) => {
+  const { t } = useTranslation("chat");
   return (
     <div
       data-slot="aui_thread-list-search"
@@ -105,8 +110,8 @@ export const ThreadListSearch = forwardRef<
         type="search"
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
-        aria-label="搜索对话"
-        placeholder="搜索对话"
+        aria-label={t("searchThreads")}
+        placeholder={t("searchThreads")}
         className={cn("h-8 ps-8 text-sm", className)}
         {...props}
       />
@@ -158,9 +163,9 @@ const dateGroupLabel = (
   startOfToday: number,
   startOfYesterday: number,
 ): string => {
-  if (!date || date.getTime() >= startOfToday) return "今天";
-  if (date.getTime() >= startOfYesterday) return "昨天";
-  return "更早";
+  if (!date || date.getTime() >= startOfToday) return i18n.t("chat:today");
+  if (date.getTime() >= startOfYesterday) return i18n.t("chat:yesterday");
+  return i18n.t("chat:earlier");
 };
 
 const startOfLocalDay = (date: Date) =>
@@ -222,7 +227,7 @@ export const useThreadListGroups = (searchQuery = "", resourceKey?: string) => {
         if (!item || item.status !== "regular") return false;
         if (resourceKey && readThreadResourceKey(item) !== resourceKey)
           return false;
-        return !query || (item.title || "新对话").toLowerCase().includes(query);
+        return !query || (item.title || i18n.t("chat:newChat")).toLowerCase().includes(query);
       })
       .map(({ index }) => index);
     if (
@@ -261,6 +266,7 @@ const ThreadListItemGroups: FC<{
   searchQuery?: string;
   resourceKey?: string;
 }> = ({ searchQuery = "", resourceKey }) => {
+  const { t } = useTranslation("chat");
   const { threadIds, filteredIndices, groups } = useThreadListGroups(
     searchQuery,
     resourceKey,
@@ -283,10 +289,10 @@ const ThreadListItemGroups: FC<{
         </div>
         <div className="space-y-1">
           <p className="text-sm font-medium">
-            {query ? "没有匹配的对话" : "还没有对话"}
+            {query ? t("noMatchingThreads") : t("noThreadsYet")}
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            {query ? "试试其他关键词" : "新建对话，开始与智能体交流"}
+            {query ? t("tryOtherKeywords") : t("startWithAgent")}
           </p>
         </div>
         {!query && (
@@ -329,6 +335,7 @@ export const ThreadListNew = forwardRef<
   HTMLButtonElement,
   ComponentPropsWithoutRef<typeof Button> & { labelClassName?: string }
 >(({ className, labelClassName, children, ...props }, ref) => {
+  const { t } = useTranslation("chat");
   return (
     <ThreadListPrimitive.New asChild>
       <Button
@@ -351,7 +358,7 @@ export const ThreadListNew = forwardRef<
               data-slot="aui_thread-list-new-label"
               className={cn("whitespace-nowrap", labelClassName)}
             >
-              新对话
+              {t("newChat")}
             </span>
           </>
         )}
@@ -363,8 +370,9 @@ export const ThreadListNew = forwardRef<
 ThreadListNew.displayName = "ThreadListNew";
 
 const ThreadListSkeleton: FC = () => {
+  const { t } = useTranslation("chat");
   return (
-    <div role="status" aria-label="加载对话" className="flex flex-col gap-0.5">
+    <div role="status" aria-label={t("loadingThreads")} className="flex flex-col gap-0.5">
       {Array.from({ length: 5 }, (_, i) => (
         <div
           key={i}
@@ -383,6 +391,7 @@ const ThreadListSkeleton: FC = () => {
 };
 
 export const ThreadListItem: FC = () => {
+  const { t } = useTranslation("chat");
   const isRunning = useAuiState((s) => s.threadListItem.isRunning);
 
   return (
@@ -405,7 +414,7 @@ export const ThreadListItem: FC = () => {
           data-slot="aui_thread-list-item-title"
           className="min-w-0 flex-1 truncate"
         >
-          <ThreadListItemPrimitive.Title fallback="新对话" />
+          <ThreadListItemPrimitive.Title fallback={t("newChat")} />
         </span>
         {isRunning && <span className="sr-only">Running</span>}
       </ThreadListItemPrimitive.Trigger>
@@ -415,6 +424,7 @@ export const ThreadListItem: FC = () => {
 };
 
 const ThreadListItemMore: FC = () => {
+  const { t } = useTranslation("chat");
   const aui = useAui();
   const [deleteOpen, setDeleteOpen] = useState(false);
   return (
@@ -428,7 +438,7 @@ const ThreadListItemMore: FC = () => {
             className="data-[state=open]:bg-accent absolute end-1.5 top-1/2 size-6 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:opacity-100"
           >
             <MoreHorizontalIcon className="size-3.5" />
-            <span className="sr-only">对话操作</span>
+            <span className="sr-only">{t("threadActions")}</span>
           </Button>
         </ThreadListItemMorePrimitive.Trigger>
         <ThreadListItemMorePrimitive.Content
@@ -444,15 +454,15 @@ const ThreadListItemMore: FC = () => {
             className="text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
           >
             <TrashIcon className="size-4" />
-            删除
+            {t("delete")}
           </ThreadListItemMorePrimitive.Item>
         </ThreadListItemMorePrimitive.Content>
       </ThreadListItemMorePrimitive.Root>
       <DeleteConfirmation
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="删除对话？"
-        description="此对话及全部消息将被永久删除，无法恢复。"
+        title={t("deleteThreadTitle")}
+        description={t("deleteThreadDescription")}
         onConfirm={async () => {
           await aui.threadListItem.delete();
         }}
