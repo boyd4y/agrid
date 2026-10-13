@@ -107,6 +107,10 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## Pi 模型预算与空回复
 
-OpenRouter通过公开 `/models` 元数据使用实际context_length与提供商输出上限，缓存5分钟。`PI_MAX_OUTPUT_TOKENS` 默认8192，且受提供商上限约束；自定义兼容端点需设置真实 `PI_CONTEXT_WINDOW`（默认32768）。错误模型上限会触发Pi SDK自己的上下文预算裁剪：实际历史/工具定义超过错误32k窗口时曾产生 `max_tokens=1`，导致只有一个reasoning token。路由在创建Run和保存本次输入前校验模型元数据。
+OpenRouter通过公开 `/models` 元数据使用实际context_length与提供商输出上限，缓存5分钟。`PI_MAX_OUTPUT_TOKENS` 默认16384，且受提供商上限约束；目录中的nullable上限不再额外回落8192，缓存区分显式预算。自定义兼容端点需设置真实 `PI_CONTEXT_WINDOW`（默认32768）。错误模型上限会触发Pi SDK自己的上下文预算裁剪：实际历史/工具定义超过错误32k窗口时曾产生 `max_tokens=1`，导致只有一个reasoning token。路由在创建Run和保存本次输入前校验模型元数据。
 
-只有reasoning而没有最终正文的已结束轮次标记failed，不再假报completed；已有工具与原生日志仍保存。官方unfinished turn保持suspended，依SDK continuation继续，不自动重放任务。当前Pi adapter未完整透传原始length原因，因此不从空正文推断所有供应商错误原因。
+2026-10-13 实际问题确认：末轮原生 assistant.stopReason=length、usage.output=8192、usage.reasoning=8192、text为0；前一轮已有正文但同样length，被旧逻辑误报completed。原因是推理计入总输出预算，且dynamic openrouter/free的reasoning=false让Pi跳过thinkingLevel=off的请求参数。
+
+使用官方 `createPi.providers.*.models[].samplingParams` 明确传递 `reasoning: { enabled: false, effort: "none" }`，让现有off设置真正进入OpenRouter请求；不修改SDK、不开额外工具循环。强制推理的模型可能拒绝none，此时按提供商真实错误处理，不能声称所有模型都能关闭推理。[Pi配置文档](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md#configure-sampling-by-thinking-level)、[OpenRouter输出与推理预算](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)。
+
+当前Pi adapter把原生length归一化为stop。通过官方可信inline extension的 `message_end` 只读观察最后一个assistant的原始stopReason和usage，保存到消息metadata.completion；不将中间length提前定失败。最终length无论有无正文均标记failed，保留部分正文并提示达到输出上限，下一次用户输入沿原生会话接着回答，不自动重试或重放工具。其它空正文不推断为length。官方unfinished turn仍保持suspended，依SDK continuation继续。

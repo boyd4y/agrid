@@ -215,3 +215,5 @@
 
 
 2026-10-13 品牌与认证页面收尾：用户进一步明确面向个人和小团队，CRM 只是案例，最终定位为“AI 原生工作空间”，主文案“让想法，动起来。”；首页、登录/注册、SEO、PRODUCT/README 与品牌文档已统一。认证布局与左侧品牌矢量图已重做，旧人物/纸张插画不再用于认证页；表单使用共享 Field、输入标签、加载反馈与重复提交保护，原认证流程保留。桌面深浅主题真实浏览器检查无页面异常。按用户要求清理 screenshots 及临时浏览器产物并加入忽略项，保留测试代码和验证记录；本轮不再新增截图。
+
+2026-10-13 推理耗尽输出预算修复：只读核对实际原生结束原因，末轮length且output=reasoning=8192、text0；前轮正文也length，被旧逻辑误completed。官方Pi samplingParams显式使thinking off进入OpenRouter请求，默认输出预算16384并保留模型目录cap、nullable fallback修复；官方message_end观察末条assistant原始原因/usage，在metadata保存，length保留正文且明确标为未完成。真实native本机SSE覆盖reasoning-only/partial/normal stop，独立test DB验证失败持久化与下一输入续接，工具执行仍一次。未调用用户模型、未修改用户历史、不生成截图。

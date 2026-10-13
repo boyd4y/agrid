@@ -17,7 +17,7 @@ import type { InMemoryFs } from "just-bash";
 import { HTTPException } from "hono/http-exception";
 import { restoreWorkspace, type WorkspaceSnapshot } from "./workspace.js";
 import type { HarnessId } from "../ai/model.js";
-import type { PiModelMetadata } from "./model-metadata.js";
+import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata, type PiCompletion } from "./model-metadata.js";
 import { validateDisabledTools } from "./tool-catalog.js";
 
 export type RuntimeMode = "local" | "sandbox";
@@ -54,6 +54,7 @@ export function createNativeAgent(options: {
   env?: Environment;
   lifecycle?: Pick<NativeAgentSettings, "onStart" | "onStepStart" | "onLanguageModelCallStart" | "onLanguageModelCallEnd" | "onToolExecutionStart" | "onToolExecutionEnd" | "onStepEnd" | "onEnd">;
   stopWhen?: NativeAgentSettings["stopWhen"];
+  onPiMessageEnd?: (completion: PiCompletion) => void;
 }): NativeAgent {
   const env = options.env ?? process.env;
   if (options.mode === "local" && options.harness !== "pi")
@@ -89,6 +90,18 @@ export function createNativeAgent(options: {
       auth: {},
       reattachInProcess: false,
       thinkingLevel: "off",
+      // Observe the native result: harness-pi 1.0.151 normalizes length to stop.
+      // This hook neither modifies messages nor starts an additional model turn.
+      extensionFactories: options.onPiMessageEnd ? [(pi) => {
+        pi.on("message_end", (event) => {
+          if (event.message.role !== "assistant") return;
+          options.onPiMessageEnd!({
+            finishReason: event.message.stopReason,
+            outputTokens: event.message.usage.output,
+            reasoningTokens: event.message.usage.reasoning ?? 0,
+          });
+        });
+      }] : undefined,
       providers: {
         [provider]: {
           baseUrl: openRouterKey
@@ -105,7 +118,10 @@ export function createNativeAgent(options: {
               input: ["text"],
               reasoning: options.piModel?.reasoning ?? false,
               contextWindow: options.piModel?.contextWindow ?? (Number(env.PI_CONTEXT_WINDOW) || 32768),
-              maxTokens: options.piModel?.maxTokens ?? (Number(env.PI_MAX_OUTPUT_TOKENS) || 8192),
+              maxTokens: options.piModel?.maxTokens ?? (Number(env.PI_MAX_OUTPUT_TOKENS) || DEFAULT_PI_OUTPUT_TOKENS),
+              // Dynamic OpenRouter routes skip Pi's model.reasoning branch;
+              // pass the official provider sampling setting explicitly.
+              ...(openRouterKey ? { samplingParams: { reasoning: { enabled: false, effort: "none" } } } : {}),
               cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             },
           ],

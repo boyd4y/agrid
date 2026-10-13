@@ -8,7 +8,7 @@ import type { HarnessId } from "../ai/model.js";
 import { chatRunLimits } from "./limits.js";
 import { chatErrorText, normalizeChatToolErrors } from "../ai/errors.js";
 import { createNativeAgent, openNativeSandbox } from "./runtime.js";
-import type { PiModelMetadata } from "./model-metadata.js";
+import type { PiModelMetadata, PiCompletion } from "./model-metadata.js";
 import { nativeHostTools, nativeToolDenial } from "./tools.js";
 import { completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease, withRuntimeLease, type RuntimeRecord, type RuntimeLease } from "./store.js";
 import { recordRunActivity, failNativeRun, runCancellationRequested, type AgentRun } from "./runs.js";
@@ -58,6 +58,7 @@ export function createNativeChatStream(options: {
       const signal = AbortSignal.any([control.signal, ...(options.signal ? [options.signal] : [])]);
       let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: InMemoryFs | undefined;
       let step = 0, completedTools = 0, activity: ChatActivity | undefined, errorText: string | undefined;
+      let piCompletion: PiCompletion | undefined;
       let streamedStep = 0, modelActive = false, expectedOutputStep = 1;
       let cancelled = false, timedOut = false, lostLease = false, closed = false;
       // Set before calling the SDK, not from callbacks or completed-tool counts.
@@ -220,6 +221,7 @@ export function createNativeChatStream(options: {
           instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
           runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
           stopWhen: stepCountIs(limits.steps),
+          onPiMessageEnd: (completion) => { piCompletion = completion; },
         });
         let opened: Awaited<ReturnType<typeof openNativeSandbox>>;
         try { opened = await openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
@@ -265,6 +267,11 @@ export function createNativeChatStream(options: {
               if (!terminalWritten) terminalText(controller, `${errorText}。已完成的工具结果会保留。`);
             }
             if (part.type === "error" && !terminalWritten) terminalText(controller, `本轮未能完成：${errorText}。已完成的工具结果会保留。`);
+            if (part.type === "finish" && piCompletion?.finishReason === "length" && !terminalWritten) {
+              const usage = piCompletion.outputTokens ? `（${piCompletion.outputTokens} token${piCompletion.reasoningTokens ? `，其中推理 ${piCompletion.reasoningTokens}` : ""}）` : "";
+              errorText = `本轮达到模型输出上限${usage}，回答尚未完成`;
+              terminalText(controller, `${errorText}。已生成的内容和工具结果已保留。可以发送“继续回答”，或缩小本次问题的范围。`);
+            }
             if (part.type === "finish" && !finalStepHasText && !terminalWritten) {
               if (session!.hasUnfinishedTurn()) terminalText(controller, "本轮已暂停，已有工具结果已保留。发送“继续执行”继续剩余步骤。");
               else {
@@ -277,7 +284,7 @@ export function createNativeChatStream(options: {
         }));
         writer.merge(toUIMessageStream({ stream, tools: agent.tools, originalMessages: options.messages,
           generateMessageId: () => options.run.assistantMessageId, onError: chatErrorText,
-          messageMetadata: ({ part }) => part.type === "finish-step" ? { ...options.metadata, runId: options.run.id } : undefined,
+          messageMetadata: ({ part }) => part.type === "finish-step" ? { ...options.metadata, runId: options.run.id, ...(piCompletion ? { completion: piCompletion } : {}) } : undefined,
           onFinish: async ({ responseMessage, outcome, isCancelled }) => {
             try {
               if (isCancelled) { cancelled = true;control.abort(new DOMException("客户端停止执行", "AbortError")); }
