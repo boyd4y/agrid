@@ -2,6 +2,9 @@ import { z } from "zod";
 
 /** Stable wire IDs. Native IDs are the installed official adapter declarations. */
 export const PLATFORM_TOOL_IDS = [
+  "batch_add_rows", "batch_update_rows", "batch_delete_rows",
+  "batch_add_columns", "batch_update_columns", "batch_delete_columns",
+  "batch_set_relations", "batch_add_relations", "batch_remove_relations",
   "list_reports",
   "get_report",
   "create_report",

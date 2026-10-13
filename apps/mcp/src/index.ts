@@ -6,7 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA } from "@tabdo/shared";
+import { BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA } from "@tabdo/shared";
 import { callCommand, textResult } from "./client.js";
 
 const cellValue = z.union([
@@ -55,6 +55,13 @@ const server = new McpServer({
   name: "tabdo",
   version: "0.1.0",
 });
+
+for (const [name, definition] of Object.entries(BATCH_TOOLS)) {
+  server.registerTool(name, { description: definition.description, inputSchema: definition.schema.shape }, async (input: Record<string, unknown>) => {
+    const validated = definition.schema.parse(input);
+    return textResult(batchToolResult(name, await callCommand(definition.command, validated)));
+  });
+}
 
 server.registerTool("rename_view", { description: "重命名表格、看板或表单视图。", inputSchema: RENAME_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("renameView", input)));
 server.registerTool("set_default_view", { description: "设置表格唯一默认视图。", inputSchema: SET_DEFAULT_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("setDefaultView", input)));

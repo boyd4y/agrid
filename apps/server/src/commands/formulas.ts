@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import {
   recomputeRowFormulas,
   resolveFormulaDepIds,
@@ -6,7 +6,7 @@ import {
   type CellValue,
   type ColumnDef,
 } from "@tabdo/shared";
-import { db, type Database } from "../db/index.js";
+import { db, type Database, type Transaction } from "../db/index.js";
 import { columns, rows } from "../db/schema.js";
 import { queryRowsWindowed } from "./queryRows.js";
 
@@ -156,4 +156,27 @@ export function assertFormulaConfig(
     );
   const err = validateFormula(formula, allColumns, selfColumnId);
   if (err) throw new Error(err);
+}
+
+/** Recompute in the caller transaction so schema batches also roll back computed cells. */
+export async function recomputeFormulasInTransaction(tableId: string, tx: Transaction) {
+  const cols = await loadTableColumns(tableId, tx);
+  if (!cols.some((c) => c.type === "formula")) return { updated: 0 };
+  let cursor: string | undefined, updated = 0;
+  for (;;) {
+    const page = await tx.select().from(rows)
+      .where(and(eq(rows.tableId, tableId), cursor ? gt(rows.id, cursor) : undefined))
+      .orderBy(asc(rows.id)).limit(200).for("update");
+    if (!page.length) break;
+    for (const row of page) {
+      const cells = (row.cells ?? {}) as Record<string, CellValue>;
+      const next = applyFormulasToCells(cols, cells);
+      if (JSON.stringify(physicalCells(cols, cells)) !== JSON.stringify(next)) {
+        await tx.update(rows).set({ cells: next, version: sql`${rows.version}+1`, updatedAt: new Date() }).where(eq(rows.id, row.id));
+        updated++;
+      }
+    }
+    cursor = page.at(-1)!.id;
+  }
+  return { updated };
 }

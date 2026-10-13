@@ -1,3 +1,5 @@
+import type { BatchAddColumnsInput, BatchUpdateColumnsInput, BatchDeleteColumnsInput, BatchColumnsResult, BatchDeleteColumnsResult } from "./batch-columns.js";
+import type { BatchRelationsInput, BatchRelationsResult } from "./batch-relations.js";
 import type { RelationCommands, RelationResults } from "./relations.js";
 import type { CellValue, ColumnConfig, ColumnType, FullTable, TableMeta, ColumnDef, RowData } from "./types.js";
 import type { QueryRowsInput, QueryRowsResult } from "./pagination.js";
@@ -36,12 +38,16 @@ import type {
 
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
+  "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
   "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
   "listTables",
   "getTable",
   "updateCell",
   "updateCells",
   "addRow",
+  "batchAddRows",
+  "batchUpdateRows",
+  "batchDeleteRows",
   "deleteRow",
   "addColumn",
   "deleteColumn",
@@ -104,6 +110,23 @@ export type AddRowInput = {
   cells?: Record<string, CellValue>;
   skipAutomation?: boolean;
 };
+export type BatchAddRowsInput = {
+  tableId: string;
+  rows: { cells?: Record<string, CellValue> }[];
+  /** internal: skip automation engine (writeback from automation itself) */
+  skipAutomation?: boolean;
+};
+export type BatchUpdateRowsInput = {
+  updates: { rowId: string; cells: Record<string, CellValue>; expectedVersion?: number }[];
+  /** internal: skip automation engine (writeback from automation itself) */
+  skipAutomation?: boolean;
+};
+export type BatchDeleteRowsInput = {
+  rowIds: string[];
+  /** internal: skip automation engine (writeback from automation itself) */
+  skipAutomation?: boolean;
+};
+export type BatchRowsResult = { count: number; rowIds: string[]; affectedTableIds: string[] };
 export type DeleteRowInput = { rowId: string };
 export type AddColumnInput = {
   tableId: string;
@@ -136,6 +159,12 @@ export type ReorderColumnsInput = {
 };
 
 export type CommandInputMap = RelationCommands & {
+  batchAddColumns: BatchAddColumnsInput;
+  batchUpdateColumns: BatchUpdateColumnsInput;
+  batchDeleteColumns: BatchDeleteColumnsInput;
+  batchSetRelations: BatchRelationsInput;
+  batchAddRelations: BatchRelationsInput;
+  batchRemoveRelations: BatchRelationsInput;
   queryRows: QueryRowsInput;
   updateColumn: UpdateColumnInput;
   reorderColumns: ReorderColumnsInput;
@@ -144,6 +173,9 @@ export type CommandInputMap = RelationCommands & {
   updateCell: UpdateCellInput;
   updateCells: UpdateCellsInput;
   addRow: AddRowInput;
+  batchAddRows: BatchAddRowsInput;
+  batchUpdateRows: BatchUpdateRowsInput;
+  batchDeleteRows: BatchDeleteRowsInput;
   deleteRow: DeleteRowInput;
   addColumn: AddColumnInput;
   deleteColumn: DeleteColumnInput;
@@ -176,6 +208,12 @@ export type CommandInputMap = RelationCommands & {
 };
 
 export type CommandResultMap = RelationResults & {
+  batchAddColumns: BatchColumnsResult;
+  batchUpdateColumns: BatchColumnsResult;
+  batchDeleteColumns: BatchDeleteColumnsResult;
+  batchSetRelations: BatchRelationsResult;
+  batchAddRelations: BatchRelationsResult;
+  batchRemoveRelations: BatchRelationsResult;
   queryRows: QueryRowsResult;
   updateColumn: ColumnDef;
   reorderColumns: ColumnDef[];
@@ -184,6 +222,9 @@ export type CommandResultMap = RelationResults & {
   updateCell: RowData;
   updateCells: RowData;
   addRow: RowData;
+  batchAddRows: BatchRowsResult;
+  batchUpdateRows: BatchRowsResult;
+  batchDeleteRows: BatchRowsResult;
   deleteRow: { ok: true };
   addColumn: ColumnDef;
   deleteColumn: { ok: true };

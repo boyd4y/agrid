@@ -1,3 +1,4 @@
+import { createBatchTools } from "./batch-tools.js";
 import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA } from "@tabdo/shared";
 import { createReportTools } from "./report-tools.js";
 import { relationConfigSchema, rollupConfigSchema } from "../commands/relations.js";
@@ -48,6 +49,7 @@ export function createTableTools(
   };
   return {
     ...createReportTools(organizationId),
+    ...createBatchTools(defaultTableId, organizationId, actorId),
     get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow({...input,...org})}),
     query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords({...input,...org})}),
     set_relation: tool({description:"整体替换已有关联字段中的目标记录。此工具不创建字段；创建关联字段用 add_column(type=relation, relation={targetTableId,...})。传 expectedVersion 防止覆盖并发修改。清空传 recordIds=[]，不删除记录。",inputSchema:zodSchema(relationRecordSchema.extend({expectedVersion:z.number().int().optional()})),execute:async input=>cmds.setRelation({...input,...org})}),
@@ -74,7 +76,7 @@ export function createTableTools(
       execute: async ({ tableId }) => cmds.listAutomations({ tableId: tableIdOrDefault(tableId), ...org }),
     }),
     create_automation: tool({
-      description: "创建自动化：新增行、字段变化或进入状态时，匹配条件后自动更新字段。配置前先 get_table 获取字段/选项 ID。当前后台支持 update_field 动作。",
+      description: "创建持续生效的事件触发规则：未来新增记录、字段变化或进入状态时自动更新字段。用于用户要求的自动处理；一次性导入或mock新增记录使用batch_add_rows。配置前get_table读取真实字段和选项id；当前动作仅update_field。",
       inputSchema: zodSchema(z.object({
         tableId: z.string().uuid().optional(), name: z.string().min(1), enabled: z.boolean().optional(),
         trigger: automationTriggerSchema, conditions: z.array(automationConditionSchema).optional(),
@@ -150,7 +152,7 @@ export function createTableTools(
     }),
 
     add_row: tool({
-      description: "新增一行，可带初始单元格值",
+      description: "新增单条记录，可带初始单元格值。一次性新增多条或mock数据使用batch_add_rows。",
       inputSchema: zodSchema(
         z.object({
           tableId: z.string().uuid().optional().describe("默认用当前打开的表"),

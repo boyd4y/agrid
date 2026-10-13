@@ -79,88 +79,92 @@ export async function createRelationColumn(
     width?: number;
   } & Scope,
 ) {
+  return db.transaction((tx) => createRelationColumnInTransaction(tx, input));
+}
+export async function createRelationColumnInTransaction(
+  tx: Transaction,
+  input: { tableId: string; name: string; config?: ColumnConfig; width?: number } & Scope,
+) {
   const organizationId = requireOrgId(input.organizationId);
   const config = relationConfigSchema.parse(input.config?.relation);
-  return db.transaction(async (tx) => {
-    const tableIds = [...new Set([input.tableId, config.targetTableId])].sort();
-    const owned = await tx
-      .select()
-      .from(tables)
-      .where(inArray(tables.id, tableIds))
-      .orderBy(asc(tables.id))
-      .for("update");
-    if (
-      owned.length !== tableIds.length ||
-      owned.some((t) => t.organizationId !== organizationId)
-    )
-      throw new Error("关联目标表不存在或不属于当前工作区");
-    const insert = async (tableId: string, name: string) => {
-      const [{ position }] = await tx
-        .select({
-          position: sql<number>`COALESCE(max(${columns.sortOrder}),-1)+1`,
-        })
-        .from(columns)
-        .where(eq(columns.tableId, tableId));
-      const [col] = await tx
-        .insert(columns)
-        .values({
-          tableId,
-          name,
-          type: "relation",
-          config: {},
-          width: input.width ?? 220,
-          sortOrder: position,
-        })
-        .returning();
-      return col;
-    };
-    const source = await insert(input.tableId, input.name);
-    const inverse = config.inverseName
-      ? await insert(config.targetTableId, config.inverseName)
-      : null;
-    const [def] = await tx
-      .insert(tableRelations)
+  const tableIds = [...new Set([input.tableId, config.targetTableId])].sort();
+  const owned = await tx
+    .select()
+    .from(tables)
+    .where(inArray(tables.id, tableIds))
+    .orderBy(asc(tables.id))
+    .for("update");
+  if (
+    owned.length !== tableIds.length ||
+    owned.some((t) => t.organizationId !== organizationId)
+  )
+    throw new Error("关联目标表不存在或不属于当前工作区");
+  const insert = async (tableId: string, name: string) => {
+    const [{ position }] = await tx
+      .select({
+        position: sql<number>`COALESCE(max(${columns.sortOrder}),-1)+1`,
+      })
+      .from(columns)
+      .where(eq(columns.tableId, tableId));
+    const [col] = await tx
+      .insert(columns)
       .values({
-        organizationId,
-        sourceTableId: input.tableId,
-        targetTableId: config.targetTableId,
-        sourceColumnId: source.id,
-        inverseColumnId: inverse?.id,
-        sourceSingle: config.limit === "one",
-        targetSingle: config.inverseLimit === "one",
+        tableId,
+        name,
+        type: "relation",
+        config: {},
+        width: input.width ?? 220,
+        sortOrder: position,
       })
       .returning();
-    const [updated] = await tx
+    return col;
+  };
+  const source = await insert(input.tableId, input.name);
+  const inverse = config.inverseName
+    ? await insert(config.targetTableId, config.inverseName)
+    : null;
+  const [def] = await tx
+    .insert(tableRelations)
+    .values({
+      organizationId,
+      sourceTableId: input.tableId,
+      targetTableId: config.targetTableId,
+      sourceColumnId: source.id,
+      inverseColumnId: inverse?.id,
+      sourceSingle: config.limit === "one",
+      targetSingle: config.inverseLimit === "one",
+    })
+    .returning();
+  const [updated] = await tx
+    .update(columns)
+    .set({
+      config: {
+        ...input.config,
+        relation: {
+          relationId: def.id,
+          direction: "source",
+          targetTableId: config.targetTableId,
+          limit: config.limit,
+        },
+      },
+    })
+    .where(eq(columns.id, source.id))
+    .returning();
+  if (inverse)
+    await tx
       .update(columns)
       .set({
         config: {
-          ...input.config,
           relation: {
             relationId: def.id,
-            direction: "source",
-            targetTableId: config.targetTableId,
-            limit: config.limit,
+            direction: "target",
+            targetTableId: input.tableId,
+            limit: config.inverseLimit,
           },
         },
       })
-      .where(eq(columns.id, source.id))
-      .returning();
-    if (inverse)
-      await tx
-        .update(columns)
-        .set({
-          config: {
-            relation: {
-              relationId: def.id,
-              direction: "target",
-              targetTableId: input.tableId,
-              limit: config.inverseLimit,
-            },
-          },
-        })
-        .where(eq(columns.id, inverse.id));
-    return { ...updated, affectedTableIds: tableIds };
-  });
+      .where(eq(columns.id, inverse.id));
+  return { ...updated, affectedTableIds: tableIds };
 }
 export async function validateRollup(
   tx: Transaction | typeof db,

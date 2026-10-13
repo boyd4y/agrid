@@ -96,6 +96,16 @@ const THREAD_COMPONENTS = {
 } as const;
 
 const MUTATING_TOOLS = new Set([
+  "batch_add_rows",
+  "batch_update_rows",
+  "batch_delete_rows",
+  "batch_add_columns",
+  "batch_update_columns",
+  "batch_delete_columns",
+  "batch_set_relations",
+  "batch_add_relations",
+  "batch_remove_relations",
+
   "set_relation",
   "add_relation",
   "remove_relation",

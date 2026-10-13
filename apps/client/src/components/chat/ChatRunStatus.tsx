@@ -9,6 +9,16 @@ import { RecoveredRunStatus } from "./ChatRuns";
 export const ChatActivityContext = createContext<ReadonlyMap<string, ChatActivity>>(new Map());
 
 const TOOL_KEYS = [
+  "batch_add_rows",
+  "batch_update_rows",
+  "batch_delete_rows",
+  "batch_add_columns",
+  "batch_update_columns",
+  "batch_delete_columns",
+  "batch_set_relations",
+  "batch_add_relations",
+  "batch_remove_relations",
+
   "list_tables", "get_table", "query_rows", "create_table", "add_column", "update_column",
   "add_row", "update_cell", "update_cells", "delete_row", "delete_column",
   "set_relation", "add_relation", "remove_relation", "create_form_view", "update_form_view",

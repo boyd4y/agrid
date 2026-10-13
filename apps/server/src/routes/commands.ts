@@ -1,3 +1,4 @@
+import { COMMANDS } from "@tabdo/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { resolveActor } from "../auth/actor.js";
@@ -22,46 +23,7 @@ commandsRoute.post("/", async (c) => {
 
   const body = z
     .object({
-      command: z.enum([
-        "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
-        "listTables",
-        "getTable",
-        "updateCell",
-        "updateCells",
-        "addRow",
-        "deleteRow",
-        "addColumn",
-        "deleteColumn",
-        "updateColumn",
-        "reorderColumns",
-        "queryRows",
-        "setStatus",
-        "moveCard",
-        "listAutomations",
-        "createAutomation",
-        "updateAutomation",
-        "deleteAutomation",
-        "listAutomationRuns",
-        "listViews",
-        "getView",
-        "deleteView",
-        "renameView",
-        "setDefaultView",
-        "updateBoardView",
-        "createFormView",
-        "updateFormView",
-        "setFormFields",
-        "addFormField",
-        "removeFormField",
-        "reorderFormFields",
-        "setFormSections",
-        "createGridView",
-        "createBoardView",
-        "setFormTheme",
-        "setFormLayout",
-        "setFormFieldSettings",
-        "setFormChrome",
-      ]),
+      command: z.enum(COMMANDS),
       input: z.record(z.string(), z.unknown()).default({}),
     })
     .parse(await c.req.json());

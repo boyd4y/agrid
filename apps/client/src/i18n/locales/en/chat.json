@@ -122,7 +122,16 @@
     "create_goal": "Save goal",
     "update_goal": "Update goal",
     "update_plan": "Update plan",
-    "get_task_state": "Read task progress"
+    "get_task_state": "Read task progress",
+    "batch_add_rows": "Adding records in batch",
+    "batch_update_rows": "Updating records in batch",
+    "batch_delete_rows": "Deleting records in batch",
+    "batch_add_columns": "Adding fields in batch",
+    "batch_update_columns": "Updating fields in batch",
+    "batch_delete_columns": "Deleting fields in batch",
+    "batch_set_relations": "Setting relations in batch",
+    "batch_add_relations": "Adding relations in batch",
+    "batch_remove_relations": "Removing relations in batch"
   },
   "task": {
     "title": "Plan & goals",

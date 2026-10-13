@@ -1,10 +1,11 @@
+import { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
+export { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
+import { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";
+export { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";
 import { readRow } from "./relation-reads.js";
 import {
   prepareRelationWrites,
   applyRelationWrites,
-  createRelationColumn,
-  validateRollup,
-  assertNoRollupDependency,
   affectedTables,
 } from "./relations.js";
 import { eq, and, asc, max, sql, inArray, or } from "drizzle-orm";
@@ -15,12 +16,10 @@ import {
   rows,
   tableRelations,
   rowRelations,
-  COLUMN_TYPES,
 } from "../db/schema.js";
 import {
   requireOrgId,
   requireTableInOrg,
-  requireRowInOrg,
   requireColumnInOrg,
   listTablesForOrg,
 } from "../tenant/scope.js";
@@ -28,9 +27,11 @@ import {
   validateCell,
   DEFAULT_PAGE_SIZE,
   changedColumns,
-  type AddColumnInput,
   type AddRowInput,
-  type DeleteColumnInput,
+  type BatchAddRowsInput,
+  type BatchUpdateRowsInput,
+  type BatchDeleteRowsInput,
+  type BatchRowsResult,
   type DeleteRowInput,
   type GetTableInput,
   type QueryRowsInput,
@@ -38,14 +39,12 @@ import {
   type SetStatusInput,
   type UpdateCellInput,
   type UpdateCellsInput,
-  type UpdateColumnInput,
   type CellValue,
   type ColumnDef,
 } from "@tabdo/shared";
 import { queryRowsWindowed, countTableRows } from "./queryRows.js";
 import {
   applyFormulasToCells,
-  assertFormulaConfig,
   loadTableColumns,
   recomputeAllFormulasForTable,
 } from "./formulas.js";
@@ -106,16 +105,6 @@ export async function getTable({
   }
 
   return { ...table, columns: cols, rows: rowList, rowCount };
-}
-
-async function getColumnOrThrow(columnId: string, organizationId?: string) {
-  if (organizationId) {
-    const hit = await requireColumnInOrg(columnId, organizationId);
-    return hit.column;
-  }
-  const [col] = await db.select().from(columns).where(eq(columns.id, columnId));
-  if (!col) throw new Error(`列不存在: ${columnId}`);
-  return col;
 }
 
 /** Create a product table inside an organization (scheme 2). */
@@ -285,154 +274,225 @@ export async function removeRelation(
   return writeRelation(input, "remove");
 }
 
+/** Serialize appends across single-row and batch callers before reading max order. */
+async function prepareRowCreation(
+  tx: Transaction,
+  input: Pick<AddRowInput, "tableId"> & OrgScoped,
+  cellMaps: (Record<string, CellValue> | undefined)[],
+) {
+  const [table] = await tx.select().from(tables).where(eq(tables.id, input.tableId)).for("update");
+  if (!table || (input.organizationId && table.organizationId !== input.organizationId))
+    throw new Error(`表格不存在或不属于该工作区: ${input.tableId}`);
+  const cols = await loadTableColumns(input.tableId, tx);
+  const colMap = columnByIdMap(cols);
+  // Acquire every relation definition in one stable order for the whole batch.
+  const relationIds = cols.filter((col) => col.type === "relation" && cellMaps.some((cells) => Object.hasOwn(cells ?? {}, col.id)))
+    .map((col) => col.config.relation?.relationId).filter((id): id is string => Boolean(id));
+  if (relationIds.length)
+    await tx.select().from(tableRelations).where(inArray(tableRelations.id, relationIds)).orderBy(asc(tableRelations.id)).for("update");
+  const [{ value: maxOrder }] = await tx.select({ value: max(rows.sortOrder) }).from(rows).where(eq(rows.tableId, input.tableId));
+  return { table, cols, colMap, nextSortOrder: (maxOrder ?? -1) + 1 };
+}
+
+/** Shared transaction body: formulas, relation writes and durable automation events. */
+async function addRowInTransaction(
+  tx: Transaction,
+  input: AddRowInput & OrgScoped,
+  context: Awaited<ReturnType<typeof prepareRowCreation>>,
+) {
+  const { table, cols, colMap } = context;
+  for (const [columnId, value] of Object.entries(input.cells ?? {})) {
+    const col = requireColumnFromMap(colMap, columnId);
+    if (col.type === "formula" || col.type === "rollup")
+      throw new Error(`公式列「${col.name}」只读，由表达式自动计算`);
+    const err = validateCell(col.type, value, col.config?.options);
+    if (err) throw new Error(`校验失败 (${col.name}): ${err}`);
+  }
+  const [row] = await tx.insert(rows).values({
+    tableId: input.tableId,
+    cells: applyFormulasToCells(cols, Object.fromEntries(Object.entries(input.cells ?? {}).filter(([id]) => colMap.get(id)?.type !== "relation"))),
+    sortOrder: context.nextSortOrder++,
+    version: 1,
+  }).returning();
+  const { plans } = await prepareRelationWrites(tx, row.id, cols, input.cells ?? {});
+  await applyRelationWrites(tx, plans, row.id, { ...input, organizationId: table.organizationId });
+  if (!input.skipAutomation) {
+    const resolved = await readRow(row.id, cols, tx, true);
+    await appendAutomationEvent(tx, table.organizationId,
+      { type: "row_created", tableId: input.tableId, rowId: row.id, cells: resolved.cells },
+      resolved, cols, input.actorId);
+  }
+  return row.id;
+}
+
 export async function addRow(input: AddRowInput & OrgScoped) {
   return db.transaction(async (tx) => {
-    const [table] = await tx
-      .select()
-      .from(tables)
-      .where(eq(tables.id, input.tableId));
-    if (
-      !table ||
-      (input.organizationId && table.organizationId !== input.organizationId)
-    ) {
-      throw new Error(`表格不存在或不属于该工作区: ${input.tableId}`);
-    }
-    const cols = await loadTableColumns(input.tableId, tx);
-    const colMap = columnByIdMap(cols);
-    for (const [columnId, value] of Object.entries(input.cells ?? {})) {
-      const col = requireColumnFromMap(colMap, columnId);
-      if (col.type === "formula" || col.type === "rollup")
-        throw new Error(`公式列「${col.name}」只读，由表达式自动计算`);
-      const err = validateCell(col.type, value, col.config?.options);
-      if (err) throw new Error(`校验失败 (${col.name}): ${err}`);
-    }
-    const relationIds = cols
-      .filter(
-        (c) => c.type === "relation" && Object.hasOwn(input.cells ?? {}, c.id),
-      )
-      .map((c) => c.config.relation?.relationId)
-      .filter((id): id is string => Boolean(id));
-    if (relationIds.length)
-      await tx
-        .select()
-        .from(tableRelations)
-        .where(inArray(tableRelations.id, relationIds))
-        .orderBy(asc(tableRelations.id))
-        .for("update");
-    const [{ value: maxOrder }] = await tx
-      .select({ value: max(rows.sortOrder) })
-      .from(rows)
-      .where(eq(rows.tableId, input.tableId));
-    const [row] = await tx
-      .insert(rows)
-      .values({
-        tableId: input.tableId,
-        cells: applyFormulasToCells(
-          cols,
-          Object.fromEntries(
-            Object.entries(input.cells ?? {}).filter(
-              ([id]) => colMap.get(id)?.type !== "relation",
-            ),
-          ),
-        ),
-        sortOrder: (maxOrder ?? -1) + 1,
-        version: 1,
-      })
-      .returning();
-    const { plans } = await prepareRelationWrites(
-      tx,
-      row.id,
-      cols,
-      input.cells ?? {},
-    );
-    await applyRelationWrites(tx, plans, row.id, {
-      ...input,
-      organizationId: table.organizationId,
-    });
-    const resolved = await readRow(row.id, cols, tx, true);
-    if (!input.skipAutomation)
-      await appendAutomationEvent(
-        tx,
-        table.organizationId,
-        {
-          type: "row_created",
-          tableId: input.tableId,
-          rowId: row.id,
-          cells: resolved.cells,
-        },
-        resolved,
-        cols,
-        input.actorId,
-      );
-    return {
-      ...(await readRow(row.id, cols, tx)),
-      affectedTableIds: await affectedTables(input.tableId, tx),
-    };
+    const context = await prepareRowCreation(tx, input, [input.cells]);
+    const rowId = await addRowInTransaction(tx, input, context);
+    return { ...(await readRow(rowId, context.cols, tx)), affectedTableIds: await affectedTables(input.tableId, tx) };
   });
 }
 
-export async function deleteRow({
-  rowId,
-  organizationId,
-  actorId,
-}: DeleteRowInput & OrgScoped) {
-  const { row, organizationId: ownerOrg } = await requireRowInOrg(
-    rowId,
-    organizationId,
-  );
-  const cols = await loadTableColumns(row.tableId);
+export async function batchAddRows(input: BatchAddRowsInput & OrgScoped): Promise<BatchRowsResult> {
+  if (!Array.isArray(input.rows) || input.rows.length < 1 || input.rows.length > 100)
+    throw new Error("批量新增必须包含 1 至 100 条记录");
+  for (const row of input.rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row) ||
+      (row.cells !== undefined && (!row.cells || typeof row.cells !== "object" || Array.isArray(row.cells))))
+      throw new Error("批量记录的 cells 必须是字段值对象");
+  }
   return db.transaction(async (tx) => {
-    // Include incoming single-direction edges even when this table has no visible inverse field.
-    const defs = await tx
-      .select()
-      .from(tableRelations)
-      .where(
-        or(
-          eq(tableRelations.sourceTableId, row.tableId),
-          eq(tableRelations.targetTableId, row.tableId),
-        ),
-      )
-      .orderBy(asc(tableRelations.id))
-      .for("update");
-    const incoming: ColumnDef[] = defs
-      .filter((d) => d.targetTableId === row.tableId && !d.inverseColumnId)
-      .map((d) => ({
-        id: d.id,
-        tableId: row.tableId,
-        name: "反向关联",
-        type: "relation",
-        width: 220,
-        sortOrder: 0,
-        createdAt: new Date(),
-        config: {
-          relation: {
-            relationId: d.id,
-            direction: "target",
-            targetTableId: d.sourceTableId,
-            limit: d.targetSingle ? "one" : "many",
-          },
-        },
-      }));
-    const deleteCols = [...cols, ...incoming];
-    const values = Object.fromEntries(
-      deleteCols.filter((c) => c.type === "relation").map((c) => [c.id, []]),
-    );
-    const { plans } = await prepareRelationWrites(
-      tx,
-      rowId,
-      deleteCols,
-      values,
-    );
-    await applyRelationWrites(tx, plans, rowId, {
-      organizationId: ownerOrg,
-      actorId,
-    });
-    const affectedTableIds = await affectedTables(row.tableId, tx);
-    const deleted = await tx.delete(rows).where(eq(rows.id, rowId)).returning();
-    if (!deleted.length) throw new Error("行不存在");
-    return { ok: true as const, affectedTableIds };
+    const context = await prepareRowCreation(tx, input, input.rows.map((row) => row.cells));
+    const rowIds: string[] = [];
+    for (const row of input.rows)
+      rowIds.push(await addRowInTransaction(tx, { tableId: input.tableId, cells: row.cells,
+        organizationId: input.organizationId, actorId: input.actorId, skipAutomation: input.skipAutomation }, context));
+    return { count: rowIds.length, rowIds, affectedTableIds: await affectedTables(input.tableId, tx) };
   });
 }
+
+function assertBatchSize(items: unknown, label: string): asserts items is unknown[] {
+  if (!Array.isArray(items) || items.length < 1 || items.length > 100)
+    throw new Error(`${label}必须包含 1 至 100 项`);
+}
+
+function assertUniqueRowIds(ids: string[]) {
+  if (ids.some((id) => typeof id !== "string" || !id.trim()) || new Set(ids).size !== ids.length)
+    throw new Error("记录 ID 必须有效且不能重复");
+}
+
+/** Tables -> relation definitions -> all current/new peer rows, each in stable order. */
+export async function prepareBatchRowWrites(
+  tx: Transaction,
+  updates: readonly { rowId: string; cells?: Record<string, CellValue> }[],
+  scope: OrgScoped,
+) {
+  const rowIds = [...new Set(updates.map((item) => item.rowId))];
+  const hits = await tx.select({ row: rows, table: tables }).from(rows).innerJoin(tables, eq(rows.tableId, tables.id)).where(inArray(rows.id, rowIds));
+  if (hits.length !== rowIds.length || hits.some((hit) => scope.organizationId && hit.table.organizationId !== scope.organizationId))
+    throw new Error("行不存在或不属于该工作区");
+  const tableIds = [...new Set(hits.map((hit) => hit.row.tableId))].sort();
+  const owned = await tx.select().from(tables).where(inArray(tables.id, tableIds)).orderBy(asc(tables.id)).for("update");
+  if (owned.length !== tableIds.length || owned.some((table) => scope.organizationId && table.organizationId !== scope.organizationId))
+    throw new Error("表格不存在或不属于该工作区");
+  const definitions = await tx.select().from(tableRelations).where(or(inArray(tableRelations.sourceTableId, tableIds), inArray(tableRelations.targetTableId, tableIds))).orderBy(asc(tableRelations.id)).for("update");
+  const colsByTable = new Map<string, ColumnDef[]>();
+  for (const tableId of tableIds) colsByTable.set(tableId, await loadTableColumns(tableId, tx));
+  const edges = await tx.select().from(rowRelations).where(or(inArray(rowRelations.sourceRowId, rowIds), inArray(rowRelations.targetRowId, rowIds)));
+  const peers = new Set([...rowIds, ...edges.flatMap((edge) => [edge.sourceRowId, edge.targetRowId])]);
+  for (const update of updates) {
+    const hit = hits.find((hit) => hit.row.id === update.rowId)!;
+    for (const col of colsByTable.get(hit.row.tableId)!) {
+      const value = update.cells?.[col.id];
+      if (col.type === "relation" && Array.isArray(value))
+        for (const id of value) if (typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) peers.add(id);
+    }
+  }
+  const locked = await tx.select().from(rows).where(inArray(rows.id, [...peers].sort())).orderBy(asc(rows.id)).for("update");
+  const rowsById = new Map(locked.map((row) => [row.id, row]));
+  if (rowIds.some((id) => !rowsById.has(id))) throw new Error("记录已删除");
+  return { rowsById, colsByTable, definitions, tablesById: new Map(owned.map((table) => [table.id, table])) };
+}
+
+export async function batchUpdateRows(input: BatchUpdateRowsInput & OrgScoped): Promise<BatchRowsResult> {
+  assertBatchSize(input.updates, "批量更新");
+  for (const update of input.updates) {
+    if (!update || typeof update !== "object" || Array.isArray(update) || !update.cells || typeof update.cells !== "object" || Array.isArray(update.cells) ||
+      (update.expectedVersion !== undefined && (!Number.isInteger(update.expectedVersion) || update.expectedVersion < 1)))
+      throw new Error("批量更新需要字段值对象与有效版本号");
+  }
+  assertUniqueRowIds(input.updates.map((update) => update.rowId));
+  return db.transaction(async (tx) => {
+    const prepared = await prepareBatchRowWrites(tx, input.updates, input);
+    // Verify the caller's versions against the same locked initial state.
+    // Earlier inverse writes in this batch may then legitimately bump a later
+    // input row; the shared helper reads its current transaction version.
+    for (const update of input.updates) {
+      const original = prepared.rowsById.get(update.rowId)!;
+      if (update.expectedVersion !== undefined && update.expectedVersion !== original.version)
+        throw new Error(`版本冲突: expected ${update.expectedVersion}, got ${original.version}`);
+    }
+    const affected = new Set<string>();
+    for (const update of input.updates) {
+      const result = await updateCellsInTransaction(tx, { rowId: update.rowId, cells: update.cells,
+        organizationId: input.organizationId, actorId: input.actorId, skipAutomation: input.skipAutomation });
+      for (const id of result.affectedTableIds) affected.add(id);
+    }
+    return { count: input.updates.length, rowIds: input.updates.map((update) => update.rowId), affectedTableIds: [...affected] };
+  });
+}
+
+async function deleteRowInTransaction(
+  tx: Transaction,
+  input: DeleteRowInput & OrgScoped & { skipAutomation?: boolean },
+  prepared: Awaited<ReturnType<typeof prepareBatchRowWrites>>,
+) {
+  const row = prepared.rowsById.get(input.rowId)!;
+  const context = { table: prepared.tablesById.get(row.tableId)! };
+  const cols = prepared.colsByTable.get(row.tableId)!;
+  const defs = prepared.definitions.filter((definition) => definition.sourceTableId === row.tableId || definition.targetTableId === row.tableId);
+  const incoming: ColumnDef[] = defs
+    .filter((d) => d.targetTableId === row.tableId && !d.inverseColumnId)
+    .map((d) => ({
+      id: d.id,
+      tableId: row.tableId,
+      name: "反向关联",
+      type: "relation",
+      width: 220,
+      sortOrder: 0,
+      createdAt: new Date(),
+      config: {
+        relation: {
+          relationId: d.id,
+          direction: "target",
+          targetTableId: d.sourceTableId,
+          limit: d.targetSingle ? "one" : "many",
+        },
+      },
+    }));
+  const deleteCols = [...cols, ...incoming];
+  const values = Object.fromEntries(
+    deleteCols.filter((c) => c.type === "relation").map((c) => [c.id, []]),
+  );
+  const { plans } = await prepareRelationWrites(
+    tx,
+    input.rowId,
+    deleteCols,
+    values,
+  );
+  await applyRelationWrites(tx, plans, input.rowId, {
+    organizationId: context.table.organizationId,
+    actorId: input.actorId,
+    skipAutomation: input.skipAutomation,
+  });
+  const deleted = await tx.delete(rows).where(eq(rows.id, input.rowId)).returning();
+  if (!deleted.length) throw new Error("行不存在");
+}
+
+export async function deleteRow(input: DeleteRowInput & OrgScoped) {
+  return db.transaction(async (tx) => {
+    const prepared = await prepareBatchRowWrites(tx, [{ rowId: input.rowId }], input);
+    const row = prepared.rowsById.get(input.rowId)!;
+    await deleteRowInTransaction(tx, input, prepared);
+    return { ok: true as const, affectedTableIds: await affectedTables(row.tableId, tx) };
+  });
+}
+
+export async function batchDeleteRows(input: BatchDeleteRowsInput & OrgScoped): Promise<BatchRowsResult> {
+  assertBatchSize(input.rowIds, "批量删除");
+  assertUniqueRowIds(input.rowIds);
+  return db.transaction(async (tx) => {
+    const prepared = await prepareBatchRowWrites(tx, input.rowIds.map((rowId) => ({ rowId })), input);
+    const affected = new Set<string>();
+    for (const rowId of input.rowIds) {
+      const row = prepared.rowsById.get(rowId)!;
+      await deleteRowInTransaction(tx, { rowId, organizationId: input.organizationId, actorId: input.actorId, skipAutomation: input.skipAutomation }, prepared);
+      for (const id of await affectedTables(row.tableId, tx)) affected.add(id);
+    }
+    return { count: input.rowIds.length, rowIds: [...input.rowIds], affectedTableIds: [...affected] };
+  });
+}
+
 export async function deleteTable(input: { tableId: string } & OrgScoped) {
   return db.transaction(async (tx) => {
     const [table] = await tx
@@ -456,270 +516,6 @@ export async function deleteTable(input: { tableId: string } & OrgScoped) {
     await tx.delete(tables).where(eq(tables.id, table.id));
     return { ok: true as const };
   });
-}
-
-export async function addColumn(input: AddColumnInput & OrgScoped) {
-  const { tableId, name, type, config, width, organizationId } = input;
-  if (!(COLUMN_TYPES as readonly string[]).includes(type)) {
-    throw new Error(`不支持的列类型: ${type}`);
-  }
-  await requireTableInOrg(tableId, organizationId);
-  if (type === "relation") return createRelationColumn(input);
-  if (type === "rollup")
-    return db.transaction(async (tx) => {
-      const rollup = await validateRollup(tx, tableId, config?.rollup);
-      const [{ position }] = await tx
-        .select({
-          position: sql<number>`COALESCE(max(${columns.sortOrder}),-1)+1`,
-        })
-        .from(columns)
-        .where(eq(columns.tableId, tableId));
-      const [col] = await tx
-        .insert(columns)
-        .values({
-          tableId,
-          name,
-          type,
-          config: { ...config, rollup },
-          width: width ?? 140,
-          sortOrder: position,
-        })
-        .returning();
-      return col;
-    });
-
-  const existingCols = await loadTableColumns(tableId);
-  let nextConfig = { ...(config ?? {}) };
-  if (type === "formula") {
-    assertFormulaConfig(nextConfig, existingCols);
-    nextConfig = {
-      ...nextConfig,
-      formula: nextConfig.formula?.trim(),
-      formulaResultType: nextConfig.formulaResultType ?? "auto",
-    };
-  }
-
-  const [{ value: maxOrder }] = await db
-    .select({ value: max(columns.sortOrder) })
-    .from(columns)
-    .where(eq(columns.tableId, tableId));
-
-  const [col] = await db
-    .insert(columns)
-    .values({
-      tableId,
-      name,
-      type,
-      config: nextConfig,
-      width: width ?? (type === "formula" ? 140 : 160),
-      sortOrder: (maxOrder ?? -1) + 1,
-    })
-    .returning();
-
-  if (type === "formula") {
-    await recomputeAllFormulasForTable(tableId);
-  }
-  return col;
-}
-
-export async function deleteColumn({
-  columnId,
-  organizationId,
-}: DeleteColumnInput & OrgScoped) {
-  const { column } = await requireColumnInOrg(columnId, organizationId);
-  const result = await db.transaction(async (tx) => {
-    const defs = await tx
-      .select()
-      .from(tableRelations)
-      .where(
-        or(
-          eq(tableRelations.sourceColumnId, columnId),
-          eq(tableRelations.inverseColumnId, columnId),
-        ),
-      )
-      .orderBy(asc(tableRelations.id))
-      .for("update");
-    const ids = [
-      ...new Set([
-        columnId,
-        ...defs.flatMap((d) => [
-          d.sourceColumnId,
-          ...(d.inverseColumnId ? [d.inverseColumnId] : []),
-        ]),
-      ]),
-    ];
-    await tx
-      .select()
-      .from(columns)
-      .where(inArray(columns.id, ids))
-      .orderBy(asc(columns.id))
-      .for("update");
-    await assertNoRollupDependency(ids, tx);
-    const affectedTableIds = [
-      ...new Set([
-        column.tableId,
-        ...defs.flatMap((d) => [d.sourceTableId, d.targetTableId]),
-      ]),
-    ];
-    await tx.delete(columns).where(inArray(columns.id, ids));
-    return { ok: true as const, affectedTableIds };
-  });
-  await recomputeAllFormulasForTable(column.tableId);
-  return result;
-}
-
-/**
- * Clear one cell when it fails validation for a new column type.
- * Uses version CAS; on conflict re-reads once and recomputes from latest cells.
- */
-async function clearIncompatibleCellCas(args: {
-  rowId: string;
-  columnId: string;
-  nextType: string;
-  options?: { id: string }[];
-  initialRow?: {
-    id: string;
-    cells?: Record<string, CellValue> | null;
-    version?: number;
-  };
-}) {
-  const { rowId, columnId, nextType, options } = args;
-  let current = args.initialRow;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (!current || attempt > 0) {
-      const [fresh] = await db.select().from(rows).where(eq(rows.id, rowId));
-      if (!fresh) return;
-      current = fresh;
-    }
-    const v = current.cells?.[columnId];
-    if (v === undefined || v === null || v === "") return;
-    const err = validateCell(nextType, v as CellValue, options);
-    if (!err) return;
-    const nextCells = { ...(current.cells ?? {}), [columnId]: null };
-    const casVersion = current.version ?? 0;
-    const [updated] = await db
-      .update(rows)
-      .set({
-        cells: nextCells,
-        version: sql`${rows.version} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(rows.id, rowId), eq(rows.version, casVersion)))
-      .returning();
-    if (updated) return;
-    // conflict — loop retries with fresh read
-  }
-  throw new Error(`版本冲突: 列类型转换写回行 ${rowId} 失败`);
-}
-
-export async function updateColumn(input: UpdateColumnInput & OrgScoped) {
-  const col = await getColumnOrThrow(input.columnId, input.organizationId);
-  const nextConfig = {
-    ...(col.config ?? {}),
-    ...(input.config ?? {}),
-    ...(input.hidden !== undefined ? { hidden: input.hidden } : {}),
-  };
-
-  if (input.type && !(COLUMN_TYPES as readonly string[]).includes(input.type)) {
-    throw new Error(`不支持的列类型: ${input.type}`);
-  }
-
-  const nextType = input.type ?? col.type;
-  if (
-    nextType !== col.type &&
-    (nextType === "relation" ||
-      nextType === "rollup" ||
-      col.type === "relation" ||
-      col.type === "rollup")
-  )
-    throw new Error("关联和汇总字段不能直接转换类型，请创建新字段");
-  if (input.type && input.type !== col.type)
-    await assertNoRollupDependency([col.id]);
-  if (
-    col.type === "relation" &&
-    input.config?.relation &&
-    JSON.stringify(input.config.relation) !==
-      JSON.stringify(col.config.relation)
-  )
-    throw new Error("关联结构不能直接修改，请创建新关联字段");
-  if (nextType === "formula") {
-    const siblings = (await loadTableColumns(col.tableId)).filter(
-      (c) => c.id !== col.id,
-    );
-    assertFormulaConfig(nextConfig, siblings, col.id);
-    nextConfig.formula = nextConfig.formula?.trim();
-    nextConfig.formulaResultType = nextConfig.formulaResultType ?? "auto";
-  }
-
-  // Type change: clear incompatible cells in batches (CAS — never overwrite concurrent cell edits)
-  if (input.type && input.type !== col.type && input.type !== "formula") {
-    const batchSize = 500;
-    let cursor: string | null = null;
-    for (;;) {
-      const page = await queryRowsWindowed({
-        tableId: col.tableId,
-        cursor,
-        limit: batchSize,
-      });
-      for (const r of page.rows) {
-        await clearIncompatibleCellCas({
-          rowId: r.id,
-          columnId: input.columnId,
-          nextType: input.type,
-          options: nextConfig.options,
-          initialRow: r,
-        });
-      }
-      if (!page.hasMore) break;
-      cursor = page.nextCursor;
-    }
-  }
-
-  const updated = await db.transaction(async (tx) => {
-    const [current] = await tx
-      .select()
-      .from(columns)
-      .where(eq(columns.id, col.id))
-      .for("update");
-    if (!current) throw new Error("字段已删除");
-    if (
-      current.type !== col.type ||
-      JSON.stringify(current.config) !== JSON.stringify(col.config)
-    )
-      throw new Error("字段配置已变化，请刷新后重试");
-    if (nextType !== col.type) await assertNoRollupDependency([col.id], tx);
-    if (col.type === "rollup" && input.config?.rollup)
-      nextConfig.rollup = await validateRollup(
-        tx,
-        col.tableId,
-        input.config.rollup,
-      );
-    const [result] = await tx
-      .update(columns)
-      .set({
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.type !== undefined ? { type: input.type } : {}),
-        config: nextConfig,
-        ...(input.width !== undefined ? { width: input.width } : {}),
-        ...(input.sortOrder !== undefined
-          ? { sortOrder: input.sortOrder }
-          : {}),
-      })
-      .where(eq(columns.id, input.columnId))
-      .returning();
-    return result;
-  });
-
-  const needsRecompute =
-    nextType === "formula" ||
-    col.type === "formula" ||
-    input.name !== undefined ||
-    input.config?.formula !== undefined ||
-    input.config?.formulaResultType !== undefined;
-  if (needsRecompute) {
-    await recomputeAllFormulasForTable(col.tableId);
-  }
-  return updated;
 }
 
 export async function reorderColumns({
@@ -813,6 +609,12 @@ export { getRow, queryRelationRecords } from "./relations.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 
 export const commands = {
+  batchSetRelations,
+  batchAddRelations,
+  batchRemoveRelations,
+  batchAddColumns,
+  batchUpdateColumns,
+  batchDeleteColumns,
   getRow,
   setRelation,
   addRelation,
@@ -824,6 +626,9 @@ export const commands = {
   updateCell,
   updateCells,
   addRow,
+  batchAddRows,
+  batchUpdateRows,
+  batchDeleteRows,
   deleteRow,
   addColumn,
   deleteColumn,

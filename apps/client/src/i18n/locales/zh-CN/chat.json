@@ -122,7 +122,16 @@
     "create_goal": "保存目标",
     "update_goal": "更新目标",
     "update_plan": "更新计划",
-    "get_task_state": "读取任务进展"
+    "get_task_state": "读取任务进展",
+    "batch_add_rows": "批量添加记录",
+    "batch_update_rows": "批量修改记录",
+    "batch_delete_rows": "批量删除记录",
+    "batch_add_columns": "批量添加字段",
+    "batch_update_columns": "批量修改字段",
+    "batch_delete_columns": "批量删除字段",
+    "batch_set_relations": "批量设置关联",
+    "batch_add_relations": "批量添加关联",
+    "batch_remove_relations": "批量解除关联"
   },
   "task": {
     "title": "计划与目标",
