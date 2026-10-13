@@ -24,26 +24,36 @@ type AppShellContextValue = {
 
 const AppShellContext = createContext<AppShellContextValue | null>(null);
 
-const SIDEBAR_KEY = "agrid.sidebarCollapsed";
-const AI_KEY = "agrid.aiOpen";
+const SIDEBAR_KEY = "tabdo.sidebarCollapsed";
+const SIDEBAR_KEY_LEGACY = "agrid.sidebarCollapsed";
+const AI_KEY = "tabdo.aiOpen";
+const AI_KEY_LEGACY = "agrid.aiOpen";
+
+function readFlag(key: string, legacyKey: string): boolean {
+  try {
+    const next = localStorage.getItem(key);
+    if (next !== null) return next === "1";
+    const prev = localStorage.getItem(legacyKey);
+    if (prev !== null) {
+      localStorage.setItem(key, prev);
+      localStorage.removeItem(legacyKey);
+      return prev === "1";
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export function AppShellProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const isAiPage = pathname.replace(/\/$/, "") === "/app";
-  const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => {
-    try {
-      return localStorage.getItem(SIDEBAR_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [aiOpen, setAiOpenState] = useState(() => {
-    try {
-      return localStorage.getItem(AI_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState(() =>
+    readFlag(SIDEBAR_KEY, SIDEBAR_KEY_LEGACY)
+  );
+  const [aiOpen, setAiOpenState] = useState(() =>
+    readFlag(AI_KEY, AI_KEY_LEGACY)
+  );
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [recordSheetOpen, setRecordSheetOpen] = useState(false);
 
