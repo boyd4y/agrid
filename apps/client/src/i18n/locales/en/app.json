@@ -132,7 +132,12 @@
     "noMatch": "No matching skills"
   },
   "settings": {
-    "description": "Workspace preferences and personal API access",
+    "description": "Preferences, API keys, and workspace integrations",
+    "tabs": {
+      "label": "Settings sections",
+      "general": "General",
+      "apiKeys": "API Key"
+    },
     "appearance": "Appearance",
     "appearanceAria": "Workspace appearance",
     "layout": "Layout",

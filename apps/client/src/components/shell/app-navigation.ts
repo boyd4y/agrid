@@ -10,7 +10,7 @@ export const APP_NAVIGATION = {
   members: { to: "/app/members", labelKey: "nav.members", icon: NiUsers },
   agents: { to: "/app/agents", labelKey: "nav.agents", icon: NiBot },
   skills: { to: "/app/skills", labelKey: "nav.skills", icon: NiBook },
-  integrations: { to: "/app/integrations", labelKey: "nav.integrations", icon: Plug },
+  integrations: { to: "/app/settings?tab=integrations", labelKey: "nav.integrations", icon: Plug },
   settings: { to: "/app/settings", labelKey: "nav.settings", icon: Settings },
 } as const;
 

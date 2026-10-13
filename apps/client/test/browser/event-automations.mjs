@@ -8,33 +8,121 @@ const fixture = await createBrowserFixture({ name: 'Event automations browser' }
 const { page, api, errors } = fixture;
 page.setDefaultTimeout(10000);
 const choose = async (control, option) => { await control.click(); await page.getByRole('option', { name: option, exact: true }).click(); };
+const header = page.locator('[data-slot=app-page-header-content]');
+const integrationsToolbar = page.getByTestId('integrations-toolbar');
+const assertCentered = async (dialog, footerButton) => {
+  await dialog.waitFor();
+  await page.waitForFunction(testId => { const box = document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect(); return box && Math.abs(box.x + box.width / 2 - innerWidth / 2) < 3 && Math.abs(box.y + box.height / 2 - innerHeight / 2) < 3; }, await dialog.getAttribute('data-testid'));
+  const bounds = await dialog.boundingBox(), footer = await footerButton.boundingBox(), viewport = page.viewportSize();
+  assert(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width + 1 && bounds.y + bounds.height <= viewport.height + 1, 'centered integration dialog fits the viewport');
+  assert(footer && footer.y >= bounds.y && footer.y + footer.height <= viewport.height + 1, 'dialog footer remains visible');
+  assert.equal(await page.locator('[data-slot=sheet-content]').count(), 0, 'integrations use centered dialogs throughout');
+};
 try {
   const table = await api('/tables', { name: 'Event target' });
   const title = await api(`/tables/${table.id}/columns`, { name: 'Title', type: 'text' });
   const amount = await api(`/tables/${table.id}/columns`, { name: 'Amount', type: 'number' });
+  let failDirectory = true;
+  await page.route('**/api/integrations', async route => {
+    if (route.request().method() === 'GET' && failDirectory) await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture directory load failure' }) });
+    else await route.fallback();
+  });
   await page.goto(frontend + '/app/integrations');
+  await page.waitForURL('**/app/settings?tab=integrations');
+  const settingsTabs = page.getByRole('tablist', { name: '设置分类', exact: true });
+  assert.equal(await settingsTabs.getAttribute('aria-orientation'), 'vertical');
+  assert.equal(await settingsTabs.getByRole('tab', { name: '集成', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(await settingsTabs.getByRole('tab', { name: '集成', exact: true }).locator('svg').count(), 1, 'settings navigation includes the integration icon');
+  assert.equal(await page.locator('a[href="/app/integrations"]').count(), 0, 'integrations are reached through settings, not a separate sidebar item');
+  await page.getByRole('alert').getByText('Fixture directory load failure', { exact: true }).waitFor();
+  assert.equal(await page.getByTestId('integrations-empty').count(), 0, 'load failure is not an empty directory');
+  failDirectory = false;
+  await page.getByRole('alert').getByRole('button', { name: '重新加载', exact: true }).click();
+  await page.getByTestId('integrations-empty').getByRole('heading', { level: 2 }).waitFor();
+  assert.equal(await page.getByTestId('integrations-empty').locator('img').count(), 1, 'initial mail directory uses the shared illustrated empty state');
+  const contentBounds = await page.locator('[data-slot=app-page-content]').boundingBox(), headerBounds = await header.boundingBox();
+  assert.equal(Math.round(contentBounds.width), 1024); assert.equal(Math.round(headerBounds.width), 1024); assert.equal(Math.round(contentBounds.x), Math.round(headerBounds.x));
+
+  let createAttempts = 0, failCreate = true, failConnection = true, failRegistration = true;
+  const fixtureInbox = { inboxId: 'wizard-inbox', address: 'wizard@fixture.local' };
+  await page.route('**/api/integrations', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    createAttempts++;
+    if (failCreate) await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture mail create failure' }) });
+    else await route.fallback();
+  });
+  await page.route('**/api/integrations/*/test', async route => {
+    const connection = (await api('/integrations')).connections.find(item => item.name === 'Browser wizard mail');
+    assert(connection, 'the wizard stores one real connection before testing it');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ connection: { ...connection, state: failConnection ? 'error' : 'connected', lastError: failConnection ? 'Fixture mail connection failure' : null }, ok: !failConnection }) });
+  });
+  await page.route('**/api/integrations/*/inboxes', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ inboxes: [fixtureInbox] }) }));
+  await page.route('**/api/integrations/*/webhooks', async route => {
+    assert.deepEqual(route.request().postDataJSON().inboxIds, [fixtureInbox.inboxId]);
+    const connectionId = new URL(route.request().url()).pathname.split('/').at(-2);
+    await route.fulfill({ status: failRegistration ? 502 : 201, contentType: 'application/json', body: JSON.stringify(failRegistration ? { error: 'Fixture mailbox registration failure' } : { endpoint: { id: crypto.randomUUID(), name: 'Browser wizard inbox', kind: 'agentmail', connectionId, inboxIds: [fixtureInbox.inboxId], receiveUrl: 'https://fixture.local/api/webhooks/agentmail/wizard', enabled: true, state: 'active', lastError: null, createdAt: new Date().toISOString() } }) });
+  });
+  await integrationsToolbar.getByRole('button', { name: '连接 AgentMail', exact: true }).click();
+  const mailDialog = page.getByTestId('integration-create-dialog');
+  await assertCentered(mailDialog, mailDialog.getByRole('button', { name: '保存并继续', exact: true }));
+  await mailDialog.getByLabel('名称', { exact: true }).fill('Browser wizard mail');
+  await mailDialog.getByLabel('API Key', { exact: true }).fill('fixture-key-never-used-remotely');
+  await mailDialog.getByRole('button', { name: '保存并继续', exact: true }).click();
+  await mailDialog.getByRole('alert').getByText('Fixture mail create failure', { exact: true }).waitFor();
+  assert.equal(await mailDialog.getByLabel('名称', { exact: true }).inputValue(), 'Browser wizard mail');
+  failCreate = false;
+  await mailDialog.getByRole('button', { name: '保存并继续', exact: true }).click();
+  await mailDialog.getByRole('alert').getByText('Fixture mail connection failure', { exact: true }).waitFor();
+  assert.equal(createAttempts, 2, 'one failed POST and one successful POST');
+  failConnection = false;
+  await mailDialog.getByRole('button', { name: '保存并继续', exact: true }).click();
+  await mailDialog.getByRole('checkbox', { name: fixtureInbox.address, exact: true }).waitFor();
+  assert.equal(createAttempts, 2, 'connection retry never creates a duplicate');
+  await mailDialog.getByRole('checkbox', { name: fixtureInbox.address, exact: true }).check();
+  await mailDialog.getByRole('button', { name: '连接邮箱', exact: true }).click();
+  await mailDialog.getByRole('alert').getByText('服务暂时不可用，请稍后重试', { exact: true }).waitFor();
+  assert.equal(await mailDialog.getByRole('checkbox', { name: fixtureInbox.address, exact: true }).isChecked(), true, 'registration failure keeps the selected mailbox');
+  failRegistration = false;
+  await mailDialog.getByRole('button', { name: '连接邮箱', exact: true }).click();
+  await mailDialog.getByLabel('接收地址', { exact: true }).waitFor();
+  for (const width of [700, 320]) { await page.setViewportSize({ width, height: 700 }); await assertCentered(mailDialog, mailDialog.getByRole('button', { name: '完成', exact: true })); }
+  await mailDialog.getByRole('button', { name: '完成', exact: true }).click(); await mailDialog.waitFor({ state: 'detached' });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const wizardConnection = (await api('/integrations')).connections.find(item => item.name === 'Browser wizard mail');
+  assert(wizardConnection && !Object.hasOwn(wizardConnection, 'apiKey') && !Object.hasOwn(wizardConnection, 'encryptedApiKey'), 'the directory returns only stored connection metadata');
+  await page.getByRole('button', { name: wizardConnection.name, exact: true }).waitFor();
+  await page.getByLabel('搜索连接…', { exact: true }).fill('no-matching-fixture-connection');
+  await page.getByTestId('integrations-no-results').waitFor();
+  await page.getByTestId('integrations-no-results').getByRole('button').click();
+  assert.equal(await page.getByLabel('搜索连接…', { exact: true }).inputValue(), '', 'clear-search action restores the complete directory');
+  await page.getByRole('button', { name: wizardConnection.name, exact: true }).waitFor();
   await page.getByRole('tab', { name: 'Webhook', exact: true }).click();
-  await page.getByRole('button', { name: '新增', exact: true }).click();
-  const sheet = page.getByRole('dialog');
-  await sheet.getByLabel('名称', { exact: true }).fill('Browser incoming hook');
+  await integrationsToolbar.getByRole('button', { name: '新增 Webhook', exact: true }).click();
+  const createDialog = page.getByTestId('integration-create-dialog');
+  await assertCentered(createDialog, createDialog.getByRole('button', { name: '创建接收地址', exact: true }));
+  await createDialog.getByLabel('名称', { exact: true }).fill('Browser incoming hook');
   let rejectEndpoint = true;
   await page.route('**/api/webhook-endpoints', async route => {
     if (route.request().method() === 'POST' && rejectEndpoint) await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture endpoint save failure' }) });
     else await route.fallback();
   });
-  await sheet.getByRole('button', { name: '保存', exact: true }).click();
-  await sheet.getByRole('alert').getByText('Fixture endpoint save failure', { exact: true }).waitFor();
-  assert.equal(await sheet.getByLabel('名称', { exact: true }).inputValue(), 'Browser incoming hook');
+  await createDialog.getByRole('button', { name: '创建接收地址', exact: true }).click();
+  await createDialog.getByRole('alert').getByText('Fixture endpoint save failure', { exact: true }).waitFor();
+  assert.equal(await createDialog.getByLabel('名称', { exact: true }).inputValue(), 'Browser incoming hook');
   rejectEndpoint = false;
-  await sheet.getByRole('button', { name: '保存', exact: true }).click();
-  await sheet.getByLabel('令牌', { exact: true }).waitFor();
-  const token = await sheet.getByLabel('令牌', { exact: true }).inputValue(); assert(token.length > 20);
-  const url = await sheet.getByLabel('接收地址', { exact: true }).inputValue(); assert(url.includes('/'));
-  await page.keyboard.press('Escape'); await sheet.waitFor({ state: 'detached' });
+  await createDialog.getByRole('button', { name: '创建接收地址', exact: true }).click();
+  await createDialog.getByLabel('令牌', { exact: true }).waitFor();
+  const token = await createDialog.getByLabel('令牌', { exact: true }).inputValue(); assert(token.length > 20);
+  const url = await createDialog.getByLabel('接收地址', { exact: true }).inputValue(); assert(url.includes('/'));
+  for (const width of [700, 320]) { await page.setViewportSize({ width, height: 700 }); await assertCentered(createDialog, createDialog.getByRole('button', { name: '完成', exact: true })); }
+  await createDialog.getByRole('button', { name: '完成', exact: true }).click(); await createDialog.waitFor({ state: 'detached' });
+  await page.setViewportSize({ width: 1600, height: 1000 });
   const endpoint = (await api('/webhook-endpoints')).endpoints.find(item => item.name === 'Browser incoming hook');
   assert(endpoint && !Object.hasOwn(endpoint, 'token'), 'list never returns a webhook token');
   await page.getByRole('button', { name: endpoint.name, exact: true }).click();
-  assert.equal(await sheet.getByLabel('令牌', { exact: true }).count(), 0, 'one-time token is not recovered on reopen');
+  const editDialog = page.getByTestId('integration-edit-dialog');
+  await assertCentered(editDialog, editDialog.getByRole('button', { name: '保存', exact: true }));
+  assert.equal(await editDialog.getByLabel('令牌', { exact: true }).count(), 0, 'one-time token is not recovered on reopen');
   await page.keyboard.press('Escape');
 
   const mail = (await api('/integrations', { provider: 'agentmail', name: 'Browser mail connection', apiKey: 'fixture-key-never-used-remotely' })).connection;
@@ -46,18 +134,18 @@ try {
   await page.getByRole('tab', { name: 'AgentMail', exact: true }).click();
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await page.getByRole('button', { name: mail.name, exact: true }).click();
-  const registered = sheet.getByTestId('connection-endpoint');
+  const registered = editDialog.getByTestId('connection-endpoint');
   await registered.getByText('local-inbox', { exact: true }).waitFor();
   assert.match(await registered.getByLabel('接收地址', { exact: true }).inputValue(), new RegExp(`/agentmail/${mailHookId}$`));
   await registered.getByRole('alert').getByText('Fixture registration failure', { exact: true }).waitFor();
   assert.equal(await registered.getByRole('button', { name: '重试注册', exact: true }).count(), 1);
-  await sheet.getByRole('button', { name: '关闭', exact: true }).click();
+  await editDialog.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByRole('button', { name: mail.name, exact: true }).click();
   await registered.getByText('local-inbox', { exact: true }).waitFor();
   await registered.getByRole('button', { name: '删除 Browser registered inbox', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click();
   assert.equal((await api('/webhook-endpoints')).endpoints.some(endpoint => endpoint.id === mailHookId), true);
-  await sheet.getByRole('button', { name: '关闭', exact: true }).click();
+  await editDialog.getByRole('button', { name: '关闭', exact: true }).click();
 
   await page.goto(frontend + '/app/automations/new');
   const sourceStep = page.getByTestId('automation-source-step');
@@ -176,5 +264,5 @@ try {
   await page.getByText('Browser deep link persisted reply', { exact: true }).waitFor();
   assert.equal(attemptedMissingHistory, false, 'an invalid deep link is rejected before switching the SDK thread');
   assert.deepEqual(errors, []);
-  console.log('PASS event automation UI: one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint/rule 400 retry retains draft, schedule preview+typed numeric command+source-back preservation, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
+  console.log('PASS event automation UI: centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, illustrated empty/error/search states, one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint/rule 400 retry retains draft, schedule preview+typed numeric command+source-back preservation, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
 } finally { await fixture.close(); }

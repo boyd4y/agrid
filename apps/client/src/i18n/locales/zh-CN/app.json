@@ -132,7 +132,12 @@
     "noMatch": "没有匹配的技能"
   },
   "settings": {
-    "description": "工作区偏好与个人 API 访问",
+    "description": "偏好设置、API Key 与工作区集成",
+    "tabs": {
+      "label": "设置分类",
+      "general": "常规",
+      "apiKeys": "API Key"
+    },
     "appearance": "外观",
     "appearanceAria": "工作区外观",
     "layout": "布局",

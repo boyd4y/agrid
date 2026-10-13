@@ -1,5 +1,9 @@
 # AgentMail 与通用 Webhook
 
+入口为「设置 → 集成」，个人API Key在「设置 → API Key」独立tab。设置采用左侧带图标的垂直tabs，切换、刷新与浏览器返回保留当前页签；旧 `/app/integrations` 跳转到 `/app/settings?tab=integrations`。
+
+集成列表沿用智能体页面的最大宽度、目录搜索、列表与空状态。首次使用、搜索无结果、加载失败分别显示连接入口、清空搜索和重试。新增、查看与编辑均使用居中Dialog，不使用Sheet。首次AgentMail连接依次填写凭证、验证并选择邮箱、完成；连接测试失败后保留已有连接，重试不重复创建。Webhook创建完成显示接收地址和一次性令牌；编辑不恢复令牌。操作位于固定底部，正文超高时独立滚动。
+
 工作区成员可以查看连接和接收地址，human owner/admin 可以管理连接与端点。管理请求沿用 Cookie 或个人 `tab_` API Key 的实时 Actor/工作区权限；外部投递只使用端点自己的 Bearer token 或 Svix 签名。来自外部的 organizationId、actorId、URL 都不会变成宿主权限或网络请求地址。
 
 ## 部署

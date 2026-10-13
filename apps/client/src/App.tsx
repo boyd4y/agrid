@@ -24,7 +24,6 @@ const ReportDetailPage = lazy(() => import("@/pages/app/ReportDetailPage").then(
 import { MembersPage } from "@/pages/app/MembersPage";
 import { AgentEditorPage } from "@/pages/app/AgentEditorPage";
 import { AgentsPage } from "@/pages/app/AgentsPage";
-import { IntegrationsPage } from "@/pages/app/IntegrationsPage";
 import { SettingsPage } from "@/pages/app/SettingsPage";
 import i18n from "@/i18n";
 const SkillsPage = lazy(() => import("@/pages/app/SkillsPage").then((module) => ({ default: module.SkillsPage })));
@@ -60,7 +59,7 @@ export default function App() {
         >
           <Route index element={<WorkspaceHomePage />} />
           <Route path="tables" element={<TablesPage />} />
-          <Route path="integrations" element={<IntegrationsPage />} />
+          <Route path="integrations" element={<Navigate to="/app/settings?tab=integrations" replace />} />
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="automations/new" element={<AutomationDetailPage />} />
           <Route path="automations/:automationId" element={<AutomationDetailPage />} />
