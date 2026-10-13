@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ export function AutomationActions({ rule, onDeleted }: {
   rule: Pick<AutomationRule, "id" | "name">;
   onDeleted: (id: string) => void;
 }) {
+  const { t } = useTranslation("automation");
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -17,19 +19,19 @@ export function AutomationActions({ rule, onDeleted }: {
     <>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground" aria-label={`${rule.name}自动化操作`} title="自动化操作">
+          <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground" aria-label={t("actionsNamed", { name: rule.name })} title={t("actionsAria")}>
             <MoreHorizontal data-icon="inline-start" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end"><DropdownMenuGroup>
-          <DropdownMenuItem variant="destructive" onSelect={() => { setMenuOpen(false); setDeleteOpen(true); }}><Trash2 />删除规则</DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={() => { setMenuOpen(false); setDeleteOpen(true); }}><Trash2 />{t("deleteRule")}</DropdownMenuItem>
         </DropdownMenuGroup></DropdownMenuContent>
       </DropdownMenu>
       <DeleteConfirmation
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="删除自动化规则？"
-        description={`将永久删除「${rule.name}」及其运行记录。表格数据会保留，此操作无法撤销。`}
+        title={t("deleteRuleQ")}
+        description={t("deleteRuleDescShort", { name: rule.name })}
         onConfirm={async () => { await api.deleteAutomation(rule.id); onDeleted(rule.id); }}
       />
     </>

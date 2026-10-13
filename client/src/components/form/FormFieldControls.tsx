@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import type { CellValue, ColumnDef, SelectOption } from "@/types/table";
 import type { MemberOption } from "@/lib/api";
 import type { FormQuestionSettings } from "@tabdo/shared";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 type ControlProps = {
   column: ColumnDef;
@@ -71,7 +73,7 @@ export function FormFieldControl({
         <span
           className={cn("text-sm", tf ? "text-[var(--form-answer)]" : "text-muted-foreground")}
         >
-          {agree || "勾选"}
+          {agree || i18n.t("form:check")}
         </span>
       </div>
     );
@@ -165,7 +167,7 @@ export function FormFieldControl({
         )}
         style={tf ? { color: "var(--form-answer)", borderRadius: 0 } : undefined}
         value={value === null || value === undefined ? "" : String(value)}
-        placeholder={placeholder ?? "数字"}
+        placeholder={placeholder ?? i18n.t("form:numberPlaceholder")}
         min={min}
         max={max}
         step={step}
@@ -304,7 +306,7 @@ function SelectControl({
           {current ? (
             <SelectChip option={current} />
           ) : (
-            <span className="opacity-60">{placeholder ?? "选择…"}</span>
+            <span className="opacity-60">{placeholder ?? i18n.t("form:selectEllipsis")}</span>
           )}
           <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </Button>
@@ -318,7 +320,7 @@ function SelectControl({
             setOpen(false);
           }}
         >
-          清空
+          {i18n.t("form:clear")}
         </button>
         {options.map((o) => (
           <button
@@ -378,7 +380,7 @@ function MultiSelectControl({
               ))}
             </div>
           ) : (
-            <span className="opacity-60">{placeholder ?? "选择多个…"}</span>
+            <span className="opacity-60">{placeholder ?? i18n.t("form:selectMultiple")}</span>
           )}
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
@@ -455,7 +457,7 @@ function PersonControl({
               {current.name}
             </span>
           ) : (
-            <span className="opacity-60">{placeholder ?? "选择成员…"}</span>
+            <span className="opacity-60">{placeholder ?? i18n.t("form:selectMember")}</span>
           )}
           <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
         </Button>
@@ -463,7 +465,7 @@ function PersonControl({
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1" align="start">
         <Input
           className="mb-1 h-8"
-          placeholder="搜索…"
+          placeholder={i18n.t("form:search")}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -475,7 +477,7 @@ function PersonControl({
             setOpen(false);
           }}
         >
-          清空
+          {i18n.t("form:clear")}
         </button>
         {list.map((m) => (
           <button

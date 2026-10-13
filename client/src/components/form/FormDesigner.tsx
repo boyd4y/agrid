@@ -9,6 +9,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { useTranslation } from "react-i18next";
 import {
   SortableContext,
   arrayMove,
@@ -71,6 +72,7 @@ function SortableFieldRow({
   onSelect: () => void;
   onToggleHidden: () => void;
 }) {
+  const { t } = useTranslation("form");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id });
   const style = {
@@ -95,7 +97,7 @@ function SortableFieldRow({
         className="cursor-grab touch-none rounded p-0.5 text-muted-foreground hover:text-foreground"
         {...attributes}
         {...listeners}
-        aria-label="拖拽排序"
+        aria-label={t("dragReorder")}
       >
         <GripVertical className="h-3.5 w-3.5" />
       </button>
@@ -113,7 +115,7 @@ function SortableFieldRow({
         type="button"
         className="rounded p-0.5 text-muted-foreground hover:text-foreground"
         onClick={onToggleHidden}
-        title={hidden ? "显示" : "隐藏"}
+        title={hidden ? t("show") : t("hide")}
       >
         {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
       </button>
@@ -122,6 +124,7 @@ function SortableFieldRow({
 }
 
 export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
+  const { t } = useTranslation("form");
   const [selectedId, setSelectedId] = useState<string | null>(
     view.resolvedFields[0]?.columnId ?? null
   );
@@ -171,7 +174,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
       const updated = await api.reorderFormFields(view.id, nextIds);
       onChange(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "排序失败");
+      setError(e instanceof Error ? e.message : t("sortFailed"));
       // reload
       const fresh = (await api.getView(view.id)) as ResolvedFormView;
       onChange(fresh);
@@ -187,7 +190,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
       const updated = await api.setFormFieldSettings(view.id, columnId, patch);
       onChange(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "更新字段失败");
+      setError(e instanceof Error ? e.message : t("updateFieldFailed"));
     } finally {
       setSaving(false);
     }
@@ -199,7 +202,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
       const updated = await api.setFormLayout(view.id, next);
       onChange(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "布局更新失败");
+      setError(e instanceof Error ? e.message : t("layoutUpdateFailed"));
     } finally {
       setSaving(false);
     }
@@ -211,7 +214,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
       const updated = await api.setFormTheme(view.id, preset);
       onChange(updated);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "主题更新失败");
+      setError(e instanceof Error ? e.message : t("themeUpdateFailed"));
     } finally {
       setSaving(false);
     }
@@ -233,7 +236,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {l === "classic" ? "经典堆叠" : "一题一屏"}
+              {l === "classic" ? t("layoutClassic") : t("layoutFocus")}
             </button>
           ))}
         </div>
@@ -241,7 +244,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="h-8 text-xs">
-              主题 · {FORM_THEME_PRESET_META[themePreset]?.label ?? themePreset}
+              {t("themeNamed", { name: FORM_THEME_PRESET_META[themePreset]?.label ?? themePreset })}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-56 p-2" align="start">
@@ -273,7 +276,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
           {saving && (
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 animate-spin" />
-              保存中
+              {t("saving")}
             </span>
           )}
           <div className="flex rounded-lg border border-border p-0.5">
@@ -288,7 +291,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
               onClick={() => setMode("design")}
             >
               <Settings2 className="mr-1 inline h-3 w-3" />
-              设计
+              {t("design")}
             </button>
             <button
               type="button"
@@ -301,7 +304,7 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
               onClick={() => setMode("fill")}
             >
               <Eye className="mr-1 inline h-3 w-3" />
-              填写
+              {t("fill")}
             </button>
           </div>
         </div>
@@ -318,9 +321,9 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
           <TableForm table={table} view={view} onSubmitted={onSubmitted} />
         </div>
       ) : (
-        <BuilderLayout sidebarLabel="表单题目" inspectorLabel="题型设置" sidebar={<>
-            <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              题目 · 拖拽排序
+        <BuilderLayout sidebarLabel={t("sidebarLabel")} inspectorLabel={t("inspectorLabel")} sidebar={<>
+            <p className="mb-2 px-1 text-[10px] font-medium text-muted-foreground">
+              {t("questionsDrag")}
             </p>
             <DndContext
               sensors={sensors}
@@ -355,11 +358,11 @@ export function FormDesigner({ table, view, onChange, onSubmitted }: Props) {
               onSubmitted={onSubmitted}
             />
           } inspector={<>
-            <p className="mb-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              题型设置
+            <p className="mb-3 text-[10px] font-medium text-muted-foreground">
+              {t("questionSettings")}
             </p>
             {!selected ? (
-              <p className="text-sm text-muted-foreground">选择一道题进行设置</p>
+              <p className="text-sm text-muted-foreground">{t("pickQuestion")}</p>
             ) : (
               <FieldInspector
                 field={selected}
@@ -379,6 +382,7 @@ function FieldInspector({
   field: ResolvedFormView["resolvedFields"][number];
   onPatch: (patch: Partial<FormFieldConfig>) => void;
 }) {
+  const { t } = useTranslation("form");
   const settings = field.settings;
   const type = field.columnType;
 
@@ -389,7 +393,7 @@ function FieldInspector({
   return (
     <div className="space-y-3" data-testid="form-field-inspector">
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">标签</label>
+        <label className="mb-1 block text-xs text-muted-foreground">{t("label")}</label>
         <Input
           className="h-8"
           defaultValue={field.label || field.columnName}
@@ -403,7 +407,7 @@ function FieldInspector({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">说明</label>
+        <label className="mb-1 block text-xs text-muted-foreground">{t("help")}</label>
         <Textarea
           className="min-h-[60px] text-sm"
           defaultValue={field.helpText ?? ""}
@@ -415,7 +419,7 @@ function FieldInspector({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">占位符</label>
+        <label className="mb-1 block text-xs text-muted-foreground">{t("placeholder")}</label>
         <Input
           className="h-8"
           defaultValue={field.placeholder ?? ""}
@@ -432,7 +436,7 @@ function FieldInspector({
           checked={Boolean(field.required)}
           onCheckedChange={(c) => onPatch({ required: Boolean(c) })}
         />
-        必填
+        {t("required")}
       </label>
       <label className="flex items-center gap-2 text-sm">
         <Checkbox
@@ -440,12 +444,12 @@ function FieldInspector({
           onCheckedChange={(c) => onPatch({ readOnly: Boolean(c) })}
           disabled={type === "formula"}
         />
-        只读
+        {t("readOnly")}
       </label>
 
       {type === "text" && (
         <div className="space-y-2 rounded-lg border border-border p-2">
-          <p className="text-xs font-medium text-muted-foreground">文本</p>
+          <p className="text-xs font-medium text-muted-foreground">{t("text")}</p>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={Boolean(settings?.kind === "text" && settings.multiline)}
@@ -458,10 +462,10 @@ function FieldInspector({
                 })
               }
             />
-            多行
+            {t("multiline")}
           </label>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">输入模式</label>
+            <label className="mb-1 block text-xs text-muted-foreground">{t("inputMode")}</label>
             <div className="flex flex-wrap gap-1">
               {(["text", "email", "url"] as const).map((m) => (
                 <button
@@ -492,10 +496,10 @@ function FieldInspector({
 
       {type === "number" && (
         <div className="space-y-2 rounded-lg border border-border p-2">
-          <p className="text-xs font-medium text-muted-foreground">数字</p>
+          <p className="text-xs font-medium text-muted-foreground">{t("number")}</p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">最小</label>
+              <label className="mb-1 block text-xs text-muted-foreground">{t("min")}</label>
               <Input
                 className="h-8"
                 type="number"
@@ -512,7 +516,7 @@ function FieldInspector({
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">最大</label>
+              <label className="mb-1 block text-xs text-muted-foreground">{t("max")}</label>
               <Input
                 className="h-8"
                 type="number"
@@ -534,9 +538,9 @@ function FieldInspector({
 
       {(type === "select" || type === "multi_select") && (
         <div className="space-y-2 rounded-lg border border-border p-2">
-          <p className="text-xs font-medium text-muted-foreground">选项展示</p>
+          <p className="text-xs font-medium text-muted-foreground">{t("optionDisplay")}</p>
           <p className="text-[10px] text-muted-foreground">
-            选项与表格视图共用
+            {t("optionsShared")}
           </p>
           <div className="flex gap-1">
             {(type === "select"
@@ -567,7 +571,7 @@ function FieldInspector({
                       })
                 }
               >
-                {d === "buttons" ? "按钮组" : d === "dropdown" ? "下拉" : "勾选"}
+                {d === "buttons" ? t("displayButtons") : d === "dropdown" ? t("displayDropdown") : t("displayCheck")}
               </button>
             ))}
           </div>
@@ -576,7 +580,7 @@ function FieldInspector({
 
       {type === "checkbox" && (
         <div className="space-y-2 rounded-lg border border-border p-2">
-          <label className="mb-1 block text-xs text-muted-foreground">同意文案</label>
+          <label className="mb-1 block text-xs text-muted-foreground">{t("agreeCopy")}</label>
           <Input
             className="h-8"
             defaultValue={
@@ -594,7 +598,7 @@ function FieldInspector({
 
       {type === "formula" && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning">
-          公式列 — 计算字段，不会随表单提交
+          {t("formulaNotSubmitted")}
         </div>
       )}
     </div>

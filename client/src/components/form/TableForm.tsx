@@ -25,6 +25,8 @@ import type {
   ResolvedFormView,
 } from "@tabdo/shared";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 type Props = {
   table: FullTable;
@@ -70,13 +72,13 @@ function buildZod(
     }
     if (f.required) {
       if ((col.type === "multi_select" || col.type === "relation")) {
-        schema = z.array(z.string()).min(1, `${label}为必填`);
+        schema = z.array(z.string()).min(1, i18n.t("form:requiredField", { label }));
       } else if (col.type === "checkbox") {
         schema = z.boolean();
       } else if (col.type === "number") {
-        schema = z.number({ error: `${label}为必填` });
+        schema = z.number({ error: i18n.t("form:requiredField", { label }) });
       } else {
-        schema = z.string({ error: `${label}为必填` }).min(1, `${label}为必填`);
+        schema = z.string({ error: i18n.t("form:requiredField", { label }) }).min(1, i18n.t("form:requiredField", { label }));
       }
     } else {
       schema = schema.optional().nullable();
@@ -86,7 +88,7 @@ function buildZod(
       const max = f.settings.maxLength;
       schema = schema.refine(
         (v) => v == null || typeof v !== "string" || v.length <= max,
-        { message: `${label}最多 ${max} 字` }
+        { message: i18n.t("form:maxChars", { label, max }) }
       );
     }
     if (f.settings?.kind === "number") {
@@ -98,7 +100,7 @@ function buildZod(
           if (max != null && v > max) return false;
           return true;
         },
-        { message: `${label}超出范围` }
+        { message: i18n.t("form:outOfRange", { label }) }
       );
     }
     shape[f.columnId] = schema;
@@ -145,6 +147,7 @@ export function TableForm({
   highlightColumnId,
   onSelectField,
 }: Props) {
+  const { t } = useTranslation("form");
   const members = useMemberOptions();
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -162,14 +165,14 @@ export function TableForm({
   const config: FormViewConfig = view?.config ?? {
     title: table.name,
     description: table.description ?? undefined,
-    submitLabel: "提交",
-    successMessage: "提交成功",
+    submitLabel: t("submit"),
+    successMessage: t("submitSuccess"),
     mode: "create",
     layout: "classic",
     theme: { preset: "notion-light" },
     fields: table.columns
       .filter((c) => c.type !== "formula" && c.type !== "rollup" && !c.config?.hidden)
-      .map((c) => ({ columnId: c.id, required: c.name === "标题" })),
+      .map((c) => ({ columnId: c.id, required: c.name === "标题" /* seed */ })),
   };
 
   const fields = useMemo(() => {
@@ -229,7 +232,7 @@ export function TableForm({
       form.reset(defaultValues(fields, columnsById));
       onSubmitted?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "提交失败");
+      setError(e instanceof Error ? e.message : t("submitFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -238,7 +241,7 @@ export function TableForm({
   const onSubmit = form.handleSubmit(submitValues);
 
   const endingTitle =
-    config.ending?.title || config.successMessage || "提交成功";
+    config.ending?.title || config.successMessage || t("submitSuccess");
   const endingDesc = config.ending?.description;
 
   if (done) {
@@ -270,7 +273,7 @@ export function TableForm({
               setWelcomeDone(!hasWelcome);
             }}
           >
-            再填一份
+            {t("fillAgain")}
           </Button>
         </div>
       </div>
@@ -390,7 +393,7 @@ export function TableForm({
                   className="text-3xl font-semibold tracking-tight md:text-4xl"
                   style={{ color: "var(--form-question)" }}
                 >
-                  {config.welcome?.title || config.title || "开始"}
+                  {config.welcome?.title || config.title || t("start")}
                 </h2>
                 {(config.welcome?.description || config.description) && (
                   <p className="text-base opacity-70" style={{ color: "var(--form-question)" }}>
@@ -407,7 +410,7 @@ export function TableForm({
                   }}
                   onClick={() => void advance()}
                 >
-                  {config.welcome?.ctaLabel || "开始"}
+                  {config.welcome?.ctaLabel || t("start")}
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Button>
               </div>
@@ -449,7 +452,7 @@ export function TableForm({
                     >
                       {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                       {idx >= fields.length - 1
-                        ? config.submitLabel || "提交"
+                        ? config.submitLabel || t("submit")
                         : "OK"}
                       {idx < fields.length - 1 && (
                         <ArrowRight className="ml-1 h-4 w-4" />
@@ -485,7 +488,7 @@ export function TableForm({
             className="text-2xl font-semibold tracking-tight"
             style={{ color: "var(--form-question)" }}
           >
-            {config.title || view?.name || "表单"}
+            {config.title || view?.name || t("form")}
           </h2>
           {config.description && (
             <p className="mt-1 text-sm opacity-70" style={{ color: "var(--form-question)" }}>
@@ -515,7 +518,7 @@ export function TableForm({
               }}
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {config.submitLabel || "提交"}
+              {config.submitLabel || t("submit")}
             </Button>
           </form>
         </Form>

@@ -21,8 +21,6 @@ import {
 import { api, type MemberOption } from "@/lib/api";
 import type { ColumnDef, CellValue, FullTable } from "@/types/table";
 import {
-  AUTOMATION_ACTION_LABELS,
-  AUTOMATION_TRIGGER_LABELS,
   FILTER_OP_LABELS,
   filterNeedsValue,
   opsForType,
@@ -35,6 +33,8 @@ import {
   type FilterOp,
 } from "@tabdo/shared";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 function newId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -68,9 +68,9 @@ function defaultAction(columns: ColumnDef[]): AutomationAction {
 function summarizeTrigger(t: AutomationTrigger, columns: ColumnDef[]) {
   const col = (id: string) =>
     columns.find((c) => c.id === id)?.name ?? id.slice(0, 6);
-  if (t.type === "row_created") return AUTOMATION_TRIGGER_LABELS.row_created;
+  if (t.type === "row_created") return i18n.t("automation:triggers.row_created");
   if (t.type === "field_changed") {
-    const base = `${AUTOMATION_TRIGGER_LABELS.field_changed} · ${col(t.columnId)}`;
+    const base = `${i18n.t("automation:triggers.field_changed")} · ${col(t.columnId)}`;
     if (t.toValue !== undefined && t.toValue !== null && t.toValue !== "") {
       return `${base} → ${String(t.toValue)}`;
     }
@@ -79,17 +79,17 @@ function summarizeTrigger(t: AutomationTrigger, columns: ColumnDef[]) {
   const opt = columns
     .find((c) => c.id === t.columnId)
     ?.config?.options?.find((o) => o.id === t.optionId)?.label;
-  return `${AUTOMATION_TRIGGER_LABELS.enter_status} · ${col(t.columnId)}=${opt ?? t.optionId}`;
+  return `${i18n.t("automation:triggers.enter_status")} · ${col(t.columnId)}=${opt ?? t.optionId}`;
 }
 
 function summarizeActions(actions: AutomationAction[], columns: ColumnDef[]) {
   return actions
     .map((a) => {
       if (a.type === "update_field") {
-        const name = columns.find((c) => c.id === a.columnId)?.name ?? "字段";
-        return `更新「${name}」`;
+        const name = columns.find((c) => c.id === a.columnId)?.name ?? i18n.t("automation:field");
+        return i18n.t("automation:updateFieldNamed", { name });
       }
-      return "执行智能体";
+      return i18n.t("automation:runAgent");
     })
     .join(" · ");
 }
@@ -101,6 +101,7 @@ type Props = {
 };
 
 export function AutomationPanel({ table, refreshToken, active = true }: Props) {
+  const { t } = useTranslation("automation");
   const requestVersion = useRef(0);
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
@@ -130,7 +131,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
       setError(null);
     } catch (e) {
       if (version === requestVersion.current)
-        setError(e instanceof Error ? e.message : "加载失败");
+        setError(e instanceof Error ? e.message : t("loadFailed"));
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
@@ -148,7 +149,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
       setRuns(await api.listAutomationRuns(table.id, { limit: 30 }));
       setShowRuns(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载运行记录失败");
+      setError(e instanceof Error ? e.message : t("loadRunsFailed"));
     }
   };
 
@@ -179,7 +180,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
       await api.replayAutomationRun(id);
       await loadRuns();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "重放失败");
+      setError(e instanceof Error ? e.message : t("replayFailed"));
     }
   };
 
@@ -188,7 +189,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
       const updated = await api.updateAutomation(rule.id, { enabled });
       setRules((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "更新失败");
+      setError(e instanceof Error ? e.message : t("updateFailed"));
     }
   };
 
@@ -223,7 +224,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
     <div className="space-y-4" data-testid="automation-panel">
       <div className="flex flex-wrap items-center gap-2">
         <p className="mr-auto text-sm text-muted-foreground">
-          当 / 如果 / 就 · 字段回写与智能体跟进
+          {t("whenIfThenHint")}
         </p>
         <Button
           type="button"
@@ -233,7 +234,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
           onClick={() => void loadRuns()}
         >
           <History className="h-3.5 w-3.5" />
-          运行记录
+          {t("runs")}
         </Button>
         <Button
           type="button"
@@ -242,23 +243,23 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
           onClick={() => setEditing("new")}
         >
           <Plus className="h-3.5 w-3.5" />
-          新建规则
+          {t("newRule")}
         </Button>
       </div>
 
       {error && (
         <ListErrorState className="min-h-0 rounded-md border border-border py-6" title={error} />
       )}
-      {loading && <p className="text-xs text-muted-foreground">加载中…</p>}
+      {loading && <p className="text-xs text-muted-foreground">{t("loading")}</p>}
       {!loading && rules.length === 0 && !editing && (
         <AppEmptyState
           illustration={NOTIOLY.chill}
-          title="还没有自动化"
-          description="用「当 / 如果 / 就」让字段回写或智能体跟进。"
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
           action={
             <Button type="button" size="sm" onClick={() => setEditing("new")}>
               <Plus className="h-3.5 w-3.5" />
-              新建规则
+              {t("newRule")}
             </Button>
           }
         />
@@ -273,7 +274,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
             <Switch
               checked={rule.enabled}
               onCheckedChange={(v) => void toggleEnabled(rule, v)}
-              aria-label="启用自动化"
+              aria-label={t("enableAutomation")}
             />
             <button
               type="button"
@@ -294,10 +295,10 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
               variant="destructive-ghost"
               size="sm"
               onClick={() => setDeleteRule(rule)}
-              aria-label={`删除规则${rule.name}`}
+              aria-label={t("deleteRuleNamed", { name: rule.name })}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              删除规则
+              {t("deleteRule")}
             </Button>
           </li>
         ))}
@@ -308,8 +309,8 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
         onOpenChange={(open) => {
           if (!open) setDeleteRule(null);
         }}
-        title="删除自动化规则？"
-        description={`将永久删除「${deleteRule?.name ?? ""}」及其运行记录，此规则将不再执行。表格数据会保留。`}
+        title={t("deleteRuleQ")}
+        description={t("deleteRuleDesc", { name: deleteRule?.name ?? "" })}
         onConfirm={async () => {
           if (deleteRule) await remove(deleteRule.id);
         }}
@@ -318,7 +319,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
       {showRuns && (
         <div className="rounded-lg border border-border bg-muted p-3">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium">最近运行</span>
+            <span className="text-xs font-medium">{t("recentRuns")}</span>
             <Button
               type="button"
               variant="ghost"
@@ -330,7 +331,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
             </Button>
           </div>
           {runs.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">暂无记录</p>
+            <p className="text-[11px] text-muted-foreground">{t("noRuns")}</p>
           ) : (
             <ul className="max-h-56 space-y-1 overflow-auto text-[11px]">
               {runs.map((r) => (
@@ -339,21 +340,21 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
                   className="flex justify-between gap-2 rounded px-1.5 py-1 hover:bg-accent"
                 >
                   <span className="truncate">
-                    {AUTOMATION_TRIGGER_LABELS[r.triggerType]} ·{" "}
+                    {t(`triggers.${r.triggerType}`)} ·{" "}
                     {
                       {
-                        queued: "排队中",
-                        running: "执行中",
-                        retrying: "等待重试",
-                        completed: "已完成",
-                        failed: "失败",
-                        skipped: "条件未满足",
-                        cancelled: "已取消",
-                        superseded: "输入已更新",
-                        unknown: "结果待确认",
+                        queued: t("runStatus.queued"),
+                        running: t("runStatus.running"),
+                        retrying: t("runStatus.retrying"),
+                        completed: t("runStatus.completed"),
+                        failed: t("runStatus.failed"),
+                        skipped: t("runStatus.skipped"),
+                        cancelled: t("runStatus.cancelled"),
+                        superseded: t("runStatus.superseded"),
+                        unknown: t("runStatus.unknown"),
                       }[r.status]
                     }
-                    {r.nextStep ? ` · 已完成 ${r.nextStep} 步` : ""}
+                    {r.nextStep ? t("stepsDone", { n: r.nextStep }) : ""}
                     {r.error ? ` · ${r.error}` : ""}
                   </span>
                   {r.status === "failed" && r.eventId && (
@@ -363,7 +364,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
                       className="h-6 shrink-0 text-xs"
                       onClick={() => void replay(r.id)}
                     >
-                      重放未完成步骤
+                      {t("replayPending")}
                     </Button>
                   )}
                   <span className="shrink-0 text-muted-foreground">
@@ -398,7 +399,8 @@ export function AutomationEditor({
   onClose,
   onSaved,
 }: EditorProps) {
-  const [name, setName] = useState(initial?.name ?? "新建自动化");
+  const { t } = useTranslation("automation");
+  const [name, setName] = useState(initial?.name ?? t("newAutomation"));
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [trigger, setTrigger] = useState<AutomationTrigger>(
     initial?.trigger ?? defaultTrigger(columns),
@@ -421,9 +423,9 @@ export function AutomationEditor({
     setSaving(true);
     setError(null);
     try {
-      if (!actions.length) throw new Error("至少添加一个动作");
+      if (!actions.length) throw new Error(t("needAction"));
       const payload = {
-        name: name.trim() || "未命名自动化",
+        name: name.trim() || t("unnamed"),
         enabled,
         trigger,
         conditions,
@@ -435,31 +437,31 @@ export function AutomationEditor({
         : await api.createAutomation(tableId, payload);
       onSaved(rule);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败");
+      setError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <section className="mx-auto w-full max-w-3xl" aria-label="自动化编辑区">
+    <section className="mx-auto w-full max-w-3xl" aria-label={t("editorAria")}>
       <div
         className="flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground"
         role="region"
-        aria-label="编辑自动化"
+        aria-label={t("editAutomation")}
         data-testid="automation-editor"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-warning" />
-            <span className="text-sm font-semibold">当 / 如果 / 就</span>
+            <span className="text-sm font-semibold">{t("whenIfThen")}</span>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
-            aria-label="返回规则列表"
+            aria-label={t("backToRules")}
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -476,22 +478,22 @@ export function AutomationEditor({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="h-9 flex-1 text-sm font-medium"
-              placeholder="自动化名称"
+              placeholder={t("namePlaceholder")}
             />
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch
                 checked={enabled}
                 onCheckedChange={setEnabled}
-                aria-label="启用"
+                aria-label={t("enabled")}
               />
-              启用
+              {t("enabled")}
             </div>
           </div>
 
           {/* WHEN */}
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 text-xs font-semibold text-warning">
-              当
+              {t("when")}
             </div>
             <Select
               value={trigger.type}
@@ -517,12 +519,10 @@ export function AutomationEditor({
               </SelectTrigger>
               <SelectContent>
                 {(
-                  Object.keys(AUTOMATION_TRIGGER_LABELS) as Array<
-                    keyof typeof AUTOMATION_TRIGGER_LABELS
-                  >
+                  (["row_created", "field_changed", "enter_status"] as const)
                 ).map((k) => (
                   <SelectItem key={k} value={k} className="text-xs">
-                    {AUTOMATION_TRIGGER_LABELS[k]}
+                    {t(`triggers.${k}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -537,7 +537,7 @@ export function AutomationEditor({
                   }
                 >
                   <SelectTrigger className="h-8 w-[160px] bg-background text-xs">
-                    <SelectValue placeholder="字段" />
+                    <SelectValue placeholder={t("fieldPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {columns.map((c) => (
@@ -568,7 +568,7 @@ export function AutomationEditor({
                       });
                     }}
                   />
-                  仅当变更为指定值时
+                  {t("onlyWhenValue")}
                 </label>
                 {trigger.toValue !== undefined &&
                   columns.find((c) => c.id === trigger.columnId) && (
@@ -600,7 +600,7 @@ export function AutomationEditor({
                   }}
                 >
                   <SelectTrigger className="h-8 w-[160px] bg-background text-xs">
-                    <SelectValue placeholder="状态列" />
+                    <SelectValue placeholder={t("statusColumn")} />
                   </SelectTrigger>
                   <SelectContent>
                     {(selectColumns.length ? selectColumns : columns).map(
@@ -619,7 +619,7 @@ export function AutomationEditor({
                   }
                 >
                   <SelectTrigger className="h-8 w-[140px] bg-background text-xs">
-                    <SelectValue placeholder="状态" />
+                    <SelectValue placeholder={t("status")} />
                   </SelectTrigger>
                   <SelectContent>
                     {(
@@ -640,7 +640,7 @@ export function AutomationEditor({
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs font-semibold text-primary">
-                如果
+                {t("if")}
               </div>
               <div className="flex items-center gap-2">
                 <Select
@@ -652,10 +652,10 @@ export function AutomationEditor({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="and" className="text-xs">
-                      全部满足
+                      {t("allMatch")}
                     </SelectItem>
                     <SelectItem value="or" className="text-xs">
-                      任一满足
+                      {t("anyMatch")}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -679,13 +679,13 @@ export function AutomationEditor({
                   }}
                 >
                   <Plus className="mr-1 h-3 w-3" />
-                  条件
+                  {t("condition")}
                 </Button>
               </div>
             </div>
             {conditions.length === 0 ? (
               <p className="text-[11px] text-muted-foreground">
-                无条件则始终执行动作
+                {t("noConditionHint")}
               </p>
             ) : (
               <div className="space-y-2">
@@ -790,7 +790,7 @@ export function AutomationEditor({
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs font-semibold text-success">
-                就
+                {t("then")}
               </div>
               <Button
                 type="button"
@@ -802,7 +802,7 @@ export function AutomationEditor({
                 }
               >
                 <Plus className="mr-1 h-3 w-3" />
-                动作
+                {t("action")}
               </Button>
             </div>
             <div className="space-y-3">
@@ -836,10 +836,10 @@ export function AutomationEditor({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="update_field" className="text-xs">
-                          {AUTOMATION_ACTION_LABELS.update_field}
+                          {t("actions.update_field")}
                         </SelectItem>
                         <SelectItem value="run_agent" className="text-xs">
-                          {AUTOMATION_ACTION_LABELS.run_agent}
+                          {t("actions.run_agent")}
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -872,7 +872,7 @@ export function AutomationEditor({
                         }
                       >
                         <SelectTrigger className="h-8 w-[140px] text-xs">
-                          <SelectValue placeholder="字段" />
+                          <SelectValue placeholder={t("fieldPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
                           {columns
@@ -916,7 +916,7 @@ export function AutomationEditor({
                   {action.type === "run_agent" && (
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        后台智能体运行时尚未接入，此动作会记录为未执行。
+                        {t("agentNotWired")}
                       </p>
                       <Select
                         value={action.agentUserId ?? "__none__"}
@@ -934,11 +934,11 @@ export function AutomationEditor({
                         }
                       >
                         <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="选择智能体" />
+                          <SelectValue placeholder={t("pickAgent")} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__" className="text-xs">
-                            系统（无指定智能体）
+                            {t("systemAgent")}
                           </SelectItem>
                           {members.map((m) => (
                             <SelectItem
@@ -953,7 +953,7 @@ export function AutomationEditor({
                       </Select>
                       <Textarea
                         className="min-h-[64px] text-xs"
-                        placeholder="提示词（可选）"
+                        placeholder={t("promptOptional")}
                         value={action.prompt ?? ""}
                         onChange={(e) =>
                           setActions((prev) =>
@@ -983,11 +983,11 @@ export function AutomationEditor({
                           }
                         >
                           <SelectTrigger className="h-8 w-[160px] text-xs">
-                            <SelectValue placeholder="结果写回字段" />
+                            <SelectValue placeholder={t("writeBackField")} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__" className="text-xs">
-                              不写回
+                              {t("noWriteBack")}
                             </SelectItem>
                             {columns.map((c) => (
                               <SelectItem
@@ -1003,7 +1003,7 @@ export function AutomationEditor({
                         {action.resultColumnId && (
                           <Input
                             className="h-8 flex-1 text-xs"
-                            placeholder="写回值"
+                            placeholder={t("writeBackValue")}
                             value={
                               action.resultValue === null ||
                               action.resultValue === undefined
@@ -1038,7 +1038,7 @@ export function AutomationEditor({
 
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
           <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onClose}>
-            <X data-icon="inline-start" />取消
+            <X data-icon="inline-start" />{t("cancel")}
           </Button>
           <Button
             type="button"
@@ -1046,7 +1046,7 @@ export function AutomationEditor({
             disabled={saving}
             onClick={() => void save()}
           >
-            {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? "保存中…" : "保存"}
+            {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? t("saving") : t("save")}
           </Button>
         </div>
       </div>
