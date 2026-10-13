@@ -26,49 +26,51 @@ export function AgentBasicFields({ value, onChange, harnesses, harnessLocked, di
   const { t } = useTranslation("agents");
   const current = harnesses.find((harness) => harness.id === value.harness);
   const customModel = !current?.models.some((model) => model.id === value.model);
-  return <FieldGroup>
+  return <FieldGroup className="gap-4">
+    <FieldGroup className="gap-4 @lg/field-group:grid @lg/field-group:grid-cols-[auto_1fr]">
     <AvatarPicker name={value.name || t("agent")} image={value.image} kind="agent" onChange={(image) => onChange({ image })} disabled={disabled} onProcessingChange={onAvatarProcessingChange} />
-    <Field>
+    <Field className="gap-2">
       <FieldLabel htmlFor="agentName">{t("name")}</FieldLabel>
       <Input id="agentName" required maxLength={100} value={value.name} onChange={(e) => onChange({ name: e.target.value })} placeholder={t("namePlaceholder")} />
     </Field>
-    <Field>
+    </FieldGroup>
+    <Field className="gap-2">
       <FieldLabel htmlFor="persona">{t("persona")}</FieldLabel>
-      <Textarea id="persona" required maxLength={20_000} value={value.persona} onChange={(e) => onChange({ persona: e.target.value })} rows={5} placeholder={t("personaPlaceholder")} />
-      <FieldDescription>{t("personaHint")}</FieldDescription>
+      <Textarea id="persona" required maxLength={20_000} value={value.persona} onChange={(e) => onChange({ persona: e.target.value })} rows={4} placeholder={t("personaPlaceholder")} />
     </Field>
-    <FieldGroup className="@xl/field-group:grid @xl/field-group:grid-cols-2">
-      <Field data-disabled={harnessLocked}>
+    <FieldGroup className="gap-4 @xl/field-group:grid @xl/field-group:grid-cols-2">
+      <Field className="gap-2" data-disabled={harnessLocked}>
         <FieldLabel htmlFor="agent-harness">Harness</FieldLabel>
         <Select value={value.harness} disabled={harnessLocked} onValueChange={(id) => {
+          if (!id) return;
           const selected = harnesses.find((item) => item.id === id);
           onChange({ harness: id as HarnessId, model: selected?.defaultModel ?? "__harness_default__", runtime: selected?.defaultRuntime ?? "sandbox" });
         }}>
           <SelectTrigger id="agent-harness"><SelectValue placeholder={t("pickHarness")}>{current && <span className="flex items-center gap-2"><HarnessLogo id={current.id} />{current.label}</span>}</SelectValue></SelectTrigger>
           <SelectContent><SelectGroup>{harnesses.map((item) => <SelectItem key={item.id} value={item.id}><HarnessLogo id={item.id} />{item.label}{!item.available && t("notConfigured")}</SelectItem>)}</SelectGroup></SelectContent>
         </Select>
-        <FieldDescription><Lock className="mr-1 inline size-3" />{t("harnessLocked")}</FieldDescription>
+        {harnessLocked && <FieldDescription><Lock className="mr-1 inline size-3" />{t("harnessLocked")}</FieldDescription>}
       </Field>
-      <Field>
+      <Field className="gap-2">
         <FieldLabel htmlFor="agent-model">{t("model")}</FieldLabel>
-        <Select value={customModel ? "__custom_model__" : value.model} onValueChange={(id) => onChange({ model: id === "__custom_model__" ? "" : id })}>
+        <Select value={customModel ? "__custom_model__" : value.model} onValueChange={(id) => { if (id) onChange({ model: id === "__custom_model__" ? "" : id }); }}>
           <SelectTrigger id="agent-model"><SelectValue placeholder={t("pickModel")} /></SelectTrigger>
           <SelectContent><SelectGroup>{(current?.models ?? []).map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}<SelectItem value="__custom_model__">{t("customModel")}</SelectItem></SelectGroup></SelectContent>
         </Select>
         <FieldDescription>{t("modelHint")}</FieldDescription>
       </Field>
     </FieldGroup>
-    {customModel && <Field>
+    {customModel && <Field className="gap-2">
       <FieldLabel htmlFor="agent-custom-model">{t("modelId")}</FieldLabel>
       <Input id="agent-custom-model" required maxLength={200} value={value.model} onChange={(event) => onChange({ model: event.target.value })} placeholder={t("modelIdPlaceholder")} />
     </Field>}
-    <Field>
+    <Field className="gap-2">
       <FieldLabel htmlFor="agent-runtime">{t("runtime")}</FieldLabel>
-      <Select value={value.runtime} onValueChange={(mode) => onChange({ runtime: mode as "local" | "sandbox" })}>
+      <Select value={value.runtime} onValueChange={(mode) => { if (mode === "local" || mode === "sandbox") onChange({ runtime: mode }); }}>
         <SelectTrigger id="agent-runtime" data-testid="agent-runtime-select"><SelectValue /></SelectTrigger>
         <SelectContent><SelectGroup>{(current?.runtimeModes ?? ["local", "sandbox"]).map((mode) => <SelectItem key={mode} value={mode}>{mode === "local" ? <Monitor /> : <Cloud />}{mode === "local" ? t("runtimeLocal") : "Sandbox"}</SelectItem>)}</SelectGroup></SelectContent>
       </Select>
-      <FieldDescription>{value.runtime === "local" ? t("runtimeLocalDesc") : t("runtimeSandboxDesc")} {t("runtimeChangeHint")}</FieldDescription>
+      <FieldDescription>{t("runtimeChangeHint")}</FieldDescription>
       {!current?.available && current?.hint && <FieldDescription>{current.hint}</FieldDescription>}
     </Field>
   </FieldGroup>;

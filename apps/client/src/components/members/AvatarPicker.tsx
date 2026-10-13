@@ -36,10 +36,10 @@ export function AvatarPicker({ name, image, kind = "human", onChange, disabled, 
   const [processing, setProcessing] = useState(false), [error, setError] = useState<string | null>(null);
   const version = useRef(0);
   const [open, setOpen] = useState(false);
-  return <Field>
+  return <Field className="gap-2" data-testid="avatar-field">
     <FieldLabel htmlFor={kind === "agent" ? undefined : id}>{t("avatar.label")}</FieldLabel>
     <div className="flex flex-wrap items-center gap-3">
-      <MemberAvatar name={name} image={image} kind={kind} className="size-14" />
+      <MemberAvatar name={name} image={image} kind={kind} />
       <Popover open={open} onOpenChange={(next) => { if (!processing) setOpen(next); }}>
         <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" disabled={disabled || processing}>{kind === "agent" ? <Bot data-icon="inline-start" /> : <Smile data-icon="inline-start" />}{kind === "agent" ? t("avatar.configureBot") : t("avatar.pick")}</Button></PopoverTrigger>
         <PopoverContent className="w-96 max-w-[calc(100vw-2rem)] max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" align="start" aria-label={kind === "agent" ? t("avatar.configureBot") : t("avatar.pickMember")}>
@@ -68,7 +68,7 @@ export function AvatarPicker({ name, image, kind = "human", onChange, disabled, 
       </Button></>}
       {image && <Button type="button" variant="ghost" size="sm" disabled={disabled || processing} onClick={() => { setError(null); onChange(null); }}><Trash2 data-icon="inline-start" />{kind === "agent" ? t("avatar.reset") : t("avatar.remove")}</Button>}
     </div>
-    <FieldDescription>{kind === "agent" ? t("avatar.hintAgent") : t("avatar.hintMember")}</FieldDescription>
+    {kind !== "agent" && <FieldDescription>{t("avatar.hintMember")}</FieldDescription>}
     {error && <FieldError role="alert">{error}</FieldError>}
   </Field>;
 }

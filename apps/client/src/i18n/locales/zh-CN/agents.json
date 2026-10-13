@@ -15,7 +15,7 @@
   "basicDesc": "设置名称、人设和运行方式。",
   "skillsDesc": "选择智能体按需学习的工作方法，只列出已选择且启用的 Skill。",
   "skillsDescShort": "选择智能体按需学习的工作方法。",
-  "toolsDesc": "查看智能体可调用的工具，按需要开启或关闭。",
+  "toolsDesc": "按能力类别开启工具。",
   "editAgent": "编辑智能体",
   "createAgent": "创建智能体",
   "editConfig": "编辑智能体配置",
@@ -49,7 +49,7 @@
   "modelHint": "保存后用于新一轮运行。",
   "toolsLoadFailed": "工具加载失败",
   "searchTools": "搜索工具",
-  "searchToolsPlaceholder": "按名称或说明搜索…",
+  "searchToolsPlaceholder": "搜索类别或工具名称…",
   "avatarLabel": "智能体头像",
   "shapes": [
     "圆形",
@@ -118,5 +118,62 @@
   "skillsSelected": "已选择 {{count}} 个 Skill",
   "removeSkill": "移除技能 {{name}}",
   "noSkillsYet": "尚未选择 Skill，点击「选择 Skill」添加。",
-  "noSkillsEnabled": "工作区暂未启用任何 Skill。"
+  "noSkillsEnabled": "工作区暂未启用任何 Skill。",
+  "capabilities": {
+    "tables": {
+      "name": "表格与记录",
+      "description": "查询、整理记录与字段，配置视图和关联。"
+    },
+    "forms": {
+      "name": "表单",
+      "description": "创建、调整与预览收集表单。"
+    },
+    "reports": {
+      "name": "报告",
+      "description": "汇总数据，创建与调整报告。"
+    },
+    "automations": {
+      "name": "自动化",
+      "description": "配置规则与查看执行结果。"
+    },
+    "plans": {
+      "name": "计划与目标",
+      "description": "维护工作步骤、目标与进度。"
+    },
+    "skills": {
+      "name": "技能读取",
+      "description": "按需读取已启用的工作方法。"
+    },
+    "files": {
+      "name": "文件操作",
+      "description": "读取、创建和编辑工作区文件。"
+    },
+    "commands": {
+      "name": "命令执行",
+      "description": "执行命令与管理工作环境。"
+    },
+    "search": {
+      "name": "检索",
+      "description": "查找文件、内容与外部资料。"
+    },
+    "interaction": {
+      "name": "交互",
+      "description": "向用户提问与发送通知。"
+    },
+    "coordination": {
+      "name": "任务协作",
+      "description": "管理任务、工作计划与协作。"
+    },
+    "scheduling": {
+      "name": "定时操作",
+      "description": "安排、查看与取消定时任务。"
+    },
+    "other": {
+      "name": "其他能力",
+      "description": "所选运行方式提供的其他工具。"
+    }
+  },
+  "partlyEnabled": "部分开启",
+  "toolDetails": "工具明细",
+  "toolOff": "已关闭"
 }

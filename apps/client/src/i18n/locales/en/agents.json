@@ -15,7 +15,7 @@
   "basicDesc": "Set name, persona, and runtime.",
   "skillsDesc": "Pick methods the agent can learn on demand (enabled skills only).",
   "skillsDescShort": "Pick methods the agent can learn on demand.",
-  "toolsDesc": "Review tools the agent can call; enable or disable as needed.",
+  "toolsDesc": "Enable tools by capability.",
   "editAgent": "Edit agent",
   "createAgent": "Create agent",
   "editConfig": "Edit agent configuration",
@@ -49,7 +49,7 @@
   "modelHint": "Used for new runs after save.",
   "toolsLoadFailed": "Failed to load tools",
   "searchTools": "Search tools",
-  "searchToolsPlaceholder": "Search by name or description…",
+  "searchToolsPlaceholder": "Search capabilities or tool names…",
   "avatarLabel": "Agent avatar",
   "shapes": [
     "Circle",
@@ -118,5 +118,62 @@
   "skillsSelected": "{{count}} skills selected",
   "removeSkill": "Remove skill {{name}}",
   "noSkillsYet": "No skills selected yet. Click “Choose skills” to add some.",
-  "noSkillsEnabled": "No skills are enabled in this workspace."
+  "noSkillsEnabled": "No skills are enabled in this workspace.",
+  "capabilities": {
+    "tables": {
+      "name": "Tables and records",
+      "description": "Query and organize records, fields, views, and relations."
+    },
+    "forms": {
+      "name": "Forms",
+      "description": "Create, adjust, and preview collection forms."
+    },
+    "reports": {
+      "name": "Reports",
+      "description": "Summarize data and create or adjust reports."
+    },
+    "automations": {
+      "name": "Automations",
+      "description": "Configure rules and review results."
+    },
+    "plans": {
+      "name": "Plans and goals",
+      "description": "Maintain steps, goals, and progress."
+    },
+    "skills": {
+      "name": "Skill reading",
+      "description": "Read enabled working methods on demand."
+    },
+    "files": {
+      "name": "Files",
+      "description": "Read, create, and edit workspace files."
+    },
+    "commands": {
+      "name": "Commands",
+      "description": "Run commands and manage the working environment."
+    },
+    "search": {
+      "name": "Search",
+      "description": "Find files, content, and external information."
+    },
+    "interaction": {
+      "name": "Interaction",
+      "description": "Ask users questions and send notifications."
+    },
+    "coordination": {
+      "name": "Task collaboration",
+      "description": "Manage tasks, plans, and collaboration."
+    },
+    "scheduling": {
+      "name": "Scheduled actions",
+      "description": "Schedule, review, and cancel recurring tasks."
+    },
+    "other": {
+      "name": "Other capabilities",
+      "description": "Other tools offered by the selected runtime."
+    }
+  },
+  "partlyEnabled": "Partly enabled",
+  "toolDetails": "Tool details",
+  "toolOff": "Off"
 }
