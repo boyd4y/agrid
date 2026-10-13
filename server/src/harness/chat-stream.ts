@@ -15,6 +15,7 @@ import { recordRunActivity, failNativeRun, runCancellationRequested, type AgentR
 import { snapshotWorkspace } from "./workspace.js";
 import { saveMessageInTransaction } from "../chat/store.js";
 import { registerNativeRun } from "./drain.js";
+import { HTTPException } from "hono/http-exception";
 
 function hasSavedPiJournal(record: RuntimeRecord): boolean {
   if (!record.resumeState) return true;
@@ -93,11 +94,16 @@ export function createNativeChatStream(options: {
         chunkDeadline = deadline(limits.timeout.chunkMs, "模型输出流超时");
       };
       const pollMs = Math.max(200, Math.min(10_000, Number(process.env.AI_RUN_POLL_MS) || 2000));
+      const pollCancellation = async () => {
+        try {
+          if (await runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
+        } catch (error) { console.warn("agent.cancel.poll", chatErrorText(error)); }
+      };
       const heartbeat = setInterval(async () => {
         if (closed || heartbeatBusy) return;
         heartbeatBusy = true;
         try {
-          if (await runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
+          await pollCancellation();
           if (Date.now() - lastRenewal >= 15_000) {
             if (!await renewRuntimeLease(options.lease)) { lostLease = true;control.abort(new Error("运行已被其他实例接管")); }
             lastRenewal = Date.now();
@@ -113,7 +119,10 @@ export function createNativeChatStream(options: {
         phaseWrites = phaseWrites.then(async () => {
           await recordRunActivity(options.lease, options.run.id, update);
           writer.write({ type: "data-chat-activity", data: update, transient: true });
-        }).catch((error) => { errorText = chatErrorText(error);control.abort(error); });
+        }).catch((error) => {
+          if (error instanceof HTTPException && error.status === 409) { errorText = chatErrorText(error);lostLease = true;control.abort(error); }
+          else console.warn("agent.activity.sync", chatErrorText(error));
+        });
         return phaseWrites;
       };
       const { tools, projectErrors, failures } = nativeHostTools(options.tools, async (execute) => {
@@ -247,13 +256,19 @@ export function createNativeChatStream(options: {
         }
         const continuing = session.hasUnfinishedTurn();
         if (continuing && options.harness === "pi") piContinuationInput = options.prompt;
-        else if (continuing && !/^(继续|继续执行|continue)$/i.test(options.prompt.trim())) throw new Error("此 Harness 的暂停会话暂时只支持继续执行；请新建对话发送其他消息");
         waitForModelOutput(1);
         stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");
-        if (await runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
+        await pollCancellation();
         signal.throwIfAborted();
         invocationStarted = true;
         const result = continuing ? await agent.continueStream({ session, abortSignal: signal }) : await agent.stream({ session, prompt: options.prompt, abortSignal: signal });
+        if (continuing && options.harness !== "pi") {
+          // Bridge-backed adapters accept fresh input through their official
+          // prompt-control API, including the bridge's accepted acknowledgement.
+          // Never replace a new user message with a magic continuation keyword.
+          try { await agent.experimental_steer({ session, text: options.prompt }); }
+          catch (error) { control.abort(error);throw error; }
+        }
         let terminalWritten = false;
         const terminalText = (controller: TransformStreamDefaultController<TextStreamPart<ToolSet>>, text: string) => {
           terminalWritten = true;

@@ -49,7 +49,7 @@ chatRoute.post("/", async (c) => {
   const actor = await resolveActor(c.req.raw);
   if (!actor?.organizationId) return c.json({ error: "未授权" }, 401);
   const body = z.object({ id: z.uuid(), agentId: z.string().min(1), context: z.unknown(),
-    messages: z.array(z.object({ id: z.string().min(1).max(200), role: z.enum(["user", "assistant"]), parts: z.array(z.object({ type: z.string() }).passthrough()).max(500) }).passthrough()).min(1).max(200),
+    messages: z.array(z.object({ id: z.string().min(1).max(200), role: z.enum(["user", "assistant"]), parts: z.array(z.object({ type: z.string() }).passthrough()).max(500) }).passthrough()).min(1),
   }).parse(await c.req.json());
   const messages = body.messages as UIMessage[];
   const agentId = body.agentId;
@@ -124,7 +124,6 @@ chatRoute.post("/", async (c) => {
       .map((p) => p.text)
       .join("\n") || "";
   if (!lastUser) return c.json({ error: "缺少用户消息" }, 400);
-  const index = messages.findIndex((m) => m.id === lastUser.id);
   const { id: userMessageId, ...userContent } = lastUser;
   if (!lastText.trim()) throw new HTTPException(400, { message: "请输入要执行的任务" });
   if (lastUser.parts.some((part) => part.type !== "text")) throw new HTTPException(400, { message: "当前入口暂不支持消息附件" });
@@ -158,8 +157,7 @@ chatRoute.post("/", async (c) => {
   try {
     const record = await prepareRuntimeRecord(lease, actor, { profileId: profile.id, harness, mode });
     c.req.raw.signal.throwIfAborted();
-    if (record.harness !== "pi" && record.resumeState?.continueFrom && !/^(继续|继续执行|continue)$/i.test(lastText.trim())) throw new HTTPException(409, { message: "此 Harness 的暂停会话暂时只支持继续执行；请新建对话发送其他消息" });
-    const run = await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: messages[index - 1]?.id ?? null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
+    const run = await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
     return createUIMessageStreamResponse({ stream: createNativeChatStream({
       actor, lease, record, run, harness, modelId, piModel, instructions: `${system}\n${taskInstructions(record)}`, agentsDocument,
       // The claimed Run owns cancellation. Closing the browser detaches its

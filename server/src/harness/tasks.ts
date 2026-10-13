@@ -12,7 +12,7 @@ import type { RuntimeRecord } from "./store.js";
 export const planSchema = z.array(z.strictObject({
   text: z.string().trim().min(1).max(1000),
   status: z.enum(["pending", "in_progress", "completed"]),
-})).max(40).refine((steps) => steps.filter((step) => step.status === "in_progress").length <= 1, "最多只能有一个正在执行的步骤");
+}));
 const publicState = (record: RuntimeRecord): AgentTaskState => ({
   plan: record.plan, goal: record.goal, mode: record.mode, updatedAt: record.updatedAt.toISOString(),
 });
@@ -48,31 +48,23 @@ export function createTaskTools(record: Pick<RuntimeRecord, "id" | "threadId">):
       },
     }),
     create_goal: tool({
-      description: "仅在用户明确要求目标或持续推进任务时创建目标；简单问答无需目标。已有未关闭目标时不能替换。新目标清空旧计划。此工具不启动后台执行。",
+      description: "按用户要求创建或替换当前目标；简单问答无需目标。新目标清空旧计划。此工具不启动后台执行。",
       inputSchema: zodSchema(z.strictObject({ objective: z.string().trim().min(1).max(4000) })),
       execute: async ({ objective }) => change((current) => {
-        if (current.goal && ["active", "paused"].includes(current.goal.status)) {
-          if (current.goal.objective === objective) return {};
-          throw new Error("当前还有未完成目标，请先完成或在用户要求下取消当前目标；不能覆盖它");
-        }
+        if (current.goal?.objective === objective && current.goal.status === "active") return {};
         return { goal: { objective, status: "active", progress: "" }, plan: [] };
       }),
     }),
     update_plan: tool({
-      description: "保存或调整当前计划；每步 pending/in_progress/completed，最多一个进行中。完成必须有实际验证。运行停止不会自动完成计划。",
+      description: "保存或调整当前计划；每步 pending/in_progress/completed，支持并行步骤。按实际进展更新，运行停止不会自动完成计划。",
       inputSchema: zodSchema(z.strictObject({ steps: planSchema })),
-      execute: async ({ steps }) => change((current) => {
-        if (current.goal && ["complete", "cancelled"].includes(current.goal.status)) throw new Error("目标已关闭，请先创建新目标再修改计划");
-        return { plan: steps };
-      }),
+      execute: async ({ steps }) => change(() => ({ plan: steps })),
     }),
     update_goal: tool({
       description: "记录目标进展和状态。只有原目标全部完成且验证通过才能 complete，须写验证依据；paused/cancelled 仅按用户明确要求。不因模型回复结束、超时或步骤预算而关闭目标。",
       inputSchema: zodSchema(z.strictObject({ status: z.enum(["active", "paused", "complete", "cancelled"]), progress: z.string().trim().min(1).max(8000) })),
       execute: async ({ status, progress }) => change((current) => {
         if (!current.goal) throw new Error("尚未创建目标");
-        if (["complete", "cancelled"].includes(current.goal.status)) throw new Error("目标已关闭，请先创建新目标");
-        if (status === "complete" && current.plan.some((step) => step.status !== "completed")) throw new Error("计划仍有未完成步骤，不能将目标标记为完成");
         return { goal: { ...current.goal, status, progress } };
       }),
     }),

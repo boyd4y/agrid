@@ -11,7 +11,7 @@
 - 原生 session 停止后保存 opaque resume state 和隔离文件工作区，再创建新 agent/sandbox 续接历史。
 - 数据库会话租约：原子抢占、续租、过期接管、旧实例 fencing；受保护操作持有租约行锁到事务结束。
 - UI 回复、原生检查点和 Run 完成状态在同一事务提交，失败时一起回滚。
-- Run 状态/阶段事件、租约心跳、账号/工作区隔离、停止接口、重复输入和分支校验。
+- Run 状态/阶段事件、租约心跳、账号/工作区隔离、停止接口和重复输入保护；UI 分支不控制原生恢复。
 - 实际原生链路的续接、取消、整轮/单步/首个输出/流中断超时、SDK 步骤暂停与 continuation；已完成工具不会因继续操作而重放。
 - 14 项原生基础设施测试及 24 项聊天测试通过；删除未使用的旧 streamText 循环与重复辅助测试。
 - 智能体本地/Sandbox 配置与创建/编辑/刷新恢复浏览器验证；不支持的 Harness/环境组合在保存时拒绝。
@@ -30,7 +30,9 @@ plan/goal 已通过私有对话工具持久化，聊天 header 可查看，刷�
 
 Run 接口：`GET /api/threads/:id/runs`、`GET /api/threads/:id/runs/:runId/events`、`POST /api/threads/:id/runs/:runId/cancel`。停止请求通过持久化标记传给持有租约的实例；默认每两秒检查一次，可配置 `AI_RUN_POLL_MS`。终态消息和检查点保存完成后释放租约。
 
-Run 返回公开投影，不公开 session ID、fence、resume state 或文件。默认不设置步骤上限，按原生 Harness 运行到自然结束；`AI_CHAT_MAX_STEPS` 仅在显式正整数配置时设置 `stopWhen`。`canContinue` 仅对最新 Run 且保存状态对应本轮输入/回复、包含原生 `continueFrom` 时成立。Pi 的已有暂停会话可接收普通追问，无固定口令：服务端使用 `HarnessAgent.continueStream`，通过官方 Pi `input` extension 将空 continuation 输入一次性替换为用户本次消息，原生运行时保存该消息并在后续模型调用前接收它，不重放 UI 历史或工具。Codex/Claude 的暂停会话暂只支持原生继续入口，普通追问明确拒绝以避免吞消息；没有冒充跨 adapter 验收。历史 Run 不能作为继续入口。
+Run 返回公开投影，不公开 session ID、fence、resume state 或文件。默认不设置步骤上限，按原生 Harness 运行到自然结束；`AI_CHAT_MAX_STEPS` 仅在显式正整数配置时设置 `stopWhen`。`canContinue` 仅对最新 Run 且保存状态对应本轮输入/回复、包含原生 `continueFrom` 时成立。暂停会话接收普通追问，无固定口令：Pi 使用官方 `continueStream` 和 `input` extension 一次提交本次输入；Codex/Claude 使用官方 `continueStream` 后 `experimental_steer`，等待 bridge accepted ACK，输入不被接收则如实失败，不静默丢弃。Bridge steering 是下一安全边界方向调整，不能保证恢复执行前原子插入；真实 Sandbox 仍未验收。历史 Run 不能作为继续入口。
+
+原生消息只由服务端提交。客户端 history adapter 仅 load，append/update 无操作；旧客户端 `/messages` POST 保留权限检查但不写入。新请求仅发送本次用户消息，保留完整 UI 展示历史；没有200条历史的执行上限。服务端使用已保存原生回复选择新用户的展示父节点，不拒绝客户端 UI parent。历史中的未执行用户残留不进入原生输入；同一 ID 如未进入任何 Run 且非 server-final，可在接受本次输入时归位，已执行消息仍不可重做。GET history 的 head 以已接受原生输入/回复为准，不采用旧客户端失败消息推进的 head。进度写入及取消状态轮询故障不额外终止执行；真实租约失效与保存失败仍如实处理。
 
 启动前 HTTP 请求已取消时不启动执行；完成 claim 并开始推送后，Run 独立于浏览器连接。响应通过 AI SDK 官方 `consumeSseStream` / `consumeStream` 保持消费原生执行的 UI 投影，使刷新和关闭页面不丢失终态提交。Composer Stop 先等待本轮持久 claim 并请求 cancel，停止按钮不会只关闭本地流伪装结束。运行中删除对话在租约锁内返回 409，要求停止并保存结果后删除。
 
@@ -101,13 +103,13 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## 计划与目标
 
-复杂任务可使用 `update_plan` 维护步骤。用户明确提出持续目标时使用 `create_goal`；`update_goal` 更新进度或按用户指令暂停、取消。`get_task_state` 读取当前状态。目标完成前要求计划所有步骤已完成，单个 Run 的终态不会自动关闭目标，也不意味着存在后台自主续跑。
+复杂任务可使用 `update_plan` 维护步骤，支持并行步骤，无40步上限或单一进行中限制。按用户要求可替换/重开目标，更新计划不受旧目标状态阻挡；目标与计划状态独立记录，不用计划完成状态硬拦目标更新。单个 Run 的终态不会自动关闭目标，也不意味着存在后台自主续跑。
 
 工具通过现有租约保护执行，计划/目标事务锁定对应 runtime 记录；读取接口 `GET /api/threads/:id/task-state` 只公开 plan/goal/mode/updatedAt，不暴露原生 resume state、文件或远程环境凭证。聊天 header 的计划按钮按需加载，运行时轮询、切换对话时取消旧请求。内部 `/workspace/agent/AGENTS.md` 在官方 onSession 生命周期生成，下一次运行采用最新人设。
 
 ## Pi 模型预算与空回复
 
-OpenRouter通过公开 `/models` 元数据使用实际context_length与提供商输出上限，缓存5分钟。`PI_MAX_OUTPUT_TOKENS` 默认16384，且受提供商上限约束；目录中的nullable上限不再额外回落8192，缓存区分显式预算。自定义兼容端点需设置真实 `PI_CONTEXT_WINDOW`（默认32768）。错误模型上限会触发Pi SDK自己的上下文预算裁剪：实际历史/工具定义超过错误32k窗口时曾产生 `max_tokens=1`，导致只有一个reasoning token。路由在创建Run和保存本次输入前校验模型元数据。
+OpenRouter通过公开 `/models` 辅助获取实际context_length与提供商输出上限，缓存5分钟，查询最多2秒。网络/HTTP/解析故障或目录遗漏ID不拦执行：优先复用已有真实缓存，无缓存则使用显式环境配置/保守默认，实际供应商最终判断模型能力；推测值不写成目录缓存。`PI_MAX_OUTPUT_TOKENS` 默认16384，且受成功目录中的提供商上限约束。冷缓存未知模型仍可能受保守32768窗口影响，需要真实 `PI_CONTEXT_WINDOW`；错误窗口可能触发Pi SDK自身上下文裁剪。没有以目录不可用或遗漏模型为由要求用户新建会话。
 
 2026-10-13 实际问题确认：末轮原生 assistant.stopReason=length、usage.output=8192、usage.reasoning=8192、text为0；前一轮已有正文但同样length，被旧逻辑误报completed。原因是推理计入总输出预算，且dynamic openrouter/free的reasoning=false让Pi跳过thinkingLevel=off的请求参数。
 

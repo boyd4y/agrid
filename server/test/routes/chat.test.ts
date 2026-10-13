@@ -120,14 +120,15 @@ test("context has no implicit table and rejects forged table scopes", async () =
   assert.match(table.system, /Explicit table/); assert.equal(table.resourceKey, `table:${tableId}`);
 });
 
-test("thread initialization is idempotent and concurrent message upserts retain one branch", async () => {
+test("thread initialization is idempotent and concurrent client appends do not choose native history", async () => {
   const body = { clientId: randomUUID(), context: { page: "ai" }, agentId };
   const results = await Promise.all(Array.from({ length: 5 }, () => req("/threads", body).then((r) => r.json())));
   assert.equal(new Set(results.map((r) => r.id)).size, 1); threadId = results[0].id;
   const message = { id: "user-1", parentId: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "列出工作区表格" }] } };
   const writes = await Promise.all(Array.from({ length: 5 }, () => req(`/threads/${threadId}/messages`, message)));
   assert(writes.every((r) => r.status === 200));
-  assert.equal((await loadMessages(threadId, actor())).messages.length, 1);
+  const history = await loadMessages(threadId, actor());
+  assert.equal(history.messages.length, 0);assert.equal(history.headId, null);
 });
 
 test("an unconfigured native runtime returns an explicit error without creating a fake reply", async () => {
@@ -140,6 +141,7 @@ test("an unconfigured native runtime returns an explicit error without creating 
 });
 
 test("history preserves structured tools and branching across reloads", async () => {
+  await saveMessage(threadId, actor(), { id: "user-1", parentId: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Server accepted input" }] } }, true);
   const firstReply = { id: "first-fixture-reply", parentId: "user-1", format: "ai-sdk/v6", content: { role: "assistant", parts: [{ type: "text", text: "First branch" }] } };
   await saveMessage(threadId, actor(), firstReply, true);
   await req(`/threads/${threadId}/messages`, { ...firstReply, content: { role: "assistant", parts: [{ type: "text", text: "stale" }] } });
@@ -216,16 +218,152 @@ test("the live streaming path injects validated system context and persists tool
     assert.equal((await loadMessages(thread.id, actor())).messages.length, 4);
     const duplicate = await req("/chat", { id: thread.id, agentId, context: { page: "table", tableId }, messages: resumedMessages });
     assert.equal(duplicate.status, 409); assert.match(await duplicate.text(), /不会重复执行工具/);
-    const branch = await req("/chat", { id: thread.id, agentId, context: { page: "table", tableId }, messages: [{ id: "wrong-branch", role: "user", parts: [{ type: "text", text: "从旧分支运行" }] }] });
-    assert.equal(branch.status, 409); assert.match(await branch.text(), /分支与原生会话不一致/);
-    assert.equal(calls.length, 3);
+    const branch = await req("/chat", { id: thread.id, agentId, context: { page: "table", tableId }, messages: [{ id: "fresh-parentless-input", role: "user", parts: [{ type: "text", text: "从旧客户端界面继续总结真实结果" }] }] });
+    assert.equal(branch.status, 200);await branch.text();assert.equal(calls.length, 4);
+    const freshNativeHistory = JSON.stringify(calls[3].messages);
+    assert.match(freshNativeHistory, /查看指定表格/);assert.match(freshNativeHistory, /总结之前读取的表格/);
+    assert.match(freshNativeHistory, /从旧客户端界面继续总结真实结果/);
+    assert.equal(calls[3].messages.filter((message) => message.role === "tool").length, 1, "new input uses existing native results without replaying tools");
     const after = await (await req(`/threads/${thread.id}/runs`)).json();
-    assert.equal(after.runs.length, 2); assert(after.runs.every((r: { status: string }) => r.status === "completed"));
+    assert.equal(after.runs.length, 3); assert(after.runs.every((r: { status: string }) => r.status === "completed"));
   } finally {
     process.env.OPENROUTER_API_KEY = "";
     process.env.OPENROUTER_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
+});
+
+test("rejected HTTP inputs and stale client heads do not block a fresh native turn or replay tools", { timeout: 15_000 }, async () => {
+  const calls: { messages: { role: string; content: unknown }[] }[] = [];
+  const tableName = `Canonical-head-${randomUUID()}`;
+  const provider = createServer(async (request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
+    }
+    let raw = "";for await (const chunk of request) raw += chunk;
+    calls.push(JSON.parse(raw));response.writeHead(200, { "Content-Type": "text/event-stream" });
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "canonical-head", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    write({ role: "assistant" });
+    if (calls.length === 1) {
+      write({ tool_calls: [{ index: 0, id: "canonical-create-once", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] });write({}, "tool_calls");
+    } else { write({ content: calls.length === 2 ? "真实表格已创建。" : "原生历史已保留，按最新输入继续。" });write({}, "stop"); }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
+  const address = provider.address();assert(address && typeof address !== "string");
+  const previousURL = process.env.OPENROUTER_BASE_URL;
+  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "canonical-local-fixture";
+  try {
+    const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
+    const initialUser = { id: "canonical-first-user", role: "user", parts: [{ type: "text", text: "CANONICAL_ACCEPTED_CREATE_ONCE" }] };
+    const first = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [initialUser] });
+    assert.equal(first.status, 200);await first.text();assert.equal(calls.length, 2);
+    const canonical = await loadMessages(thread.id, actor());assert(canonical.headId);
+    const rejected = [
+      { id: "http-rejected-one", role: "user", parts: [{ type: "text", text: "REJECTED_HTTP_FIRST_DO_NOT_EXECUTE" }] },
+      { id: "http-rejected-two", role: "user", parts: [{ type: "text", text: "REJECTED_HTTP_SECOND_DO_NOT_EXECUTE" }] },
+    ];
+    process.env.OPENROUTER_API_KEY = "";
+    for (const input of rejected) {
+      const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [input] });
+      assert.equal(response.status, 503);assert.match(await response.text(), /Pi 未配置模型提供商/);
+    }
+    assert.equal(calls.length, 2, "preflight rejection never starts a native turn");
+    process.env.OPENROUTER_API_KEY = "canonical-local-fixture";
+    // Seed only this test thread to reproduce rows written by the older client
+    // persistence path. The current compatibility endpoint must not create them.
+    const seedTime = Date.now();
+    await db.insert(chatMessages).values(rejected.map((input, index) => ({ threadId: thread.id, messageId: input.id, parentId: index ? rejected[0].id : canonical.headId,
+      content: { role: input.role, parts: input.parts }, serverFinal: false, createdAt: new Date(seedTime + index) })));
+    await db.update(chatThreads).set({ headId: rejected[1].id }).where(eq(chatThreads.id, thread.id));
+    const stale = await (await req(`/threads/${thread.id}/messages`)).json();
+    assert.equal(stale.headId, canonical.headId, "GET projects the accepted native head rather than an unexecuted client row");
+    assert.equal((await req(`/threads/${thread.id}/messages`, { id: "client-append-noop", parentId: rejected[1].id, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "CLIENT_APPEND_MUST_NOT_RUN" }] } })).status, 200);
+    assert.equal((await req(`/threads/${thread.id}/messages`, { id: initialUser.id, parentId: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "CLIENT_UPDATE_MUST_NOT_REPLACE" }] } })).status, 200);
+    const unchanged = await loadMessages(thread.id, actor());
+    assert(!unchanged.messages.some((message) => message.id === "client-append-noop"));
+    assert.deepEqual(unchanged.messages.find((message) => message.id === initialUser.id)?.content.parts, initialUser.parts);
+    const latest = { id: "canonical-latest-user", role: "user", parts: [{ type: "text", text: "LATEST_INPUT_USE_THE_EXISTING_TABLE" }] };
+    // Reproduce the append/Run race for an already-present, unexecuted user:
+    // its stale client parent can be normalized because no Run owns that row.
+    await db.insert(chatMessages).values({ threadId: thread.id, messageId: latest.id, parentId: rejected[1].id, content: { role: latest.role, parts: latest.parts }, serverFinal: false, createdAt: new Date(seedTime + 2) });
+    await db.update(chatThreads).set({ headId: latest.id }).where(eq(chatThreads.id, thread.id));
+    const resumed = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [...stale.messages.map((message: { id: string; content: Record<string, unknown> }) => ({ id: message.id, ...message.content })), latest] });
+    assert.equal(resumed.status, 200);assert.match(await resumed.text(), /按最新输入继续/);assert.equal(calls.length, 3);
+    const nativeHistory = JSON.stringify(calls[2].messages);
+    assert.match(nativeHistory, /CANONICAL_ACCEPTED_CREATE_ONCE/);assert(nativeHistory.includes(tableName));assert.match(nativeHistory, /LATEST_INPUT_USE_THE_EXISTING_TABLE/);
+    assert(!nativeHistory.includes("REJECTED_HTTP") && !nativeHistory.includes("CLIENT_APPEND") && !nativeHistory.includes("CLIENT_UPDATE"), "unexecuted UI inputs never enter the native journal");
+    const restored = await loadMessages(thread.id, actor());
+    assert.equal(restored.messages.find((message) => message.id === latest.id)?.parentId, canonical.headId, "the server chooses the accepted canonical parent");
+    const runs = await (await req(`/threads/${thread.id}/runs`)).json();
+    assert.equal(runs.runs.length, 2);assert(runs.runs.every((run: { status: string }) => run.status === "completed"));
+    const tables = await (await req("/tables")).json();
+    assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1, "existing native tool results are not replayed");
+  } finally {
+    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
+  }
+});
+
+test("progress event insertion failures remain observational and do not abort native tools or final persistence", { timeout: 15_000 }, async () => {
+  const calls: { messages: { role: string; content: unknown }[] }[] = [];
+  const tableName = `Observer-fault-${randomUUID()}`;
+  const provider = createServer(async (request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
+    }
+    let raw = "";for await (const chunk of request) raw += chunk;
+    calls.push(JSON.parse(raw));response.writeHead(200, { "Content-Type": "text/event-stream" });
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "observer-fault", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    write({ role: "assistant" });
+    if (calls.length === 1) {
+      write({ tool_calls: [{ index: 0, id: "observer-create-once", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] });write({}, "tool_calls");
+    } else { write({ content: "真实工具已完成，进度记录故障不影响保存回复。" });write({}, "stop"); }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
+  const address = provider.address();assert(address && typeof address !== "string");
+  const previousURL = process.env.OPENROUTER_BASE_URL;
+  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-observer-fault-provider";
+  const faultName = `progress_fault_${randomUUID().replaceAll("-", "")}`;
+  try {
+    const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
+    assert.match(thread.id, /^[0-9a-f-]{36}$/);
+    // These identifiers and the UUID come only from this isolated fixture.
+    // The trigger passes every other thread, including concurrent test suites.
+    await client.unsafe(`CREATE FUNCTION ${faultName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF EXISTS (SELECT 1 FROM agent_runs WHERE id = NEW.run_id AND thread_id = '${thread.id}'::uuid) THEN
+        RAISE EXCEPTION 'fixture_progress_observer_failure';
+      END IF;
+      RETURN NEW;
+    END $$`);
+    await client.unsafe(`CREATE TRIGGER ${faultName} BEFORE INSERT ON agent_run_events FOR EACH ROW EXECUTE FUNCTION ${faultName}()`);
+    const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "observer-fault-user", role: "user", parts: [{ type: "text", text: "创建一次真实表格并保存回复" }] }] });
+    assert.equal(response.status, 200);const stream = await response.text();
+    assert.match(stream, /真实工具已完成，进度记录故障不影响保存回复/);
+    assert(!stream.includes("系统提示") && !stream.includes("本轮未能完成") && !stream.includes('"type":"error"'), "observer failure is not projected as a native execution failure");
+    assert.equal(calls.length, 2);assert.equal(calls[1].messages.filter((message) => message.role === "tool").length, 1);
+    const { runs } = await (await req(`/threads/${thread.id}/runs`)).json();
+    assert.equal(runs.length, 1);assert.equal(runs[0].status, "completed");assert.equal(runs[0].error, null);
+    const history = await loadMessages(thread.id, actor());
+    assert.equal(history.headId, runs[0].assistantMessageId);
+    assert.match(JSON.stringify(history.messages.at(-1)?.content), /真实工具已完成，进度记录故障不影响保存回复/);
+    assert.match(JSON.stringify(history.messages.at(-1)?.content), /observer-create-once/);
+    const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
+    assert(checkpoint.resumeState);assert(checkpoint.workspace?.length);
+    const tables = await (await req("/tables")).json();
+    assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1, "the real mutation executes exactly once despite failed progress inserts");
+    const { events } = await (await req(`/threads/${thread.id}/runs/${runs[0].id}/events`)).json();
+    assert.deepEqual(events, []);
+    await assert.rejects(client.unsafe("INSERT INTO agent_run_events (run_id, activity) VALUES ($1, '{}'::jsonb)", [runs[0].id]), /fixture_progress_observer_failure/, "the thread-specific SQL fault is genuinely active");
+  } finally {
+    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
+    try { await client.unsafe(`DROP TRIGGER IF EXISTS ${faultName} ON agent_run_events`); }
+    finally { await client.unsafe(`DROP FUNCTION IF EXISTS ${faultName}()`); }
   }
 });
 

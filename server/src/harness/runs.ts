@@ -17,7 +17,6 @@ export async function beginNativeRun(lease: RuntimeLease, actor: Actor, record: 
     const previousRuns = await tx.select({ id: agentRuns.id, runtimeId: agentRuns.runtimeSessionId, userMessageId: agentRuns.userMessageId, assistantMessageId: agentRuns.assistantMessageId }).from(agentRuns).where(eq(agentRuns.threadId, lease.threadId)).orderBy(desc(agentRuns.startedAt), desc(agentRuns.id)).limit(1);
     if (previousRuns.some((r) => r.runtimeId !== record.id)) throw new HTTPException(409, { message: "切换智能体需要新建对话，已有原生会话属于原智能体" });
     if (record.resumeState && previousRuns.some((r) => r.userMessageId !== record.lastUserMessageId)) throw new HTTPException(409, { message: "上一轮执行因服务中断，暂时无法继续此对话。已有操作结果会保留，请新建对话继续。" });
-    if (record.lastAssistantMessageId && message.parentId !== record.lastAssistantMessageId) throw new HTTPException(409, { message: "当前消息分支与原生会话不一致，请返回最新对话或新建对话" });
     if (!record.resumeState) {
       // Only server-certified Pi startup failures may precede a first native turn.
       // Check the entire history: a latest harmless failure cannot hide an older crash.
@@ -39,14 +38,23 @@ export async function beginNativeRun(lease: RuntimeLease, actor: Actor, record: 
       const safeFailures = record.harness === "pi" && Boolean(previousRuns.length && record.lastAssistantMessageId
         && previousRuns[0].userMessageId === record.lastUserMessageId && previousRuns[0].assistantMessageId === record.lastAssistantMessageId);
       if (unsafeRuns.length || unsafeReplies.length || (previousRuns.length && !safeFailures)) throw new HTTPException(409, { message: "此对话暂时无法继续，历史消息已保留；请新建对话继续。" });
-      if (message.parentId && !safeFailures) throw new HTTPException(409, { message: "新的原生会话必须从新对话开始" });
     }
     // A replica died before committing its checkpoint. Do not replay its side effects.
     await tx.update(agentRuns).set({ status: "failed", error: "执行进程已中断，结果未完整保存；请核对已完成的数据修改", endedAt: new Date() })
       .where(and(eq(agentRuns.threadId, lease.threadId), inArray(agentRuns.status, [...active]), sql`${agentRuns.fence}<${lease.fence}`));
-    await saveMessageInTransaction(tx, lease.threadId, actor, message);
+    // UI history is a projection, not the native session's execution history.
+    // Older clients may have stored an unaccepted user message after HTTP failure.
+    const canonicalMessage = { ...message, parentId: record.lastAssistantMessageId ?? null };
+    const messageScope = and(eq(chatMessages.threadId, lease.threadId), eq(chatMessages.messageId, message.id));
+    const [existing] = await tx.select().from(chatMessages).where(messageScope);
+    if (existing) {
+      if (existing.serverFinal || existing.content.role !== "user") throw new HTTPException(409, { message: "消息 ID 已被使用，请发送新消息" });
+      // duplicate Run was checked above: only an uninvoked user can be reparented.
+      await tx.update(chatMessages).set({ parentId: canonicalMessage.parentId }).where(messageScope);
+    }
+    await saveMessageInTransaction(tx, lease.threadId, actor, canonicalMessage);
     const [thread] = await tx.select().from(chatThreads).where(threadScope(lease.threadId, actor));
-    await tx.update(chatThreads).set({ custom: { ...thread.custom, agentId } }).where(threadScope(lease.threadId, actor));
+    await tx.update(chatThreads).set({ custom: { ...thread.custom, agentId }, headId: message.id, lastMessageAt: new Date(), updatedAt: new Date() }).where(threadScope(lease.threadId, actor));
     const [run] = await tx.insert(agentRuns).values({ id: randomUUID(), threadId: lease.threadId, runtimeSessionId: record.id, userMessageId: message.id, assistantMessageId: randomUUID(), fence: lease.fence }).returning();
     return run;
   });

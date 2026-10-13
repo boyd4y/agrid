@@ -6,7 +6,7 @@ import { resolveActor, type Actor } from "../auth/actor.js";
 import { db } from "../db/index.js";
 import { chatThreads, agentThreadLeases } from "../db/schema.js";
 import { resolveChatContext } from "../chat/context.js";
-import { loadMessages, requireThread, saveMessage, threadScope } from "../chat/store.js";
+import { loadMessages, requireThread, threadScope } from "../chat/store.js";
 import { listNativeRuns, listNativeRunEvents, requestRunCancellation } from "../harness/runs.js";
 import { getThreadTaskState } from "../harness/tasks.js";
 
@@ -75,18 +75,14 @@ threadsRoute.post("/:id/title", async (c) => {
   return c.json({ title: (await requireThread(threadId, actor)).title });
 });
 
-const messageInput = z.object({
-  id: z.string().min(1).max(200), parentId: z.string().min(1).max(200).nullable(),
-  format: z.literal("ai-sdk/v6"),
-  content: z.object({ role: z.enum(["user", "assistant"]), parts: z.array(z.object({ type: z.string() }).passthrough()).max(500) }).passthrough(),
-});
 threadsRoute.get("/:id/messages", async (c) => c.json(await loadMessages(id(c.req.param("id")), c.get("actor"))));
 threadsRoute.get("/:id/runs", async (c) => c.json({ runs: await listNativeRuns(id(c.req.param("id")), c.get("actor")) }));
 threadsRoute.get("/:id/task-state", async (c) => c.json({ state: await getThreadTaskState(id(c.req.param("id")), c.get("actor")) }));
 threadsRoute.get("/:id/runs/:runId/events", async (c) => c.json({ events: await listNativeRunEvents(id(c.req.param("id")), id(c.req.param("runId")), c.get("actor")) }));
 threadsRoute.post("/:id/runs/:runId/cancel", async (c) => c.json(await requestRunCancellation(id(c.req.param("id")), id(c.req.param("runId")), c.get("actor"))));
 threadsRoute.post("/:id/messages", async (c) => {
-  const input = messageInput.parse(await c.req.json());
-  await saveMessage(id(c.req.param("id")), c.get("actor"), input);
+  // Compatibility for older history adapters: native chat alone commits input
+  // and output. A client projection must not advance or overwrite native history.
+  await requireThread(id(c.req.param("id")), c.get("actor"));
   return c.json({ ok: true });
 });

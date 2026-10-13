@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useAui, type RemoteThreadListAdapter, type ThreadHistoryAdapter } from "@assistant-ui/react";
 import { createAssistantStream } from "assistant-stream";
 import i18n from "@/i18n";
+import type { HttpChatTransportInitOptions, UIMessage } from "ai";
 
 export type ChatPageContext = {
   page: "ai" | "tables" | "table" | "automations" | "reports" | "skills" | "agents" | "members" | "settings";
@@ -30,12 +31,6 @@ function useThreadAdapters() {
       const pin = () => {
         threadItem = aui.threads.item({ id: aui.threadListItem.getState().id });
       };
-      const save = async (item: Parameters<typeof format.encode>[0]) => {
-        const { remoteId } = await threadItem.initialize();
-        await request(`/api/threads/${remoteId}/messages`, {
-          id: format.getId(item.message), parentId: item.parentId, format: format.format, content: format.encode(item),
-        });
-      };
       return {
         pin,
         load: async () => {
@@ -45,13 +40,21 @@ function useThreadAdapters() {
           const result = await request<{ headId: string | null; messages: StoredMessage[] }>(`/api/threads/${remoteId}/messages`);
           return { headId: result.headId ?? undefined, messages: result.messages.filter((m) => m.format === format.format).map((m) => format.decode({ id: m.id, parent_id: m.parentId, format: m.format, content: m.content as Parameters<typeof format.decode>[0]["content"] })) };
         },
-        append: save,
-        update: (item) => save(item),
+        // Native begin-run and checkpoints are the only message writers.
+        // A rejected local submission must never advance persisted history.
+        append: async () => {},
+        update: async () => {},
       };
     },
   }), [aui]);
   return useMemo(() => ({ history }), [history]);
 }
+
+/** Native session history stays on the server; the UI history remains intact. */
+export const prepareNativeChatRequest: NonNullable<HttpChatTransportInitOptions<UIMessage>["prepareSendMessagesRequest"]> = ({ id, messages, body, trigger, messageId, requestMetadata }) => {
+  const latestUser = [...messages].reverse().find(message => message.role === "user");
+  return { body: { ...body, id, messages: latestUser ? [latestUser] : [], trigger, messageId, metadata: requestMetadata } };
+};
 
 /** The adapter identity is stable; initialization snapshots the current page. */
 export function createThreadAdapter(getContext: () => { context: ChatPageContext; agentId: string | null }): RemoteThreadListAdapter {

@@ -1,7 +1,7 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { db, type Transaction } from "../db/index.js";
-import { chatMessages, chatThreads } from "../db/schema.js";
+import { agentRuns, agentRuntimeSessions, chatMessages, chatThreads } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
 
 export function threadScope(id: string, actor: Actor) {
@@ -104,13 +104,18 @@ export async function saveMessage(
 
 export async function loadMessages(threadId: string, actor: Actor) {
   const thread = await requireThread(threadId, actor);
+  const [latest] = await db.select({ run: agentRuns, session: agentRuntimeSessions }).from(agentRuns)
+    .innerJoin(agentRuntimeSessions, eq(agentRuns.runtimeSessionId, agentRuntimeSessions.id))
+    .where(eq(agentRuns.threadId, threadId)).orderBy(desc(agentRuns.startedAt), desc(agentRuns.id)).limit(1);
   const messages = await db
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.threadId, threadId))
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
   return {
-    headId: thread.headId,
+    // Old client-side HTTP failures may have advanced the display head. The
+    // accepted native input/result is authoritative; no journal or tools replay.
+    headId: latest ? (["starting", "running"].includes(latest.run.status) ? latest.run.userMessageId : latest.session.lastAssistantMessageId) : thread.headId,
     messages: messages.map((m) => ({
       id: m.messageId,
       parentId: m.parentId,

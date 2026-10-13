@@ -51,6 +51,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import {
   createThreadAdapter,
+  prepareNativeChatRequest,
   type ChatPageContext,
 } from "@/lib/chat-persistence";
 
@@ -341,6 +342,7 @@ function ScopedChatPanel({
     () =>
       new AssistantChatTransport({
         api: "/api/chat",
+        prepareSendMessagesRequest: prepareNativeChatRequest,
         body: () => ({
           agentId: requestRef.current.agentId,
           context: requestRef.current.context,
