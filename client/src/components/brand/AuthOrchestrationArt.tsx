@@ -1,7 +1,9 @@
 import { useId } from "react";
+import { useTranslation } from "react-i18next";
 
 /** Brand diagram, rather than a simulation of a running agent or product UI. */
 export function AuthOrchestrationArt() {
+  const { t } = useTranslation("marketing");
   const id = useId();
   const titleId = `${id}-title`;
   const glowId = `${id}-glow`;
@@ -15,7 +17,7 @@ export function AuthOrchestrationArt() {
       data-auth-orchestration
     >
       <title id={titleId}>
-        将零散的想法，通过 tabdo AI 组织成资料与信息、计划与步骤、进展与结果。
+        {t("art.title")}
       </title>
       <defs>
         <radialGradient id={glowId}>
@@ -41,8 +43,8 @@ export function AuthOrchestrationArt() {
       </g>
 
       <rect x="144" y="13" width="352" height="66" rx="14" fill="var(--background)" stroke="var(--border)" />
-      <text x="167" y="37" fill="var(--muted-foreground)" fontSize="11">一个想法</text>
-      <text x="167" y="60" fill="var(--foreground)" fontSize="16" fontWeight="500">把零散的想法，整理成计划</text>
+      <text x="167" y="37" fill="var(--muted-foreground)" fontSize="11">{t("art.ideaLabel")}</text>
+      <text x="167" y="60" fill="var(--foreground)" fontSize="16" fontWeight="500">{t("art.ideaHeadline")}</text>
       <g transform="translate(459 40)" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="m0-8 2.5 5.5L8 0 2.5 2.5 0 8l-2.5-5.5L-8 0l5.5-2.5Z" />
       </g>
@@ -51,7 +53,7 @@ export function AuthOrchestrationArt() {
       <image href="/brand/tabdo-mark-ink.svg" x="299" y="148" width="42" height="44" className="dark:hidden" />
       <image href="/brand/tabdo-mark-white.svg" x="299" y="148" width="42" height="44" className="hidden dark:block" />
       <rect x="283" y="220" width="74" height="20" rx="10" fill="var(--muted)" />
-      <text x="320" y="234" textAnchor="middle" fill="var(--muted-foreground)" fontSize="11">AI 动手</text>
+      <text x="320" y="234" textAnchor="middle" fill="var(--muted-foreground)" fontSize="11">{t("art.aiActs")}</text>
 
       <g fill="var(--background)" stroke="var(--border)">
         <rect x="24" y="280" width="176" height="66" rx="12" />
@@ -67,14 +69,14 @@ export function AuthOrchestrationArt() {
         <path d="M459 319v-19M459 319h24M465 314v-6M473 314v-13M481 314v-9" />
       </g>
       <g fill="var(--foreground)" fontSize="14" fontWeight="500">
-        <text x="76" y="310">资料与信息</text>
-        <text x="284" y="310">计划与步骤</text>
-        <text x="492" y="310">进展与结果</text>
+        <text x="76" y="310">{t("art.info")}</text>
+        <text x="284" y="310">{t("art.plan")}</text>
+        <text x="492" y="310">{t("art.progress")}</text>
       </g>
       <g fill="var(--muted-foreground)" fontSize="10">
-        <text x="76" y="330">收集 · 整理 · 关联</text>
-        <text x="284" y="330">拆解 · 安排 · 推进</text>
-        <text x="492" y="330">查看 · 记录 · 调整</text>
+        <text x="76" y="330">{t("art.infoHint")}</text>
+        <text x="284" y="330">{t("art.planHint")}</text>
+        <text x="492" y="330">{t("art.progressHint")}</text>
       </g>
     </svg>
   );

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   blogCategories,
   blogPosts,
@@ -10,6 +11,7 @@ import { SeoHead } from "@/components/seo/SeoHead";
 import { cn } from "@/lib/utils";
 
 export function BlogPage() {
+  const { t } = useTranslation("marketing");
   const [cat, setCat] = useState<BlogCategory | "All">("All");
   const posts = useMemo(
     () =>
@@ -20,8 +22,8 @@ export function BlogPage() {
   return (
     <main className="relative">
       <SeoHead
-        title="Blog"
-        description="tabdo blog — product, engineering, and how-to notes on AI-native tables."
+        title={t("blog.seoTitle")}
+        description={t("blog.seoDescription")}
         path="/blog"
       />
       <div
@@ -33,10 +35,10 @@ export function BlogPage() {
       />
       <div className="mx-auto max-w-5xl px-4 py-14">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          tabdo Blog
+          {t("blog.title")}
         </h1>
         <p className="mt-2 text-muted-foreground">
-          How we build agent-equal tables — measured notes, not vapor.
+          {t("blog.subtitle")}
         </p>
 
         <div className="mt-8 flex flex-wrap gap-2">
@@ -52,7 +54,7 @@ export function BlogPage() {
                   : "border-border bg-background text-muted-foreground hover:text-foreground"
               )}
             >
-              {c}
+              {c === "All" ? t("blog.all") : t(`blog.categories.${c}`)}
             </button>
           ))}
         </div>
@@ -72,7 +74,7 @@ export function BlogPage() {
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-5">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="font-medium text-primary">{p.category}</span>
+                    <span className="font-medium text-primary">{t(`blog.categories.${p.category}`)}</span>
                     <span>·</span>
                     <time dateTime={p.date}>{p.date}</time>
                   </div>
@@ -89,7 +91,7 @@ export function BlogPage() {
         </ul>
 
         <p className="mt-10 text-xs text-muted-foreground">
-          Machine-readable index:{" "}
+          {t("blog.machineIndex")}{" "}
           <a className="underline hover:text-foreground" href="/llms.txt">
             /llms.txt
           </a>{" "}

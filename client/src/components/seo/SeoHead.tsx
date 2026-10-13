@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { BRAND, BRAND_COPY } from "@/lib/brand";
+import i18n from "@/i18n";
+import { BRAND } from "@/lib/brand";
 
 export type SeoProps = {
   title: string;
@@ -38,7 +39,7 @@ function upsertLink(rel: string, href: string) {
 /** Client-side SEO tags for marketing pages (title, description, OG, Twitter). */
 export function SeoHead({
   title,
-  description = BRAND_COPY.description,
+  description,
   path = "/",
   type = "website",
   image = "/tabdo-mark.svg",
@@ -47,19 +48,20 @@ export function SeoHead({
   noindex,
 }: SeoProps) {
   useEffect(() => {
+    const desc = description ?? i18n.t("marketing:brand.description");
     const fullTitle = title.includes(SITE) ? title : `${title} · ${SITE}`;
     document.title = fullTitle;
     const url = `${ORIGIN}${path}`;
     const absImage = image.startsWith("http") ? image : `${ORIGIN}${image}`;
 
-    upsertMeta("name", "description", description);
+    upsertMeta("name", "description", desc);
     upsertMeta("name", "twitter:card", "summary_large_image");
     upsertMeta("name", "twitter:title", fullTitle);
-    upsertMeta("name", "twitter:description", description);
+    upsertMeta("name", "twitter:description", desc);
     upsertMeta("name", "twitter:image", absImage);
     upsertMeta("property", "og:site_name", SITE);
     upsertMeta("property", "og:title", fullTitle);
-    upsertMeta("property", "og:description", description);
+    upsertMeta("property", "og:description", desc);
     upsertMeta("property", "og:type", type);
     upsertMeta("property", "og:url", url);
     upsertMeta("property", "og:image", absImage);

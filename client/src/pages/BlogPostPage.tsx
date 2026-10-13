@@ -1,10 +1,12 @@
 import { Link, useParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 import { getPost } from "@/data/blog";
 import { BlogCover } from "@/components/illustrations/BlogCover";
 import { SeoHead } from "@/components/seo/SeoHead";
 
 export function BlogPostPage() {
+  const { t } = useTranslation("marketing");
   const { slug } = useParams();
   const post = slug ? getPost(slug) : undefined;
 
@@ -12,9 +14,9 @@ export function BlogPostPage() {
     return (
       <main className="mx-auto max-w-2xl px-4 py-20 text-center">
         <SeoHead title="Not found" path="/blog" noindex />
-        <p className="text-muted-foreground">文章不存在</p>
+        <p className="text-muted-foreground">{t("blog.notFound")}</p>
         <Link to="/blog" className="mt-4 inline-block text-primary">
-          返回博客
+          {t("blog.backToBlog")}
         </Link>
       </main>
     );
@@ -43,7 +45,7 @@ export function BlogPostPage() {
           to="/blog"
           className="mb-8 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Blog
+          <ArrowLeft className="h-3.5 w-3.5" /> {t("blog.back")}
         </Link>
 
         <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-muted shadow-sm">
@@ -52,7 +54,7 @@ export function BlogPostPage() {
 
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="rounded-full bg-muted px-2 py-0.5 font-medium text-foreground">
-            {post.category}
+            {t(`blog.categories.${post.category}`)}
           </span>
           <time dateTime={post.date}>{post.date}</time>
           <span>·</span>

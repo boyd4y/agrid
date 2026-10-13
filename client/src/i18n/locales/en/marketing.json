@@ -1,5 +1,9 @@
 {
-  "nav": { "home": "Home", "docs": "Docs", "blog": "Blog" },
+  "nav": {
+    "home": "Home",
+    "docs": "Docs",
+    "blog": "Blog"
+  },
   "enterWorkspace": "Open workspace",
   "login": "Log in",
   "signup": "Sign up",
@@ -14,10 +18,22 @@
     "rocketAlt": "Person on a rocket using a laptop"
   },
   "surfaces": {
-    "speak": { "label": "Say the idea", "hint": "Tell AI what you want to do" },
-    "organize": { "label": "Organize", "hint": "Bring existing information together" },
-    "plan": { "label": "Plan steps", "hint": "Clarify what comes next together" },
-    "act": { "label": "Take action", "hint": "Let AI work while you review and adjust" }
+    "speak": {
+      "label": "Say the idea",
+      "hint": "Tell AI what you want to do"
+    },
+    "organize": {
+      "label": "Organize",
+      "hint": "Bring existing information together"
+    },
+    "plan": {
+      "label": "Plan steps",
+      "hint": "Clarify what comes next together"
+    },
+    "act": {
+      "label": "Take action",
+      "hint": "Let AI work while you review and adjust"
+    }
   },
   "ideas": {
     "title": "Have an idea? Let AI help you act",
@@ -61,5 +77,35 @@
   "authAside": {
     "pipeline": "From idea to action",
     "homeAria": "tabdo home"
+  },
+  "blog": {
+    "title": "tabdo Blog",
+    "seoTitle": "Blog",
+    "seoDescription": "tabdo blog — product, engineering, and how-to notes on AI-native tables.",
+    "subtitle": "How we build agent-equal tables — measured notes, not vapor.",
+    "all": "All",
+    "notFound": "Post not found",
+    "backToBlog": "Back to blog",
+    "back": "Blog",
+    "machineIndex": "Machine-readable index:",
+    "categories": {
+      "Product": "Product",
+      "Engineering": "Engineering",
+      "AI agents": "AI agents",
+      "Design": "Design",
+      "How-to": "How-to"
+    }
+  },
+  "art": {
+    "title": "Turn scattered ideas into information, plans, and outcomes with tabdo AI.",
+    "ideaLabel": "An idea",
+    "ideaHeadline": "Turn scattered thoughts into a plan",
+    "aiActs": "AI at work",
+    "info": "Info & context",
+    "plan": "Plans & steps",
+    "progress": "Progress & results",
+    "infoHint": "Collect · organize · link",
+    "planHint": "Break down · schedule · push",
+    "progressHint": "Review · log · adjust"
   }
 }

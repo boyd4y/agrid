@@ -1,5 +1,9 @@
 {
-  "nav": { "home": "首页", "docs": "文档", "blog": "博客" },
+  "nav": {
+    "home": "首页",
+    "docs": "文档",
+    "blog": "博客"
+  },
   "enterWorkspace": "进入工作台",
   "login": "登录",
   "signup": "注册",
@@ -14,10 +18,22 @@
     "rocketAlt": "坐在火箭上使用电脑的人物"
   },
   "surfaces": {
-    "speak": { "label": "说出想法", "hint": "告诉 AI 你想做什么" },
-    "organize": { "label": "整理信息", "hint": "把已有的信息放在一起" },
-    "plan": { "label": "安排步骤", "hint": "一起理清下一步" },
-    "act": { "label": "动手执行", "hint": "让 AI 操作，随时查看和调整" }
+    "speak": {
+      "label": "说出想法",
+      "hint": "告诉 AI 你想做什么"
+    },
+    "organize": {
+      "label": "整理信息",
+      "hint": "把已有的信息放在一起"
+    },
+    "plan": {
+      "label": "安排步骤",
+      "hint": "一起理清下一步"
+    },
+    "act": {
+      "label": "动手执行",
+      "hint": "让 AI 操作，随时查看和调整"
+    }
   },
   "ideas": {
     "title": "有了想法，就让 AI 帮你动手",
@@ -61,5 +77,35 @@
   "authAside": {
     "pipeline": "从想法，到行动",
     "homeAria": "tabdo 首页"
+  },
+  "blog": {
+    "title": "tabdo 博客",
+    "seoTitle": "博客",
+    "seoDescription": "tabdo 博客 — 产品、工程与 AI 原生表格实践笔记。",
+    "subtitle": "我们如何做「智能体与人同权」的表格 — 实测笔记，不是空话。",
+    "all": "全部",
+    "notFound": "文章不存在",
+    "backToBlog": "返回博客",
+    "back": "博客",
+    "machineIndex": "机器可读索引：",
+    "categories": {
+      "Product": "产品",
+      "Engineering": "工程",
+      "AI agents": "AI 智能体",
+      "Design": "设计",
+      "How-to": "指南"
+    }
+  },
+  "art": {
+    "title": "将零散的想法，通过 tabdo AI 组织成资料与信息、计划与步骤、进展与结果。",
+    "ideaLabel": "一个想法",
+    "ideaHeadline": "把零散的想法，整理成计划",
+    "aiActs": "AI 动手",
+    "info": "资料与信息",
+    "plan": "计划与步骤",
+    "progress": "进展与结果",
+    "infoHint": "收集 · 整理 · 关联",
+    "planHint": "拆解 · 安排 · 推进",
+    "progressHint": "查看 · 记录 · 调整"
   }
 }
