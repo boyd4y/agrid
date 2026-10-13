@@ -1,6 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import { and, asc, eq, gt, inArray, max, or, sql } from "drizzle-orm";
-import { db, type Transaction } from "../db/index.js";
+import { db, inTransaction, type Transaction } from "../db/index.js";
 import { columns, rows, tables, tableRelations, COLUMN_TYPES } from "../db/schema.js";
 import {
   BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA,
@@ -48,8 +48,8 @@ async function addColumnInTransaction(tx: Transaction, input: AddColumnInput & S
   if (type === "formula") await recomputeFormulasInTransaction(tableId, tx);
   return { ...column, affectedTableIds: [tableId] };
 }
-export async function addColumn(input: AddColumnInput & Scope) {
-  return db.transaction(async (tx) => {
+export async function addColumn(input: AddColumnInput & Scope, transaction?: Transaction) {
+  return inTransaction(transaction, async (tx) => {
     await lockSchema(tx, [input.tableId, ...(input.type === "relation" && input.config?.relation ? [input.config.relation.targetTableId] : [])], input);
     return addColumnInTransaction(tx, input);
   });
@@ -76,8 +76,8 @@ async function tablesForColumns(tx: Transaction, ids: string[], scope: Scope) {
     .where(or(inArray(tableRelations.sourceColumnId, ids), inArray(tableRelations.inverseColumnId, ids)));
   return [...new Set([...tableIds, ...defs.flatMap((d) => [d.sourceTableId, d.targetTableId])])];
 }
-export async function deleteColumn(input: DeleteColumnInput & Scope) {
-  return db.transaction(async (tx) => {
+export async function deleteColumn(input: DeleteColumnInput & Scope, transaction?: Transaction) {
+  return inTransaction(transaction, async (tx) => {
     await lockSchema(tx, await tablesForColumns(tx, [input.columnId], input), input);
     return deleteColumnInTransaction(tx, input);
   });
@@ -129,17 +129,17 @@ async function updateColumnInTransaction(tx: Transaction, input: UpdateColumnInp
     await recomputeFormulasInTransaction(column.tableId, tx);
   return updated;
 }
-export async function updateColumn(input: UpdateColumnInput & Scope) {
-  return db.transaction(async (tx) => {
+export async function updateColumn(input: UpdateColumnInput & Scope, transaction?: Transaction) {
+  return inTransaction(transaction, async (tx) => {
     await lockSchema(tx, await tablesForColumns(tx, [input.columnId], input), input);
     return updateColumnInTransaction(tx, input);
   });
 }
 
-export async function batchAddColumns(raw: BatchAddColumnsInput & Scope): Promise<BatchColumnsResult> {
+export async function batchAddColumns(raw: BatchAddColumnsInput & Scope, transaction?: Transaction): Promise<BatchColumnsResult> {
   const input = BATCH_ADD_COLUMNS_SCHEMA.parse({ tableId: raw.tableId, columns: raw.columns });
   const scope = { organizationId: requireOrgId(raw.organizationId), actorId: raw.actorId };
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     await lockSchema(tx, [input.tableId, ...input.columns.flatMap((c) => c.type === "relation" && c.config?.relation ? [c.config.relation.targetTableId] : [])], scope);
     const added = [], affected = new Set<string>();
     for (const column of input.columns) {
@@ -149,10 +149,10 @@ export async function batchAddColumns(raw: BatchAddColumnsInput & Scope): Promis
     return { count: added.length, columns: added, affectedTableIds: [...affected] };
   });
 }
-export async function batchUpdateColumns(raw: BatchUpdateColumnsInput & Scope): Promise<BatchColumnsResult> {
+export async function batchUpdateColumns(raw: BatchUpdateColumnsInput & Scope, transaction?: Transaction): Promise<BatchColumnsResult> {
   const input = BATCH_UPDATE_COLUMNS_SCHEMA.parse({ columns: raw.columns });
   const scope = { organizationId: requireOrgId(raw.organizationId), actorId: raw.actorId };
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     const tableIds = await tablesForColumns(tx, input.columns.map((c) => c.columnId), scope);
     await lockSchema(tx, tableIds, scope);
     const updated = [];
@@ -160,10 +160,10 @@ export async function batchUpdateColumns(raw: BatchUpdateColumnsInput & Scope): 
     return { count: updated.length, columns: updated, affectedTableIds: tableIds };
   });
 }
-export async function batchDeleteColumns(raw: BatchDeleteColumnsInput & Scope): Promise<BatchDeleteColumnsResult> {
+export async function batchDeleteColumns(raw: BatchDeleteColumnsInput & Scope, transaction?: Transaction): Promise<BatchDeleteColumnsResult> {
   const input = BATCH_DELETE_COLUMNS_SCHEMA.parse({ columnIds: raw.columnIds });
   const scope = { organizationId: requireOrgId(raw.organizationId), actorId: raw.actorId };
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     const tableIds = await tablesForColumns(tx, input.columnIds, scope);
     await lockSchema(tx, tableIds, scope);
     const selected = await tx.select().from(columns).where(inArray(columns.id, input.columnIds));

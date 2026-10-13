@@ -5,8 +5,22 @@ import { z } from "zod";
 import { COLUMN_TYPES } from "../db/schema.js";
 import * as cmds from "../commands/index.js";
 import { requireActorOrg } from "../tenant/http.js";
+import { requireColumnInOrg } from "../tenant/scope.js";
 
 export const columnsRoute = new Hono();
+
+columnsRoute.get("/columns/:id", async (c) => {
+  const scope = await requireActorOrg(c.req.raw);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  const id = z.string().uuid().safeParse(c.req.param("id"));
+  if (!id.success) return c.json({ error: "字段标识无效" }, 400);
+  try {
+    const { column } = await requireColumnInOrg(id.data, scope.organizationId);
+    return c.json(column);
+  } catch {
+    return c.json({ error: "字段不存在" }, 404);
+  }
+});
 
 columnsRoute.post("/tables/:id/columns", async (c) => {
   const scope = await requireActorOrg(c.req.raw);

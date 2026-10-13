@@ -16,7 +16,8 @@
 - 14 项原生基础设施测试及 24 项聊天测试通过；删除未使用的旧 streamText 循环与重复辅助测试。
 - 智能体本地/Sandbox 配置与创建/编辑/刷新恢复浏览器验证；不支持的 Harness/环境组合在保存时拒绝。
 
-plan/goal 已通过私有对话工具持久化，聊天 header 可查看，刷新后恢复；AGENTS.md 从智能体人设内部生成，不提供额外工作区设置。聊天仅展示当前等待、停止、必要的原生继续和消息内错误反馈；用户要求移除额外的执行历史面板，内部 Run 状态仍用于刷新恢复和防止重复发送。自动化运行日志不受影响。本地真实浏览器流断开、刷新恢复、启动中停止与失败反馈已验收。远程 Sandbox 已接官方创建/恢复接口与配置测试，尚未用真实凭证验证。
+计划与目标只取决于 Harness 原生能力，平台不再实现或注入独立计划/目标工具。AGENTS.md 从智能体人设生成。聊天展示原生消息、实际提问和必要错误，内部 Run 用于刷新与防止重复发送，不展示额外执行历史面板。自动化运行记录是独立资源，使用右侧 Sheet。
+
 
 ## 三种状态各自负责什么
 
@@ -50,15 +51,9 @@ Harness 1.0.149 会隐藏 host tool 参数校验原因，且忽略继承的 `str
 
 ## 工具目录与智能体开关
 
-`GET /api/members/agents/tools?harness=pi|codex|claude` 返回当前已安装官方 adapter 的 `builtinTools` 元数据，以及真实业务、Skill 检索、目标和计划的 host 工具定义。目录分 `builtin` / `platform`，不把平台工具伪装成内置工具。Pi 7 个、Codex 4 个、Claude Code 48 个声明的原生工具；平台共 59 个。三个已安装 adapter 都声明支持原生工具过滤；未声明支持过滤或审批的原生工具会标为 `alwaysEnabled` 并拒绝关闭。原生声明可能仍要求对应 runtime、MCP 或外部环境；目录不是远程执行验收。
+工具设置只按类型控制平台工具（记录、字段、关联、批量、视图、表单、报告、自动化及 Skill 检索），不列出 Harness 内置工具，不注入平台计划/目标。运行使用官方 `inactiveTools` 过滤平台工具，原生能力由 adapter 自己提供。关闭工具不撤销已经完成的数据操作；智能体 Skill 分配仍决定其按需可读文件。
 
-`persona.disabledTools?: string[]` 缺省或 `[]` 全开启，新增工具默认开启。创建/修改保持 owner/admin 权限，拒绝未知、重复和当前 Harness 不支持的名称；普通成员可读取目录。人设 JSON 已持久化，无新数据库迁移。运行使用 [官方 `inactiveTools`](https://ai-sdk.dev/docs/ai-sdk-harnesses/tools#tool-filtering) 原样传入完整 host+native 工具集合，由 SDK 执行过滤和拒绝；没有手工删除定义或应用自己的执行循环。
-
-原生 `read`/`bash` 操作隔离工作区；平台工具经过原 schema 校验、组织/用户绑定与会话 lease。关闭 `read_skill` 只禁用该平台检索入口，原生 Skill 文件仍由 Skill 分配决定；关闭 native `read`/`bash` 会限制其相应能力。计划/目标四个工具也可关闭，均列入工作计划组。关闭工具不更改已有数据、计划或技能分配。
-
-本地 Pi 真 SDK 已验证：关闭的 native/host 工具未出现在实际 provider 工具目录，强行调用平台工具执行计数为零，模型收到原生拒绝原因，UI 保存 `output-error`，没有表格变更事件或计划写入。SDK 的 host 拒绝结果可能是 `execution-denied` payload，按失败投影和统计；Pi 对未暴露工具直接返回原生 `tool-error`。已有真实 schema 错误、业务失败、模型纠正、历史刷新、组织隔离、取消和 lease proof 继续通过。Codex/Claude 的过滤能力已核对安装包与官方接口，真实远程调用仍属于下方 Sandbox 待验收范围。
-
-外部 MCP token 客户端拥有独立工具接口和权限入口，不使用某个聊天智能体的工具偏好。当前 MCP 缺少报告、自动化、建表和部分表单布局接口；没有把 host 工具目录标成已完成 MCP 全覆盖。需要另外对齐这些业务入口，私有对话目标/计划和 UI 预览也不能机械暴露为 MCP 工具。
+官方 schema、用户和工作区绑定、租约保护沿用普通聊天实现。MCP 复用同一命令层；本轮增加创建、修改、删除、读取自动化与运行记录接口。MCP 的外部用户 Key 是独立调用身份，不继承某个智能体的 UI 工具偏好，也不代表所有平台接口已完整覆盖。
 
 ## 运行环境
 
@@ -116,3 +111,13 @@ OpenRouter通过公开 `/models` 辅助获取实际context_length与提供商输
 使用官方 `createPi.providers.*.models[].samplingParams` 明确传递 `reasoning: { enabled: false, effort: "none" }`，让现有off设置真正进入OpenRouter请求；不修改SDK、不开额外工具循环。强制推理的模型可能拒绝none，此时按提供商真实错误处理，不能声称所有模型都能关闭推理。[Pi配置文档](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md#configure-sampling-by-thinking-level)、[OpenRouter输出与推理预算](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)。
 
 当前Pi adapter把原生length归一化为stop。通过官方可信inline extension的 `message_end` 只读观察最后一个assistant的原始stopReason和usage，保存到消息metadata.completion；不将中间length提前定失败。最终length无论有无正文均标记failed，保留部分正文并提示达到输出上限，下一次用户输入沿原生会话接着回答，不自动重试或重放工具。其它空正文不推断为length。官方unfinished turn仍保持suspended，依SDK continuation继续。
+
+## 自动化中的原生智能体动作
+
+`run_agent` 只配置 `agentUserId` 和 `prompt`。自动化创建者的实时成员身份是执行身份，选中的智能体必须属于同一工作区。persona、model、skills、平台工具与隔离环境均复用 `prepareNativeChatAgent`；后台调用普通聊天的官方 Harness 执行核心，没有第二套模型循环或 HTTP 回环。
+
+每个自动化动作先短事务创建一条稳定的私有 workspace 对话与输入ID，再释放事务执行原生 stream。重复投递读取同一 native run 和持久输出，不重发本次事件。真实 Harness 提问对应 `waiting_input`，用户从运行 Sheet 打开 `/app?thread=<id>`，在普通对话回答；原生完成后 worker 自动接续剩余数据动作。同一 pending 问题和 tool-result 均沿官方 continuation。
+
+运行中或未完整保存的原生动作不冒充完成，不自行重试已执行工具。只有既有服务器 `NOT_INVOKED` 证书证明输入从未发送给 Pi 时，才使用相同 run/input/assistant ID重试启动。取消、供应商错误和缺配置如实保存。故障发生在外部副作用之后仍需要核对，不能承诺所有外部效果恰好一次。
+
+本地原生 SDK fixture 已验证实际平台工具执行、持久正文、重复投递、真实待答和同一输入续接。未使用用户模型或 Vercel 凭证。原生宿主工具目前沿用会话租约事务，需要正常连接池（至少2连接）；单连接池仅适用于纯数据库 command composition 测试，不能支撑嵌套原生宿主调用。

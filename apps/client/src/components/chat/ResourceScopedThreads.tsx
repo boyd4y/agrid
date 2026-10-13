@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { useEffect, useRef, useState } from "react";
 import { useAui, useAuiEvent, useAuiState } from "@assistant-ui/react";
 import {
   type ChatResourceKey,
@@ -12,6 +14,7 @@ import i18n from "@/i18n";
 
 type Props = {
   resourceKey: ChatResourceKey;
+  remoteThreadId?: string | null;
 };
 
 function isEmptyUnboundTitle(title: string | undefined): boolean {
@@ -27,12 +30,15 @@ function isEmptyUnboundTitle(title: string | undefined): boolean {
  * - on resource change: open last / most-recent scoped session, or new
  * - unbound threads stay hidden from scoped lists (not auto-attached to every table)
  */
-export function ResourceScopedThreads({ resourceKey }: Props) {
+export function ResourceScopedThreads({ resourceKey, remoteThreadId }: Props) {
   const aui = useAui();
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const isLoading = useAuiState((s) => s.threads.isLoading);
   const appliedKeyRef = useRef<string | null>(null);
+  const openedRemoteRef = useRef<string | null>(null);
+  const switchQueue = useRef(Promise.resolve());
+  const [linkRevision, setLinkRevision] = useState(0);
 
   const stampThread = (threadId: string) => {
     if (!threadId) return;
@@ -53,9 +59,35 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
     }
   };
 
+  useEffect(() => {
+    if (!remoteThreadId || openedRemoteRef.current === remoteThreadId) return;
+    let cancelled = false;
+    // Serialize SDK switches so rapid navigation cannot apply an older selection last.
+    const open = switchQueue.current.then(async () => {
+      if (cancelled) return;
+      await api.getChatThread(remoteThreadId);
+      if (cancelled) return;
+      await aui.threads.switchToThread(remoteThreadId);
+      if (cancelled) return;
+      openedRemoteRef.current = remoteThreadId;
+      appliedKeyRef.current = resourceKey;
+      setLastThreadId(resourceKey, remoteThreadId);
+      setLinkRevision(value => value + 1);
+    }).catch(error => {
+      if (cancelled) return;
+      openedRemoteRef.current = remoteThreadId;
+      appliedKeyRef.current = null;
+      setLinkRevision(value => value + 1);
+      toast.error(error instanceof Error ? error.message : i18n.t("errors:loadFailed"));
+    });
+    switchQueue.current = open;
+    return () => { cancelled = true; };
+  }, [remoteThreadId, resourceKey, aui]);
+
   // Switch pool when resourceKey changes (after thread list is ready)
   useEffect(() => {
     if (isLoading) return;
+    if (remoteThreadId && openedRemoteRef.current !== remoteThreadId) return;
     if (appliedKeyRef.current === resourceKey) return;
 
     const scoped = threadItems.filter((t) => {
@@ -102,7 +134,7 @@ export function ResourceScopedThreads({ resourceKey }: Props) {
     }
     // stamp of new thread happens via mainThreadId / selection effects
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resourceKey, isLoading, threadItems, mainThreadId, aui]);
+  }, [resourceKey, remoteThreadId, linkRevision, isLoading, threadItems, mainThreadId, aui]);
 
   // Stamp + remember whenever main thread belongs (or can belong) to this pool
   useEffect(() => {

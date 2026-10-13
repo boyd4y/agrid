@@ -245,6 +245,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
             collapsed={sidebarCollapsed}
           />
           <NavItem {...nav("skills")} collapsed={sidebarCollapsed} />
+          <NavItem {...nav("integrations")} collapsed={sidebarCollapsed} />
           <ThemeToggle sidebar expanded={!sidebarCollapsed} />
         </div>
 

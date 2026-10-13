@@ -18,3 +18,8 @@ export const db = drizzle(client, { schema });
 export type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type Database = typeof db | Transaction;
 export { client };
+
+/** Compose command side effects and their caller's receipt in one transaction. */
+export function inTransaction<T>(transaction: Transaction | undefined, work: (tx: Transaction) => Promise<T>): Promise<T> {
+  return transaction ? work(transaction) : db.transaction(work);
+}

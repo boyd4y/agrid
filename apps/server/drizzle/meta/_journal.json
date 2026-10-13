@@ -162,6 +162,13 @@
       "when": 1791862700000,
       "tag": "0022_user_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791862800000,
+      "tag": "0023_event_automations",
+      "breakpoints": true
     }
   ]
 }

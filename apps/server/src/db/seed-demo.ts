@@ -399,9 +399,10 @@ async function ensureBacklogAutomations(tableId: string) {
     await db.delete(automations).where(eq(automations.tableId, tableId));
   }
 
+  const [sourceTable] = await db.select().from(tables).where(eq(tables.id, tableId));
   await db.insert(automations).values([
     {
-      tableId,
+      tableId, organizationId: sourceTable.organizationId, source: { kind: "table" as const, tableId },
       name: "进入已完成时勾选",
       enabled: true,
       trigger: { type: "enter_status", columnId: byName["状态"], optionId: "done" },
@@ -410,7 +411,7 @@ async function ensureBacklogAutomations(tableId: string) {
       actions: [{ type: "update_field", value: true, columnId: byName["已完成"] }],
     },
     {
-      tableId,
+      tableId, organizationId: sourceTable.organizationId, source: { kind: "table" as const, tableId },
       name: "新建记录默认 P2",
       enabled: true,
       trigger: { type: "row_created" },
@@ -419,7 +420,7 @@ async function ensureBacklogAutomations(tableId: string) {
       actions: [{ type: "update_field", value: "p2", columnId: byName["优先级"] }],
     },
     {
-      tableId,
+      tableId, organizationId: sourceTable.organizationId, source: { kind: "table" as const, tableId },
       name: "优先级变 P0 时改标题前缀",
       enabled: false,
       trigger: { type: "field_changed", columnId: byName["优先级"], toValue: "p0" },

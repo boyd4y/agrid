@@ -1,12 +1,12 @@
 import { BATCH_SET_RELATIONS_SCHEMA, type BatchRelationsInput, type BatchRelationsResult } from "@tabdo/shared";
-import { db } from "../db/index.js";
+import { inTransaction, type Transaction } from "../db/index.js";
 import { readRow } from "./relation-reads.js";
 import { requireOrgId } from "../tenant/scope.js";
 import { prepareBatchRowWrites, updateCellsInTransaction, type OrgScoped } from "./index.js";
 
-async function writeBatchRelations(raw: BatchRelationsInput & OrgScoped, mode: "set" | "add" | "remove"): Promise<BatchRelationsResult> {
+async function writeBatchRelations(raw: BatchRelationsInput & OrgScoped & { skipAutomation?: boolean }, mode: "set" | "add" | "remove", transaction?: Transaction): Promise<BatchRelationsResult> {
   const input = BATCH_SET_RELATIONS_SCHEMA.parse({ relations: raw.relations });
-  const scope = { organizationId: requireOrgId(raw.organizationId), actorId: raw.actorId };
+  const scope = { organizationId: requireOrgId(raw.organizationId), actorId: raw.actorId, skipAutomation: raw.skipAutomation };
   // Multiple fields on one row share one CAS and one version/event write.
   const grouped = new Map<string, { rowId: string; cells: Record<string, string[]>; expectedVersion?: number }>();
   for (const relation of input.relations) {
@@ -19,7 +19,7 @@ async function writeBatchRelations(raw: BatchRelationsInput & OrgScoped, mode: "
     grouped.set(relation.rowId, group);
   }
   const updates = [...grouped.values()];
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     const prepared = await prepareBatchRowWrites(tx, updates, scope);
     for (const update of updates) {
       const row = prepared.rowsById.get(update.rowId)!;
@@ -46,6 +46,6 @@ async function writeBatchRelations(raw: BatchRelationsInput & OrgScoped, mode: "
     return { count: input.relations.length, rows: results, affectedTableIds: [...affected] };
   });
 }
-export async function batchSetRelations(input: BatchRelationsInput & OrgScoped) { return writeBatchRelations(input, "set"); }
-export async function batchAddRelations(input: BatchRelationsInput & OrgScoped) { return writeBatchRelations(input, "add"); }
-export async function batchRemoveRelations(input: BatchRelationsInput & OrgScoped) { return writeBatchRelations(input, "remove"); }
+export async function batchSetRelations(input: BatchRelationsInput & OrgScoped & { skipAutomation?: boolean }, transaction?: Transaction) { return writeBatchRelations(input, "set", transaction); }
+export async function batchAddRelations(input: BatchRelationsInput & OrgScoped & { skipAutomation?: boolean }, transaction?: Transaction) { return writeBatchRelations(input, "add", transaction); }
+export async function batchRemoveRelations(input: BatchRelationsInput & OrgScoped & { skipAutomation?: boolean }, transaction?: Transaction) { return writeBatchRelations(input, "remove", transaction); }

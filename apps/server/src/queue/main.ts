@@ -2,12 +2,14 @@ import { client } from "../db/index.js";
 import { startWorker } from "./workers.js";
 import { createRelay } from "./relay.js";
 import { positiveInt } from "./config.js";
+import { dispatchDueSchedules } from "../automation/schedule.js";
+import { reconcileNativeAutomations } from "../automation/execution.js";
 const relay = createRelay();
 const runtime = startWorker();
 let closing = false;
 const loop = (async () => {
   while (!closing) {
-    try { await relay.tick(); } catch (error) { console.error("[relay]", error); }
+    try { await dispatchDueSchedules(); await reconcileNativeAutomations(); await relay.tick(); } catch (error) { console.error("[relay]", error); }
     if (!closing) await new Promise((resolve) => setTimeout(resolve, positiveInt("AUTOMATION_RELAY_POLL_MS", 500)));
   }
 })();

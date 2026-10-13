@@ -35,7 +35,7 @@ async function fixture(options: { enabled?: boolean; trigger?: "row_created" | "
   const [input, output] = await db.insert(columns).values([
     { tableId: table.id, name: "Input", type: "text" }, { tableId: table.id, name: "Output", type: "text" },
   ]).returning();
-  const [rule] = await db.insert(automations).values({ tableId: table.id, name: "Rule", enabled: options.enabled ?? true,
+  const [rule] = await db.insert(automations).values({ tableId: table.id, organizationId: org, source: { kind: "table", tableId: table.id }, name: "Rule", enabled: options.enabled ?? true,
     trigger: options.trigger === "field_changed" ? { type: "field_changed", columnId: input.id } : { type: "row_created" },
     conditions: options.condition ? [{ id: "c", columnId: input.id, op: "eq", value: options.condition }] : [],
     actions: [{ type: "update_field", columnId: output.id, value: "done" },

@@ -17,6 +17,7 @@ try {
   await page.getByRole('link', { name: '新建自动化', exact: true }).first().click();
   await page.getByTestId('automation-source-step').waitFor();
   assert.equal(await page.getByTestId('automation-editor').count(), 0, 'creation chooses source before editor');
+  await page.getByTestId('automation-source-step').getByRole('combobox', { name: '来源表格', exact: true }).click();
   await page.getByRole('option', { name: 'Builder source', exact: true }).click();
   await page.getByRole('button', { name: '下一步', exact: true }).click();
   const editor = page.getByTestId('automation-editor');

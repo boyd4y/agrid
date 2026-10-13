@@ -1,5 +1,5 @@
 import { NiBook, NiBot, NiGrid, NiUsers, NiZap } from "@/components/icons";
-import { ChartNoAxesCombined, MessageSquare, Settings } from "lucide-react";
+import { ChartNoAxesCombined, MessageSquare, Settings, Plug } from "lucide-react";
 
 /** Sidebar and page headers share the same menu keys and icon components. Labels come from i18n `app:nav.*`. */
 export const APP_NAVIGATION = {
@@ -10,6 +10,7 @@ export const APP_NAVIGATION = {
   members: { to: "/app/members", labelKey: "nav.members", icon: NiUsers },
   agents: { to: "/app/agents", labelKey: "nav.agents", icon: NiBot },
   skills: { to: "/app/skills", labelKey: "nav.skills", icon: NiBook },
+  integrations: { to: "/app/integrations", labelKey: "nav.integrations", icon: Plug },
   settings: { to: "/app/settings", labelKey: "nav.settings", icon: Settings },
 } as const;
 

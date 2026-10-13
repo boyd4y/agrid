@@ -11,7 +11,7 @@ import {
   affectedTables,
 } from "./relations.js";
 import { eq, and, asc, max, sql, inArray, or } from "drizzle-orm";
-import { db, type Transaction } from "../db/index.js";
+import { db, inTransaction, type Transaction } from "../db/index.js";
 import {
   tables,
   columns,
@@ -22,7 +22,6 @@ import {
 import {
   requireOrgId,
   requireTableInOrg,
-  requireColumnInOrg,
   listTablesForOrg,
 } from "../tenant/scope.js";
 import {
@@ -134,12 +133,12 @@ export async function createTable(input: {
   return table;
 }
 
-export async function updateCell(input: UpdateCellInput & OrgScoped) {
-  return updateCells({ ...input, cells: { [input.columnId]: input.value } });
+export async function updateCell(input: UpdateCellInput & OrgScoped, transaction?: Transaction) {
+  return updateCells({ ...input, cells: { [input.columnId]: input.value } }, transaction);
 }
 
-export async function updateCells(input: UpdateCellsInput & OrgScoped) {
-  return db.transaction((tx) => updateCellsInTransaction(tx, input));
+export async function updateCells(input: UpdateCellsInput & OrgScoped, transaction?: Transaction) {
+  return inTransaction(transaction, (tx) => updateCellsInTransaction(tx, input));
 }
 export async function updateCellsInTransaction(
   tx: Transaction,
@@ -250,35 +249,25 @@ export async function updateCellsInTransaction(
 async function writeRelation(
   input: import("@tabdo/shared").RelationWriteInput & OrgScoped,
   mode: "set" | "add" | "remove",
+  transaction?: Transaction,
 ) {
-  const { column } = await requireColumnInOrg(
-    input.columnId,
-    input.organizationId,
-  );
-  if (column.type !== "relation") throw new Error("字段不是关联类型");
   if (!Array.isArray(input.recordIds)) throw new Error("recordIds 必须是数组");
-  return db.transaction((tx) =>
-    updateCellsInTransaction(
-      tx,
-      { ...input, cells: { [input.columnId]: input.recordIds } },
-      mode,
-    ),
-  );
+  return inTransaction(transaction, async tx => {
+    const [hit] = await tx.select({ column: columns, organizationId: tables.organizationId }).from(columns)
+      .innerJoin(tables, eq(columns.tableId, tables.id)).where(eq(columns.id, input.columnId));
+    if (!hit || (input.organizationId && hit.organizationId !== input.organizationId) || hit.column.type !== "relation")
+      throw new Error("字段不是关联类型或不属于该工作区");
+    return updateCellsInTransaction(tx, { ...input, cells: { [input.columnId]: input.recordIds } }, mode);
+  });
 }
-export async function setRelation(
-  input: import("@tabdo/shared").RelationWriteInput & OrgScoped,
-) {
-  return writeRelation(input, "set");
+export async function setRelation(input: import("@tabdo/shared").RelationWriteInput & OrgScoped, transaction?: Transaction) {
+  return writeRelation(input, "set", transaction);
 }
-export async function addRelation(
-  input: import("@tabdo/shared").RelationWriteInput & OrgScoped,
-) {
-  return writeRelation(input, "add");
+export async function addRelation(input: import("@tabdo/shared").RelationWriteInput & OrgScoped, transaction?: Transaction) {
+  return writeRelation(input, "add", transaction);
 }
-export async function removeRelation(
-  input: import("@tabdo/shared").RelationWriteInput & OrgScoped,
-) {
-  return writeRelation(input, "remove");
+export async function removeRelation(input: import("@tabdo/shared").RelationWriteInput & OrgScoped, transaction?: Transaction) {
+  return writeRelation(input, "remove", transaction);
 }
 
 /** Serialize appends across single-row and batch callers before reading max order. */
@@ -337,15 +326,15 @@ async function addRowInTransaction(
   return row.id;
 }
 
-export async function addRow(input: AddRowInput & OrgScoped) {
-  return db.transaction(async (tx) => {
+export async function addRow(input: AddRowInput & OrgScoped, transaction?: Transaction) {
+  return inTransaction(transaction, async (tx) => {
     const context = await prepareRowCreation(tx, input, [input.cells]);
     const rowId = await addRowInTransaction(tx, input, context);
     return { ...(await readRow(rowId, context.cols, tx)), affectedTableIds: await affectedTables(input.tableId, tx) };
   });
 }
 
-export async function batchAddRows(input: BatchAddRowsInput & OrgScoped): Promise<BatchRowsResult> {
+export async function batchAddRows(input: BatchAddRowsInput & OrgScoped, transaction?: Transaction): Promise<BatchRowsResult> {
   if (!Array.isArray(input.rows) || input.rows.length < 1 || input.rows.length > 100)
     throw new Error("批量新增必须包含 1 至 100 条记录");
   for (const row of input.rows) {
@@ -353,7 +342,7 @@ export async function batchAddRows(input: BatchAddRowsInput & OrgScoped): Promis
       (row.cells !== undefined && (!row.cells || typeof row.cells !== "object" || Array.isArray(row.cells))))
       throw new Error("批量记录的 cells 必须是字段值对象");
   }
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     const context = await prepareRowCreation(tx, input, input.rows.map((row) => row.cells));
     const rowIds: string[] = [];
     for (const row of input.rows)
@@ -406,7 +395,7 @@ export async function prepareBatchRowWrites(
   return { rowsById, colsByTable, definitions, tablesById: new Map(owned.map((table) => [table.id, table])) };
 }
 
-export async function batchUpdateRows(input: BatchUpdateRowsInput & OrgScoped): Promise<BatchRowsResult> {
+export async function batchUpdateRows(input: BatchUpdateRowsInput & OrgScoped, transaction?: Transaction): Promise<BatchRowsResult> {
   assertBatchSize(input.updates, "批量更新");
   for (const update of input.updates) {
     if (!update || typeof update !== "object" || Array.isArray(update) || !update.cells || typeof update.cells !== "object" || Array.isArray(update.cells) ||
@@ -414,7 +403,7 @@ export async function batchUpdateRows(input: BatchUpdateRowsInput & OrgScoped): 
       throw new Error("批量更新需要字段值对象与有效版本号");
   }
   assertUniqueRowIds(input.updates.map((update) => update.rowId));
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     const prepared = await prepareBatchRowWrites(tx, input.updates, input);
     // Verify the caller's versions against the same locked initial state.
     // Earlier inverse writes in this batch may then legitimately bump a later
@@ -481,8 +470,8 @@ async function deleteRowInTransaction(
   if (!deleted.length) throw new Error("行不存在");
 }
 
-export async function deleteRow(input: DeleteRowInput & OrgScoped) {
-  return db.transaction(async (tx) => {
+export async function deleteRow(input: DeleteRowInput & OrgScoped, transaction?: Transaction) {
+  return inTransaction(transaction, async (tx) => {
     const prepared = await prepareBatchRowWrites(tx, [{ rowId: input.rowId }], input);
     const row = prepared.rowsById.get(input.rowId)!;
     await deleteRowInTransaction(tx, input, prepared);
@@ -490,10 +479,10 @@ export async function deleteRow(input: DeleteRowInput & OrgScoped) {
   });
 }
 
-export async function batchDeleteRows(input: BatchDeleteRowsInput & OrgScoped): Promise<BatchRowsResult> {
+export async function batchDeleteRows(input: BatchDeleteRowsInput & OrgScoped, transaction?: Transaction): Promise<BatchRowsResult> {
   assertBatchSize(input.rowIds, "批量删除");
   assertUniqueRowIds(input.rowIds);
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     const prepared = await prepareBatchRowWrites(tx, input.rowIds.map((rowId) => ({ rowId })), input);
     const affected = new Set<string>();
     for (const rowId of input.rowIds) {
@@ -530,35 +519,22 @@ export async function deleteTable(input: { tableId: string } & OrgScoped) {
   });
 }
 
-export async function reorderColumns({
-  tableId,
-  columnIds,
-  organizationId,
-}: ReorderColumnsInput & OrgScoped) {
-  await requireTableInOrg(tableId, organizationId);
-  const existing = await db
-    .select()
-    .from(columns)
-    .where(eq(columns.tableId, tableId))
-    .orderBy(asc(columns.sortOrder));
-  const idSet = new Set(existing.map((c) => c.id));
-  for (const id of columnIds) {
-    if (!idSet.has(id)) throw new Error(`列不属于该表: ${id}`);
-  }
-  const rest = existing
-    .map((c) => c.id)
-    .filter((id) => !columnIds.includes(id));
-  const order = [...columnIds, ...rest];
-  const updated = [];
-  for (let i = 0; i < order.length; i++) {
-    const [u] = await db
-      .update(columns)
-      .set({ sortOrder: i })
-      .where(eq(columns.id, order[i]))
-      .returning();
-    updated.push(u);
-  }
-  return updated.sort((a, b) => a.sortOrder - b.sortOrder);
+export async function reorderColumns(input: ReorderColumnsInput & OrgScoped, transaction?: Transaction) {
+  return inTransaction(transaction, async tx => {
+    const [table] = await tx.select().from(tables).where(eq(tables.id, input.tableId)).for("update");
+    if (!table || (input.organizationId && table.organizationId !== input.organizationId)) throw new Error("表格不存在");
+    const existing = await tx.select().from(columns).where(eq(columns.tableId, input.tableId)).orderBy(asc(columns.sortOrder)).for("update");
+    const idSet = new Set(existing.map(column => column.id));
+    if (new Set(input.columnIds).size !== input.columnIds.length) throw new Error("字段不能重复");
+    for (const id of input.columnIds) if (!idSet.has(id)) throw new Error(`列不属于该表: ${id}`);
+    const order = [...input.columnIds, ...existing.map(column => column.id).filter(id => !input.columnIds.includes(id))];
+    const updated = [];
+    for (const [sortOrder, id] of order.entries()) {
+      const [column] = await tx.update(columns).set({ sortOrder }).where(eq(columns.id, id)).returning();
+      updated.push(column);
+    }
+    return updated;
+  });
 }
 
 /** Windowed query — SQL filter pushdown + keyset cursor. Never returns unbounded rows. */
@@ -567,20 +543,8 @@ export async function queryRows(input: QueryRowsInput & OrgScoped) {
   return queryRowsWindowed(input);
 }
 
-export async function setStatus({
-  rowId,
-  columnId,
-  statusOptionId,
-  organizationId,
-  actorId,
-}: SetStatusInput & OrgScoped) {
-  return updateCell({
-    rowId,
-    columnId,
-    value: statusOptionId,
-    organizationId,
-    actorId,
-  });
+export async function setStatus(input: SetStatusInput & OrgScoped & { skipAutomation?: boolean }, transaction?: Transaction) {
+  return updateCell({ ...input, value: input.statusOptionId }, transaction);
 }
 
 export const moveCard = setStatus;

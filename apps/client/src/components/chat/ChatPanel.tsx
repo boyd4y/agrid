@@ -264,7 +264,7 @@ function ScopedChatPanel({
     },
     [agents],
   );
-  const { pathname } = useLocation();
+  const { pathname, search: locationSearch } = useLocation();
   const page: ChatPageContext["page"] =
     variant === "home"
       ? "ai"
@@ -453,7 +453,7 @@ function ScopedChatPanel({
     <AssistantRuntimeProvider runtime={runtime} config={auiConfig}>
       <AskUserQuestionsUI />
       <ChatRunsProvider onRecovered={() => onMutatedRef.current()}>
-      <ResourceScopedThreads resourceKey={resourceKey} />
+      <ResourceScopedThreads resourceKey={resourceKey} remoteThreadId={variant === "home" ? new URLSearchParams(locationSearch).get("thread") : null} />
       <ThreadAgentBinding onSelect={selectSavedAgent} />
       <FloatingAssistantFrame
         floating={!isHome}

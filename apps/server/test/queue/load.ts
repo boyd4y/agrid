@@ -40,7 +40,7 @@ try {
     const [table] = await db.insert(tables).values({ organizationId: org, name: "load" }).returning();
     const [output] = await db.insert(columns).values({ tableId: table.id, name: "output", type: "text" }).returning();
     // Fan-out: two rules, two actions each. Four durable writes per event.
-    await db.insert(automations).values([1,2].map((i) => ({ tableId: table.id, name: `rule-${i}`,
+    await db.insert(automations).values([1,2].map((i) => ({ tableId: table.id, organizationId: org, source: { kind: "table" as const, tableId: table.id }, name: `rule-${i}`,
       trigger: { type: "row_created" }, actions: [
         { type: "update_field", columnId: output.id, value: `rule-${i}-one` },
         { type: "update_field", columnId: output.id, value: `rule-${i}-two` },

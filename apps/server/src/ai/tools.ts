@@ -1,5 +1,5 @@
 import { createBatchTools } from "./batch-tools.js";
-import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA } from "@tabdo/shared";
+import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA } from "@tabdo/shared";
 import { createReportTools } from "./report-tools.js";
 import { relationConfigSchema, rollupConfigSchema } from "../commands/relations.js";
 import { tool, zodSchema } from "ai";
@@ -26,14 +26,6 @@ const relationRecordSchema = z.strictObject({
   columnId: z.string().uuid().describe("已存在的关联字段 UUID，使用 get_table 获取；不能传字段名称"),
   recordIds: z.array(z.string().uuid()).max(1000).describe("目标表记录 UUID 数组，使用 query_relation_records / query_rows 获取"),
 });
-
-const automationTriggerSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("row_created") }),
-  z.object({ type: z.literal("field_changed"), columnId: z.string().uuid(), toValue: cellValueSchema.optional() }),
-  z.object({ type: z.literal("enter_status"), columnId: z.string().uuid(), optionId: z.string() }),
-]);
-const automationActionSchema = z.object({ type: z.literal("update_field"), columnId: z.string().uuid(), value: cellValueSchema });
-const automationConditionSchema = z.object({ id: z.string(), columnId: z.string().uuid(), op: z.enum(FILTER_OPS), value: cellValueSchema.optional() });
 
 /** AI tools mirror the shared command layer — row reads are ALWAYS windowed */
 export function createTableTools(
@@ -76,22 +68,14 @@ export function createTableTools(
       execute: async ({ tableId }) => cmds.listAutomations({ tableId: tableIdOrDefault(tableId), ...org }),
     }),
     create_automation: tool({
-      description: "创建持续生效的事件触发规则：未来新增记录、字段变化或进入状态时自动更新字段。用于用户要求的自动处理；一次性导入或mock新增记录使用batch_add_rows。配置前get_table读取真实字段和选项id；当前动作仅update_field。",
-      inputSchema: zodSchema(z.object({
-        tableId: z.string().uuid().optional(), name: z.string().min(1), enabled: z.boolean().optional(),
-        trigger: automationTriggerSchema, conditions: z.array(automationConditionSchema).optional(),
-        conditionLogic: z.enum(["and", "or"]).optional(), actions: z.array(automationActionSchema).min(1),
-      })),
-      execute: async (input) => cmds.createAutomation({ ...input, tableId: tableIdOrDefault(input.tableId), ...org }),
+      description: "创建持续生效的自动化：表格变更、Webhook、已接入的AgentMail邮箱或定时计划，执行数据命令或指定智能体任务。一次性mock/导入用batch_add_rows。来源必须实际配置；先get_table取得字段ID。智能体动作必须选真实agentUserId+prompt。",
+      inputSchema: zodSchema(AUTOMATION_CREATE_SCHEMA),
+      execute: async input => cmds.createAutomation({ ...input, ...(input.source ? {} : { tableId: tableIdOrDefault(input.tableId) }), ...org }),
     }),
     update_automation: tool({
-      description: "修改自动化规则、条件或字段动作；enabled 控制启用/停用。",
-      inputSchema: zodSchema(z.object({
-        automationId: z.string().uuid(), name: z.string().min(1).optional(), enabled: z.boolean().optional(),
-        trigger: automationTriggerSchema.optional(), conditions: z.array(automationConditionSchema).optional(),
-        conditionLogic: z.enum(["and", "or"]).optional(), actions: z.array(automationActionSchema).min(1).optional(),
-      })),
-      execute: async (input) => cmds.updateAutomation({ ...input, ...org }),
+      description: "修改自动化条件、数据动作、智能体任务或时间计划；enabled控制启用。",
+      inputSchema: zodSchema(AUTOMATION_UPDATE_SCHEMA.extend({ automationId: z.string().uuid() })),
+      execute: async input => cmds.updateAutomation({ ...input, ...org }),
     }),
     delete_automation: tool({
       description: "删除自动化规则并停止后续执行。",

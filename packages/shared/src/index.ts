@@ -4,6 +4,8 @@ export * from "./filters.js";
 export * from "./pagination.js";
 export * from "./formula.js";
 export * from "./automation.js";
+export * from "./automation-contracts.js";
+export * from "./integrations.js";
 export * from "./views.js";
 
 export * from "./relations.js";

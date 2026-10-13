@@ -1,16 +1,23 @@
 import type { CellValue } from "./types.js";
+import type { AutomationSource, AutomationDataCommand, AutomationEventCondition } from "./automation-contracts.js";
 import type { FilterCondition, FilterLogic } from "./filters.js";
 
-/** Feishu-style automation triggers (when) */
+/** Sources and actions compose independently of the underlying data layout. */
 export const AUTOMATION_TRIGGERS = [
   "row_created",
   "field_changed",
   "enter_status",
+  "webhook_received",
+  "message_received",
+  "schedule_due",
 ] as const;
 
 export type AutomationTriggerType = (typeof AUTOMATION_TRIGGERS)[number];
 
 export type AutomationTrigger =
+  | { type: "webhook_received" }
+  | { type: "message_received" }
+  | { type: "schedule_due" }
   | { type: "row_created" }
   | {
       type: "field_changed";
@@ -26,7 +33,7 @@ export type AutomationTrigger =
       optionId: string;
     };
 
-export const AUTOMATION_ACTIONS = ["update_field", "run_agent"] as const;
+export const AUTOMATION_ACTIONS = ["update_field", "run_agent", "command"] as const;
 export type AutomationActionType = (typeof AUTOMATION_ACTIONS)[number];
 
 export type UpdateFieldAction = {
@@ -37,19 +44,24 @@ export type UpdateFieldAction = {
 
 export type RunAgentAction = {
   type: "run_agent";
-  /** agent userId (member kind=agent); background runtime is not yet implemented. */
+  /** Agent user ID; shared across table, incoming events and scheduled tasks. */
   agentUserId?: string | null;
   prompt?: string;
-  /** Reserved writeback configuration for the future background agent runtime. */
+  /** Legacy persisted configuration only; never interpreted as an agent result. */
   resultColumnId?: string;
   resultValue?: CellValue;
 };
 
-export type AutomationAction = UpdateFieldAction | RunAgentAction;
+export type DataCommandAction = { type: "command"; command: AutomationDataCommand; input: Record<string, unknown> };
+export type AutomationAction = UpdateFieldAction | RunAgentAction | DataCommandAction;
 
 export type AutomationRule = {
   id: string;
-  tableId: string;
+  tableId: string | null;
+  organizationId: string;
+  createdByUserId: string | null;
+  source: AutomationSource;
+  eventConditions: AutomationEventCondition[];
   name: string;
   enabled: boolean;
   version: number;
@@ -61,15 +73,16 @@ export type AutomationRule = {
   updatedAt: string | Date;
 };
 
-export type AutomationRunStatus = "queued" | "running" | "retrying" | "completed" | "failed" | "skipped" | "cancelled" | "superseded" | "unknown";
+export type AutomationRunStatus = "queued" | "running" | "retrying" | "waiting_input" | "completed" | "failed" | "skipped" | "cancelled" | "superseded" | "unknown";
 
 export type AutomationRun = {
   id: string;
   automationId: string;
-  tableId: string;
-  rowId: string;
+  tableId: string | null;
+  rowId: string | null;
   status: AutomationRunStatus;
   eventId?: string | null;
+  threadId?: string | null;
   attempts?: number;
   nextStep?: number;
   triggerType: AutomationTriggerType;
@@ -83,15 +96,21 @@ export const AUTOMATION_TRIGGER_LABELS: Record<AutomationTriggerType, string> = 
   row_created: "当新增记录时",
   field_changed: "当字段变更时",
   enter_status: "当进入某状态时",
+  webhook_received: "当收到 Webhook 时",
+  message_received: "当收到邮件时",
+  schedule_due: "按时间计划",
 };
 
 export const AUTOMATION_ACTION_LABELS: Record<AutomationActionType, string> = {
   update_field: "更新字段",
   run_agent: "执行智能体",
+  command: "操作数据",
 };
 
 export type CreateAutomationInput = {
-  tableId: string;
+  tableId?: string;
+  source?: AutomationSource;
+  eventConditions?: AutomationEventCondition[];
   name: string;
   enabled?: boolean;
   trigger: AutomationTrigger;
@@ -102,6 +121,8 @@ export type CreateAutomationInput = {
 
 export type UpdateAutomationInput = {
   automationId: string;
+  source?: AutomationSource;
+  eventConditions?: AutomationEventCondition[];
   name?: string;
   enabled?: boolean;
   trigger?: AutomationTrigger;

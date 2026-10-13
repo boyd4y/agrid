@@ -1,3 +1,7 @@
+import { AutomationSourceFields } from "./AutomationSourceFields";
+import { Field, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
+import { AutomationEventConditions } from "./AutomationEventConditions";
+import { AutomationDataActionFields, defaultCommandInput } from "./AutomationDataActionFields";
 import { changedFilterOperator, filterOpsForColumn } from "@/lib/filter-value";
 import { FILTER_CONTROL_CLASS_NAME, FilterValueInput } from "@/components/table/FilterBar";
 import { FormFieldControl } from "@/components/form/FormFieldControls";
@@ -15,6 +19,7 @@ import { Checkbox } from "@tabdo/ui/components/checkbox";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -25,6 +30,8 @@ import {
   FILTER_OP_LABELS,
   filterNeedsValue,
   type AutomationAction,
+  type AutomationSource,
+  type AutomationEventCondition,
   type AutomationRule,
   type AutomationRun,
   type AutomationTrigger,
@@ -76,6 +83,7 @@ function summarizeTrigger(t: AutomationTrigger, columns: ColumnDef[]) {
     }
     return base;
   }
+  if (t.type !== "enter_status") return i18n.t(`automation:triggers.${t.type}`);
   const opt = columns
     .find((c) => c.id === t.columnId)
     ?.config?.options?.find((o) => o.id === t.optionId)?.label;
@@ -89,7 +97,7 @@ function summarizeActions(actions: AutomationAction[], columns: ColumnDef[]) {
         const name = columns.find((c) => c.id === a.columnId)?.name ?? i18n.t("automation:field");
         return i18n.t("automation:updateFieldNamed", { name });
       }
-      return i18n.t("automation:runAgent");
+      return a.type === "command" ? i18n.t(`automation:generic.commands.${a.command}`) : i18n.t("automation:runAgent");
     })
     .join(" · ");
 }
@@ -352,6 +360,7 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
                         cancelled: t("runStatus.cancelled"),
                         superseded: t("runStatus.superseded"),
                         unknown: t("runStatus.unknown"),
+                        waiting_input: t("runStatus.waiting_input"),
                       }[r.status]
                     }
                     {r.nextStep ? t("stepsDone", { n: r.nextStep }) : ""}
@@ -383,7 +392,8 @@ export function AutomationPanel({ table, refreshToken, active = true }: Props) {
 }
 
 type EditorProps = {
-  tableId: string;
+  tableId?: string;
+  source?: AutomationSource;
   columns: ColumnDef[];
   members: MemberOption[];
   initial: AutomationRule | null;
@@ -407,7 +417,8 @@ function TriggerValueInput(props: {
 }
 
 export function AutomationEditor({
-  tableId,
+  tableId = "",
+  source: sourceProp,
   columns,
   members,
   initial,
@@ -416,6 +427,8 @@ export function AutomationEditor({
   onSavingChange,
 }: EditorProps) {
   const { t } = useTranslation("automation");
+  const [source, setSource] = useState<AutomationSource>(sourceProp ?? initial?.source ?? { kind: "table", tableId });
+  const isTable = source.kind === "table";
   const [sampleRows, setSampleRows] = useState<RowData[]>([]);
   const needsFormulaSamples = columns.some(column => column.type === "formula" && (!column.config.formulaResultType || column.config.formulaResultType === "auto"));
   useEffect(() => {
@@ -431,17 +444,23 @@ export function AutomationEditor({
   const [name, setName] = useState(initial?.name ?? t("newAutomation"));
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
   const [trigger, setTrigger] = useState<AutomationTrigger>(
-    initial?.trigger ?? defaultTrigger(columns),
+    initial?.trigger ?? (source.kind === "table" ? defaultTrigger(columns) : { type: source.kind === "agentmail" ? "message_received" : source.kind === "webhook" ? "webhook_received" : "schedule_due" }),
   );
   const [conditions, setConditions] = useState<FilterCondition[]>(
     initial?.conditions ?? [],
   );
+  const [eventConditions, setEventConditions] = useState<AutomationEventCondition[]>(initial?.eventConditions ?? []);
+  const [invalidActions, setInvalidActions] = useState<Record<string, boolean>>({});
+  const [pendingActions, setPendingActions] = useState<Record<string, boolean>>({});
+  const blocked = Object.values(invalidActions).some(Boolean) || Object.values(pendingActions).some(Boolean);
+  const savingRef = useRef(false);
   const [conditionLogic, setConditionLogic] = useState<FilterLogic>(
     initial?.conditionLogic ?? "and",
   );
   const [actions, setActions] = useState<AutomationAction[]>(
-    initial?.actions?.length ? initial.actions : [defaultAction(columns)],
+    initial?.actions?.length ? initial.actions.map(action => action.type === "run_agent" ? { type: "run_agent" as const, agentUserId: action.agentUserId, prompt: action.prompt ?? "" } : action) : [{ type: "command", command: "updateCells", input: defaultCommandInput("updateCells", source) }],
   );
+  const [actionIds, setActionIds] = useState(() => actions.map(() => crypto.randomUUID()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -450,27 +469,31 @@ export function AutomationEditor({
   const agents = members.filter((member) => member.kind === "agent");
 
   const save = async () => {
-    if (saving) return;
+    if (savingRef.current || blocked) return;
+    savingRef.current = true;
     setSaving(true);
     onSavingChange?.(true);
     setError(null);
     try {
       if (!actions.length) throw new Error(t("needAction"));
       const payload = {
+        source,
+        eventConditions: isTable ? [] : eventConditions,
         name: name.trim() || t("unnamed"),
         enabled,
         trigger,
-        conditions,
+        conditions: isTable ? conditions : [],
         conditionLogic,
         actions,
       };
       const rule = initial
         ? await api.updateAutomation(initial.id, payload)
-        : await api.createAutomation(tableId, payload);
+        : await api.createSourceAutomation(payload);
       onSaved(rule);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("saveFailed"));
     } finally {
+      savingRef.current = false;
       setSaving(false);
       onSavingChange?.(false);
     }
@@ -502,7 +525,7 @@ export function AutomationEditor({
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-auto px-4 py-4">
+        <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-auto px-4 py-4">
           {error && (
             <ListErrorState className="min-h-0 rounded-md border border-border py-4" title={error} />
           )}
@@ -524,6 +547,8 @@ export function AutomationEditor({
             </div>
           </div>
 
+          {!isTable && <section className="rounded-lg border p-3"><FieldGroup><Field><FieldLabel>{t("when")}</FieldLabel><p className="text-sm">{t(`triggers.${trigger.type}`)}</p></Field><AutomationSourceFields value={source} onChange={setSource} lockKind disabled={saving} /></FieldGroup></section>}
+          {isTable && <>
           {/* WHEN */}
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 text-xs font-semibold text-warning">
@@ -671,6 +696,9 @@ export function AutomationEditor({
             )}
           </section>
 
+          </>}
+          {!isTable && <section className="rounded-lg border p-3"><FieldGroup><Field><FieldLabel>{t("if")}</FieldLabel><Select value={conditionLogic} onValueChange={value => setConditionLogic(value as FilterLogic)}><SelectTrigger aria-label={t("generic.conditionLogic")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="and">{t("allMatch")}</SelectItem><SelectItem value="or">{t("anyMatch")}</SelectItem></SelectGroup></SelectContent></Select></Field><AutomationEventConditions source={source} value={eventConditions} onChange={setEventConditions} /></FieldGroup></section>}
+          {isTable && <>
           {/* IF */}
           <section className="rounded-lg border border-border bg-muted/40 p-3">
             <div className="mb-2 flex items-center justify-between">
@@ -825,249 +853,17 @@ export function AutomationEditor({
             )}
           </section>
 
-          {/* THEN */}
-          <section className="rounded-lg border border-border bg-muted/40 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-xs font-semibold text-success">
-                {t("then")}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-[11px]"
-                onClick={() =>
-                  setActions((prev) => [...prev, defaultAction(columns)])
-                }
-              >
-                <Plus className="mr-1 h-3 w-3" />
-                {t("action")}
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {actions.map((action, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    "rounded-md border border-border bg-background p-2.5",
-                  )}
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <Select
-                      value={action.type}
-                      onValueChange={(v) => {
-                        setActions((prev) =>
-                          prev.map((a, i) => {
-                            if (i !== idx) return a;
-                            if (v === "update_field")
-                              return defaultAction(columns);
-                            return {
-                              type: "run_agent",
-                              agentUserId: agents[0]?.userId ?? null,
-                              prompt: "",
-                            };
-                          }),
-                        );
-                      }}
-                    >
-                      <SelectTrigger className="h-8 flex-1 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="update_field" className="text-xs">
-                          {t("actions.update_field")}
-                        </SelectItem>
-                        <SelectItem value="run_agent" className="text-xs">
-                          {t("actions.run_agent")}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      disabled={actions.length <= 1}
-                      onClick={() =>
-                        setActions((prev) => prev.filter((_, i) => i !== idx))
-                      }
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-
-                  {action.type === "update_field" && (
-                    <div className="flex flex-wrap gap-2">
-                      <Select
-                        value={action.columnId}
-                        onValueChange={(columnId) =>
-                          setActions((prev) =>
-                            prev.map((a, i) =>
-                              i === idx && a.type === "update_field"
-                                ? { ...a, columnId, value: null }
-                                : a,
-                            ),
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-8 w-[140px] text-xs">
-                          <SelectValue placeholder={t("fieldPlaceholder")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {writableColumns
-                            .map((c) => (
-                              <SelectItem
-                                key={c.id}
-                                value={c.id}
-                                className="text-xs"
-                              >
-                                {c.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      {columns.find((c) => c.id === action.columnId) && (
-                        <div className="min-w-40 flex-1" data-testid="automation-action-value">
-                          <FormFieldControl
-                            size="sm"
-                            column={
-                              columns.find((c) => c.id === action.columnId)!
-                            }
-                            value={action.value}
-                            onChange={(value) =>
-                              setActions((prev) =>
-                                prev.map((a, i) =>
-                                  i === idx && a.type === "update_field"
-                                    ? { ...a, value }
-                                    : a,
-                                ),
-                              )
-                            }
-                            members={members}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {action.type === "run_agent" && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">
-                        {t("agentNotWired")}
-                      </p>
-                      <Select
-                        value={action.agentUserId ?? "__none__"}
-                        onValueChange={(v) =>
-                          setActions((prev) =>
-                            prev.map((a, i) =>
-                              i === idx && a.type === "run_agent"
-                                ? {
-                                    ...a,
-                                    agentUserId: v === "__none__" ? null : v,
-                                  }
-                                : a,
-                            ),
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder={t("pickAgent")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__" className="text-xs">
-                            {t("systemAgent")}
-                          </SelectItem>
-                          {agents.map((m) => (
-                            <SelectItem
-                              key={m.userId}
-                              value={m.userId}
-                              className="text-xs"
-                            >
-                              {m.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Textarea
-                        className="min-h-[64px] text-xs"
-                        placeholder={t("promptOptional")}
-                        value={action.prompt ?? ""}
-                        onChange={(e) =>
-                          setActions((prev) =>
-                            prev.map((a, i) =>
-                              i === idx && a.type === "run_agent"
-                                ? { ...a, prompt: e.target.value }
-                                : a,
-                            ),
-                          )
-                        }
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Select
-                          value={action.resultColumnId ?? "__none__"}
-                          onValueChange={(v) =>
-                            setActions((prev) =>
-                              prev.map((a, i) =>
-                                i === idx && a.type === "run_agent"
-                                  ? {
-                                      ...a,
-                                      resultColumnId:
-                                        v === "__none__" ? undefined : v,
-                                      resultValue: v === "__none__" ? undefined : null,
-                                    }
-                                  : a,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-[160px] text-xs">
-                            <SelectValue placeholder={t("writeBackField")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__" className="text-xs">
-                              {t("noWriteBack")}
-                            </SelectItem>
-                            {writableColumns.map((c) => (
-                              <SelectItem
-                                key={c.id}
-                                value={c.id}
-                                className="text-xs"
-                              >
-                                {c.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {writableColumns.find((c) => c.id === action.resultColumnId) && (
-                          <div className="min-w-40 flex-1" data-testid="automation-result-value">
-                          <FormFieldControl
-                            size="sm"
-                            column={writableColumns.find((c) => c.id === action.resultColumnId)!}
-                            value={action.resultValue ?? null}
-                            members={members}
-                            onChange={(value) =>
-                              setActions((prev) =>
-                                prev.map((a, i) =>
-                                  i === idx && a.type === "run_agent"
-                                    ? {
-                                        ...a,
-                                        resultValue: value,
-                                      }
-                                    : a,
-                                ),
-                              )
-                            }
-                          />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+          </>}
+          <section className="rounded-lg border bg-muted/40 p-3">
+            <div className="mb-3 flex items-center justify-between gap-2"><p className="text-sm font-semibold">{t("then")}</p><Button type="button" variant="outline" size="sm" onClick={() => { setActionIds(previous => [...previous, crypto.randomUUID()]); setActions(previous => [...previous, { type: "command", command: "updateCells", input: defaultCommandInput("updateCells", source) }]); }}><Plus data-icon="inline-start" />{t("action")}</Button></div>
+            <div className="flex flex-col gap-3">{actions.map((action, index) => <section key={actionIds[index]} className="rounded-md border bg-background p-3" aria-label={t("generic.step", { index: index + 1 })}>
+              <div className="mb-3 flex items-center gap-2"><Select value={action.type} onValueChange={type => { setInvalidActions(previous => ({ ...previous, [actionIds[index]]: false })); setActions(previous => previous.map((action, position) => position === index ? type === "run_agent" ? { type: "run_agent", agentUserId: agents[0]?.userId ?? null, prompt: "" } : { type: "command", command: "updateCells", input: defaultCommandInput("updateCells", source) } : action)); }}><SelectTrigger aria-label={t("action")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="command">{t("actions.command")}</SelectItem><SelectItem value="run_agent">{t("actions.run_agent")}</SelectItem>{action.type === "update_field" && <SelectItem value="update_field">{t("actions.update_field")}</SelectItem>}</SelectGroup></SelectContent></Select><Button type="button" variant="ghost" size="icon" aria-label={t("generic.removeAction")} disabled={actions.length <= 1} onClick={() => { setActionIds(previous => previous.filter((_, position) => position !== index)); setActions(previous => previous.filter((_, position) => position !== index)); }}><Trash2 /></Button></div>
+              {action.type === "command" && <AutomationDataActionFields key={action.command} command={action.command} input={action.input} source={source} step={index} members={members} sourceColumns={columns} onCommandChange={command => setActions(previous => previous.map((action, position) => position === index ? { type: "command", command, input: defaultCommandInput(command, source) } : action))} onChange={input => setActions(previous => previous.map((action, position) => position === index && action.type === "command" ? { ...action, input } : action))} onInvalidChange={invalid => setInvalidActions(previous => previous[actionIds[index]] === invalid ? previous : { ...previous, [actionIds[index]]: invalid })} onPendingChange={pending => setPendingActions(previous => previous[actionIds[index]] === pending ? previous : { ...previous, [actionIds[index]]: pending })} />}
+              {action.type === "update_field" && <FieldGroup><Field><FieldLabel>{t("field")}</FieldLabel><Select value={action.columnId} onValueChange={columnId => setActions(previous => previous.map((action, position) => position === index && action.type === "update_field" ? { ...action, columnId, value: null } : action))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{writableColumns.map(column => <SelectItem key={column.id} value={column.id}>{column.name}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>{columns.find(column => column.id === action.columnId) && <FormFieldControl column={columns.find(column => column.id === action.columnId)!} value={action.value} members={members} onChange={value => setActions(previous => previous.map((action, position) => position === index && action.type === "update_field" ? { ...action, value } : action))} />}</FieldGroup>}
+              {action.type === "run_agent" && <FieldGroup><Field><FieldLabel>{t("pickAgent")}</FieldLabel><Select value={action.agentUserId ?? ""} onValueChange={agentUserId => setActions(previous => previous.map((action, position) => position === index ? { type: "run_agent", agentUserId, prompt: action.type === "run_agent" ? action.prompt ?? "" : "" } : action))}><SelectTrigger><SelectValue placeholder={t("pickAgent")} /></SelectTrigger><SelectContent><SelectGroup>{agents.map(agent => <SelectItem key={agent.userId} value={agent.userId}>{agent.name}</SelectItem>)}</SelectGroup></SelectContent></Select></Field><Field><FieldLabel>{t("generic.prompt")}</FieldLabel><Textarea rows={4} value={action.prompt ?? ""} placeholder="{{event.message.subject}}" onChange={event => setActions(previous => previous.map((action, position) => position === index && action.type === "run_agent" ? { ...action, prompt: event.target.value } : action))} /><p className="text-xs text-muted-foreground">{t("generic.promptHint")}</p></Field></FieldGroup>}
+            </section>)}</div>
           </section>
-        </div>
+        </fieldset>
 
         <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
           <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onClose}>
@@ -1076,7 +872,7 @@ export function AutomationEditor({
           <Button
             type="button"
             size="sm"
-            disabled={saving}
+            disabled={saving || blocked}
             onClick={() => void save()}
           >
             {saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}{saving ? t("saving") : t("save")}

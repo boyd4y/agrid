@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { Button } from "@tabdo/ui/components/button";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Keyboard, Moon, Sun, Monitor, Languages } from "lucide-react";
 import { useAppShell } from "@/context/AppShellContext";
@@ -61,6 +63,7 @@ export function SettingsPage() {
       </FieldGroup></CardContent>
     </Card>
     {user && user.kind !== "agent" && <ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} />}
+    <Card className="shrink-0"><CardHeader><CardTitle>{t("nav.integrations")}</CardTitle></CardHeader><CardContent><Button asChild variant="outline"><Link to="/app/integrations">{t("integrations:settingsLink")}</Link></Button></CardContent></Card>
     <Card className="shrink-0">
       <CardHeader><CardTitle className="flex items-center gap-2"><Keyboard aria-hidden className="size-4" />{t("settings.shortcuts")}</CardTitle></CardHeader>
       <CardContent><ul className="flex flex-col gap-2 text-sm text-muted-foreground">

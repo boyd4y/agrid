@@ -103,3 +103,18 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 ## 文件存储
 
 本地与 S3 协议 fixture、失败清理和隔离数据库路由测试已纳入 server 常规测试入口，配置与精确范围见 [文件存储](file-storage.md)。真实远程对象服务仍需独立验收，测试不读取用户 S3 配置或文件。
+
+## 通用事件自动化与集成
+
+```sh
+DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
+  pnpm --filter @tabdo/server test:automations
+DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
+  pnpm --filter @tabdo/server exec tsx --test test/routes/integrations.test.ts test/harness/automation-agent-action.test.ts
+```
+
+`test/automation/` 验证真实数据命令与receipt原子事务、顺序引用、已提交步骤不重放、邮件补正文后条件match/skip，以及并发计划去重和DST。原生智能体 fixture 使用实际官方Pi、平台数据工具、askUserQuestions和普通chat答案续接；断言同一native run/input及单次工具副作用。所有fixture精确清理自己组织，不truncate其他测试组织。
+
+`integrations.test.ts` 用官方Svix、固定origin的AgentMail协议fixture和真实DB测试投递、认证、body上限、事务故障不ACK、幂等与生命周期。不会连接真实AgentMail。`event-automations` browser suite 覆盖端点一次性token、schedule预览、typed动作保存、事件绑定/重载、失败草稿重试与Sheet。
+
+新来源配置接口、模型与远程执行边界见 [事件自动化](event-automations.md)与[集成部署](integrations.md)。生产外部服务凭证验收不包含在本地PASS范围。

@@ -7,7 +7,8 @@
     "members": "Members",
     "agents": "Agents",
     "skills": "Skills",
-    "settings": "Settings"
+    "settings": "Settings",
+    "integrations": "Integrations"
   },
   "shell": {
     "workspace": "Workspace",

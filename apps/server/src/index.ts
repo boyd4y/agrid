@@ -12,6 +12,8 @@ import { membersRoute } from "./routes/members.js";
 import { commandsRoute } from "./routes/commands.js";
 import { automationsRoute } from "./routes/automations.js";
 import { reportsRoute } from "./routes/reports.js";
+import { integrationsRoute } from "./routes/integrations.js";
+import { webhookEndpointsRoute, webhooksRoute } from "./routes/webhooks.js";
 import { apiKeysRoute } from "./routes/api-keys.js";
 import { filesRoute } from "./routes/files.js";
 import { skillsRoute } from "./routes/skills.js";
@@ -67,6 +69,9 @@ app.route("/api/reports", reportsRoute);
 app.route("/api/skills", skillsRoute);
 app.route("/api", filesRoute);
 app.route("/api/user/api-keys", apiKeysRoute);
+app.route("/api/integrations", integrationsRoute);
+app.route("/api/webhook-endpoints", webhookEndpointsRoute);
+app.route("/api/webhooks", webhooksRoute);
 
 app.onError((err, c) => {
   if ("getResponse" in err && typeof err.getResponse === "function") return err.getResponse();

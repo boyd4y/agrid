@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { History, LoaderCircle, X } from "lucide-react";
@@ -8,7 +9,7 @@ import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { api } from "@/lib/api";
 
-export function AutomationRunsSheet({ tableId, automationId, name }: { tableId: string; automationId: string; name: string }) {
+export function AutomationRunsSheet({ tableId, automationId, name }: { tableId?: string; automationId: string; name: string }) {
   const { t } = useTranslation("automation");
   const [open, setOpen] = useState(false), [runs, setRuns] = useState<AutomationRun[] | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function AutomationRunsSheet({ tableId, automationId, name }: { tableId: 
       inFlight = true;
       if (initial) { setLoading(true); setError(null); }
       try {
-        const result = await api.listAutomationRuns(tableId, { automationId, limit: 30 });
+        const result = await api.listRuleRuns(automationId);
         if (!cancelled) { setRuns(result); setError(null); }
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : t("loadFailed"));
@@ -62,6 +63,7 @@ export function AutomationRunsSheet({ tableId, automationId, name }: { tableId: 
           : runs?.length === 0 && !error ? <p className="text-sm text-muted-foreground">{t("noRunRecords")}</p>
           : runs && <ul className="divide-y divide-border">{runs.map(run => <li key={run.id} className="py-3 text-sm first:pt-0">
             <div className="flex flex-wrap items-center justify-between gap-2"><span>{t(`runStatus.${run.status}`)}</span><time className="text-xs text-muted-foreground">{new Date(run.createdAt).toLocaleString()}</time></div>
+            {run.status === "waiting_input" && run.threadId && <Button asChild variant="outline" size="sm" className="mt-2"><Link to={`/app?thread=${encodeURIComponent(run.threadId)}`}>{t("generic.openConversation")}</Link></Button>}
             {run.error && <p className="mt-2 break-words text-destructive">{run.error}</p>}
             {run.status === "failed" && run.eventId && <Button className="mt-2" variant="outline" size="sm" disabled={Boolean(replaying)} onClick={() => void replay(run)}>{replaying === run.id && <LoaderCircle className="size-4 animate-spin" />}{t("replayPending")}</Button>}
           </li>)}</ul>}

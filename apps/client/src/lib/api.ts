@@ -144,6 +144,7 @@ export const api = {
   removeRelation:(input:import("@tabdo/shared").RelationWriteInput)=>relationCommand<RowData>("removeRelation",input),
   listTables: () => request<TableMeta[]>("/api/tables"),
   deleteTable: (id: string) => request<{ ok: boolean }>(`/api/tables/${id}`, { method: "DELETE" }),
+  getColumn: (id: string) => request<ColumnDef>(`/api/columns/${encodeURIComponent(id)}`),
   getTable: (id: string) => request<FullTable>(`/api/tables/${id}`),
   createTable: (name: string, description?: string) =>
     request<TableMeta>("/api/tables", {
@@ -304,10 +305,12 @@ export const api = {
       organization: { id: string; name: string; slug: string } | null;
     }>("/api/members/me"),
 
+  getChatThread: (id: string) => request<{ id: string }>(`/api/threads/${encodeURIComponent(id)}`),
+
   listAutomations: (tableId: string) =>
     request<AutomationRule[]>(`/api/tables/${tableId}/automations`),
-  listWorkspaceAutomations: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ rules: (AutomationRule & { sourceName: string })[]; hasMore: boolean }>(`/api/automations?offset=${offset}&limit=${limit}`, { signal }),
-  getAutomation: (id: string) => request<AutomationRule & { sourceName: string }>(`/api/automations/${id}`),
+  listWorkspaceAutomations: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ rules: (AutomationRule & { sourceName: string | null })[]; hasMore: boolean }>(`/api/automations?offset=${offset}&limit=${limit}`, { signal }),
+  getAutomation: (id: string) => request<AutomationRule & { sourceName: string | null }>(`/api/automations/${id}`),
   listReports: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ reports: import("@tabdo/shared").Report[]; hasMore: boolean }>(`/api/reports?offset=${offset}&limit=${limit}`, { signal }),
   getReport: (id: string) => request<import("@tabdo/shared").Report>(`/api/reports/${id}`),
   saveReport: (config: import("@tabdo/shared").ReportPageConfig, id?: string, expectedVersion?: number) => request<import("@tabdo/shared").Report>(id ? `/api/reports/${id}` : "/api/reports", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? { ...config, expectedVersion } : config) }),
@@ -329,21 +332,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateAutomation: (
-    id: string,
-    data: Partial<{
-      name: string;
-      enabled: boolean;
-      trigger: AutomationTrigger;
-      conditions: FilterCondition[];
-      conditionLogic: FilterLogic;
-      actions: AutomationAction[];
-    }>
-  ) =>
-    request<AutomationRule>(`/api/automations/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
+  createSourceAutomation: (data: import("@tabdo/shared").CreateAutomationInput) =>
+    request<AutomationRule>("/api/automations", { method: "POST", body: JSON.stringify(data) }),
+  updateAutomation: (id: string, data: Omit<import("@tabdo/shared").UpdateAutomationInput, "automationId">) =>
+    request<AutomationRule>(`/api/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  listRuleRuns: (id: string) => request<AutomationRun[]>(`/api/automations/${id}/runs`),
+  previewAutomationSchedule: (data: { cron: string; timeZone: string }) =>
+    request<{ occurrences: string[] }>("/api/automations/schedule-preview", { method: "POST", body: JSON.stringify({ cron: data.cron, timeZone: data.timeZone }) }),
+  listIntegrations: () => request<{ connections: import("@tabdo/shared").IntegrationConnection[]; canManage: boolean }>("/api/integrations"),
+  createIntegration: (data: { provider: "agentmail"; name: string; apiKey: string }) => request<{ connection: import("@tabdo/shared").IntegrationConnection }>("/api/integrations", { method: "POST", body: JSON.stringify(data) }),
+  updateIntegration: (id: string, data: { name?: string; apiKey?: string; enabled?: boolean }) => request<{ connection: import("@tabdo/shared").IntegrationConnection }>(`/api/integrations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteIntegration: (id: string) => request(`/api/integrations/${id}`, { method: "DELETE" }),
+  testIntegration: (id: string) => request<{ connection: import("@tabdo/shared").IntegrationConnection; ok: boolean }>(`/api/integrations/${id}/test`, { method: "POST" }),
+  listIntegrationInboxes: (id: string) => request<{ inboxes: import("@tabdo/shared").IntegrationInbox[] }>(`/api/integrations/${id}/inboxes`),
+  registerIntegrationWebhook: (id: string, inboxIds: string[]) => request<{ endpoint: import("@tabdo/shared").WebhookEndpoint }>(`/api/integrations/${id}/webhooks`, { method: "POST", body: JSON.stringify({ inboxIds }) }),
+  listWebhookEndpoints: () => request<{ endpoints: import("@tabdo/shared").WebhookEndpoint[]; canManage: boolean }>("/api/webhook-endpoints"),
+  createWebhookEndpoint: (name: string) => request<{ endpoint: import("@tabdo/shared").WebhookEndpoint; token: string }>("/api/webhook-endpoints", { method: "POST", body: JSON.stringify({ name }) }),
+  updateWebhookEndpoint: (id: string, data: { name?: string; enabled?: boolean }) => request<{ endpoint: import("@tabdo/shared").WebhookEndpoint }>(`/api/webhook-endpoints/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  deleteWebhookEndpoint: (id: string) => request(`/api/webhook-endpoints/${id}`, { method: "DELETE" }),
   deleteAutomation: (id: string) =>
     request<{ ok: boolean }>(`/api/automations/${id}`, { method: "DELETE" }),
   replayAutomationRun: (id: string) =>

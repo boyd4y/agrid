@@ -11,7 +11,6 @@ import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { AutomationActions } from "@/components/automation/AutomationActions";
 import { subscribeDataChanges } from "@/lib/data-changes";
 import { api } from "@/lib/api";
-import { AUTOMATION_TRIGGER_LABELS } from "@tabdo/shared";
 import { ListPagination } from "@/components/controls/list-pagination";
 import { ListItemLink } from "@/components/controls/list-item-link";
 import { useRemotePagination, type ListPageRequest } from "@/hooks/useListPagination";
@@ -38,7 +37,7 @@ export function AutomationsPage() {
           <ListItemLink to={`/app/automations/${rule.id}`} label={rule.name} />
           <Zap className="size-5 shrink-0 text-warning" />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">{rule.name}</div><div className="mt-1 truncate text-xs text-muted-foreground">{rule.sourceName} · {AUTOMATION_TRIGGER_LABELS[rule.trigger.type]}</div>
+            <div className="truncate text-sm font-medium">{rule.name}</div><div className="mt-1 truncate text-xs text-muted-foreground">{rule.sourceName ?? t(`automation:generic.sources.${rule.source.kind}`)} · {t(`automation:triggers.${rule.trigger.type}`)}</div>
           </div><span className={rule.enabled ? "text-xs text-success" : "text-xs text-muted-foreground"}>{rule.enabled ? t("common:enabled") : t("common:disabled")}</span>
           <div className="relative z-10 shrink-0"><AutomationActions rule={rule} onDeleted={() => { void refresh(); }} /></div>
         </li>)}

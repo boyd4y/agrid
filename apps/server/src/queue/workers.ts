@@ -21,7 +21,7 @@ export function startWorker(hooks: { beforeAction?: (eventId: string) => Promise
     try {
       const [event] = await db.select().from(automationEvents).where(eq(automationEvents.id, eventId));
       if (!event || event.finishedAt || event.generation !== generation) return;
-      lease = await acquireRowLease(leases, event.organizationId, event.rowId);
+      lease = await acquireRowLease(leases, event.organizationId, event.rowId ?? event.id);
       if (!lease) {
         await job.moveToDelayed(Date.now() + 200 + Math.floor(Math.random() * 300), token);
         throw new DelayedError();

@@ -356,8 +356,11 @@ export const automations = pgTable(
   "automations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    source: jsonb("source").$type<import("@tabdo/shared").AutomationSource>().notNull(),
+    eventConditions: jsonb("event_conditions").$type<import("@tabdo/shared").AutomationEventCondition[]>().default([]).notNull(),
     tableId: uuid("table_id")
-      .notNull()
       .references(() => tables.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     enabled: boolean("enabled").default(true).notNull(),
@@ -371,6 +374,7 @@ export const automations = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    index("automations_org_created_idx").on(t.organizationId, t.createdAt),
     index("automations_table_idx").on(t.tableId),
     index("automations_table_enabled_idx").on(t.tableId, t.enabled),
   ]
@@ -382,10 +386,8 @@ export const automationRuns = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     automationId: uuid("automation_id")
       .notNull(),
-    tableId: uuid("table_id")
-      .notNull(),
-    rowId: uuid("row_id")
-      .notNull(),
+    tableId: uuid("table_id"),
+    rowId: uuid("row_id"),
     eventId: uuid("event_id"),
     ruleVersion: integer("rule_version").default(1).notNull(),
     ruleSnapshot: jsonb("rule_snapshot").$type<Record<string, unknown>>(),
@@ -412,10 +414,10 @@ export type AutomationRunRow = typeof automationRuns.$inferSelect;
 export const automationEvents = pgTable("automation_events", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: text("organization_id").notNull(),
-  tableId: uuid("table_id").notNull(),
-  rowId: uuid("row_id").notNull(),
-  rowVersion: integer("row_version").notNull(),
-  expectedVersion: integer("expected_version").notNull(),
+  tableId: uuid("table_id"),
+  rowId: uuid("row_id"),
+  rowVersion: integer("row_version"),
+  expectedVersion: integer("expected_version"),
   snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
   status: text("status").default("matched").notNull(),
   generation: integer("generation").default(0).notNull(),
@@ -558,3 +560,69 @@ export const rowRelations = pgTable("row_relations", {
   index("relation_target_row_idx").on(t.relationId, t.targetRowId, t.sourceRowId),
   uniqueIndex("relation_source_single").on(t.relationId, t.sourceRowId).where(sql`${t.sourceSingle}`),
   uniqueIndex("relation_target_single").on(t.relationId, t.targetRowId).where(sql`${t.targetSingle}`)]);
+
+/** Service credentials are encrypted; public projections never select these fields. */
+export const integrationConnections = pgTable("integration_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  createdByUserId: text("created_by_user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  provider: text("provider").$type<"agentmail">().notNull(),
+  name: text("name").notNull(),
+  encryptedCredential: jsonb("encrypted_credential").$type<Record<string, string>>().notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  state: text("state").default("unverified").notNull(),
+  lastError: text("last_error"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [index("integration_connections_org_idx").on(t.organizationId)]);
+export const webhookEndpoints = pgTable("webhook_endpoints", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  createdByUserId: text("created_by_user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  kind: text("kind").$type<"webhook" | "agentmail">().notNull(),
+  connectionId: uuid("connection_id").references(() => integrationConnections.id, { onDelete: "cascade" }),
+  inboxIds: jsonb("inbox_ids").$type<string[]>().default([]).notNull(),
+  tokenHash: text("token_hash"),
+  encryptedSigningSecret: jsonb("encrypted_signing_secret").$type<Record<string, string>>(),
+  remoteWebhookId: text("remote_webhook_id"),
+  enabled: boolean("enabled").default(true).notNull(),
+  state: text("state").default("active").notNull(),
+  lastError: text("last_error"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [index("webhook_endpoints_org_idx").on(t.organizationId)]);
+export const integrationDeliveries = pgTable("integration_deliveries", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  endpointId: uuid("endpoint_id").notNull().references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id").notNull(),
+  dedupeKey: text("dedupe_key").notNull(),
+  logicalKey: text("logical_key"),
+  connectionId: uuid("connection_id"),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  status: text("status").default("received").notNull(),
+  eventId: uuid("event_id"),
+  receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [uniqueIndex("integration_deliveries_transport_idx").on(t.endpointId, t.dedupeKey),
+  uniqueIndex("integration_deliveries_logical_idx").on(t.connectionId, t.logicalKey)]);
+export const automationSchedules = pgTable("automation_schedules", {
+  automationId: uuid("automation_id").primaryKey().references(() => automations.id, { onDelete: "cascade" }),
+  nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
+  ruleVersion: integer("rule_version").notNull(),
+}, t => [index("automation_schedules_due_idx").on(t.nextRunAt)]);
+export const automationOccurrences = pgTable("automation_occurrences", {
+  automationId: uuid("automation_id").notNull().references(() => automations.id, { onDelete: "cascade" }),
+  ruleVersion: integer("rule_version").notNull(),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+  eventId: uuid("event_id").notNull(),
+}, t => [uniqueIndex("automation_occurrences_key").on(t.automationId, t.ruleVersion, t.scheduledFor)]);
+/** One native conversation per automation action, stable across worker delivery retries. */
+export const automationAgentActions = pgTable("automation_agent_actions", {
+  runId: uuid("run_id").notNull().references(() => automationRuns.id, { onDelete: "cascade" }),
+  step: integer("step").notNull(),
+  threadId: uuid("thread_id").notNull(),
+  userMessageId: text("user_message_id").notNull(),
+  agentRunId: uuid("agent_run_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, t => [uniqueIndex("automation_agent_actions_key").on(t.runId, t.step)]);
