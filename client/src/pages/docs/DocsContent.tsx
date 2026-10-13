@@ -74,7 +74,7 @@ export function DocsContent({ blocks }: { blocks: DocsBlock[] }) {
                   <Link
                     key={card.href}
                     to={card.href}
-                    className="group rounded-2xl border border-border bg-background p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                    className="group rounded-2xl border border-border bg-background p-5 shadow-sm transition hover:border-primary/30 hover:shadow-md"
                   >
                     {card.badge ? (
                       <span className="mb-2 inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">

@@ -40,7 +40,7 @@
   --radius-lg: var(--radius);
 }
 
-/* Light (default) — Notion-warm shadcn tokens */
+/* Light (default) — warm paper + tabdo action (行动蓝) */
 :root {
   color-scheme: light;
   --radius: 0.5rem;
@@ -165,4 +165,16 @@ body {
     "PingFang SC", "Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
+}
+
+/* A11y: cut nonessential motion; keep instant state changes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
