@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AssistantChatTransport } from "@assistant-ui/ai-sdk";
-import { prepareNativeChatRequest } from "../src/lib/chat-persistence.ts";
+import { prepareNativeChatRequest } from "../src/lib/native-chat-transport.ts";
 
 test("official native transport submits one fresh user from a long UI history without changing displayed history", async () => {
   const history = Array.from({ length: 250 }, (_, index) => ({

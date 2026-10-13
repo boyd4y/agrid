@@ -223,3 +223,5 @@
 2026-10-13 继续失败后的简化整改：只读确认实际会话具有完整 resume/journal，失败来自客户端在 HTTP 拒绝后保存两条未执行消息并推进 UI head，服务端又用 UI parent 拒绝原生续接。移除 UI parent 执行拦截，由服务端选择原生展示父节点；客户端 history 仅加载，旧 messages POST 兼容但不写，GET 使用真实接受的原生 head，历史残留不进入模型。请求只传最新用户消息、去除200条历史限制；删除所有 Harness 的固定继续口令，Pi官方输入扩展和 bridge 官方 accepted ACK steering 接收新输入。进度记录与取消轮询故障不再主动停止；真实租约/最终保存失败仍如实处理。模型目录不再作为执行前置门槛，2秒查询、真实旧缓存优先降级；删除 Plan/Goal 任意步骤数量、并行、关闭/替换等硬限制。
 
 本轮验证：隔离测试DB与本机真实 Pi/SSE，routes7项、store7项、startup-boundary2项通过；新增真实 SQL 进度写入故障测试通过，工具一次、正常回复/会话持久化且无合成失败提示。模型目录4项、client11项及客户端/服务端生产与测试类型检查通过。HTTP拒绝残留两条消息后仍可普通续接，最新输入进入原生日志且工具不重放。未调用用户模型、未修改实际用户数据/历史、未新增截图或迁移。真实 Codex/Claude Sandbox 未验收；冷缓存未知模型上下文仍属配置降级边界。最新完整性/权限/租约/提交幂等保护保留，详见 docs/agent-run-audit.md 最后一节。
+
+2026-10-13 合入远端国际化后的启动修复：保留远端16个提交，解决chat-persistence唯一import冲突；原生transport参数独立为无界面依赖模块。删除未使用的RUN_LABELS Proxy，类型/颜色翻译使用普通对象getter，报告类型使用普通getter返回对象/数组，消除React热更新Symbol异常及空数组反射失真；旧unit fixture适配翻译边界，client11项与client/server测试类型检查通过。MCP开发脚本保持原状；根dev先构建shared，server dev不再并行重复删除重建dist，消除MCP启动竞态；真实stdio initialize返回tabdo。未重启用户API/Vite。用户后续要求将工作区整理为apps/*与packages/*，继续推进。

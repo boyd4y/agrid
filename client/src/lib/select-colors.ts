@@ -70,14 +70,8 @@ const SELECT_COLOR_KEYS: SelectColorToken[] = [
 ];
 
 /** Live color names — reads current i18n language. */
-export const SELECT_COLOR_NAMES: Record<SelectColorToken, string> = new Proxy(
-  {} as Record<SelectColorToken, string>,
-  {
-    get: (_t, prop: string) => i18n.t(`table:colors.${prop}`),
-    ownKeys: () => SELECT_COLOR_KEYS,
-    getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
-  },
-);
+export const SELECT_COLOR_NAMES = Object.defineProperties({} as Record<SelectColorToken, string>,
+  Object.fromEntries(SELECT_COLOR_KEYS.map((color) => [color, { enumerable: true, get: () => i18n.t(`table:colors.${color}`) }])));
 
 /** Custom colors are rendered exactly; choose text with WCAG-readable contrast. */
 export function selectOptionStyle(raw?: string | null): SelectChipStyle {

@@ -12,10 +12,6 @@ import { useTranslation } from "react-i18next";
 export function runStatusLabel(status: AgentRunStatus): string {
   return i18n.t(`chat:runStatus.${status}`);
 }
-/** @deprecated Prefer runStatusLabel — kept for external imports that expect a map. */
-export const RUN_LABELS: Record<AgentRunStatus, string> = new Proxy({} as Record<AgentRunStatus, string>, {
-  get: (_t, prop: string) => runStatusLabel(prop as AgentRunStatus),
-});
 export const isActiveRun = (run?: AgentRunSummary) => run?.status === "starting" || run?.status === "running";
 export function activityLabel(activity?: ChatActivity | null): string {
   if (!activity) return i18n.t("chat:phase.starting");

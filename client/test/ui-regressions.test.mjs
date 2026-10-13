@@ -5,14 +5,17 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+// These unit fixtures exercise initialization and metadata, not translations.
+// The browser's alias-based i18n module cannot resolve from a data: module.
+const withTranslationFixture = (source) => source.replace('import i18n from "@/i18n";', 'const i18n = { t: (key) => key };');
 const compiled = ts.transpileModule(await read("../src/lib/ensure-organization.ts"), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { createOrganizationInitializer } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const { createOrganizationInitializer } = await import(`data:text/javascript;base64,${Buffer.from(withTranslationFixture(compiled)).toString("base64")}`);
 const chatCompiled = ts.transpileModule(await read("../src/lib/chat-resource.ts"), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { threadResourceCustomUpdate, setStoredThreadResource } = await import(`data:text/javascript;base64,${Buffer.from(chatCompiled).toString("base64")}`);
+const { threadResourceCustomUpdate, setStoredThreadResource } = await import(`data:text/javascript;base64,${Buffer.from(withTranslationFixture(chatCompiled)).toString("base64")}`);
 const user = { id: "user-123456789", name: "Demo" };
 const organization = { id: "workspace-1", name: "Workspace", slug: "workspace" };
 

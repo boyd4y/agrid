@@ -51,9 +51,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import {
   createThreadAdapter,
-  prepareNativeChatRequest,
   type ChatPageContext,
 } from "@/lib/chat-persistence";
+import { prepareNativeChatRequest } from "@/lib/native-chat-transport";
 
 export type { HarnessId } from "@/lib/harness";
 

@@ -27,7 +27,7 @@ import {
 import { ReportChart } from "./ReportChart";
 import { ReportDataPopover } from "./ReportDataPopover";
 import { DashboardCanvas } from "./DashboardCanvas";
-import { REPORT_CHART_OPTIONS } from "./chart-types";
+import { reportChartOptions } from "./chart-types";
 import { resolveReportLayout } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -52,11 +52,6 @@ function widgetTypes() {
     text: { label: i18n.t("reports:widgetTypes.text"), icon: Type },
   } as const;
 }
-const TYPES = new Proxy({} as ReturnType<typeof widgetTypes>, {
-  get: (_t, prop: string) => widgetTypes()[prop as keyof ReturnType<typeof widgetTypes>],
-  ownKeys: () => Object.keys(widgetTypes()),
-  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
-});
 function Choice({
   id,
   label,
@@ -210,7 +205,7 @@ function DashboardWidget({
         <Button
           variant="ghost"
           size="icon"
-          aria-label={i18n.t("reports:dragWidget", { title: widget.title || TYPES[widget.type].label })}
+          aria-label={i18n.t("reports:dragWidget", { title: widget.title || widgetTypes()[widget.type].label })}
           className="report-drag-handle size-7 touch-none cursor-grab"
         >
           <GripVertical />
@@ -221,7 +216,7 @@ function DashboardWidget({
           className="min-w-0 flex-1 justify-start text-left"
           onClick={onSelect}
         >
-          <span className="truncate">{widget.title || TYPES[widget.type].label}</span>
+          <span className="truncate">{widget.title || widgetTypes()[widget.type].label}</span>
         </Button>
         <div
           className={cn(
@@ -393,7 +388,7 @@ export function ReportBuilder({
     if (config.widgets.length >= 40) return;
     const base = {
       id: crypto.randomUUID(),
-      title: TYPES[type].label,
+      title: widgetTypes()[type].label,
       width: type === "text" ? ("full" as const) : ("half" as const),
     };
     const widget: ReportWidget =
@@ -479,7 +474,7 @@ export function ReportBuilder({
                   className="flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border bg-card p-4"
                 >
                   <h3 className="mb-3 shrink-0 text-sm font-medium">
-                    {widget.title || TYPES[widget.type].label}
+                    {widget.title || widgetTypes()[widget.type].label}
                   </h3>
                   <div className="min-h-0 flex-1 overflow-auto">
                     <WidgetContent
@@ -522,8 +517,8 @@ export function ReportBuilder({
               {t("addWidget")}
             </p>
             <div className="flex flex-col gap-1">
-              {(Object.keys(TYPES) as ReportWidget["type"][]).map((type) => {
-                const Icon = TYPES[type].icon;
+              {(Object.keys(widgetTypes()) as ReportWidget["type"][]).map((type) => {
+                const Icon = widgetTypes()[type].icon;
                 return (
                   <Button
                     key={type}
@@ -534,7 +529,7 @@ export function ReportBuilder({
                     onClick={() => add(type)}
                   >
                     <Icon data-icon="inline-start" />
-                    {TYPES[type].label}
+                    {widgetTypes()[type].label}
                     <Plus data-icon="inline-end" className="ml-auto" />
                   </Button>
                 );
@@ -546,7 +541,7 @@ export function ReportBuilder({
             </p>
             <div className="flex flex-col gap-1">
               {config.widgets.map((w) => {
-                const Icon = TYPES[w.type].icon;
+                const Icon = widgetTypes()[w.type].icon;
                 return (
                   <Button
                     key={w.id}
@@ -558,7 +553,7 @@ export function ReportBuilder({
                   >
                     <Icon data-icon="inline-start" />
                     <span className="truncate">
-                      {w.title || TYPES[w.type].label}
+                      {w.title || widgetTypes()[w.type].label}
                     </span>
                   </Button>
                 );
@@ -732,7 +727,7 @@ export function ReportBuilder({
                           id="report-chart"
                           label={t("chartType")}
                           value={selected.query.chartType}
-                          options={REPORT_CHART_OPTIONS.map(
+                          options={reportChartOptions().map(
                             ({ icon: glyph, ...option }) => ({
                               ...option,
                               glyph,

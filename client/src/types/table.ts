@@ -124,16 +124,10 @@ const COLUMN_TYPE_KEYS: ColumnType[] = [
 ];
 
 /** Live labels — reads current i18n language. Prefer iterating COLUMN_TYPE_KEYS for menus. */
-export const COLUMN_TYPE_LABELS: Record<ColumnType, string> = new Proxy({} as Record<ColumnType, string>, {
-  get: (_t, prop: string) => i18n.t(`table:columnTypes.${prop}`),
-  ownKeys: () => COLUMN_TYPE_KEYS,
-  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
-});
+export const COLUMN_TYPE_LABELS = Object.defineProperties({} as Record<ColumnType, string>,
+  Object.fromEntries(COLUMN_TYPE_KEYS.map((type) => [type, { enumerable: true, get: () => i18n.t(`table:columnTypes.${type}`) }])));
 
 const FORMULA_RESULT_KEYS: FormulaResultType[] = ["auto", "number", "text", "checkbox", "date"];
 
-export const FORMULA_RESULT_TYPE_LABELS: Record<FormulaResultType, string> = new Proxy({} as Record<FormulaResultType, string>, {
-  get: (_t, prop: string) => i18n.t(`table:formulaResult.${prop}`),
-  ownKeys: () => FORMULA_RESULT_KEYS,
-  getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
-});
+export const FORMULA_RESULT_TYPE_LABELS = Object.defineProperties({} as Record<FormulaResultType, string>,
+  Object.fromEntries(FORMULA_RESULT_KEYS.map((type) => [type, { enumerable: true, get: () => i18n.t(`table:formulaResult.${type}`) }])));
