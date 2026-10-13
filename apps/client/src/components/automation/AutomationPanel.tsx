@@ -392,6 +392,20 @@ type EditorProps = {
   onSavingChange?: (saving: boolean) => void;
 };
 
+/** Trigger equality compares complete cell values, unlike IF array-membership filters. */
+function TriggerValueInput(props: {
+  column: ColumnDef;
+  value: CellValue;
+  onChange: (value: CellValue) => void;
+  members: MemberOption[];
+  sampleRows: RowData[];
+}) {
+  if (props.column.type === "relation" || props.column.type === "multi_select") {
+    return <FormFieldControl size="sm" column={props.column} value={props.value} onChange={props.onChange} members={props.members} />;
+  }
+  return <FilterValueInput {...props} className="w-full min-w-0" />;
+}
+
 export function AutomationEditor({
   tableId,
   columns,
@@ -432,6 +446,7 @@ export function AutomationEditor({
   const [error, setError] = useState<string | null>(null);
 
   const selectColumns = columns.filter((c) => c.type === "select");
+  const writableColumns = columns.filter((c) => !["formula", "rollup"].includes(c.type));
   const agents = members.filter((member) => member.kind === "agent");
 
   const save = async () => {
@@ -591,15 +606,15 @@ export function AutomationEditor({
                 </label>
                 {trigger.toValue !== undefined &&
                   columns.find((c) => c.id === trigger.columnId) && (
-                    <div className="min-w-36 flex-1">
-                      <FormFieldControl
-                        size="sm"
+                    <div className="min-w-36 flex-1" data-testid="automation-trigger-value">
+                      <TriggerValueInput
                         column={columns.find((c) => c.id === trigger.columnId)!}
                         value={trigger.toValue}
                         onChange={(value) =>
                           setTrigger({ ...trigger, toValue: value })
                         }
                         members={members}
+                        sampleRows={sampleRows}
                       />
                     </div>
                   )}
@@ -715,6 +730,7 @@ export function AutomationEditor({
                   return (
                     <div
                       key={c.id}
+                      data-testid="automation-condition"
                       className="flex flex-wrap items-center gap-1.5"
                     >
                       <Select
@@ -775,6 +791,7 @@ export function AutomationEditor({
                         <FilterValueInput
                           key={`${c.columnId}:${c.op}`}
                           sampleRows={sampleRows}
+                          members={members}
                           column={
                             columns.find((column) => column.id === c.columnId)!
                           }
@@ -897,10 +914,7 @@ export function AutomationEditor({
                           <SelectValue placeholder={t("fieldPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
-                          {columns
-                            .filter(
-                              (c) => !["formula", "rollup"].includes(c.type),
-                            )
+                          {writableColumns
                             .map((c) => (
                               <SelectItem
                                 key={c.id}
@@ -913,7 +927,7 @@ export function AutomationEditor({
                         </SelectContent>
                       </Select>
                       {columns.find((c) => c.id === action.columnId) && (
-                        <div className="min-w-40 flex-1">
+                        <div className="min-w-40 flex-1" data-testid="automation-action-value">
                           <FormFieldControl
                             size="sm"
                             column={
@@ -999,6 +1013,7 @@ export function AutomationEditor({
                                       ...a,
                                       resultColumnId:
                                         v === "__none__" ? undefined : v,
+                                      resultValue: v === "__none__" ? undefined : null,
                                     }
                                   : a,
                               ),
@@ -1012,7 +1027,7 @@ export function AutomationEditor({
                             <SelectItem value="__none__" className="text-xs">
                               {t("noWriteBack")}
                             </SelectItem>
-                            {columns.map((c) => (
+                            {writableColumns.map((c) => (
                               <SelectItem
                                 key={c.id}
                                 value={c.id}
@@ -1023,32 +1038,27 @@ export function AutomationEditor({
                             ))}
                           </SelectContent>
                         </Select>
-                        {action.resultColumnId && (
-                          <Input
-                            className="h-8 flex-1 text-xs"
-                            placeholder={t("writeBackValue")}
-                            value={
-                              action.resultValue === null ||
-                              action.resultValue === undefined
-                                ? ""
-                                : String(action.resultValue)
-                            }
-                            onChange={(e) =>
+                        {writableColumns.find((c) => c.id === action.resultColumnId) && (
+                          <div className="min-w-40 flex-1" data-testid="automation-result-value">
+                          <FormFieldControl
+                            size="sm"
+                            column={writableColumns.find((c) => c.id === action.resultColumnId)!}
+                            value={action.resultValue ?? null}
+                            members={members}
+                            onChange={(value) =>
                               setActions((prev) =>
                                 prev.map((a, i) =>
                                   i === idx && a.type === "run_agent"
                                     ? {
                                         ...a,
-                                        resultValue:
-                                          e.target.value === ""
-                                            ? null
-                                            : e.target.value,
+                                        resultValue: value,
                                       }
                                     : a,
                                 ),
                               )
                             }
                           />
+                          </div>
                         )}
                       </div>
                     </div>

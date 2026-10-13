@@ -2,6 +2,7 @@ import { RelationPicker } from "./RelationPicker";
 import { useEffect, useRef, useState } from "react";
 import { PersonControl } from "@/components/form/FormFieldControls";
 import { useMemberOptions } from "@/hooks/useMemberOptions";
+import type { MemberOption } from "@/lib/api";
 import {
   changedFilterOperator,
   filterOpsForColumn,
@@ -278,11 +279,15 @@ export function FilterValueInput({
   value,
   onChange,
   sampleRows = [],
+  className = FILTER_CONTROL_CLASS_NAME,
+  members,
 }: {
   column: ColumnDef;
   value: CellValue;
   onChange: (v: CellValue) => void;
   sampleRows?: Pick<RowData, "cells">[];
+  className?: string;
+  members?: MemberOption[];
 }) {
   const { t } = useTranslation("table");
   const { t: tf } = useTranslation("filters");
@@ -294,12 +299,14 @@ export function FilterValueInput({
         value={value}
         onChange={onChange}
         label={label}
+        className={className}
+        members={members}
       />
     );
   if (type === "relation")
     return (
       <div
-        className={FILTER_CONTROL_CLASS_NAME}
+        className={className}
         data-testid="filter-value"
         data-filter-type={type}
       >
@@ -339,7 +346,7 @@ export function FilterValueInput({
       >
         <SelectTrigger
           size="sm"
-          className={FILTER_CONTROL_CLASS_NAME}
+          className={className}
           aria-label={label}
           data-testid="filter-value"
           data-filter-type={type}
@@ -371,7 +378,7 @@ export function FilterValueInput({
       >
         <SelectTrigger
           size="sm"
-          className={FILTER_CONTROL_CLASS_NAME}
+          className={className}
           aria-label={label}
           data-testid="filter-value"
           data-filter-type={type}
@@ -389,12 +396,12 @@ export function FilterValueInput({
     );
   if (type === "number")
     return (
-      <NumberFilterInput value={value} onChange={onChange} label={label} />
+      <NumberFilterInput value={value} onChange={onChange} label={label} className={className} />
     );
   if (type === "date")
     return (
       <div
-        className={FILTER_CONTROL_CLASS_NAME}
+        className={className}
         data-testid="filter-value"
         data-filter-type={type}
       >
@@ -410,7 +417,7 @@ export function FilterValueInput({
   return (
     <Input
       size="sm"
-      className={FILTER_CONTROL_CLASS_NAME}
+      className={className}
       aria-label={label}
       data-testid="filter-value"
       data-filter-type={type}
@@ -425,37 +432,38 @@ function PersonFilterInput({
   value,
   onChange,
   label,
+  className,
+  members,
 }: {
   value: CellValue;
   onChange: (value: CellValue) => void;
   label: string;
+  className: string;
+  members?: MemberOption[];
 }) {
-  const members = useMemberOptions();
+  if (!members) return <LoadedPersonFilterInput value={value} onChange={onChange} label={label} className={className} />;
   return (
-    <div
-      className={FILTER_CONTROL_CLASS_NAME}
-      data-testid="filter-value"
-      data-filter-type="person"
-    >
-      <PersonControl
-        size="sm"
-        value={typeof value === "string" ? value : null}
-        onChange={onChange}
-        members={members}
-        placeholder={label}
-      />
+    <div className={className} data-testid="filter-value" data-filter-type="person">
+      <PersonControl size="sm" value={typeof value === "string" ? value : null} onChange={onChange} members={members} placeholder={label} />
     </div>
   );
+}
+
+function LoadedPersonFilterInput(props: Omit<Parameters<typeof PersonFilterInput>[0], "members">) {
+  const members = useMemberOptions();
+  return <PersonFilterInput {...props} members={members} />;
 }
 
 function NumberFilterInput({
   value,
   onChange,
   label,
+  className,
 }: {
   value: CellValue;
   onChange: (value: CellValue) => void;
   label: string;
+  className: string;
 }) {
   const { t } = useTranslation("filters");
   const [draft, setDraft] = useState(
@@ -473,7 +481,7 @@ function NumberFilterInput({
     <Input
       size="sm"
       inputMode="decimal"
-      className={FILTER_CONTROL_CLASS_NAME}
+      className={className}
       aria-label={label}
       aria-invalid={invalid}
       title={invalid ? t("invalidNumber") : undefined}
