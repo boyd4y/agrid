@@ -23,7 +23,6 @@ const TOOL_KEYS = [
   "add_row", "update_cell", "update_cells", "delete_row", "delete_column",
   "set_relation", "add_relation", "remove_relation", "create_form_view", "update_form_view",
   "create_automation", "update_automation", "list_automations", "open_preview",
-  "create_goal", "update_goal", "update_plan", "get_task_state",
 ] as const;
 
 function toolLabel(name: string | undefined): string {

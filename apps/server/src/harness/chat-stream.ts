@@ -155,7 +155,6 @@ export function createNativeChatStream(options: {
           modelActive = false;clearTimeout(stepDeadline);clearModelDeadlines();
           for (const result of toolResults) {
             if (failures.has(result.toolCallId) || nativeToolDenial(result.output)) continue;
-            if (["create_goal", "update_goal", "update_plan"].includes(result.toolName)) continue;
             if (!/^(create_|update_|rename_|add_|batch_|delete_|set_|remove_|reorder_|move_card)/.test(result.toolName)) continue;
             const output = result.output as { affectedTableIds?: string[]; tableId?: string; id?: string } | undefined;
             const ids = output?.affectedTableIds ?? (output?.tableId ? [output.tableId] : result.toolName === "create_table" && output?.id ? [output.id] : undefined);

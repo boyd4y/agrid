@@ -19,8 +19,6 @@ const {
 } = await import("../../src/db/schema.js");
 const { saveMessage } = await import("../../src/chat/store.js");
 const { beginNativeRun, listNativeRuns } = await import("../../src/harness/runs.js");
-const { getThreadTaskState, createTaskTools } = await import("../../src/harness/tasks.js");
-const { nativeHostTools } = await import("../../src/harness/tools.js");
 const {
   claimRuntimeLease,
   releaseRuntimeLease,
@@ -310,46 +308,4 @@ test("expired runs become visible failures; an older checkpoint cannot replay an
   await assert.rejects(beginNativeRun(next, actor, record, { id: "run-user-3", parentId: first.assistantMessageId, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "retry" }] } }, agentMember), /执行因服务中断/);
   assert.equal((await listNativeRuns(threadId, actor)).length, 2);
   await releaseRuntimeLease(next);
-});
-
-test("task tools persist parallel large plans and independent goal state while rejecting invalid input and stale owners", async () => {
-  const threadId = await newThread(), lease = await claimRuntimeLease(threadId, actor);
-  assert.equal(await getThreadTaskState(threadId, actor), null);
-  const record = await prepareRuntimeRecord(lease, actor, { profileId, harness: "pi", mode: "local" });
-  const run = await beginNativeRun(lease, actor, record, { id: "task-user", parentId: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Complete goal" }] } }, agentMember);
-  const tools = nativeHostTools(createTaskTools(record), (operation) => withRuntimeLease(lease, operation)).tools;
-  const execute = (name: string, input: unknown) => tools[name].execute!(input as never, { toolCallId: randomUUID(), messages: [], context: undefined }) as Promise<unknown>;
-  await execute("create_goal", { objective: "Create and verify table" });
-  const parallelSteps = Array.from({ length: 45 }, (_, index) => ({ text: `Verify independent item ${index + 1}`, status: index < 2 ? "in_progress" as const : "pending" as const }));
-  await execute("update_plan", { steps: parallelSteps });
-  assert.deepEqual((await getThreadTaskState(threadId, actor))?.plan, parallelSteps, "more than forty steps and concurrent work are valid plan state");
-  await assert.rejects(execute("update_plan", { steps: [{ text: "Invalid status", status: "invented" }] }), /status/);
-  await execute("create_goal", { objective: "Create and verify table" }); // Retry doesn't erase plan.
-  assert.equal((await getThreadTaskState(threadId, actor))?.plan.length, 45);
-  await execute("create_goal", { objective: "Replace current task as requested" });
-  assert.equal((await getThreadTaskState(threadId, actor))?.goal?.objective, "Replace current task as requested");
-  assert.deepEqual((await getThreadTaskState(threadId, actor))?.plan, [], "replacing an active goal clears its old plan");
-  await execute("update_plan", { steps: parallelSteps });
-  await assert.rejects(getThreadTaskState(threadId, { ...actor, userId: agentUser }), /不存在/);
-  await assert.rejects(getThreadTaskState(threadId, { ...actor, organizationId: foreignOrg }), /不存在/);
-  const state = await getThreadTaskState(threadId, actor);
-  assert.deepEqual(Object.keys(state!).sort(), ["goal", "mode", "plan", "updatedAt"]);
-  // A completed Run is independent of the continuing goal/plan.
-  await completeRuntimeTurn(lease, actor, record.id, {
-    resumeState: { type: "resume-session", specificationVersion: "harness-v1", harnessId: "pi", data: { opaque: "fixture" } },
-    workspace: [], sandboxId: record.sandboxId, userMessageId: run.userMessageId, assistantMessageId: run.assistantMessageId, status: "ready",
-  }, { id: run.assistantMessageId, parentId: run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: [{ type: "text", text: "More to do" }] } }, { id: run.id, status: "completed" });
-  assert.equal((await getThreadTaskState(threadId, actor))?.goal?.status, "active");
-  await execute("update_goal", { status: "complete", progress: "Read back the saved table and verified fields" });
-  assert.equal((await getThreadTaskState(threadId, actor))?.goal?.status, "complete", "goal completion does not require changing every independent plan annotation");
-  await execute("update_plan", { steps: [] });
-  assert.deepEqual((await getThreadTaskState(threadId, actor))?.plan, [], "a completed goal does not prevent editing plan state");
-  await execute("update_goal", { status: "active", progress: "User requested reopening the saved objective" });
-  assert.equal((await getThreadTaskState(threadId, actor))?.goal?.status, "active", "a closed goal may be reopened by its actual requested status");
-  await execute("create_goal", { objective: "Next task" });
-  assert.deepEqual((await getThreadTaskState(threadId, actor))?.plan, []);
-  await execute("update_goal", { status: "paused", progress: "User requested pause" });
-  await releaseRuntimeLease(lease);
-  await assert.rejects(execute("update_goal", { status: "active", progress: "stale operation" }), /接管/);
-  assert.equal((await getThreadTaskState(threadId, actor))?.goal?.status, "paused");
 });

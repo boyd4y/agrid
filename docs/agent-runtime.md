@@ -101,11 +101,11 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 官方依据：[HarnessAgent 会话、生命周期与 continuation](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)，[adapter 能力](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-adapters)。
 
 
-## 计划与目标
+## 原生工具与平台工具
 
-复杂任务可使用 `update_plan` 维护步骤，支持并行步骤，无40步上限或单一进行中限制。按用户要求可替换/重开目标，更新计划不受旧目标状态阻挡；目标与计划状态独立记录，不用计划完成状态硬拦目标更新。单个 Run 的终态不会自动关闭目标，也不意味着存在后台自主续跑。
+Harness 内置工具由对应适配器管理，不在平台工具设置中单独罗列或禁用。计划能力只取决于 Harness 原生支持；平台不再注入计划/目标指令、工具或额外任务状态接口。旧配置中的已知内置工具 ID 和已移除的四个任务工具 ID 在加载、保存及执行入口归一化时忽略；未知 ID 仍按配置错误拒绝。
 
-工具通过现有租约保护执行，计划/目标事务锁定对应 runtime 记录；读取接口 `GET /api/threads/:id/task-state` 只公开 plan/goal/mode/updatedAt，不暴露原生 resume state、文件或远程环境凭证。聊天 header 的计划按钮按需加载，运行时轮询、切换对话时取消旧请求。内部 `/workspace/agent/AGENTS.md` 在官方 onSession 生命周期生成，下一次运行采用最新人设。
+工具设置只控制平台数据操作与 Skill 读取工具，使用官方 `inactiveTools` 执行禁用。原生 `askUserQuestions` 保留标准问题与答案续接流程。内部 `/workspace/agent/AGENTS.md` 在官方 onSession 生命周期生成，下一次运行采用最新人设。历史迁移和已保存的旧任务数据保留，本轮不删除数据库列或用户数据。
 
 ## Pi 模型预算与空回复
 

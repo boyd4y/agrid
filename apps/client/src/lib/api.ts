@@ -103,7 +103,6 @@ export const api = {
   listAgentRunEvents: (threadId: string, runId: string, signal?: AbortSignal) => request<{ events: import("@tabdo/shared").AgentRunEvent[] }>(`/api/threads/${threadId}/runs/${runId}/events`, { signal }),
   cancelAgentRun: (threadId: string, runId: string) => request<{ ok: boolean }>(`/api/threads/${threadId}/runs/${runId}/cancel`, { method: "POST", body: "{}" }),
   getChatMessages: (threadId: string, signal?: AbortSignal) => request<{ headId: string | null; messages: Array<{ id: string; parentId: string | null; format: string; content: Record<string, unknown> }> }>(`/api/threads/${threadId}/messages`, { signal }),
-  getAgentTaskState: (threadId: string, signal?: AbortSignal) => request<{ state: import("@tabdo/shared").AgentTaskState | null }>(`/api/threads/${threadId}/task-state`, { signal }),
   listSkills: () => request<import("@tabdo/shared").SkillLibrary>("/api/skills"),
   getSkill: (id: string) => request<import("@tabdo/shared").SkillDocument>(`/api/skills/${encodeURIComponent(id)}`),
   updateSkill: (id: string, document: string, expectedVersion: number) => request<import("@tabdo/shared").SkillDocument>(`/api/skills/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ document, expectedVersion }) }),

@@ -471,8 +471,6 @@ export const agentRuntimeSessions = pgTable("agent_runtime_sessions", {
   lastAssistantMessageId: text("last_assistant_message_id"),
   status: text("status").$type<"ready" | "interrupted" | "failed">().default("ready").notNull(),
   error: text("error"),
-  plan: jsonb("plan").$type<import("@tabdo/shared").AgentPlanStep[]>().default([]).notNull(),
-  goal: jsonb("goal").$type<import("@tabdo/shared").AgentGoal>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [uniqueIndex("agent_runtime_thread_profile_idx").on(t.threadId, t.agentProfileId)]);
 

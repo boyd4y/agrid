@@ -72,18 +72,20 @@ test("agent creation uses a human session, creates no key, and enforces roles", 
   assert.equal((await req(`/members/agents/${codex.id}`, { persona: { runtime: "local" } }, "PATCH")).status, 400);
 });
 
-test("agent tool settings persist, validate adapter compatibility, and enforce owner role", async () => {
+test("agent platform tool settings normalize legacy IDs, persist, and enforce owner role", async () => {
   const catalog = await (await req("/members/agents/tools?harness=pi")).json();
   assert.equal(catalog.harness, "pi"); assert.equal(catalog.supportsFiltering, true);
-  for (const id of ["read", "bash", "update_cell", "read_skill", "update_plan"]) assert(catalog.tools.some((item: {id:string}) => item.id === id));
+  for (const id of ["update_cell", "read_skill"]) assert(catalog.tools.some((item: {id:string}) => item.id === id));
+  assert(catalog.tools.every((item: {source:string}) => item.source === "platform"));
   assert(!catalog.tools.some((item: {id:string}) => item.id === "webSearch"));
   assert.equal((await req("/members/agents/tools?harness=unsupported")).status, 400);
   assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: ["bash"] } }, "PATCH", otherCookie)).status, 403);
-  for (const disabledTools of [["unknown_tool"], ["bash", "bash"], ["webSearch"]]) {
+  for (const disabledTools of [["unknown_tool"], ["bash", "bash"]]) {
     assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools } }, "PATCH")).status, 400);
   }
-  const disabled = ["bash", "update_cell", "read_skill", "update_plan"];
-  assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: disabled } }, "PATCH")).status, 200);
+  const legacy = ["bash", "update_cell", "read_skill", "update_plan"];
+  const disabled = ["update_cell", "read_skill"];
+  assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: legacy } }, "PATCH")).status, 200);
   const [profile] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentUserId));
   assert.deepEqual(profile.persona.disabledTools, disabled);
   const members = await (await req("/members")).json();
@@ -93,7 +95,10 @@ test("agent tool settings persist, validate adapter compatibility, and enforce o
   const [retained] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentUserId));
   assert.deepEqual(retained.persona.disabledTools, disabled);
   assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: [] } }, "PATCH")).status, 200);
-  assert.equal((await req("/members/agents", { name: "Wrong native tools", persona: { defaultHarness: "codex", disabledTools: ["read"] } })).status, 400);
+  const normalized = await req("/members/agents", { name: "Legacy native tools", persona: { defaultHarness: "codex", disabledTools: ["read", "webSearch", "create_goal"] } });
+  assert.equal(normalized.status, 201);
+  const created = (await normalized.json()).member; users.push(created.userId);
+  assert.deepEqual(created.agent.persona.disabledTools, []);
 });
 
 test("workspace table icons and pins persist and reject invalid or foreign changes", async () => {
@@ -493,20 +498,15 @@ test("invalid relation calls expose field errors, reach the model for correction
   }
 });
 
-test("native goal and plan survive new runtime turns; persona generates internal AGENTS.md", { timeout: 20_000 }, async () => {
+test("native persona policy updates survive new turns and generate internal AGENTS.md", { timeout: 20_000 }, async () => {
   const policy = "Policy-fixture-before: read saved results before completion.";
   assert.equal((await req(`/members/agents/${agentId}`, { persona: { systemPrompt: policy } }, "PATCH")).status, 200);
-  const objective = "Create one table and verify it", name = `Task-${randomUUID()}`;
+  const name = `Task-${randomUUID()}`;
   const calls: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];
   const operations = [
-    { tool: "create_goal", args: { objective } },
-    { tool: "update_plan", args: { steps: [{ text: "Create table and verify saved state", status: "in_progress" }] } },
     { tool: "create_table", args: { name } },
     null,
-    { tool: "get_task_state", args: {} },
     { tool: "list_tables", args: {} },
-    { tool: "update_plan", args: { steps: [{ text: "Create table and verify saved state", status: "completed" }] } },
-    { tool: "update_goal", args: { status: "complete", progress: `Verified ${name} in list_tables` } },
     null,
   ];
   const provider = createServer(async (request, response) => {
@@ -519,7 +519,7 @@ test("native goal and plan survive new runtime turns; persona generates internal
     if (operation) {
       write({ role: "assistant", tool_calls: [{ index: 0, id: `task-call-${calls.length}`, type: "function", function: { name: operation.tool, arguments: JSON.stringify(operation.args) } }] }, null);
       write({}, "tool_calls");
-    } else { write({ role: "assistant", content: calls.length === 4 ? "表格已创建，下一轮核对结果。" : "已核对保存结果，目标已完成。" }, null); write({}, "stop"); }
+    } else { write({ role: "assistant", content: calls.length === 2 ? "表格已创建，下一轮核对结果。" : "已核对保存结果。" }, null); write({}, "stop"); }
     response.end("data: [DONE]\n\n");
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
@@ -529,32 +529,26 @@ test("native goal and plan survive new runtime turns; persona generates internal
   process.env.OPENROUTER_API_KEY = "local-test-provider";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
-    const first = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "tasks-user-1", role: "user", parts: [{ type: "text", text: "把创建并核对表格作为目标，先创建，下一轮再验证" }] }] });
+    const first = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "tasks-user-1", role: "user", parts: [{ type: "text", text: "先创建表格，下一轮再验证" }] }] });
     assert.equal(first.status, 200);
     const stream = await first.text();
     assert.match(stream, /表格已创建/);
     assert(!stream.includes('"state":"output-error"'));
     assert.equal((stream.match(/"type":"data-table-mutated"/g) ?? []).length, 1);
-    const state = await (await req(`/threads/${thread.id}/task-state`)).json();
-    assert.equal(state.state.goal.status, "active"); assert.equal(state.state.plan[0].status, "in_progress");
+    assert.equal((await req(`/threads/${thread.id}/task-state`)).status, 404, "retired custom task endpoint is absent");
     assert.equal((await (await req(`/threads/${thread.id}/runs`)).json()).runs[0].status, "completed");
-    assert.equal((await req(`/threads/${thread.id}/task-state`, undefined, "GET", otherCookie)).status, 404);
-    assert.deepEqual(Object.keys(state.state).sort(), ["goal", "mode", "plan", "updatedAt"]);
     assert.match(JSON.stringify(calls[0].messages), /Policy-fixture-before/);
     const updatedPolicy = "Policy-fixture-after: verify table ownership before completing.";
     assert.equal((await req(`/members/agents/${agentId}`, { persona: { systemPrompt: updatedPolicy } }, "PATCH")).status, 200);
     const history = await loadMessages(thread.id, actor());
     const messages = history.messages.map((message) => ({ id: message.id, ...message.content }));
-    const second = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [...messages, { id: "tasks-user-2", role: "user", parts: [{ type: "text", text: "核对已保存表格，更新计划并完成目标" }] }] });
+    const second = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [...messages, { id: "tasks-user-2", role: "user", parts: [{ type: "text", text: "核对已保存表格" }] }] });
     assert.equal(second.status, 200);
     const secondStream = await second.text();
-    assert.match(secondStream, /目标已完成/);
+    assert.match(secondStream, /已核对保存结果/);
     assert(!secondStream.includes("data-table-mutated"));
-    assert.equal(calls.length, 9);
-    assert.match(JSON.stringify(calls[4].messages.filter((message) => message.role === "system")), /Policy-fixture-after/);
-    assert.match(JSON.stringify(calls[4].messages.filter((message) => message.role === "system")), /Create one table and verify it/);
-    const finished = await (await req(`/threads/${thread.id}/task-state`)).json();
-    assert.equal(finished.state.goal.status, "complete"); assert.equal(finished.state.plan[0].status, "completed");
+    assert.equal(calls.length, 4);
+    assert.match(JSON.stringify(calls[2].messages.filter((message) => message.role === "system")), /Policy-fixture-after/);
     const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
     const policyFile = checkpoint.workspace?.find((entry) => entry.path === "/workspace/agent/AGENTS.md");
     assert(policyFile?.type === "file" && typeof policyFile.content === "string"); assert.match(Buffer.from(policyFile.content, "base64").toString("utf8"), /Policy-fixture-after/);
@@ -862,7 +856,7 @@ test("tool execution failures keep business reasons in the stream, model step an
   }
 });
 
-test("chat uses persisted native and platform tool settings; denied calls create no mutation and persist errors", async () => {
+test("chat normalizes legacy native/task settings while disabled platform calls still persist errors", async () => {
   const calls: Array<{ tools?: { function: { name: string } }[]; messages: { role: string; content: unknown }[] }> = [];
   const provider = createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/v1/models") {
@@ -886,7 +880,9 @@ test("chat uses persisted native and platform tool settings; denied calls create
   process.env.OPENROUTER_API_KEY = "tool-settings-test";
   process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
   try {
-    assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: ["create_table", "update_plan", "bash", "read"] } }, "PATCH")).status, 200);
+    // Simulate an untouched old profile rather than the already-normalizing PATCH.
+    const [profile] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentUserId));
+    await db.update(agentProfile).set({ persona: { ...profile.persona, disabledTools: ["create_table", "update_plan", "bash", "read"] } }).where(eq(agentProfile.id, profile.id));
     const beforeTables = await (await req("/tables")).json();
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "disabled-tools-user", role: "user", parts: [{ type: "text", text: "确认工具开关" }] }] });
@@ -895,15 +891,14 @@ test("chat uses persisted native and platform tool settings; denied calls create
     assert(!stream.includes('"type":"data-table-mutated"'));
     assert.match(stream, /tool-output-error/);
     const sent = calls[0].tools?.map(item => item.function.name) ?? [];
-    for (const id of ["create_table", "update_plan", "bash", "read"]) assert(!sent.includes(id), `${id} disabled in real chat provider catalog`);
-    assert(sent.includes("get_table")); assert(sent.includes("get_task_state"));
+    for (const id of ["create_table", "update_plan", "create_goal", "update_goal", "get_task_state"]) assert(!sent.includes(id), `${id} absent from real chat provider catalog`);
+    for (const id of ["get_table", "bash", "read", "askUserQuestions"]) assert(sent.includes(id));
     assert.match(JSON.stringify(calls[1].messages), /Tool create_table not found/);
     assert.deepEqual(await (await req("/tables")).json(), beforeTables);
-    const [runtime] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
-    assert.deepEqual(runtime.plan, []);
     const history = await (await req(`/threads/${thread.id}/messages`)).json();
     const parts = history.messages.flatMap((message: { content: { parts: Array<{type:string;state?:string}> } }) => message.content.parts);
-    assert.equal(parts.filter((part: {type:string;state?:string}) => ["tool-create_table", "tool-update_plan"].includes(part.type) && part.state === "output-error").length, 2);
+    assert.equal(parts.filter((part: {type:string;state?:string}) => part.type === "tool-create_table" && part.state === "output-error").length, 1);
+    assert.match(JSON.stringify(calls[1].messages), /Tool update_plan not found/, "retired tools have no execution implementation");
   } finally {
     await req(`/members/agents/${agentId}`, { persona: { disabledTools: [] } }, "PATCH");
     process.env.OPENROUTER_API_KEY = ""; process.env.OPENROUTER_BASE_URL = "";

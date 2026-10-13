@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cpu, Wrench, Loader2, RefreshCw, FileText, Terminal, Search, MessageCircle, Table2, ClipboardList, ChartColumn, Zap, ListChecks, BookOpen, Users, Clock } from "lucide-react";
+import { Wrench, Loader2, RefreshCw, Table2, ClipboardList, ChartColumn, Zap, BookOpen } from "lucide-react";
 import type { AgentToolCatalogItem } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import type { HarnessId } from "@/lib/harness";
@@ -11,10 +11,9 @@ import { Badge } from "@tabdo/ui/components/badge";
 import { useTranslation } from "react-i18next";
 import { groupAgentTools, setAgentToolGroup } from "./tool-groups";
 
-const capabilityIcons: Record<string, typeof Cpu> = {
-  files: FileText, commands: Terminal, search: Search, interaction: MessageCircle,
+const capabilityIcons: Record<string, typeof Wrench> = {
   tables: Table2, forms: ClipboardList, reports: ChartColumn, automations: Zap,
-  plans: ListChecks, skills: BookOpen, coordination: Users, scheduling: Clock, other: Wrench,
+  skills: BookOpen, other: Wrench,
 };
 
 export function AgentToolFields({ harness, disabledTools, onChange, disabled }: {
@@ -47,13 +46,10 @@ export function AgentToolFields({ harness, disabledTools, onChange, disabled }: 
     {loading ? <FieldDescription role="status" className="flex items-center gap-2"><Loader2 className="size-4 animate-spin" />{t("loadingTools")}</FieldDescription>
       : error ? <Field className="gap-2"><FieldError>{error}</FieldError><Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setRetry(value => value + 1)}><RefreshCw data-icon="inline-start" />{t("retry")}</Button></Field>
       : groups.length === 0 ? <FieldDescription>{t("noMatchingTools")}</FieldDescription>
-      : <FieldGroup className="gap-5">{(["builtin", "platform"] as const).map(source => {
-        const sourceGroups = groups.filter(group => group.source === source);
-        if (!sourceGroups.length) return null;
-        return <FieldSet key={source} className="gap-0" data-tool-source={source}>
-          <FieldLegend variant="label" className="flex items-center gap-2">{source === "builtin" ? <Cpu className="size-4" /> : <Wrench className="size-4" />}{source === "builtin" ? t("harnessBuiltin") : t("platformTools")}</FieldLegend>
+      : <FieldSet className="gap-0" data-tool-source="platform">
+          <FieldLegend variant="label" className="flex items-center gap-2"><Wrench className="size-4" />{t("platformTools")}</FieldLegend>
           <FieldGroup className="gap-0 divide-y divide-border">
-            {sourceGroups.map(group => {
+            {groups.map(group => {
               const Icon = capabilityIcons[group.category] ?? Wrench;
               const enabledCount = group.tools.filter(tool => !disabledTools.includes(tool.id)).length;
               const mixed = enabledCount > 0 && enabledCount < group.tools.length;
@@ -75,7 +71,6 @@ export function AgentToolFields({ harness, disabledTools, onChange, disabled }: 
               </div>;
             })}
           </FieldGroup>
-        </FieldSet>;
-      })}</FieldGroup>}
+        </FieldSet>}
   </FieldGroup>;
 }

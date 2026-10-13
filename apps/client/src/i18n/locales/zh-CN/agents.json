@@ -99,9 +99,7 @@
   "noMatchingTools": "没有匹配的工具。",
   "builtin": "内置",
   "workspace": "工作区",
-  "builtinDesc": "由所选 Harness 执行文件、命令等操作。",
   "workspaceDesc": "访问工作区的表格、表单、报告与自动化，遵循当前成员权限。",
-  "harnessBuiltin": "Harness 内置工具",
   "platformTools": "平台工具",
   "enabledCount": "已开启 {{enabled}}/{{total}}",
   "shape": "形状",
@@ -136,37 +134,9 @@
       "name": "自动化",
       "description": "配置规则与查看执行结果。"
     },
-    "plans": {
-      "name": "计划与目标",
-      "description": "维护工作步骤、目标与进度。"
-    },
     "skills": {
       "name": "技能读取",
       "description": "按需读取已启用的工作方法。"
-    },
-    "files": {
-      "name": "文件操作",
-      "description": "读取、创建和编辑工作区文件。"
-    },
-    "commands": {
-      "name": "命令执行",
-      "description": "执行命令与管理工作环境。"
-    },
-    "search": {
-      "name": "检索",
-      "description": "查找文件、内容与外部资料。"
-    },
-    "interaction": {
-      "name": "交互",
-      "description": "向用户提问与发送通知。"
-    },
-    "coordination": {
-      "name": "任务协作",
-      "description": "管理任务、工作计划与协作。"
-    },
-    "scheduling": {
-      "name": "定时操作",
-      "description": "安排、查看与取消定时任务。"
     },
     "other": {
       "name": "其他能力",

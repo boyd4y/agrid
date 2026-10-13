@@ -123,7 +123,7 @@ membersRoute.post("/agents", async (c) => {
   if (persona.defaultHarness !== "pi" && persona.runtime === "local") return c.json({ error: "本地模式目前只支持 Pi；Codex 和 Claude Code 请使用 Sandbox" }, 400);
   if (persona.defaultHarness !== "pi" && ["openrouter/free", "auto"].includes(persona.defaultModel)) return c.json({ error: "请选择此 Harness 的原生模型或 Harness 默认模型" }, 400);
 
-  validateDisabledTools(persona.defaultHarness, persona.disabledTools);
+  persona.disabledTools = validateDisabledTools(persona.defaultHarness, persona.disabledTools);
 
   await db.transaction(async (tx) => {
     await tx.insert(user).values({
@@ -255,7 +255,7 @@ membersRoute.patch("/agents/:memberId", async (c) => {
   if (lockedHarness !== "pi" && nextPersona.runtime === "local") return c.json({ error: "本地模式目前只支持 Pi；Codex 和 Claude Code 请使用 Sandbox" }, 400);
   if (lockedHarness !== "pi" && ["openrouter/free", "auto"].includes(nextPersona.defaultModel ?? "")) return c.json({ error: "请选择此 Harness 的原生模型或 Harness 默认模型" }, 400);
 
-  validateDisabledTools(lockedHarness, nextPersona.disabledTools);
+  nextPersona.disabledTools = validateDisabledTools(lockedHarness, nextPersona.disabledTools);
 
   await db.transaction(async (tx) => {
   if (body.name || body.image !== undefined) {

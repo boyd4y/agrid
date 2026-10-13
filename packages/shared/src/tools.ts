@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Stable wire IDs. Native IDs are the installed official adapter declarations. */
+/** Configurable platform wire IDs. Native tool availability belongs to the Harness. */
 export const PLATFORM_TOOL_IDS = [
   "batch_add_rows", "batch_update_rows", "batch_delete_rows",
   "batch_add_columns", "batch_update_columns", "batch_delete_columns",
@@ -59,13 +59,10 @@ export const PLATFORM_TOOL_IDS = [
   "delete_view",
   "create_grid_view",
   "create_board_view",
-  "get_task_state",
-  "create_goal",
-  "update_goal",
-  "update_plan",
   "read_skill"
 ] as const;
-export const BUILTIN_TOOL_IDS = [
+// Accepted only to normalize previously saved configurations, never selectable.
+const legacyBuiltinToolIds = [
   "Agent",
   "Artifact",
   "CronCreate",
@@ -118,7 +115,11 @@ export const BUILTIN_TOOL_IDS = [
   "webSearch",
   "write"
 ] as const;
-export const DISABLED_TOOLS_SCHEMA = z.array(z.enum([...PLATFORM_TOOL_IDS, ...BUILTIN_TOOL_IDS])).max(160).refine(ids => new Set(ids).size === ids.length, "工具名称不能重复");
+const retiredTaskToolIds = ["get_task_state", "create_goal", "update_goal", "update_plan"] as const;
+const platformToolIds = new Set<string>(PLATFORM_TOOL_IDS);
+export const DISABLED_TOOLS_SCHEMA = z.array(z.enum([...PLATFORM_TOOL_IDS, ...legacyBuiltinToolIds, ...retiredTaskToolIds]))
+  .max(160).refine(ids => new Set(ids).size === ids.length, "工具名称不能重复")
+  .transform(ids => ids.filter((id): id is (typeof PLATFORM_TOOL_IDS)[number] => platformToolIds.has(id)));
 export type AgentToolCatalogItem = {
   id: string;
   name: string;

@@ -29,13 +29,3 @@ export type AgentRunSummary = {
   pendingQuestionCallIds?: string[];
 };
 export type AgentRunEvent = { id: string; runId: string; activity: ChatActivity; createdAt: string };
-
-export type AgentPlanStep = { text: string; status: "pending" | "in_progress" | "completed" };
-export type AgentGoal = { objective: string; status: "active" | "paused" | "complete" | "cancelled"; progress: string };
-/** Public projection. Native resume state, sandbox identifiers and files stay private. */
-export type AgentTaskState = {
-  plan: AgentPlanStep[];
-  goal: AgentGoal | null;
-  mode: "local" | "sandbox";
-  updatedAt: string;
-};

@@ -29,7 +29,6 @@ import { createNativeChatStream } from "../harness/chat-stream.js";
 import { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease } from "../harness/store.js";
 import { beginNativeRun } from "../harness/runs.js";
 import { HTTPException } from "hono/http-exception";
-import { createTaskTools, taskInstructions } from "../harness/tasks.js";
 import { validateDisabledTools } from "../harness/tool-catalog.js";
 import { questionContinuation, resumeQuestionRun } from "../harness/questions.js";
 import type { NativeQuestionResultRequest } from "@tabdo/shared";
@@ -167,10 +166,10 @@ chatRoute.post("/", async (c) => {
     const { id: userMessageId, ...userContent } = lastUser ?? { id: "", role: "user", parts: [] };
     const run = resumed?.run ?? await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
     return createUIMessageStreamResponse({ stream: createNativeChatStream({
-      actor, lease, record, run, harness, modelId, piModel, instructions: `${system}\n${taskInstructions(record)}`, agentsDocument,
+      actor, lease, record, run, harness, modelId, piModel, instructions: system, agentsDocument,
       // The claimed Run owns cancellation. Closing the browser detaches its
       // projection; explicit stop is persisted through the Run cancel API.
-      tools: { ...tools, ...createTaskTools(record) }, disabledTools, skills: skillContext.skills, prompt: lastText, messages: resumed?.messages ?? messages,
+      tools, disabledTools, skills: skillContext.skills, prompt: lastText, messages: resumed?.messages ?? messages,
       toolResultContinuations: resumed?.toolResultContinuations,
       // A cancelled submission before the stream starts may have raced claim.
       // Once streaming starts, HTTP disconnects no longer cancel this Run.

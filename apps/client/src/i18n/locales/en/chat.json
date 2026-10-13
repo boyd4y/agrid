@@ -119,10 +119,6 @@
     "update_automation": "Update automation",
     "list_automations": "List automations",
     "open_preview": "Open preview",
-    "create_goal": "Save goal",
-    "update_goal": "Update goal",
-    "update_plan": "Update plan",
-    "get_task_state": "Read task progress",
     "batch_add_rows": "Adding records in batch",
     "batch_update_rows": "Updating records in batch",
     "batch_delete_rows": "Deleting records in batch",
@@ -132,21 +128,6 @@
     "batch_set_relations": "Setting relations in batch",
     "batch_add_relations": "Adding relations in batch",
     "batch_remove_relations": "Removing relations in batch"
-  },
-  "task": {
-    "title": "Plan & goals",
-    "viewAria": "View plan and goals",
-    "refreshAria": "Refresh task state",
-    "loadFailed": "Could not load task state",
-    "empty": "No plan or goals yet. Plans for complex tasks will appear here.",
-    "persistHint": "Plans persist across turns. Goal status follows real task progress.",
-    "goalActive": "Active",
-    "goalPaused": "Paused",
-    "goalComplete": "Complete",
-    "goalCancelled": "Cancelled",
-    "stepCompleted": "Completed",
-    "stepInProgress": "In progress",
-    "stepPending": "Pending"
   },
   "resource": {
     "report": "Chat for this report",

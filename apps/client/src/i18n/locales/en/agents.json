@@ -99,9 +99,7 @@
   "noMatchingTools": "No matching tools.",
   "builtin": "Built-in",
   "workspace": "Workspace",
-  "builtinDesc": "Harness runs files, commands, and similar actions.",
   "workspaceDesc": "Access workspace tables, forms, reports, and automations with member permissions.",
-  "harnessBuiltin": "Harness built-in tools",
   "platformTools": "Platform tools",
   "enabledCount": "On {{enabled}}/{{total}}",
   "shape": "Shape",
@@ -136,37 +134,9 @@
       "name": "Automations",
       "description": "Configure rules and review results."
     },
-    "plans": {
-      "name": "Plans and goals",
-      "description": "Maintain steps, goals, and progress."
-    },
     "skills": {
       "name": "Skill reading",
       "description": "Read enabled working methods on demand."
-    },
-    "files": {
-      "name": "Files",
-      "description": "Read, create, and edit workspace files."
-    },
-    "commands": {
-      "name": "Commands",
-      "description": "Run commands and manage the working environment."
-    },
-    "search": {
-      "name": "Search",
-      "description": "Find files, content, and external information."
-    },
-    "interaction": {
-      "name": "Interaction",
-      "description": "Ask users questions and send notifications."
-    },
-    "coordination": {
-      "name": "Task collaboration",
-      "description": "Manage tasks, plans, and collaboration."
-    },
-    "scheduling": {
-      "name": "Scheduled actions",
-      "description": "Schedule, review, and cancel recurring tasks."
     },
     "other": {
       "name": "Other capabilities",

@@ -76,9 +76,9 @@ without replacing the SDK's native execution loop.
 | 原生执行与会话历史 | `HarnessAgent` / 官方 adapter 管理执行循环；只发送本轮输入，不将 UI 全量历史重新当成模型输入。 |
 | 恢复、停止与释放 | SDK `createSession`、`detach`、`stop`、`destroy` 与 opaque resume state；已验证本地跨进程恢复待回答问题。Run 的展示状态不作为恢复前置。 |
 | Skill 包 | `skills` 原生传入 name/description/content/files；引用文件和脚本随包物化；正文按需读取，与 tool 独立。下一轮读取最新已启用分配。 |
-| Tool 与开关 | 官方 `tool` / `inputSchema` / host execute；`inactiveTools`控制平台工具和适配器支持关闭的原生工具。9项batch入口共享schema；`askUserQuestions`三平台目录一致可见。 |
+| Tool 与开关 | 官方 `tool` / `inputSchema` / host execute；平台目录与 `inactiveTools` 只控制平台工具，不提供原生工具开关。9项batch入口共享schema；原生 `askUserQuestions` 保留标准答案续接。 |
 | 用户询问 | 官方 canonical `askUserQuestions`、客户端 `addResult`、标准 tool-result continuation；支持单选、多选、自由文字、部分回答和拒绝。 |
-| Plan / Goal | 作为独立平台工具在原生执行环境保存业务任务进展；不把计划状态当成SDK执行暂停/结束条件。原生适配器的规划工具仍由自身执行。 |
+| Plan / Goal | 移除平台自建计划/目标工具、指令与任务状态接口；规划仅取决于 Harness 原生支持，不添加平台拦截。旧工具配置归一化兼容，历史数据库数据保留。 |
 | 进度、正文与错误 | SDK stream / step / tool / finish原生事件投影到assistant-ui；保留真实错误和输出上限，不伪造助手总结或固定继续口令。 |
 | 本地与Sandbox | Pi使用官方JustBash隔离文件系统；Codex/Claude使用官方Vercel Sandbox和原生adapter。真实远程执行仍需独立验证，不影响本地验证。 |
 | 附件输入 | 当前三adapter实际均拒绝ImagePart/FilePart。统一预检返回具体版本限制；关闭默认AI SDK上传adapter，避免UI宣称支持而丢弃输入。 |

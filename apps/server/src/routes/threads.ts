@@ -8,7 +8,6 @@ import { chatThreads, agentThreadLeases, agentRuntimeSessions } from "../db/sche
 import { resolveChatContext } from "../chat/context.js";
 import { loadMessages, requireThread, threadScope } from "../chat/store.js";
 import { listNativeRuns, listNativeRunEvents, requestRunCancellation } from "../harness/runs.js";
-import { getThreadTaskState } from "../harness/tasks.js";
 import { discardQuestionSandbox } from "../harness/question-sandboxes.js";
 
 export const threadsRoute = new Hono<{ Variables: { actor: Actor } }>();
@@ -81,7 +80,6 @@ threadsRoute.post("/:id/title", async (c) => {
 
 threadsRoute.get("/:id/messages", async (c) => c.json(await loadMessages(id(c.req.param("id")), c.get("actor"))));
 threadsRoute.get("/:id/runs", async (c) => c.json({ runs: await listNativeRuns(id(c.req.param("id")), c.get("actor")) }));
-threadsRoute.get("/:id/task-state", async (c) => c.json({ state: await getThreadTaskState(id(c.req.param("id")), c.get("actor")) }));
 threadsRoute.get("/:id/runs/:runId/events", async (c) => c.json({ events: await listNativeRunEvents(id(c.req.param("id")), id(c.req.param("runId")), c.get("actor")) }));
 threadsRoute.post("/:id/runs/:runId/cancel", async (c) => c.json(await requestRunCancellation(id(c.req.param("id")), id(c.req.param("runId")), c.get("actor"))));
 threadsRoute.post("/:id/messages", async (c) => {

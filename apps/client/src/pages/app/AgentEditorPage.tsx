@@ -30,7 +30,6 @@ export function AgentEditorPage() {
   const [image, setImage] = useState<string | null>(null), [avatarProcessing, setAvatarProcessing] = useState(false);
   const selectedSkills = skills.filter((skill) => skill.enabled && skillNames.includes(skill.name));
   const savingRef = useRef(false);
-  const toolDrafts = useRef<Partial<Record<HarnessId, string[]>>>({});
   const [initialConfiguration, setInitialConfiguration] = useState("");
   const [section, setSection] = useState("basic");
   const formRef = useRef<HTMLFormElement>(null);
@@ -39,16 +38,7 @@ export function AgentEditorPage() {
     if (patch.image !== undefined) setImage(patch.image);
     if (patch.name !== undefined) setAgentName(patch.name);
     if (patch.persona !== undefined) setPersona(patch.persona);
-    if (patch.harness !== undefined) {
-      if (patch.harness !== harness) {
-        toolDrafts.current[harness] = disabledTools;
-        const platformIds = new Set<string>(PLATFORM_TOOL_IDS);
-        const platformDraft = disabledTools.filter(id => platformIds.has(id));
-        const nativeDraft = (toolDrafts.current[patch.harness] ?? []).filter(id => !platformIds.has(id));
-        setDisabledTools([...new Set([...platformDraft, ...nativeDraft])].sort());
-      }
-      setHarness(patch.harness);
-    }
+    if (patch.harness !== undefined) setHarness(patch.harness);
     if (patch.model !== undefined) setModel(patch.model);
     if (patch.runtime !== undefined) setRuntime(patch.runtime);
   };
@@ -67,13 +57,15 @@ export function AgentEditorPage() {
       setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "openrouter/free");
       setRuntime(agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"));
       const selectedNames = library.skills.filter((s) => s.enabled && (!agent?.agent?.persona?.skillNames || agent.agent.persona.skillNames.includes(s.name))).map((s) => s.name);
-      setSkillNames(selectedNames); toolDrafts.current = {}; setDisabledTools(agent?.agent?.persona?.disabledTools ?? []);
+      const platformIds = new Set<string>(PLATFORM_TOOL_IDS);
+      const selectedDisabledTools = (agent?.agent?.persona?.disabledTools ?? []).filter(id => platformIds.has(id));
+      setSkillNames(selectedNames); setDisabledTools(selectedDisabledTools);
       setInitialConfiguration(JSON.stringify({ name: (agent?.name ?? "").trim(), image: agent?.image ?? null, persona: {
         systemPrompt: (agent?.agent?.persona?.systemPrompt ?? t("defaultPersona")).trim(),
         defaultHarness: selected,
         defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "openrouter/free").trim(),
         runtime: agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"),
-        skillNames: selectedNames, disabledTools: [...(agent?.agent?.persona?.disabledTools ?? [])].sort(),
+        skillNames: selectedNames, disabledTools: [...selectedDisabledTools].sort(),
       }}));setReady(true);
     }).catch((e: Error) => { if (!cancelled) setCreateError(e.message); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };

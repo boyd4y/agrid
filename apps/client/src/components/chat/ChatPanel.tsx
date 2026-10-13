@@ -1,7 +1,6 @@
 import { FloatingAssistantFrame } from "./FloatingAssistantFrame";
 import { FloatingThreadControls } from "./FloatingThreadControls";
 import { ChatActivityContext, ChatRunStatus } from "./ChatRunStatus";
-import { AgentTaskPopover } from "./AgentTaskPopover";
 import { ChatRunsProvider, ChatRunsContext, isActiveRun, PersistentRunCancel } from "./ChatRuns";
 import type { ChatActivity } from "@tabdo/shared";
 import { toast } from "sonner";
@@ -555,7 +554,6 @@ function ScopedChatPanel({
                     />
                   ) : null}
                 </div>
-                {!noAgents && <AgentTaskPopover />}
                 {!isHome && (
                   <FloatingThreadControls
                     showThreads={showFloatingThreads}
