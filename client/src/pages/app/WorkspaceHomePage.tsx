@@ -9,11 +9,13 @@ import type { AppOutletContext } from "@/layouts/AppShell";
 import { api } from "@/lib/api";
 import type { FullTable } from "@/types/table";
 import { AppPageHeader } from "@/components/shell/AppPage";
+import { useTranslation } from "react-i18next";
 
 export function WorkspaceHomePage() {
+  const { t } = useTranslation(["app", "errors"]);
   const { tables, notifyTableMutated, getTableRefreshToken } = useOutletContext<AppOutletContext>();
   const previewPanelRef = usePanelRef();
-  const [previewOpen, setPreviewOpen] = useState(true);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
   const [activeKind, setActiveKind] = useState<PreviewSlotKind | null>(null);
   const [cache, setCache] = useState<Record<string, FullTable>>({});
@@ -32,11 +34,11 @@ export function WorkspaceHomePage() {
       const full = await api.getTable(id);
       if (versions.current[id] === version) setCache((previous) => ({ ...previous, [id]: { ...full, rows: full.rows ?? [], rowCount: full.rowCount ?? 0 } }));
     } catch (error) {
-      if (versions.current[id] === version) setErrors((previous) => ({ ...previous, [id]: error instanceof Error ? error.message : "加载失败" }));
+      if (versions.current[id] === version) setErrors((previous) => ({ ...previous, [id]: error instanceof Error ? error.message : t("errors:loadFailed") }));
     } finally {
       if (versions.current[id] === version) setLoading((previous) => ({ ...previous, [id]: false }));
     }
-  }, []);
+  }, [t]);
 
   // One request per dataset, even when several open Tabs use it. Reads never notify writes.
   const refreshSignature = JSON.stringify([...new Set(tabs.map((tab) => tab.tableId))].sort().map((id) => [id, getTableRefreshToken(id)]));
@@ -62,10 +64,10 @@ export function WorkspaceHomePage() {
     creating.current = true;
     setCreateError(null);
     try {
-      const table = await api.createTable(`新表格 ${tables.length + 1}`);
+      const table = await api.createTable(t("tables.newTableName", { n: tables.length + 1 }));
       openTab({ kind: "table", tableId: table.id });
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "创建表格失败");
+      setCreateError(error instanceof Error ? error.message : t("errors:createTableFailed"));
     } finally { creating.current = false; }
   };
 
@@ -83,8 +85,8 @@ export function WorkspaceHomePage() {
 
   useEffect(() => {
     const listener = (event: Event) => handleOpenPreview((event as CustomEvent<OpenPreviewPayload>).detail ?? {});
-    window.addEventListener("agrid:open-preview", listener);
-    return () => window.removeEventListener("agrid:open-preview", listener);
+    window.addEventListener("tabdo:open-preview", listener);
+    return () => window.removeEventListener("tabdo:open-preview", listener);
   }, [handleOpenPreview]);
 
   const contexts: Record<string, PreviewSlotContext> = {};
@@ -99,7 +101,7 @@ export function WorkspaceHomePage() {
   };
 
   return <div className="flex h-full min-h-0 min-w-0 w-full flex-col bg-background" data-testid="workspace-home-split" data-preview-open={previewOpen ? "true" : "false"}>
-    <AppPageHeader page="ai" description="与智能体对话，创建表格、整理数据和配置自动化。" />
+    <AppPageHeader page="ai" description={t("ai.description")} />
     <div className="min-h-0 min-w-0 flex-1">
       <ResizablePanelGroup orientation="horizontal" id="workspace-home" className="h-full min-h-0 w-full">
         <ResizablePanel id="workspace-chat" defaultSize="50%" minSize="22%" className="flex h-full min-h-0 flex-col">
