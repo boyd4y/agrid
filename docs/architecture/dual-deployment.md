@@ -64,6 +64,8 @@ apps/server/src/storage/     # 上传、元信息、文件 namespace 与权限
 
 供应商库为 optional peer，并在包开发时安装。使用某适配器的应用显式安装对应 SDK；CF 的默认入口和 CF 子路径不导入 BullMQ、AWS SDK、Node 文件系统或宿主 Pi。
 
+共同平台采用渐进提取：第一批进入 `packages/platform` 的是已在 Node/workerd 验证的 PG resource factory、Better Auth factory、唯一 schema 和私有检查点数据契约；通过 `@tabdo/platform/database`、`/auth`、`/schema`、`/checkpoints` 导出。server 原路径暂作兼容 re-export，环境解析、默认池、邮件发送及实际工作区保存/恢复仍由 Node 装配提供。默认 platform index 只导出类型。业务命令、Run repository 与 Hono app 尚未整体迁移，不能因建立了包就标记整个平台为 edge-ready。
+
 ## 4. 通用契约与业务边界
 
 ### Queue
@@ -169,7 +171,8 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 - [x] 架构修订：按能力包 + 包内 adapters，补充基础设施与业务解耦边界、依赖图和新实施顺序。
 - [x] 按修订迁移 queue/storage 与包内 adapters；业务消息协议移至 shared、文件 namespace 留在 server；移除旧 core/runtime 包，更新 exports、optional peers、开发构建、Docker 与回归。
 - [x] 第一批平台工厂：HTTP app 与 Node 启停分离；Better Auth 和 PG resource 接收显式配置，当前 Node 入口已接入。
-- [ ] 平台请求作用域资源、业务执行服务与独立 platform 包提取。
+- [x] 第一批独立 platform 包：共同 DB/auth 工厂、schema 和私有 checkpoint 契约；Node/workerd 两个实际调用者及兼容导出已接入。
+- [ ] 平台业务请求作用域依赖注入、命令/Run repository 与 Hono 服务继续提取。
 - [x] Harness/Sandbox 能力包：Pi/Codex/Claude SDK 配置与 local/Vercel 生命周期进入包内 adapters；Tabdo 环境解析、人设、业务工具、权限、工作区 schema 与限额继续留在平台装配层。
 - [x] 平台嵌入式 Run 执行与 HTTP 投影分离；后台直接等待相同执行入口和检查点清理，关闭输出订阅不取消 Run。
 - [ ] 独立 Harness runner、Sandbox/Execution 实现与平台跨实例续接。
@@ -187,6 +190,8 @@ Harness/Sandbox 实现见 [harness](../../packages/harness/README.md)、[sandbox
 执行入口阶段：Harness 44 项、聊天 31 项回归通过。新增真实原生工具/PG 用例确认无输出端口的执行返回时最终消息、检查点与租约释放已完成；读流取消与关闭输出端口只断开投影，执行继续且下一轮不重放工具。输出端口目前是临时 UI 投影，持久 stream cursor 与独立 runner 仍待实施。
 
 Edge 工厂阶段：workerd + 本地 Hyperdrive binding + 隔离 PG 的真实 Better Auth HTTP 验收通过，包含注册、8 个并发请求的签名配置隔离、退出登录、新请求观察撤销及每请求连接释放。只使用共用工厂与 schema，不加载 Node 启动/global DB/auth。远程 Hyperdrive 事务池/缓存和完整产品入口仍待验收。
+
+platform 包阶段：上述实现进入 [platform](../../packages/platform/README.md)，Node 装配和 workerd 夹具直接调用包的公开 subpaths；server schema/factory 仅兼容导出。Drizzle 从原 schema 与兼容入口导出同样的 37 张表 DDL，无新增迁移。全仓 build/typecheck、冻结锁文件离线安装、141 项服务端回归与 workerd 工厂用例通过。全回归同时修复旧夹具缺少真实自动化创建者、空智能体动作及对字段唯一性旧错误的期待，没有放宽生产权限或唯一性校验。
 
 ## 12. 调研依据
 

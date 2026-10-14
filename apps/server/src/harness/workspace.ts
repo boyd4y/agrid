@@ -1,18 +1,8 @@
 import { InMemoryFs } from "just-bash";
-import { z } from "zod";
+import { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/platform/checkpoints";
+export { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/platform/checkpoints";
 import { posix } from "node:path";
 
-const snapshotEntry = z
-  .object({
-    path: z.string().startsWith("/").max(4096),
-    type: z.enum(["directory", "file", "symlink"]),
-    content: z.string().optional(),
-    target: z.string().optional(),
-    mode: z.number().int().min(0).max(0o7777),
-  })
-  .strict();
-export const workspaceSnapshotSchema = z.array(snapshotEntry).max(4000);
-export type WorkspaceSnapshot = z.infer<typeof workspaceSnapshotSchema>;
 const MAX_BYTES = 32 * 1024 * 1024;
 
 /** Only an isolated virtual filesystem is serialized, never the server's disk. */

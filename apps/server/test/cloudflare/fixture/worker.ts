@@ -1,6 +1,6 @@
 // Local factory contract test only. This is not the Tabdo product Worker entry.
-import { createDatabase } from "../../../src/db/factory.js";
-import { createPlatformAuth } from "../../../src/auth/factory.js";
+import { createDatabase } from "@tabdo/platform/database";
+import { createPlatformAuth } from "@tabdo/platform/auth";
 
 export default {
   async fetch(request, env) {

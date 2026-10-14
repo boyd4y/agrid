@@ -10,6 +10,8 @@
 
 嵌入式 Run 执行已与 HTTP 投影拆开：后台任务直接等待同一个执行入口完成检查点提交和租约释放，浏览器取消读流只断开投影。44 项 Harness 与 31 项聊天回归通过；独立 runner、持久输出订阅及 CF 协调仍未完成。
 
+首批 `@tabdo/platform` 已独立：PG/Better Auth 工厂、唯一 schema 与私有 checkpoint 契约，Node 装配和实际 workerd 夹具均通过包调用。workerd 真实验证请求资源关闭、Cookie 签名并发隔离和退出；Drizzle 导出 37 张表 DDL 与迁移前完全一致，141 项服务端回归通过。继续拆业务请求依赖、Run repository、runner 和 DO；当前只证明工厂可用，完整 CF 产品入口仍未完成。
+
 ## 已完成并提交
 
 - 一级列表统一最大宽度和分页。

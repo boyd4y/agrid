@@ -8,6 +8,7 @@ COPY packages/queue/package.json packages/queue/package.json
 COPY packages/storage/package.json packages/storage/package.json
 COPY packages/harness/package.json packages/harness/package.json
 COPY packages/sandbox/package.json packages/sandbox/package.json
+COPY packages/platform/package.json packages/platform/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/client/package.json apps/client/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
@@ -17,6 +18,7 @@ COPY packages/queue packages/queue
 COPY packages/storage packages/storage
 COPY packages/harness packages/harness
 COPY packages/sandbox packages/sandbox
+COPY packages/platform packages/platform
 COPY apps/server apps/server
 RUN pnpm --filter @tabdo/server... build
 

@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { nameConflictMessage } from "./name-errors.js";
 import "../load-env.js";
-import { createDatabase } from "./factory.js";
+import { createDatabase } from "@tabdo/platform/database";
 
 const DEV_DATABASE_URL =
   "postgresql://tableapp:tableapp@localhost:5432/tableapp";

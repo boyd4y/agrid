@@ -1,7 +1,7 @@
 import { db } from "../db/index.js";
 import { sendInviteEmail } from "./email.js";
 import { userKeyInvitationContext } from "./key-invitation-context.js";
-import { createPlatformAuth, DEV_SECRET, assertProductionAuthSecret } from "./factory.js";
+import { createPlatformAuth, DEV_SECRET, assertProductionAuthSecret } from "@tabdo/platform/auth";
 
 const secret = process.env.NODE_ENV === "production"
   ? assertProductionAuthSecret(process.env.BETTER_AUTH_SECRET)
