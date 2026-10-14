@@ -7,14 +7,16 @@ import type { BatchAddRowsInput } from "@tabdo/shared";
 if (!process.env.DATABASE_URL || !new URL(process.env.DATABASE_URL).pathname.endsWith("_agent_test"))
   throw new Error("Use a dedicated *_agent_test database");
 const { db, client } = await import("../../src/db/index.js");
-const { organization, rows, rowRelations, automationEvents, automationRuns, automationOutbox } = await import("../../src/db/schema.js");
+const { organization, user, member, rows, rowRelations, automationEvents, automationRuns, automationOutbox } = await import("../../src/db/schema.js");
 const commands = await import("../../src/commands/index.js");
-const org = randomUUID(), foreignOrg = randomUUID(), scope = { organizationId: org };
+const org = randomUUID(), foreignOrg = randomUUID(), owner = randomUUID(), scope = { organizationId: org, actorId: owner };
 let tableId: string, titleId: string, numberId: string, formulaId: string, relationId: string, targetTableId: string,
   targetId: string, inverseId: string, foreignTableId: string, foreignRowId: string;
 
 before(async () => {
   await db.insert(organization).values([{ id: org, name: "Batch row tests", slug: org }, { id: foreignOrg, name: "Foreign batch tests", slug: foreignOrg }]);
+  await db.insert(user).values({ id: owner, name: "Batch fixture owner", email: `${owner}@local.test` });
+  await db.insert(member).values({ id: randomUUID(), userId: owner, organizationId: org, role: "owner" });
   targetTableId = (await commands.createTable({ ...scope, name: "Batch targets" })).id;
   targetId = (await commands.addRow({ ...scope, tableId: targetTableId })).id;
   tableId = (await commands.createTable({ ...scope, name: "Batch source" })).id;
@@ -36,6 +38,7 @@ after(async () => {
   if (tableIds.length) await db.delete(automationRuns).where(inArray(automationRuns.tableId, tableIds));
   await db.delete(automationEvents).where(eq(automationEvents.organizationId, org));
   await db.delete(organization).where(inArray(organization.id, [org, foreignOrg]));
+  await db.delete(user).where(eq(user.id, owner));
   await client.end();
 });
 const savedRows = () => db.select().from(rows).where(eq(rows.tableId, tableId)).orderBy(asc(rows.sortOrder));

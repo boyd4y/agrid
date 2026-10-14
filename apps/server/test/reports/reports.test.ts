@@ -7,7 +7,7 @@ if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a d
 const { db, client } = await import("../../src/db/index.js");
 const { organization, member, session, user, rows, columns, automations } = await import("../../src/db/schema.js");
 const { auth } = await import("../../src/auth/index.js");
-const { createTable, addColumn, addRow, updateCell } = await import("../../src/commands/index.js");
+const { createTable, getTable, addColumn, addRow, updateCell } = await import("../../src/commands/index.js");
 const service = await import("../../src/reports/service.js");
 const crud = await import("../../src/automation/crud.js");
 const { reportsRoute, reportErrorResponse } = await import("../../src/routes/reports.js");
@@ -21,7 +21,7 @@ before(async () => {
   const response = await auth.handler(new Request("http://localhost:3001/api/auth/sign-up/email", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ email: `reports-${randomUUID()}@local.test`, password: "Test-report-password-123!", name: "Report Test" }) }));
   assert.equal(response.status, 200);userId = (await response.json()).user.id;cookie = response.headers.getSetCookie().map((cookie) => cookie.split(";")[0]).join("; ");
   await db.insert(organization).values([{ id: org, name: "Report workspace", slug: org }, { id: foreignOrg, name: "Foreign report workspace", slug: foreignOrg }]);
-  await db.insert(member).values({ id: randomUUID(), userId, organizationId: org, role: "owner" });
+  await db.insert(member).values([{ id: randomUUID(), userId, organizationId: org, role: "owner" }, { id: randomUUID(), userId, organizationId: foreignOrg, role: "owner" }]);
   await db.update(session).set({ activeOrganizationId: org }).where(eq(session.userId, userId));
   tableId = (await createTable({ organizationId: org, name: "Sales" })).id;
   foreignTableId = (await createTable({ organizationId: foreignOrg, name: "Secret" })).id;
@@ -84,11 +84,12 @@ test("deleted report fields fail visibly and deleting a report preserves source 
 });
 
 test("independent automation listing and direct detail never expose a foreign source", async () => {
-  const rule = await crud.createAutomation({ organizationId: org, tableId, name: "Independent automation", trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: groupId, value: "done" }] });
-  const foreign = await crud.createAutomation({ organizationId: foreignOrg, tableId: foreignTableId, name: "Secret rule", trigger: { type: "row_created" }, actions: [{ type: "run_agent" }] });
+  const rule = await crud.createAutomation({ actorId: userId, organizationId: org, tableId, name: "Independent automation", trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: groupId, value: "done" }] });
+  const foreignTitle = (await getTable({ organizationId: foreignOrg, tableId: foreignTableId })).columns[0].id;
+  const foreign = await crud.createAutomation({ actorId: userId, organizationId: foreignOrg, tableId: foreignTableId, name: "Secret rule", trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: foreignTitle, value: "Secret" }] });
   const list = await (await req("/automations")).json();assert.equal(list.rules.length, 1);assert.equal(list.rules[0].id, rule.id);assert.equal(list.rules[0].sourceName, "Sales");
   assert.equal((await req(`/automations/${rule.id}`)).status, 200);assert.equal((await req(`/automations/${foreign.id}`)).status, 404);
-  await assert.rejects(crud.createAutomation({ organizationId: org, tableId: foreignTableId, name: "Forged source", trigger: { type: "row_created" }, actions: [{ type: "run_agent" }] }), /表格不存在/);
+  await assert.rejects(crud.createAutomation({ actorId: userId, organizationId: org, tableId: foreignTableId, name: "Forged source", trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: foreignTitle, value: "Secret" }] }), /表格不存在/);
   await crud.deleteAutomation({ organizationId: org, automationId: rule.id });assert.equal((await req(`/automations/${rule.id}`)).status, 404);
   assert.equal((await (await req("/automations")).json()).rules.length, 0);
 });

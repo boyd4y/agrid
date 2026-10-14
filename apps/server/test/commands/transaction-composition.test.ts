@@ -43,7 +43,7 @@ async function snapshot() {
   };
 }
 /** A receipt failure must undo every earlier business write in the caller's transaction. */
-async function compose(runId: string, work: (tx: Transaction) => Promise<Record<string, unknown>>) {
+async function compose(runId: string, work: (tx: Transaction) => Promise<Record<string, unknown>>, repeatFailure?: RegExp) {
   const initial = await snapshot();
   const execute = (rollback = false) => db.transaction(async tx => {
     const result = await work(tx);
@@ -60,8 +60,8 @@ async function compose(runId: string, work: (tx: Transaction) => Promise<Record<
   assert.deepEqual(receipt[0].result, result);
   assert.equal((await db.select().from(automationRuns).where(eq(automationRuns.id, runId)))[0].nextStep, 1);
   const committed = await snapshot();
-  await assert.rejects(execute(), error => (error as { cause?: { code?: string } }).cause?.code === "23505");
-  assert.deepEqual(await snapshot(), committed, "an existing caller receipt rejects and rolls back the second set of business effects");
+  await assert.rejects(execute(), repeatFailure ?? (error => (error as { cause?: { code?: string } }).cause?.code === "23505"));
+  assert.deepEqual(await snapshot(), committed, "a duplicate receipt or business uniqueness conflict rejects and rolls back extra effects");
   return result;
 }
 
@@ -109,7 +109,7 @@ test("column batches, relation inverse creation/deletion and reorder use the cal
     await commands.batchDeleteColumns({ ...scope, columnIds: [added.columns[1].id] }, tx);
     await commands.deleteColumn({ ...scope, columnId: temporary.id }, tx);
     return { columnId: added.columns[0].id };
-  });
+  }, /同一表格已存在同名字段/);
   const saved = await commands.getTable({ ...scope, tableId: source.id });
   assert.equal(saved.columns.length, 2); assert.equal(saved.columns[0].id, result.columnId);
   assert.equal(saved.columns[0].name, "Renamed amount"); assert.equal(saved.columns[0].width, 240);

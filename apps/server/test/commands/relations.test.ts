@@ -7,6 +7,8 @@ if (!process.env.DATABASE_URL?.endsWith("_agent_test"))
 const { db, client } = await import("../../src/db/index.js");
 const {
   organization,
+  user,
+  member,
   columns,
   rowRelations,
   rows,
@@ -17,7 +19,7 @@ const {
 const cmds = await import("../../src/commands/index.js");
 const org = randomUUID(),
   foreignOrg = randomUUID();
-const scope = { organizationId: org };
+const owner = randomUUID(), scope = { organizationId: org, actorId: owner };
 let customers: string,
   orders: string,
   foreign: string,
@@ -37,6 +39,8 @@ before(async () => {
     { id: org, name: "Relation tests", slug: org },
     { id: foreignOrg, name: "Foreign", slug: foreignOrg },
   ]);
+  await db.insert(user).values({ id: owner, name: "Relation fixture owner", email: `${owner}@local.test` });
+  await db.insert(member).values({ id: randomUUID(), userId: owner, organizationId: org, role: "owner" });
   customers = (await cmds.createTable({ ...scope, name: "客户" })).id;
   orders = (await cmds.createTable({ ...scope, name: "订单" })).id;
   foreign = (
@@ -129,6 +133,7 @@ before(async () => {
 after(async () => {
   await db.delete(organization).where(eq(organization.id, org));
   await db.delete(organization).where(eq(organization.id, foreignOrg));
+  await db.delete(user).where(eq(user.id, owner));
   await client.end();
 });
 
