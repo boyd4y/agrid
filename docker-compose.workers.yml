@@ -1,5 +1,7 @@
 # Run after `pnpm db:migrate`.
 # API and one background worker use the same image with different commands.
+# Production env contract and smoke checklist: docs/workers.md
+# Secrets must come from the host/Compose env, never a baked .env in the image.
 # docker compose -f docker-compose.yml -f docker-compose.workers.yml up -d --build
 services:
   worker:
@@ -16,6 +18,53 @@ services:
       DB_POOL_MAX: 4
       WORKER_CONCURRENCY: 8
       QUEUE_GLOBAL_CONCURRENCY: 32
+
+      # Required to start: auth is loaded by the worker import graph.
+      # Use the same random >=32-character secret as the API; no example values.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
+      APP_URL: ${APP_URL:-}
+
+      # Optional capabilities: run_agent needs its selected model provider,
+      # plus Vercel credentials for Codex/Claude Code or Pi sandbox mode.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
+      CODEX_MODEL: ${CODEX_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-}
+      PI_API_KEY: ${PI_API_KEY:-}
+      PI_BASE_URL: ${PI_BASE_URL:-}
+      PI_MODEL: ${PI_MODEL:-}
+      PI_CONTEXT_WINDOW: ${PI_CONTEXT_WINDOW:-}
+      PI_MAX_OUTPUT_TOKENS: ${PI_MAX_OUTPUT_TOKENS:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      VERCEL_TOKEN: ${VERCEL_TOKEN:-}
+      VERCEL_TEAM_ID: ${VERCEL_TEAM_ID:-}
+      VERCEL_PROJECT_ID: ${VERCEL_PROJECT_ID:-}
+      VERCEL_OIDC_TOKEN: ${VERCEL_OIDC_TOKEN:-}
+
+      # Optional capabilities: AgentMail credential hydration requires the same
+      # encryption key as the API. Hook registration needs a public URL.
+      INTEGRATION_ENCRYPTION_KEY: ${INTEGRATION_ENCRYPTION_KEY:-}
+      WEBHOOK_PUBLIC_URL: ${WEBHOOK_PUBLIC_URL:-}
+
+      # File access must use the API's storage backend/bucket or shared volume.
+      # LOCAL_DIR is a container path; the default matches uploaded_files below.
+      FILE_STORAGE_DRIVER: ${FILE_STORAGE_DRIVER:-local}
+      FILE_STORAGE_LOCAL_DIR: ${FILE_STORAGE_LOCAL_DIR:-/app/data/files}
+      FILE_STORAGE_S3_ENDPOINT: ${FILE_STORAGE_S3_ENDPOINT:-}
+      FILE_STORAGE_S3_REGION: ${FILE_STORAGE_S3_REGION:-}
+      FILE_STORAGE_S3_BUCKET: ${FILE_STORAGE_S3_BUCKET:-}
+      FILE_STORAGE_S3_ACCESS_KEY_ID: ${FILE_STORAGE_S3_ACCESS_KEY_ID:-}
+      FILE_STORAGE_S3_SECRET_ACCESS_KEY: ${FILE_STORAGE_S3_SECRET_ACCESS_KEY:-}
+      FILE_STORAGE_S3_FORCE_PATH_STYLE: ${FILE_STORAGE_S3_FORCE_PATH_STYLE:-}
+      FILE_UPLOAD_MAX_BYTES: ${FILE_UPLOAD_MAX_BYTES:-}
+      FILE_UPLOAD_MAX_FILES: ${FILE_UPLOAD_MAX_FILES:-}
+      FILE_UPLOAD_MAX_REQUEST_BYTES: ${FILE_UPLOAD_MAX_REQUEST_BYTES:-}
     volumes:
       - uploaded_files:/app/data/files
     stop_grace_period: 25s
