@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { HarnessAgent, type HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
+import type { HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
+import { createHarnessAgent } from "@tabdo/harness/agent";
+import { createPiAdapter } from "@tabdo/harness/adapters/pi";
+import { createLocalSandboxAdapter } from "@tabdo/sandbox/adapters/local";
 import { HARNESS_V1_BUILTIN_TOOLS } from "@ai-sdk/harness";
-import { createPi } from "@ai-sdk/harness-pi";
-import { createJustBashNetworkSandboxSession } from "@ai-sdk/sandbox-just-bash";
 import { tool } from "ai";
 import { z } from "zod";
 import { restoreWorkspace, snapshotWorkspace, type WorkspaceSnapshot } from "../../src/harness/workspace.js";
@@ -14,9 +15,10 @@ assert(["produce", "consume"].includes(mode));assert(baseUrl.startsWith("http://
 const saved: { resumeState: HarnessAgentResumeSessionState; workspace: WorkspaceSnapshot } | undefined = mode === "consume" ? JSON.parse(await readFile(stateFile, "utf8")) : undefined;
 const fs = await restoreWorkspace(saved?.workspace);
 // Deliberately use official default reattach settings and no app/DB imports.
-const agent = new HarnessAgent({
-  harness: createPi({ auth: {}, thinkingLevel: "off", providers: { fixture: { baseUrl, apiKey: "fixture", api: "openai-completions", models: [{ id: "fixture", name: "Fixture", input: ["text"], reasoning: false, contextWindow: 262144, maxTokens: 1024, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] } } }),
-  model: "fixture/fixture", instructions: "Use the actual tools", stopWhen: [],
+const agent = createHarnessAgent(createPiAdapter({ providerId: "fixture", apiKey: "fixture", baseUrl,
+  model: { id: "fixture", contextWindow: 262144, maxTokens: 1024, reasoning: false }, maxTokensField: "max_tokens",
+}), {
+  instructions: "Use the actual tools", stopWhen: [],
   tools: {
     write_marker: tool({ inputSchema: z.object({}), execute: async () => {
       let previous = 0;try { previous = Number(await fs.readFile("/workspace/marker.txt")); } catch { /* initial workspace */ }
@@ -25,7 +27,7 @@ const agent = new HarnessAgent({
     askUserQuestions: HARNESS_V1_BUILTIN_TOOLS.askUserQuestions,
   },
 });
-const sandbox = await createJustBashNetworkSandboxSession({ fs, cwd: "/workspace", env: {}, sandboxId: `question-worker-${randomUUID()}` });
+const { session: sandbox } = await createLocalSandboxAdapter({ cwd: "/workspace", env: {}, createFilesystem: async () => fs }).create({ sandboxId: `question-worker-${randomUUID()}` });
 const session = await agent.createSession({ sessionId, sandboxSession: sandbox, ...(saved ? { resumeFrom: saved.resumeState } : {}) });
 if (mode === "produce") {
   const result = await agent.stream({ session, prompt: "Write marker exactly once and ask direction." });for await (const _part of result.stream) { /* native slice */ }

@@ -68,6 +68,8 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/queue --filter @tabdo/storage test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未设置这个变量时明确跳过。CF Queues 与 R2 使用 Wrangler 官方 `createTestHarness` 在真实本地 workerd 中独立验证，不访问远程资源。`pnpm -r --filter @tabdo/queue --filter @tabdo/storage build:fixture` 验证各自 edge bundle；fixtures 不是平台生产入口。业务消息与 UUID 文件 namespace 回归位于 shared/server 测试中。
 
+`pnpm -r --filter @tabdo/harness --filter @tabdo/sandbox test` 在独立包内验证真实 Pi 工具循环、原生历史和 JustBash 工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
+
 专用 PostgreSQL 数据库名称必须以 `_queue_test` 结尾，并先执行迁移；Redis 使用专用实例与 `agrid-queue-test` 前缀。下面使用本地已有测试实例，绝不能改成业务数据库/Redis：
 
 ```bash

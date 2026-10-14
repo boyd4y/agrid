@@ -6,6 +6,8 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/queue/package.json packages/queue/package.json
 COPY packages/storage/package.json packages/storage/package.json
+COPY packages/harness/package.json packages/harness/package.json
+COPY packages/sandbox/package.json packages/sandbox/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/client/package.json apps/client/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
@@ -13,6 +15,8 @@ RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
 COPY packages/queue packages/queue
 COPY packages/storage packages/storage
+COPY packages/harness packages/harness
+COPY packages/sandbox packages/sandbox
 COPY apps/server apps/server
 RUN pnpm --filter @tabdo/server... build
 

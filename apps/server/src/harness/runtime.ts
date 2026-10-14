@@ -1,30 +1,22 @@
-import { HarnessAgent, type HarnessAgentSettings } from "@ai-sdk/harness/agent";
-import type {
-  HarnessV1,
-  HarnessV1NetworkSandboxSession,
-  HarnessV1Skill,
-} from "@ai-sdk/harness";
-import { createPi } from "@ai-sdk/harness-pi";
-import { createCodex } from "@ai-sdk/harness-codex";
-import { createClaudeCode } from "@ai-sdk/harness-claude-code";
-import { createJustBashNetworkSandboxSession } from "@ai-sdk/sandbox-just-bash";
-import {
-  createVercelNetworkSandboxSession,
-  resumeVercelNetworkSandboxSession,
-} from "@ai-sdk/sandbox-vercel";
+import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
 import type { ToolSet } from "ai";
 import type { InMemoryFs } from "just-bash";
+import { createHarnessAgent } from "@tabdo/harness/agent";
+import { assertSandboxCompatibility, type HarnessAdapter, type NativeAgent, type NativeAgentSettings } from "@tabdo/harness";
+import { createPiAdapter } from "@tabdo/harness/adapters/pi";
+import { createCodexAdapter } from "@tabdo/harness/adapters/codex";
+import { createClaudeCodeAdapter } from "@tabdo/harness/adapters/claude-code";
+import { createLocalSandboxAdapter } from "@tabdo/sandbox/adapters/local";
+import { createVercelSandboxAdapter } from "@tabdo/sandbox/adapters/vercel";
 import { HTTPException } from "hono/http-exception";
 import { restoreWorkspace, type WorkspaceSnapshot } from "./workspace.js";
 import type { HarnessId } from "../ai/model.js";
 import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata, type PiCompletion } from "./model-metadata.js";
 import { validateDisabledTools } from "./tool-catalog.js";
-import { nativeQuestionTools } from "./question-tools.js";
+export type { NativeAgent, NativeAgentSettings };
 
 export type RuntimeMode = "local" | "sandbox";
 type Environment = Readonly<Record<string, string | undefined>>;
-export type NativeAgent = HarnessAgent<HarnessV1, ToolSet>;
-export type NativeAgentSettings = HarnessAgentSettings<HarnessV1, ToolSet>;
 const value = (env: Environment, name: string) =>
   env[name]?.trim() || undefined;
 
@@ -66,7 +58,7 @@ export function createNativeAgent(options: {
     });
   if (options.mode === "sandbox") sandboxCredentials(env);
 
-  let harness: HarnessV1, model: string | undefined;
+  let adapter: HarnessAdapter, model: string | undefined;
   if (options.harness === "pi") {
     const openRouterKey = value(env, "OPENROUTER_API_KEY"),
       directKey = value(env, "PI_API_KEY");
@@ -89,63 +81,19 @@ export function createNativeAgent(options: {
       });
     const maxTokens = options.piModel?.maxTokens ?? (Number(env.PI_MAX_OUTPUT_TOKENS) || DEFAULT_PI_OUTPUT_TOKENS);
     const maxTokensField = openRouterKey ? "max_tokens" : "max_completion_tokens";
-    harness = createPi({
-      // An explicit environment disables native subscription discovery on the server.
-      auth: {},
-      // Pending client tools use Pi's official parked-session path. Destructive
-      // suspension currently replaces their results with an SDK stop error.
+    adapter = createPiAdapter({
+      providerId: provider,
+      baseUrl: openRouterKey ? value(env, "OPENROUTER_BASE_URL") || "https://openrouter.ai/api/v1" : directBase!,
+      apiKey: openRouterKey || directKey!,
+      model: { id: modelId, reasoning: options.piModel?.reasoning ?? false,
+        contextWindow: options.piModel?.contextWindow ?? (Number(env.PI_CONTEXT_WINDOW) || 32768), maxTokens },
+      maxTokensField,
+      samplingParams: openRouterKey ? { reasoning: { enabled: false, effort: "none" } } : undefined,
+      // Current warm-session behavior is preserved until platform cold resume is wired.
       reattachInProcess: true,
-      thinkingLevel: "off",
-      extensionFactories: options.onPiMessageEnd || options.consumePiContinuationInput ? [(pi) => {
-        // continueStream resumes Pi with an empty input. Its official input hook
-        // submits the current follow-up as a native user message before execution.
-        if (options.consumePiContinuationInput) pi.on("input", (event) => {
-          if (event.text !== "") return { action: "continue" };
-          const text = options.consumePiContinuationInput!();
-          return text === undefined ? { action: "continue" } : { action: "transform", text };
-        });
-        // Observe the native result: harness-pi 1.0.151 normalizes length to stop.
-        if (options.onPiMessageEnd) pi.on("message_end", (event) => {
-          if (event.message.role !== "assistant") return;
-          options.onPiMessageEnd!({
-            finishReason: event.message.stopReason,
-            outputTokens: event.message.usage.output,
-            reasoningTokens: event.message.usage.reasoning ?? 0,
-          });
-        });
-      }] : undefined,
-      providers: {
-        [provider]: {
-          baseUrl: openRouterKey
-            ? value(env, "OPENROUTER_BASE_URL") ||
-              "https://openrouter.ai/api/v1"
-            : directBase!,
-          apiKey: openRouterKey || directKey!,
-          authHeader: true,
-          api: "openai-completions",
-          models: [
-            {
-              id: modelId,
-              name: modelId,
-              input: ["text"],
-              reasoning: options.piModel?.reasoning ?? false,
-              contextWindow: options.piModel?.contextWindow ?? (Number(env.PI_CONTEXT_WINDOW) || 32768),
-              maxTokens,
-              compat: { maxTokensField },
-              // Pi estimates input tokens before provider serialization and can
-              // clamp this to 1 against advisory/missing context metadata. The
-              // official sampling parameters preserve the chosen output cap;
-              // the provider remains authoritative for actual context overflow.
-              samplingParams: { [maxTokensField]: maxTokens,
-                ...(openRouterKey ? { reasoning: { enabled: false, effort: "none" } } : {}),
-              },
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            },
-          ],
-        },
-      },
+      onMessageEnd: options.onPiMessageEnd,
+      consumeContinuationInput: options.consumePiContinuationInput,
     });
-    model = `${provider}/${modelId}`;
   } else if (options.harness === "codex") {
     const key = value(env, "OPENAI_API_KEY") || value(env, "CODEX_API_KEY");
     if (!key)
@@ -154,14 +102,12 @@ export function createNativeAgent(options: {
           "原生 Codex 需要 OPENAI_API_KEY 或 CODEX_API_KEY，并按 Responses 协议配置；当前适配器不会自动复用 OPENROUTER_API_KEY",
       });
     const base = value(env, "OPENAI_BASE_URL") || value(env, "CODEX_BASE_URL");
-    harness = createCodex({
-      auth: { OPENAI_API_KEY: key, ...(base ? { OPENAI_BASE_URL: base } : {}) },
-    });
     model = options.modelId?.trim() || value(env, "CODEX_MODEL");
     if (model === "openrouter/free" || model === "openrouter/auto")
       throw new HTTPException(400, {
         message: "Codex 需要原生模型 ID，请重新设置智能体模型",
       });
+    adapter = createCodexAdapter({ apiKey: key, baseUrl: base, model });
   } else {
     const key = value(env, "ANTHROPIC_API_KEY") || value(env, "CLAUDE_API_KEY");
     if (!key)
@@ -170,27 +116,21 @@ export function createNativeAgent(options: {
           "原生 Claude Code 需要 ANTHROPIC_API_KEY 或 CLAUDE_API_KEY；请配置 Anthropic Messages 协议提供商",
       });
     const base = value(env, "ANTHROPIC_BASE_URL");
-    harness = createClaudeCode({
-      auth: {
-        ANTHROPIC_API_KEY: key,
-        ...(base ? { ANTHROPIC_BASE_URL: base } : {}),
-      },
-    });
     model = options.modelId?.trim() || value(env, "CLAUDE_MODEL");
     if (model === "openrouter/free" || model === "openrouter/auto")
       throw new HTTPException(400, {
         message: "Claude Code 需要原生模型 ID，请重新设置智能体模型",
       });
+    adapter = createClaudeCodeAdapter({ apiKey: key, baseUrl: base, model });
   }
 
   const document =
     options.agentsDocument?.trim() ||
     "# AGENTS.md\n\n遵循 tabdo 工作区权限，使用实际工具验证结果，再向用户报告完成情况。";
-  return new HarnessAgent<HarnessV1, ToolSet>({
+  assertSandboxCompatibility(adapter, options.mode === "sandbox");
+  return createHarnessAgent(adapter, {
     ...options.lifecycle,
-    harness,
-    model,
-    tools: { ...options.tools, ...nativeQuestionTools(options.harness) },
+    tools: options.tools,
     inactiveTools: validateDisabledTools(options.harness, options.disabledTools),
     skills: options.skills,
     runtimeContext: options.runtimeContext,
@@ -224,30 +164,22 @@ export async function openNativeSandbox(options: {
       throw new HTTPException(409, {
         message: "本地原生工作区快照缺失，无法恢复；请新建对话",
       });
-    const fs = await restoreWorkspace(options.workspace);
-    const sandbox = await createJustBashNetworkSandboxSession({
-      fs,
-      cwd: "/workspace",
-      env: {},
-      sandboxId: options.sandboxId,
-      abortSignal: options.signal,
+    const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: {},
+      createFilesystem: () => restoreWorkspace(options.workspace),
+      restoreFilesystem: () => restoreWorkspace(options.workspace),
     });
-    return { sandbox, fs };
+    const request = { sandboxId: options.sandboxId, abortSignal: options.signal };
+    const opened = options.hasResumeState ? await adapter.resume(request) : await adapter.create(request);
+    return { sandbox: opened.session, fs: opened.workspace };
   }
+
   const credentials = sandboxCredentials(options.env ?? process.env);
-  const sandbox = options.hasResumeState
-    ? await resumeVercelNetworkSandboxSession({
-        ...credentials,
-        sandboxId: options.sandboxId,
-        abortSignal: options.signal,
-      })
-    : await createVercelNetworkSandboxSession({
-        ...credentials,
-        sandboxId: options.sandboxId,
-        runtime: "node24",
-        ports: [4000],
-        template: await options.agent.getSandboxTemplate(),
-        abortSignal: options.signal,
-      });
-  return { sandbox };
+  const adapter = createVercelSandboxAdapter({
+    create: { ...credentials, runtime: "node24", ports: [4000] },
+    resume: credentials,
+  });
+  const opened = options.hasResumeState
+    ? await adapter.resume({ sandboxId: options.sandboxId, abortSignal: options.signal })
+    : await adapter.create({ sandboxId: options.sandboxId, template: await options.agent.getSandboxTemplate(), abortSignal: options.signal });
+  return { sandbox: opened.session };
 }

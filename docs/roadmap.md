@@ -6,7 +6,7 @@
 
 目标：业务和用户对 Node/Cloudflare 无感知，保留 Better Auth 与官方 Harness。实施依据是[修订架构](architecture/dual-deployment.md)：按 queue/storage/harness/sandbox 等能力组织包，供应商实现放包内 adapters，业务协议/权限/数据状态由平台拥有。
 
-已先独立提交架构修订，再按新边界迁移 queue/storage 包及内部 adapters。底层处理通用消息和相对对象 key；自动化协议与 UUID 文件 namespace 在 shared/server。旧 core/runtime 包已撤下。继续按文档推进共同平台工厂、独立 runner、恢复、DO/队列/调度和完整双模式验收；登录过期仅影响远程验收。
+已先独立提交架构修订，再按新边界迁移 queue/storage 包及内部 adapters。底层处理通用消息和相对对象 key；自动化协议与 UUID 文件 namespace 在 shared/server。旧 core/runtime 包已撤下。首批 app/Better Auth/PG 工厂和 Harness/Sandbox 能力包也已接入；通用 SDK 装配不导入产品协议/数据库。继续推进请求作用域平台资源、独立 runner、恢复、DO/队列/调度和完整双模式验收；登录过期仅影响远程验收。
 
 ## 已完成并提交
 

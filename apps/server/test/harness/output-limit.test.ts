@@ -110,7 +110,7 @@ test("native output-limit ChatStream persists partial text as failed and resumes
   try {
     await db.insert(user).values([{ id: owner, email: actor.email, name: actor.name }, { id: agentUser, email: `${agentUser}@local.test`, name: "Output fixture", kind: "agent" }]);
     await db.insert(organization).values({ id: org, name: "Output fixture", slug: org });
-    await db.insert(member).values({ id: agentMember, userId: agentUser, organizationId: org });
+    await db.insert(member).values([{ id: actor.memberId, userId: owner, organizationId: org, role: "owner" }, { id: agentMember, userId: agentUser, organizationId: org }]);
     await db.insert(agentProfile).values({ id: profileId, userId: agentUser, organizationId: org, memberId: agentMember, displayName: "Output fixture" });
     const [thread] = await db.insert(chatThreads).values({ userId: owner, organizationId: org, clientId: randomUUID(), custom: { resourceKey: "workspace" } }).returning();
     const tools = { get_output_fixture: tool({ inputSchema: z.object({}), execute: () => ({ verified: ++executed }) }) };

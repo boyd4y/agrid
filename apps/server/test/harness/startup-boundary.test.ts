@@ -22,7 +22,7 @@ const actor: Actor = { kind: "human", userId: owner, organizationId: org, member
 before(async () => {
   await db.insert(user).values([{ id: owner, email: actor.email, name: actor.name }, { id: agentUser, email: `${agentUser}@local.test`, name: "Pi fixture", kind: "agent" }]);
   await db.insert(organization).values({ id: org, name: "Startup fixture", slug: org });
-  await db.insert(member).values({ id: agentMember, userId: agentUser, organizationId: org });
+  await db.insert(member).values([{ id: actor.memberId, userId: owner, organizationId: org, role: "owner" }, { id: agentMember, userId: agentUser, organizationId: org }]);
   await db.insert(agentProfile).values({ id: profileId, userId: agentUser, organizationId: org, memberId: agentMember, displayName: "Pi fixture" });
 });
 after(async () => {
@@ -79,7 +79,9 @@ test("Pi startup failures and early cancellation retain native state and allow o
   try {
     const threadId = await newThread();
     const cancelled = await prepare(threadId, "NEVER_SUBMITTED_INITIAL");
-    assert.match(await consume(cancelled, tools, AbortSignal.abort(new DOMException("Early stop", "AbortError"))), /本轮没有执行操作/);
+    const cancelledOutput = await consume(cancelled, tools, AbortSignal.abort(new DOMException("Early stop", "AbortError")));
+    assert.match(cancelledOutput, /"type":"abort"/);
+    assert.doesNotMatch(cancelledOutput, /系统提示/);
     assert.equal(calls.length, 0);assert.equal(mutations, 0);
     let record = await runtime(threadId);assert.equal(record.resumeState, null);assert.equal(record.workspace, null);
     assert.equal(record.lastUserMessageId, cancelled.run.userMessageId);assert.equal(record.lastAssistantMessageId, cancelled.run.assistantMessageId);
@@ -108,7 +110,9 @@ test("Pi startup failures and early cancellation retain native state and allow o
 
     // Cancellation is durable before execute but is checked after actual createSession.
     const earlyStop = await prepare(threadId, "NEVER_SUBMITTED_AFTER_HISTORY");await requestRunCancellation(threadId, earlyStop.run.id, actor);
-    assert.match(await consume(earlyStop, tools), /本轮已停止/);
+    const earlyStopOutput = await consume(earlyStop, tools);
+    assert.match(earlyStopOutput, /"type":"abort"/);
+    assert.doesNotMatch(earlyStopOutput, /系统提示/);
     record = await runtime(threadId);assert.deepEqual(record.resumeState, oldState);assert.deepEqual(record.workspace, oldWorkspace);assert.equal(record.sandboxId, oldSandbox);
     assert.equal((await listNativeRuns(threadId, actor))[0].status, "cancelled");assert.equal(calls.length, 2);assert.equal(mutations, 1);
 
