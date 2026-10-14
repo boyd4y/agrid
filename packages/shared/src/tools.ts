@@ -21,6 +21,8 @@ export const PLATFORM_TOOL_IDS = [
   "set_relation",
   "add_relation",
   "remove_relation",
+  "get_workspace",
+  "list_members",
   "list_tables",
   "create_table",
   "list_automations",
@@ -133,3 +135,11 @@ export type AgentToolCatalog = {
   supportsFiltering: boolean;
   tools: AgentToolCatalogItem[];
 };
+
+/** Read current workspace identities without exposing cross-workspace selectors. */
+export const MEMBER_LIST_SCHEMA = z.strictObject({
+  kind: z.enum(["human", "agent"]).optional(),
+  search: z.string().trim().max(200).optional(),
+  offset: z.number().int().min(0).default(0),
+  limit: z.number().int().min(1).max(100).default(50),
+});

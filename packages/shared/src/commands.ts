@@ -38,6 +38,7 @@ import type {
 
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
+  "getWorkspace", "listMembers",
   "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
   "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
   "listTables",

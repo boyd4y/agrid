@@ -1,3 +1,4 @@
+export { getWorkspace, listMembers } from "./workspace.js";
 import { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
 export { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
 import { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";

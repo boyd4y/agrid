@@ -1,3 +1,4 @@
+import { MEMBER_LIST_SCHEMA } from "@tabdo/shared";
 import { createBatchTools } from "./batch-tools.js";
 import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
 import { createReportTools } from "./report-tools.js";
@@ -47,6 +48,16 @@ export function createTableTools(
     set_relation: tool({description:"整体替换已有关联字段中的目标记录。此工具不创建字段；创建关联字段用 add_column(type=relation, relation={targetTableId,...})。传 expectedVersion 防止覆盖并发修改。清空传 recordIds=[]，不删除记录。",inputSchema:zodSchema(relationRecordSchema.extend({expectedVersion:z.number().int().optional()})),execute:async input=>cmds.setRelation({...input,...org})}),
     add_relation: tool({description:"向已有的关联字段增量添加目标记录，幂等，不覆盖其他并发添加。此工具不创建关联字段或表格关系定义；创建单双向字段用 add_column(type=relation, relation={targetTableId,inverseName,...})。需要实际字段 UUID 和目标记录 UUID 数组。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.addRelation({...input,...org})}),
     remove_relation: tool({description:"从已有关联字段增量解除指定记录，不删除目标记录，也不删除关联字段。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.removeRelation({...input,...org})}),
+    get_workspace: tool({
+      description: "获取当前工作区名称和当前执行成员身份。工作区范围由服务器确定。",
+      inputSchema: zodSchema(z.strictObject({})),
+      execute: async () => cmds.getWorkspace(org),
+    }),
+    list_members: tool({
+      description: "查询当前工作区成员与智能体，可按姓名/邮箱搜索、kind=human或agent筛选并分页。分配负责人前先查询；person字段填返回的userId，不要填姓名或成员id。智能体动作agentUserId使用kind=agent的userId。",
+      inputSchema: zodSchema(MEMBER_LIST_SCHEMA),
+      execute: async input => cmds.listMembers({ ...input, ...org }),
+    }),
     list_tables: tool({
       description: "列出当前工作区的多维表格",
       inputSchema: zodSchema(z.object({})),

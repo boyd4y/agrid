@@ -10,9 +10,10 @@ description: 把资料清单、旅行安排或团队项目整理成可维护的�
 
 1. 明确每条记录代表什么、用户随后如何查找或更新它。先查看当前绑定表；没有绑定时用 list_tables 查找，避免重复建表或默认使用第一张表。
 2. 用 get_table 读取字段 UUID、类型、选项和 rowCount。新建时用 create_table；仅补足必要字段。字段和值的具体规则见 [references/field-types.md](references/field-types.md)。
-3. 单条整理用 add_row / update_cells，多条导入或修改用 batch_*。先确认目标记录和转换规则，保留无关值；批量参数、事务和恢复方法见 [references/batch-workflows.md](references/batch-workflows.md)。
-4. 用 query_rows 按实际 filters、sort 和 nextCursor 分页核对结果；hasMore=true 时第一页不是全部数据。需要整体统计时交给 report 技能的服务端聚合。
-5. 交付表格、关键字段和实际写入结果。删除记录或字段按用户要求执行；解除关联不等于删除记录。
+3. 负责人使用 list_members 查出真实成员 userId，再写入 person 字段；查询智能体用 kind=agent。不要把姓名当 ID，也不要要求用户手动查 ID。
+4. 单条整理用 add_row / update_cells，多条导入或修改用 batch_*。先确认目标记录和转换规则，保留无关值；批量参数、事务和恢复方法见 [references/batch-workflows.md](references/batch-workflows.md)。
+5. 用 query_rows 按实际 filters、sort 和 nextCursor 分页核对结果；hasMore=true 时第一页不是全部数据。需要整体统计时交给 report 技能的服务端聚合。
+6. 交付表格、关键字段和实际写入结果。删除记录或字段按用户要求执行；解除关联不等于删除记录。
 
 ## 关系与派生信息
 

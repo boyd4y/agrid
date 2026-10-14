@@ -44,7 +44,7 @@
 {"$step":{"index":0,"path":"result.id"}}
 ```
 
-当前平台工具没有 list_agents，agentUserId 使用 UI 选定智能体的真实 userId，不是 member.id，也不能按姓名猜 ID。
+使用 list_members(kind=agent) 按姓名查询真实智能体 userId；agentUserId 填返回的 userId，不是成员记录 id。不按姓名猜 ID，匹配不唯一时再澄清。
 
 run_agent 的动作结果直接包含 text、threadId、agentRunId、status，后续引用其文字用 path="text"，不要假设 text 自动解析成对象。引用只能指向已经完成的前序动作，不能循环或访问未来步骤。
 

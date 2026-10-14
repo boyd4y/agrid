@@ -30,4 +30,4 @@
 
 不要给 update_column 传它未提供的配置字段；需要批量 schema 支持的配置时使用对应 batch 工具。改单选选项或字段类型前查看已有数据及依赖，依赖错误不通过删除其他字段绕过。
 
-当前平台工具没有 list_members / list_agents。负责人和自动化智能体先通过 UI 选择并取得真实 userId；已明确提供真实 ID 时可使用，不能按姓名猜 ID。
+分配负责人前用 list_members 按姓名或邮箱查找当前工作区成员，person 填返回的 userId。kind=human 查人员，kind=agent 查智能体（含人设）；自动化 agentUserId 同样使用智能体的 userId。id 是成员记录 ID，不能代替 userId。结果有多名匹配时再澄清，不要求用户手动找 ID。get_workspace 可查看当前工作区与执行身份。

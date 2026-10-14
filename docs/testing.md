@@ -124,3 +124,14 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 `api-keys` browser suite 验证个人密钥创建/真实删除及失败重试，删除后GET列表为空且旧Bearer立即401，并核对设置框架、垂直标签、深链、刷新、浏览器返回、旧集成地址跳转和未知标签归一化。两个suite直接检查选中菜单伪元素不显示、整行高亮、列表四边边框与间距、真实hover/focus反馈及统一删除颜色。320px验证先收起现有AppShell侧栏，局部tabpanel核对scrollWidth/clientWidth，不用全局隐藏溢出冒充通过；它不代表全站侧栏已实现手机自动收起。常规只保留外观/语言，没有布局开关。
 
 `automation-sources` 验证内联来源卡片的固定高度和底部间距、表格/邮件/邮箱空状态、菜单图标一致性、窄屏与深浅模式；定时任务使用专门单页表单，保存真正的 `run_agent` 智能体与任务描述、时间/时区，失败保留输入，列表与旧链接独立路由。`native-controls.test.mjs` 扫描应用和 UI 包，禁止原生 picker、datalist、单选/滑条和 details 表面；共享组件以 Storybook 展示。浏览器文件选择仅保留隐藏的系统文件选择入口，不在产品中渲染原生文件控件。
+
+## 名称、看板与成员身份回归
+
+在隔离的 `_agent_test` 数据库迁移后，可单独执行：
+
+```sh
+pnpm --filter @tabdo/server exec tsx --test test/commands/name-conflicts.test.ts test/harness/workspace-tools.test.ts
+pnpm --filter @tabdo/client test:browser -- name-conflicts kanban-overflow
+```
+
+名称测试覆盖数据库直接写入、作用域重名、并发、历史重复与批量回滚。看板测试检查中文、连续长文本和换行内容在两种密度下的实际宽度与省略号，并确认详情交互。成员测试使用官方 Pi Harness 与本地模型 fixture，依次读取成员工具的真实结果、更新 person 字段、检查已保存 userId；同时核对跨工作区隔离、智能体查询与分页。测试不发送真实模型请求，不修改已有工作区数据，也不生成截图。

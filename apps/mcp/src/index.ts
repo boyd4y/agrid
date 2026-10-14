@@ -6,7 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { COLUMN_TYPES, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
+import { COLUMN_TYPES, MEMBER_LIST_SCHEMA, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
 import { callCommand, textResult } from "./client.js";
 
 const cellValue = z.union([
@@ -46,6 +46,9 @@ const server = new McpServer({
   name: "tabdo",
   version: "0.1.0",
 });
+
+server.registerTool("get_workspace", { description: "获取当前工作区与执行成员身份", inputSchema: {} }, async () => textResult(await callCommand("getWorkspace", {})));
+server.registerTool("list_members", { description: "查询工作区成员和智能体；支持姓名/邮箱搜索、kind筛选和分页。负责人person填userId；智能体动作agentUserId用kind=agent的userId，不用成员id或姓名。", inputSchema: MEMBER_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listMembers", input)));
 
 for (const [name, definition] of Object.entries(BATCH_TOOLS)) {
   server.registerTool(name, { description: definition.description, inputSchema: definition.schema.shape }, async (input: Record<string, unknown>) => {

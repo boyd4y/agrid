@@ -16,7 +16,7 @@
 ## 与真实实现对齐
 
 - 文件列只引用已通过 UI 上传、归属同一列的 UUID，遵守单/多文件配置；不承诺聊天附件上传、解析产品文件或自动映射到执行环境。
-- 人员值与 run_agent 选择使用真实 userId，不是 member.id。当前无 list_members/list_agents 工具，先用 UI 选择，不按姓名猜 ID。
+- 人员值与 run_agent 选择使用真实 userId，不是 member.id。list_members 按姓名/邮箱查询当前工作区真实 userId，kind=agent 查询智能体。负责人和 run_agent 都使用 userId，不按姓名猜 ID。
 - AgentMail 仅入站；正文可在执行前由受控官方 API 补取，HTML-only 与缺纯文本有区别。附件只有元数据，不支持发信/回复/附件下载；ISO 接收时间与数组收件人不可直接写成 date/text。
 - 自动化 command 结果引用 `steps[n].result`，原生 Agent 结果为 `steps[n].text` 等字段；JSON 精确引用保留类型，prompt 插值是文字，不执行 JS。
 - 原生提问在关联对话回答，unknown 状态先查看原运行，不复制任务重放。无自建 plan/goal 工具、门禁或额外工具循环。
