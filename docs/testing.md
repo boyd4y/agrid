@@ -173,3 +173,7 @@ pnpm --filter @tabdo/platform-cloudflare typecheck:container
 ```
 
 它验证真实 DO/Container 的提前 spawn ACK、exit、单次启动、身份隔离、DO 重建后 launch marker、显式只读 token probe、不明状态拒绝重播、启动失败和取消竞态。spawn ACK 不是原生执行就绪或 PG invocation receipt；API pid 也不假定是 Linux PID。测试 finally 只销毁自身 namespace/UUID 的容器。
+
+## CF 正式产品本地回归
+
+完整启动命令与隔离条件见[本地 Cloudflare 开发](development/cloudflare-local.md)。`pnpm dev:cf` 运行正式入口；`pnpm test:cloudflare:product` 的两个 opt-in 用例串行占用本地模型端口，覆盖前端代理到原生容器、提问冷恢复、R2、取消和实际数据/定时触发。不能把默认跳过计作通过，也不能改用用户数据库。`pnpm test:dev-config` 独立验证配置文件、端口、密钥隔离与 DeepSeek 快捷设置。

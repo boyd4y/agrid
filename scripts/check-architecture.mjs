@@ -53,4 +53,16 @@ for (const file of await files(resolve(backendDirectory, "src"))) {
   assert(!/\b(?:getDatabase|getAuth|AsyncLocalStorage)\s*\(/.test(source), `${file}: services require explicit dependencies`);
   assert(!/\bprocess\.env\b/.test(source), `${file}: environment must be injected`);
 }
+const executorDirectory = resolve(root,"packages/agent-runtime");
+const executorConfig = JSON.parse(await readFile(resolve(executorDirectory,"tsconfig.json"),"utf8"));
+assert.deepEqual(executorConfig.compilerOptions.types,[],"executor must not inherit host runtime globals");
+for (const file of await files(resolve(executorDirectory,"src"))) {
+  const source = await readFile(file,"utf8");
+  for (const match of source.matchAll(/import\s+(type\s+)?[^;]*?from\s*["']([^"']+)["']/g)) {
+    const [,typeOnly,specifier] = match;
+    assert(!specifier.startsWith("node:") && !specifier.startsWith("cloudflare:") && !specifier.startsWith("@tabdo/platform-cloudflare"),`${file}: platform execution effect must be injected`);
+    if (specifier.startsWith("@tabdo/platform-node")) assert(typeOnly,`${file}: executor may only refer to host types`);
+  }
+  assert(!/\bprocess\.|\bBuffer\s*[.(]/.test(source),`${file}: executor must use explicit ports and Web APIs`);
+}
 console.log("Architecture boundaries passed: portable core, isolated implementations, explicit backend dependencies.");

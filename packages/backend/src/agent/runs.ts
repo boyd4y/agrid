@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import type { RuntimeDependencies, DatabaseDependencies } from "../dependencies.js";
+import type { Transaction } from "../db/types.js";
 import type { ChatActivity, AgentRunSummary } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
 
@@ -17,7 +18,7 @@ function pendingQuestionCallIds(continuation: unknown): string[] {
 }
 
 
-export async function beginNativeRun(deps: RuntimeDependencies, lease: RuntimeLease, actor: Actor, record: RuntimeRecord, message: StoredMessage, agentId: string): Promise<AgentRun> {
+export async function beginNativeRun(deps: RuntimeDependencies, lease: RuntimeLease, actor: Actor, record: RuntimeRecord, message: StoredMessage, agentId: string, transaction?: Transaction): Promise<AgentRun> {
   return withRuntimeLease(deps, lease, async (tx) => {
     const [duplicate] = await tx.select().from(agentRuns).where(and(eq(agentRuns.threadId, lease.threadId), eq(agentRuns.userMessageId, message.id)));
     if (duplicate) throw new ServiceError(409, { message: "本条消息已启动过智能体执行，请刷新查看结果；不会重复执行工具" });
@@ -64,10 +65,10 @@ export async function beginNativeRun(deps: RuntimeDependencies, lease: RuntimeLe
     await tx.update(chatThreads).set({ custom: { ...thread.custom, agentId }, headId: message.id, lastMessageAt: deps.now(), updatedAt: deps.now() }).where(threadScope(lease.threadId, actor));
     const [run] = await tx.insert(agentRuns).values({ id: deps.uuid(), threadId: lease.threadId, runtimeSessionId: record.id, userMessageId: message.id, assistantMessageId: deps.uuid(), fence: lease.fence }).returning();
     return run;
-  });
+  }, transaction);
 }
 
-export async function recordRunActivity(deps: DatabaseDependencies, lease: RuntimeLease, runId: string, activity: ChatActivity) {
+export async function recordRunActivity(deps: DatabaseDependencies, lease: RuntimeLease, runId: string, activity: ChatActivity, transaction?: Transaction) {
   return withRuntimeLease(deps, lease, async (tx) => {
     const [updated] = await tx.update(agentRuns).set({ activity, ...(activity.phase === "finished" ? {} : { status: "running" as const }) })
       .where(and(eq(agentRuns.id, runId), eq(agentRuns.fence, lease.fence),
@@ -81,14 +82,14 @@ export async function recordRunActivity(deps: DatabaseDependencies, lease: Runti
     }
     await tx.insert(agentRunEvents).values({ runId, activity });
     return true;
-  });
+  }, transaction);
 }
 
-export async function failNativeRun(deps: RuntimeDependencies, lease: RuntimeLease, runId: string, error: string) {
+export async function failNativeRun(deps: RuntimeDependencies, lease: RuntimeLease, runId: string, error: string, transaction?: Transaction) {
   await withRuntimeLease(deps, lease, async (tx) => {
     const [run] = await tx.update(agentRuns).set({ status: "failed", error, endedAt: deps.now() }).where(and(eq(agentRuns.id, runId), eq(agentRuns.fence, lease.fence))).returning({ runtimeId: agentRuns.runtimeSessionId });
     if (run) await tx.update(agentRuntimeSessions).set({ status: "failed", error, updatedAt: deps.now() }).where(eq(agentRuntimeSessions.id, run.runtimeId));
-  });
+  }, transaction);
 }
 
 export async function runCancellationRequested(deps: DatabaseDependencies, runId: string): Promise<boolean> {

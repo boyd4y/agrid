@@ -8,6 +8,8 @@ import { saveMessageInTransaction } from "../chat/store.js";
 import { agentExecutions, agentRuns, chatMessages, member } from "../db/schema.js";
 import { withRuntimeLease, type RuntimeLease, type RuntimeRecord } from "./runtime-store.js";
 import type { AgentRun } from "./runs.js";
+import { QUESTION_NOT_INVOKED } from "./checkpoints.js";
+export { QUESTION_NOT_INVOKED } from "./checkpoints.js";
 
 /** Official schema validation is injected by the Harness assembly, never reimplemented here. */
 export type QuestionSchemaValidators = Readonly<{
@@ -25,8 +27,6 @@ export type QuestionDependencies<Continuation> = RuntimeDependencies & QuestionS
   getPendingCalls(continuation: Continuation): readonly PendingQuestionCall[];
 }>;
 
-/** Only the official executor's pre-invocation failure path may write this proof. */
-export const QUESTION_NOT_INVOKED = "question-not-invoked-v1";
 const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item)
   ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 

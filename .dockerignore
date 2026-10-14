@@ -4,3 +4,13 @@ node_modules
 .git
 .env
 *.log
+
+# Private local configuration and runtime state
+.env.*
+**/.env
+**/.env.*
+.dev.vars*
+**/.dev.vars*
+.local
+**/.wrangler
+data

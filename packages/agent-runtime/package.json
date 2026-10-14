@@ -1,0 +1,55 @@
+{
+  "name": "@tabdo/agent-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./execution": {
+      "types": "./src/execution.ts",
+      "development": "./src/execution.ts",
+      "import": "./dist/execution.js",
+      "default": "./dist/execution.js"
+    },
+    "./ports": {
+      "types": "./src/ports.ts",
+      "development": "./src/ports.ts",
+      "import": "./dist/ports.js",
+      "default": "./dist/ports.js"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "development": "./src/errors.ts",
+      "import": "./dist/errors.js",
+      "default": "./dist/errors.js"
+    },
+    "./workspace": {
+      "types": "./src/workspace.ts",
+      "development": "./src/workspace.ts",
+      "import": "./dist/workspace.js",
+      "default": "./dist/workspace.js"
+    },
+    "./gateway": {
+      "types": "./src/gateway.ts",
+      "development": "./src/gateway.ts",
+      "import": "./dist/gateway.js",
+      "default": "./dist/gateway.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tabdo/core": "workspace:*",
+    "@tabdo/backend": "workspace:*",
+    "@tabdo/shared": "workspace:*",
+    "@tabdo/platform-node": "workspace:*",
+    "@ai-sdk/harness": "1.0.149",
+    "ai": "7.0.138",
+    "just-bash": "2.14.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

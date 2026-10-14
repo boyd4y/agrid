@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.test.json",
+  "compilerOptions": {
+    "rootDir": "../../.."
+  },
+  "include": [
+    "product-live.test.ts",
+    "automation-live.test.ts"
+  ]
+}

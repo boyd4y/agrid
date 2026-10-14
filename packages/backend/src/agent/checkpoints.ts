@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Private proof written only before an accepted question continuation enters the SDK. */
+export const QUESTION_NOT_INVOKED = "question-not-invoked-v1";
+
 // Private persisted workspace shape; restoration policy stays with the runtime.
 const snapshotEntry = z
   .object({

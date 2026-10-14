@@ -161,12 +161,12 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 - [x] 明确 Worker 控制侧与 Node/Sandbox 执行侧的依赖图隔离，不要求更换原生 Harness。
 - [x] 物理迁移 core、Node/CF 平台实现与 backend，应用已接入；独立类型、依赖、通用 DO 与原生 SDK 回归通过。
 - [x] 真实 Wrangler/DO/Docker 下的 Pi 工具、待答 detach、销毁与冷恢复无重放；本地模型夹具，不等于 DeepSeek 网络或产品工具 gateway 已验收。
-- [ ] 产品 PG + DO/Sandbox 接线：模型配置、产品工具、取消、待答恢复、重复启动和现有输出协议。
-- [ ] 验证 DO/队列持久接受、Sandbox 生命周期与现有 PG checkpoint 的交接/补偿。
-- [ ] 再按边界迁移包、清除隐式 service 依赖，更新 Wrangler/类型/构建。
+- [x] 本地产品 PG + DO/Sandbox 接线：模型配置、产品工具、取消、待答恢复、重复启动和现有输出协议。
+- [x] 本地验证 DO/队列持久接受、Sandbox 生命周期与现有 PG checkpoint 的交接/补偿。
+- [x] 共享业务/原生执行器提取、显式 service 依赖，以及产品 Wrangler/Env/构建接线。
 - [ ] 聊天、定时、自动化、MCP、文件和权限撤销完成真实双模式验收；其他 Harness 单独验证。
 
-当前已完成真实平台实现分包，以及命令、Run/Session、Outbox 的显式依赖，不新建空 agent-runtime 包，不把 Sandbox 夹具或 PG 工厂验收标记为完整产品部署完成。
+当前已提取有实际执行代码的 agent-runtime，产品 Worker 也已接入共享 backend。下面早期夹具记录仍保留为历史证据；本地与远程验收分别记录。
 
 ## 2026-10-15 共享业务接线
 
@@ -175,7 +175,7 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 - HTTP command route 共用 Hono 工厂，当前成员身份在业务事务中重新锁定；客户端不能传内部执行选项或替换工作区。
 - 真实 Wrangler + PG/Better Auth + DO 用例直接导入 backend，验证 batch 写入/唯一冲突回滚、成员查询、输出游标、私人会话、成员撤销与取消。
 - 通用 CF Sandbox 计算控制已实现：独立 DO/resource、持久 launch fence、有限 exec 的提前返回、冷重建 unknown 拒绝重播，以及显式 probe/销毁。它不拥有产品状态或 SDK 输出；Container API pid 按 opaque reference 处理。Docker 验收与原生 Harness 验收独立。
-- 待完成：正式产品 Worker 路由、完整 agent-runtime、Sandbox 工具 gateway、聊天/定时/数据事件统一接受派发与全链路验收。当前分层和夹具不是可部署完整产品。
+- 此阶段后续接线已完成，正式产品本地验收见下节；远程部署仍待验收。
 
 ## 调研依据
 
@@ -189,8 +189,18 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 - 原生 SDK：`packages/platform-node/node_modules/@ai-sdk/harness-{pi,codex,claude-code}`；未修改第三方源码。测试使用本地模型夹具，没有调用生产模型。
 
 
-## 本轮验证记录
+## 先行批次验证记录（历史）
 
 2026-10-15：完整 workspace build、架构边界检查、backend/server/CF 源与测试类型检查通过；服务端 161/161、隔离 Redis/BullMQ 故障回归 18/18、CF 产品命令/Session 4/4、CF 框架 4/4、PG/Auth Worker 工厂 1/1，以及真实 DO/Container 控制 1/1 通过。测试仅使用 `_agent_test` / `_queue_test` 与自有 fixture namespace，Docker 资源清理已核实。
 
 PG/命令/DO fixture 的 Wrangler dry-run 产物 3727.35 KiB（gzip 640.58 KiB）；这是该验证图的大小，不是完整产品部署体积。完整网络模型、产品工具 gateway 与端到端派发仍未通过，不标记整个架构任务完成。
+
+## 2026-10-15 一键产品开发入口
+
+`pnpm dev:cf` 启动正式 Vite/Worker，而非测试 fixture。默认前端 5173、Worker 8787；API 同源代理，PG 通过本地 Hyperdrive 连接既有数据库。Docker 按执行启动，R2/DO/Queues 使用 Wrangler 本地状态，每分钟调用同一个 Cron handler。Node 开发入口 `pnpm dev` 保留。
+
+实际公开 API 验证：注册/创建组织、智能体和表格；Queue → DO → Docker 原生 Pi 工具写入、提问、新容器恢复同 Run、取消、R2 上传下载；数据变更 Queue 动作和 Cron 智能体任务、私有运行历史、普通对话列表隔离。测试均使用 `_agent_test` 和本地模型服务，不使用用户凭证。
+
+CF 当前原生执行为 Pi/local，其他 Harness 明确拒绝。生产资源 ID、Hyperdrive 池/缓存、远程容器及真实模型调用尚未验收。配置、迁移与存储边界见[本地开发](../development/cloudflare-local.md)。
+
+最终源码验证：`pnpm build`、`pnpm typecheck`、`pnpm typecheck:test`、架构检查、冻结离线安装、13 项开发配置测试全部通过；server 167/167、CF 产品服务 5/5、专用 Redis/队列故障回归 18/18 通过。最后重新启动 `pnpm dev:cf`，两套实际产品 HTTP/Queue/Cron/Docker 回归 2/2 通过。开发进程、测试账号和自己的 R2/容器资源已清理。正式 Worker dry-run 为 4451.73 KiB（gzip 803.77 KiB），无部署或付费模型调用。

@@ -1,29 +1,26 @@
 # 当前持续任务
 
-更新：2026-10-14。按用户要求持续推进；独立功能完成、自检后单独提交并推送。
+更新：2026-10-15。按用户要求持续推进；独立功能完成、自检后单独提交并推送。
 
-## 双部署 framework（CF 优先实施中）
+## 双部署 framework（CF 本地产品链路已接通）
 
-Cloudflare 优先，继续支持 Node/Cloudflare 双部署；Cloudflare 使用 Workers + DO + Sandbox，在 Sandbox 内执行原生 Harness，不要求额外常驻 Node 服务。保留 PostgreSQL、Drizzle 与 Better Auth。依据为[双部署架构](architecture/dual-deployment.md)和[包边界](architecture/runtime-boundaries.md)。core/platform-node/platform-cloudflare 已隔离，platform 已改名 backend 并提取显式身份服务；agent-runtime 与其余业务仍待提取。Worker 与 Sandbox 分别构建，不更换原生 Harness。
+Cloudflare 优先，保留 Node/Cloudflare 双部署；用户使用相同前端、HTTP、聊天和权限协议。Cloudflare 使用 Workers + Queues/Cron + Durable Objects + 按需 Sandbox，保留 PostgreSQL、Drizzle、Better Auth；无需额外常驻 Node API 或 Redis。边界见[双部署架构](architecture/dual-deployment.md)和[包边界](architecture/runtime-boundaries.md)。
 
-- 已完成：平台包与类型/依赖图分离；通用 DO 不再绑定 Run/Thread/AI 协议；身份服务显式 DB/session resolver，无 ALS/Node 依赖；应用、测试、构建和冻结锁更新。
-- 本轮验证：149 项 server 回归、core/Node/CF 能力与 PG/DO/Auth 用例通过；真实 Wrangler/DO/Docker 下 Pi 在容器销毁后冷续接，工具未重放；源/测试类型、全仓构建、架构检查和冻结离线安装通过。只使用隔离 PG/Redis和本地模型夹具。
-- 待完成：共用业务 repositories/services 与 agent-runtime 完整提取；产品 PG 持久派发接 DO/Sandbox 和工具 gateway；聊天/自动化/定时、实际 Queue/Cron、完整 Worker 的本地端到端验收。远程 Hyperdrive 池/缓存与容器行为另验。
+### 已完成
 
-### 已有双部署实施记录（新包隔离尚未实施）
+- `core` 定义通用能力，`platform-node` / `platform-cloudflare` 隔离实现；`backend` 保存共享业务，`agent-runtime` 通过显式端口执行官方原生 Harness。
+- 全部公共 REST 路由及表格、文件、技能、报告、成员、集成服务共用 backend；Node 原路径保留薄 facade。
+- 聊天、定时任务与数据事件共享 PG 接受记录、执行 fence、事务工具凭据与检查点。Sandbox 只拿单次受限 gateway 能力，不持 PG、Redis 或认证管理凭证。
+- `pnpm dev:cf` 一键启动 Vite 与 Wrangler；本地 Queues/R2/DO、每分钟模拟 Cron、Docker 按需运行，连接现有 PG。配置与显式迁移见[本地指南](development/cloudflare-local.md)。
+- 实际前端代理链路已验证注册/工作区/智能体、工具写表、同 Run 问答冷恢复、R2 文件、取消、数据自动化和定时智能体私有历史。使用隔离 PG 与本地模型协议服务。
 
-目标保持业务和用户对 Node/Cloudflare 无感知，保留 Better Auth 与官方 Harness。此前依据为[双部署记录](architecture/dual-deployment.md)：按能力包与内部 adapters 实施。下列记录保留实际完成证据，不代表已完成新的物理包隔离或 Cloudflare Sandbox 部署。
+### 待完成
 
-已先独立提交架构修订，再按新边界迁移 queue/storage 包及内部 adapters。底层处理通用消息和相对对象 key；自动化协议与 UUID 文件 namespace 在 shared/server。旧 core/runtime 包已撤下。首批 app/Better Auth/PG 工厂和 Harness/Sandbox 能力包也已接入；通用 SDK 装配不导入产品协议/数据库。请求资源隔离、独立 runner 与 DO 输出/取消已完成本地验证。继续推进共同业务包提取、实际 CF 队列/调度接线及完整双模式验收；登录过期仅影响远程验收。
+- Cloudflare 线上绑定、Hyperdrive 连接池/缓存、远程 Container 生命周期及真实 DeepSeek 调用验收。
+- CF 产品执行目前支持 Pi + local 原生运行模式；其他 Harness 在 CF 显式拒绝，尚需分别接入与验收。Node 既有 Harness 能力保留。
+- 本地 R2 与旧 Node 本地文件是不同存储；已有 `local` 文件记录需迁移，不能直接假定文件已存在。
 
-嵌入式 Run 执行已与 HTTP 投影拆开：后台任务直接等待同一个执行入口完成检查点提交和租约释放，浏览器取消读流只断开投影。独立 Node runner、持久接受/输出订阅、签名 HTTP 控制与真实 Pi 待答跨进程续接已接入。Node 聊天嵌入/独立进程的公共协议一致；CF 输出/取消调用真实平台服务。
-
-首批 `@tabdo/platform` 已独立：PG/Better Auth 工厂、唯一 schema 与私有 checkpoint 契约，Node 装配和实际 workerd 夹具均通过包调用。workerd 真实验证请求资源关闭、Cookie 签名并发隔离和退出；Drizzle 导出 37 张表 DDL 与迁移前完全一致，141 项服务端回归通过。业务 DB/Auth 已改显式请求/任务 scope，SDK-free agent admission 也通过实际 workerd。完整 CF 产品入口仍未完成。
-
-当前并行批次的完成/待完成边界：
-
-- 已完成：严格资源作用域；通用 process/HTTP execution adapters；持久执行接受与输出；真实子进程/HTTP 冷续接；Node 公共聊天可选独立执行；DO 接通实际身份/输出/取消。
-- 待完成：业务服务继续提取成共用包；自动化/定时统一提交接受记录；CF Queue/Cron 与 Outbox 接线；完整 Worker 入口与 CF/E2B 计算部署；hibernating bridge；远程验收。
+本地链路通过不等于线上发布完成。详细验证与历史演进保留在架构和测试文档中。
 
 ## 已完成并提交
 

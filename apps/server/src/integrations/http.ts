@@ -1,46 +1,33 @@
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { z } from "zod";
+import * as body from "@tabdo/backend/integrations/body";
+import { ServiceError } from "@tabdo/backend/errors";
+import { backendCall, mapServiceError } from "../services/backend-facade.js";
 
-/** Bound actual bytes, including chunked or misleading Content-Length bodies. */
+/** Node compatibility projections; byte limits and parsing have one shared implementation. */
 export async function boundedBody(request: Request, limit: number): Promise<Buffer> {
-  const reader = request.body?.getReader(); if (!reader) return Buffer.alloc(0);
-  const chunks: Uint8Array[] = []; let size = 0;
-  try {
-    for (;;) {
-      const result = await reader.read(); if (result.done) break;
-      size += result.value.byteLength;
-      if (size > limit) { await reader.cancel(); throw new HTTPException(413, { message: "请求内容过大" }); }
-      chunks.push(result.value);
-    }
-    return Buffer.concat(chunks, size);
-  } finally { reader.releaseLock(); }
+  return Buffer.from(await backendCall(() => body.boundedBody(request, limit)));
 }
 export function webhookBodyLimit() {
-  const value = Number(process.env.WEBHOOK_MAX_BODY_BYTES ?? 2 * 1024 * 1024);
-  if (!Number.isInteger(value) || value < 1024 || value > 16 * 1024 * 1024) throw new HTTPException(503, { message: "WEBHOOK_MAX_BODY_BYTES 配置不正确" });
-  return value;
+  try { return body.webhookBodyLimit(Number(process.env.WEBHOOK_MAX_BODY_BYTES ?? 2 * 1024 * 1024)); }
+  catch (error) { return mapServiceError(error); }
 }
-export function jsonValue(body: Buffer): unknown {
-  try { return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body)); }
-  catch { throw new HTTPException(400, { message: "请发送有效的 JSON" }); }
+export function jsonValue(bytes: Uint8Array): unknown {
+  try { return body.jsonValue(bytes); } catch (error) { return mapServiceError(error); }
 }
-export function jsonObject(body: Buffer): Record<string, unknown> {
-  try {
-    const value = jsonValue(body);
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("object expected");
-    return value as Record<string, unknown>;
-  } catch { throw new HTTPException(400, { message: "请发送有效的 JSON 对象" }); }
+export function jsonObject(bytes: Uint8Array): Record<string, unknown> {
+  try { return body.jsonObject(bytes); } catch (error) { return mapServiceError(error); }
 }
-export async function parseBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
-  const result = schema.safeParse(jsonObject(await boundedBody(c.req.raw, 16 * 1024)));
-  if (!result.success) throw new HTTPException(400, { message: "参数不正确" });
-  return result.data;
+export function parseBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
+  return backendCall(() => body.parseBody(c.req.raw, schema));
 }
-export function validUuid(value: string) { if (!z.uuid().safeParse(value).success) throw new HTTPException(404, { message: "资源不存在" }); return value; }
+export function validUuid(value: string) {
+  try { return body.validUuid(value); } catch (error) { return mapServiceError(error); }
+}
 export function integrationError(error: Error, c: Context) {
   if (error instanceof HTTPException) return c.json({ error: error.message }, error.status);
-  // Never log raw request bodies, provider response bodies or encrypted records.
+  if (error instanceof ServiceError) return c.json({ error: error.message }, error.status as import("hono/utils/http-status").ContentfulStatusCode);
   console.error("integration.request.failed", error.name);
   return c.json({ error: "集成请求失败，请重试" }, 500);
 }

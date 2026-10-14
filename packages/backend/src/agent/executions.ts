@@ -5,6 +5,7 @@ import type { ToolResultPart, UIMessageChunk } from "ai";
 import { z } from "zod";
 import { agentExecutions, agentExecutionChunks, agentRuns, agentRuntimeSessions, agentThreadLeases, agentProfile, chatThreads, chatMessages, member, user } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
+import type { Transaction } from "../db/types.js";
 import { chatContextSchema, type ChatContext } from "../chat/context-schema.js";
 import { threadScope } from "../chat/store.js";
 import { claimRuntimeLease, releaseRuntimeLease, withRuntimeLease, type RuntimeLease } from "./runtime-store.js";
@@ -32,7 +33,7 @@ const canonical = (value: unknown): string => JSON.stringify(value, (_key, item)
 export async function acceptNativeExecution(deps: DatabaseDependencies, input: {
   actor: Actor; lease: RuntimeLease; run: AgentRun; context: ChatContext;
   prompt: string; boundTableId?: string; toolResultContinuations?: ToolResultPart[];
-}): Promise<NativeExecutionReference> {
+}, transaction?: Transaction): Promise<NativeExecutionReference> {
   const context = chatContextSchema.parse(input.context);
   const prompt = z.string().max(2_000_000).parse(input.prompt);
   if (input.boundTableId) uuid.parse(input.boundTableId);
@@ -62,7 +63,7 @@ export async function acceptNativeExecution(deps: DatabaseDependencies, input: {
     }
     const [accepted] = await tx.insert(agentExecutions).values({ runId: run.id, fence: input.lease.fence, leaseToken: input.lease.token, input: document }).returning();
     return { executionId: accepted.id, runId: run.id, threadId: run.threadId };
-  });
+  }, transaction);
 }
 
 /** Resolves identity from the private accepted Run, never from a queue body principal. */
@@ -109,7 +110,7 @@ export async function recoverAcceptedNativeExecution(deps: RuntimeDependencies, 
 }
 
 /** The durable invocation fence is committed before the SDK; uncertain starts are never retried. */
-export async function claimNativeExecution(deps: RuntimeDependencies, loaded: LoadedNativeExecution): Promise<boolean> {
+export async function claimNativeExecution(deps: RuntimeDependencies, loaded: LoadedNativeExecution, transaction?: Transaction): Promise<boolean> {
   return withRuntimeLease(deps, loaded.lease, async tx => {
     const [membership] = await tx.select().from(member).where(and(eq(member.userId, loaded.actor.userId), eq(member.organizationId, loaded.actor.organizationId))).for("share");
     if (!membership) throw new ServiceError(403, { message: "创建者已离开工作区" });
@@ -118,11 +119,11 @@ export async function claimNativeExecution(deps: RuntimeDependencies, loaded: Lo
     const [claimed] = await tx.update(agentExecutions).set({ status: "invoking", invokedAt: deps.now() })
       .where(and(eq(agentExecutions.id, loaded.execution.id), eq(agentExecutions.status, "accepted"))).returning({ id: agentExecutions.id });
     return Boolean(claimed);
-  });
+  }, transaction);
 }
 
 /** Await each append; cursor+chunk commit in one transaction under the active Run fence. */
-export async function appendNativeExecutionChunk(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunk: UIMessageChunk): Promise<void> {
+export async function appendNativeExecutionChunk(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunk: UIMessageChunk, transaction?: Transaction): Promise<void> {
   await withRuntimeLease(deps, loaded.lease, async tx => {
     const [run] = await tx.select({ id: agentRuns.id }).from(agentRuns).where(and(eq(agentRuns.id, loaded.run.id), eq(agentRuns.fence, loaded.lease.fence)));
     if (!run) throw new ServiceError(409, { message: "运行已被接管" });
@@ -131,7 +132,7 @@ export async function appendNativeExecutionChunk(deps: DatabaseDependencies, loa
       .returning({ cursor: agentExecutions.lastCursor });
     if (!execution) throw new ServiceError(409, { message: "执行输出已关闭" });
     await tx.insert(agentExecutionChunks).values({ executionId: loaded.execution.id, cursor: execution.cursor, chunk: chunk as unknown as Record<string, unknown> });
-  });
+  }, transaction);
 }
 
 /** Settled describes this computing attempt; authoritative business outcome remains agent_runs. */

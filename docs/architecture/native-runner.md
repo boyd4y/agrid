@@ -1,8 +1,8 @@
 # 持久原生执行器
 
-本文记录现有原生 Node 执行实现，继续服务双部署目标。Cloudflare 路线由 Workers/DO 协调，在 Sandbox 内执行完整原生 Harness；Worker 不直接加载 Node SDK，也不要求额外常驻 Node HTTP 服务。最新包边界见[运行时与包边界](runtime-boundaries.md)。Sandbox 部署/生命周期仍待验证，此次未迁移代码。
+本文记录现有原生 Node 执行实现，继续服务双部署目标。Cloudflare 路线由 Workers/DO 协调，在 Sandbox 内执行完整原生 Harness；Worker 不直接加载 Node SDK，也不要求额外常驻 Node HTTP 服务。最新包边界见[运行时与包边界](runtime-boundaries.md)。本地 Wrangler + Docker 的完整产品链路已验证；远程部署另验。
 
-本阶段把计算资源启动与产品 Run 分开。通用 `@tabdo/execution` 包提供 Node 子进程、签名 HTTP 控制适配器；产品接受、权限、租约、检查点和输出仍由 PG repository 管理。没有另造模型或工具循环。
+本阶段把计算资源启动与产品 Run 分开。通用 `@tabdo/platform-node/execution/*` 能力提供 Node 子进程、签名 HTTP 控制适配器；产品接受、权限、租约、检查点和输出仍由 PG repository 管理。没有另造模型或工具循环。
 
 ## Node 聊天
 
@@ -14,7 +14,7 @@
 4. 执行者重新领取 fence，先提交 `accepted → invoking` 再调用官方 SDK。输出按游标持久保存。
 5. Node 输出投影按需分页、重新验证凭证。浏览器关闭只关闭订阅；显式取消写入 PG。
 
-启动失败仍保留接受记录。Node 装配每五秒扫描最多八个 `accepted` 任务；跨进程 CAS 防止重复调用。`invoking` 且计算状态不明的任务不会自动重跑。此模式当前接通聊天；自动化/定时的原生动作仍使用嵌入式执行入口，待统一接入接受服务。
+启动失败仍保留接受记录。Node 装配每五秒扫描最多八个 `accepted` 任务；跨进程 CAS 防止重复调用。`invoking` 且计算状态不明的任务不会自动重跑。自动化/定时也提交相同持久接受记录；Node 装配可等待已有原生执行入口，CF 只提交有限派发。
 
 ```sh
 pnpm build
@@ -37,6 +37,10 @@ HMAC 验证身份、方法、路径、body 与时效；PG 执行记录提供业�
 
 ## Cloudflare 与验证边界
 
-DO 通过实际平台服务读取相同 PG 输出与持久取消，每次回调独立创建/关闭 DB/Auth。Wrangler 的真实 Workers 运行环境已验证 Cookie/API Key、私有会话隔离、成员撤销、输出分页与 DO 重建。完整产品 Worker、Queue/Cron 接受服务、Sandbox 内部执行生命周期与远程验收仍待接入。PG 保留，CF 优先本地验证见当前架构边界。
+`apps/cloudflare/src/index.ts` 装配正式 Hono/Queue/Cron 入口，共用 `backend`。`ProductSessionObject` 投影 PG 输出并处理取消；`ProductExecutionObject` 只持计算资源元数据，启动单次 Sandbox 程序。原生 SDK、Pi adapter 和 JustBash 工作区在 `sandbox/runtime/` 中运行，通过受限 HTTP gateway 执行平台工具及提交检查点；其业务权限仍由 PG 当前成员与 fence 决定。
 
-独立进程回归已验证 Pi 的工具只执行一次、待答进程退出、答案通过签名 HTTP 在新进程继续原 Run，以及重复启动不重放。尚未宣称 Codex/Claude、Cloudflare Containers/E2B 的实际远程生命周期完成。
+迁移 `0027_execution_gateway` 增加执行能力与工具调用凭据。工具效果和结果记录同事务提交；重复相同调用读取结果，更换输入或旧 fence 拒绝。执行状态不明时不盲目重放。提问由官方 SDK 校验，答案在新容器中续接同一个 Run。
+
+本地使用 `pnpm dev:cf`，见[本地开发指南](../development/cloudflare-local.md)。真实 Vite → Worker → Queues/DO → Docker/Pi 验收覆盖工具、问答冷恢复、R2、取消和定时历史；数据变更自动化也经过实际 Queue。测试使用隔离 PostgreSQL 与本地模型 HTTP 服务，没有调用生产模型。
+
+当前 CF 产品执行只支持 Pi/local；Codex/Claude 在 Node 保留已有实现，在 CF 尚未接入。线上 Hyperdrive、Cloudflare Container、真实 DeepSeek、其他远程 Sandbox 均未计入本轮通过。

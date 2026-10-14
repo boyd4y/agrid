@@ -97,7 +97,7 @@ test("headless native Pi commits one actual tool and reply; concurrent and recei
   const executing = runAutomationAgentAction(task);
   await reached;
   let duplicate;
-  try { duplicate = await runAutomationAgentAction(task);assert.equal(duplicate.status, "unknown"); }
+  try { duplicate = await runAutomationAgentAction(task);assert.equal(duplicate.status, "accepted", "durably accepted computing work is distinct from an unknown invocation"); }
   finally { release(); }
   const result = await executing;
   assert.equal(result.status, "completed", result.error);assert.match(result.text, /Native automation finished/);

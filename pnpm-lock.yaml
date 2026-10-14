@@ -183,31 +183,40 @@ importers:
 
   apps/cloudflare:
     dependencies:
+      '@tabdo/backend':
+        specifier: workspace:*
+        version: link:../../packages/backend
       '@tabdo/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@tabdo/platform-cloudflare':
         specifier: workspace:*
         version: link:../../packages/platform-cloudflare
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: 5.20261014.1
-        version: 5.20261014.1
-      '@tabdo/backend':
+      '@tabdo/shared':
         specifier: workspace:*
-        version: link:../../packages/backend
-      '@types/node':
-        specifier: ^22.14.1
-        version: 22.20.5
-      ai:
-        specifier: 7.0.138
-        version: 7.0.138(zod@4.6.5)
+        version: link:../../packages/shared
+      better-auth:
+        specifier: ^1.7.7
+        version: 1.7.7(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261014.1)(@opentelemetry/api@1.9.1)(kysely@0.29.6)(postgres@3.4.9)(sql.js@1.14.2))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@cloudflare/workers-types@5.20261014.1)(@opentelemetry/api@1.9.1)(kysely@0.29.6)(postgres@3.4.9)(sql.js@1.14.2)
       hono:
         specifier: ^4.7.8
         version: 4.13.13
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 5.20261014.1
+        version: 5.20261014.1
+      '@types/node':
+        specifier: ^22.14.1
+        version: 22.20.5
+      ai:
+        specifier: 7.0.138
+        version: 7.0.138(zod@4.6.5)
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
@@ -220,6 +229,49 @@ importers:
       wrangler:
         specifier: 4.149.0
         version: 4.149.0(@cloudflare/workers-types@5.20261014.1)(@types/node@22.20.5)
+
+  apps/cloudflare/sandbox/runtime:
+    dependencies:
+      '@ai-sdk/harness':
+        specifier: 1.0.149
+        version: 1.0.149(ws@8.22.0)(zod@4.6.5)
+      '@ai-sdk/harness-pi':
+        specifier: 1.0.151
+        version: 1.0.151(@aws-sdk/credential-provider-node@3.972.86)(@earendil-works/pi-tui@1.2.0)(@modelcontextprotocol/sdk@1.32.1(zod@4.6.5))(@opentelemetry/api@1.9.1)(@smithy/signature-v4@5.7.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(ws@8.22.0)(zod@4.6.5)
+      '@ai-sdk/sandbox-just-bash':
+        specifier: 1.0.149
+        version: 1.0.149(ws@8.22.0)(zod@4.6.5)
+      '@tabdo/agent-runtime':
+        specifier: workspace:*
+        version: link:../../../../packages/agent-runtime
+      '@tabdo/backend':
+        specifier: workspace:*
+        version: link:../../../../packages/backend
+      '@tabdo/platform-node':
+        specifier: workspace:*
+        version: link:../../../../packages/platform-node
+      '@tabdo/shared':
+        specifier: workspace:*
+        version: link:../../../../packages/shared
+      ai:
+        specifier: 7.0.138
+        version: 7.0.138(zod@4.6.5)
+      just-bash:
+        specifier: 2.14.5
+        version: 2.14.5
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: ^22.14.1
+        version: 22.20.5
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
 
   apps/mcp:
     dependencies:
@@ -278,6 +330,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.17(hono@4.13.13)
+      '@tabdo/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
       '@tabdo/backend':
         specifier: workspace:*
         version: link:../../packages/backend
@@ -352,6 +407,37 @@ importers:
         specifier: 4.149.0
         version: 4.149.0(@cloudflare/workers-types@5.20261014.1)(@types/node@22.20.5)
 
+  packages/agent-runtime:
+    dependencies:
+      '@ai-sdk/harness':
+        specifier: 1.0.149
+        version: 1.0.149(ws@8.22.0)(zod@4.6.5)
+      '@tabdo/backend':
+        specifier: workspace:*
+        version: link:../backend
+      '@tabdo/core':
+        specifier: workspace:*
+        version: link:../core
+      '@tabdo/platform-node':
+        specifier: workspace:*
+        version: link:../platform-node
+      '@tabdo/shared':
+        specifier: workspace:*
+        version: link:../shared
+      ai:
+        specifier: 7.0.138
+        version: 7.0.138(zod@4.6.5)
+      just-bash:
+        specifier: 2.14.5
+        version: 2.14.5
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+
   packages/backend:
     dependencies:
       '@better-auth/drizzle-adapter':
@@ -381,6 +467,12 @@ importers:
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
+      svix:
+        specifier: ^2.8.0
+        version: 2.8.0
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.1
       zod:
         specifier: ^4.6.5
         version: 4.6.5

@@ -80,8 +80,9 @@ export async function releaseRuntimeLease(deps: DatabaseDependencies, lease: Run
 export async function withRuntimeLease<T>(deps: DatabaseDependencies,
   lease: RuntimeLease,
   fn: (tx: Transaction) => Promise<T>,
+  transaction?: Transaction,
 ): Promise<T> {
-  return deps.database.transaction(async (tx) => {
+  const work = async (tx: Transaction) => {
     const [row] = await tx
       .select()
       .from(agentThreadLeases)
@@ -101,7 +102,8 @@ export async function withRuntimeLease<T>(deps: DatabaseDependencies,
       .set({ expiresAt: sql`clock_timestamp()+interval '120 seconds'` })
       .where(leaseScope(lease));
     return fn(tx);
-  });
+  };
+  return transaction ? work(transaction) : deps.database.transaction(work);
 }
 
 export async function prepareRuntimeRecord(deps: RuntimeDependencies,
@@ -215,6 +217,7 @@ export async function completeRuntimeTurn(deps: RuntimeDependencies,
   checkpoint: RuntimeCheckpoint,
   message: StoredMessage,
   run?: { id: string; status: import("@tabdo/shared").AgentRunStatus; error?: string },
+  transaction?: Transaction,
 ): Promise<void> {
   if (
     message.id !== checkpoint.assistantMessageId ||
@@ -231,7 +234,7 @@ export async function completeRuntimeTurn(deps: RuntimeDependencies,
         .where(and(eq(agentRuns.id, run.id), eq(agentRuns.threadId, lease.threadId), eq(agentRuns.fence, lease.fence))).returning({ id: agentRuns.id });
       if (!saved) throw new ServiceError(409, { message: "运行已被接管，无法提交结果" });
     }
-  });
+  }, transaction);
 }
 
 /** Commit a transport-only failure without replacing the native journal or opaque state.
@@ -239,6 +242,7 @@ export async function completeRuntimeTurn(deps: RuntimeDependencies,
 export async function completeUninvokedPiRun(deps: RuntimeDependencies,
   lease: RuntimeLease, actor: Actor, recordId: string,
   message: StoredMessage, run: { id: string; status: "failed" | "cancelled"; error: string },
+  transaction?: Transaction,
 ): Promise<void> {
   await withRuntimeLease(deps, lease, async (tx) => {
     const [owned] = await tx.select().from(agentRuns).where(and(
@@ -260,5 +264,5 @@ export async function completeUninvokedPiRun(deps: RuntimeDependencies,
       status: run.status === "cancelled" ? "interrupted" : "failed", error: run.error, updatedAt: deps.now(),
     }).where(eq(agentRuntimeSessions.id, recordId));
     await tx.update(agentRuns).set({ status: run.status, error: run.error, endedAt: deps.now() }).where(eq(agentRuns.id, run.id));
-  });
+  }, transaction);
 }

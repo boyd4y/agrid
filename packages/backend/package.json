@@ -206,6 +206,76 @@
       "development": "./src/automation/outbox.ts",
       "import": "./dist/automation/outbox.js",
       "default": "./dist/automation/outbox.js"
+    },
+    "./http/*": {
+      "types": "./src/http/*.ts",
+      "workerd": "./src/http/*.ts",
+      "development": "./src/http/*.ts",
+      "import": "./dist/http/*.js",
+      "default": "./dist/http/*.js"
+    },
+    "./services/*": {
+      "types": "./src/services/*.ts",
+      "workerd": "./src/services/*.ts",
+      "development": "./src/services/*.ts",
+      "import": "./dist/services/*.js",
+      "default": "./dist/services/*.js"
+    },
+    "./skills/*": {
+      "types": "./src/skills/*.ts",
+      "workerd": "./src/skills/*.ts",
+      "development": "./src/skills/*.ts",
+      "import": "./dist/skills/*.js",
+      "default": "./dist/skills/*.js"
+    },
+    "./reports/*": {
+      "types": "./src/reports/*.ts",
+      "workerd": "./src/reports/*.ts",
+      "development": "./src/reports/*.ts",
+      "import": "./dist/reports/*.js",
+      "default": "./dist/reports/*.js"
+    },
+    "./chat/context": {
+      "types": "./src/chat/context.ts",
+      "workerd": "./src/chat/context.ts",
+      "development": "./src/chat/context.ts",
+      "import": "./dist/chat/context.js",
+      "default": "./dist/chat/context.js"
+    },
+    "./agent/*": {
+      "types": "./src/agent/*.ts",
+      "workerd": "./src/agent/*.ts",
+      "development": "./src/agent/*.ts",
+      "import": "./dist/agent/*.js",
+      "default": "./dist/agent/*.js"
+    },
+    "./automation/scheduled-runs": {
+      "types": "./src/automation/scheduled-runs.ts",
+      "workerd": "./src/automation/scheduled-runs.ts",
+      "development": "./src/automation/scheduled-runs.ts",
+      "import": "./dist/automation/scheduled-runs.js",
+      "default": "./dist/automation/scheduled-runs.js"
+    },
+    "./auth/avatar-validation": {
+      "types": "./src/auth/avatar-validation.ts",
+      "workerd": "./src/auth/avatar-validation.ts",
+      "development": "./src/auth/avatar-validation.ts",
+      "import": "./dist/auth/avatar-validation.js",
+      "default": "./dist/auth/avatar-validation.js"
+    },
+    "./integrations/*": {
+      "types": "./src/integrations/*.ts",
+      "workerd": "./src/integrations/*.ts",
+      "development": "./src/integrations/*.ts",
+      "import": "./dist/integrations/*.js",
+      "default": "./dist/integrations/*.js"
+    },
+    "./automation/*": {
+      "types": "./src/automation/*.ts",
+      "workerd": "./src/automation/*.ts",
+      "development": "./src/automation/*.ts",
+      "import": "./dist/automation/*.js",
+      "default": "./dist/automation/*.js"
     }
   },
   "scripts": {
@@ -222,7 +292,9 @@
     "hono": "^4.7.8",
     "cron-parser": "^5.6.0",
     "ai": "7.0.138",
-    "@tabdo/core": "workspace:*"
+    "@tabdo/core": "workspace:*",
+    "yaml": "^2.8.1",
+    "svix": "^2.8.0"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

@@ -11,6 +11,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 - [文档索引](docs/README.md)：功能说明、架构、开发与部署指南。
 - [贡献指南](AGENTS.md)：目录结构、开发命令、代码和测试约定。
+- [本地 Cloudflare 开发](docs/development/cloudflare-local.md)：`pnpm dev:cf`、DeepSeek、PostgreSQL 与按需 Sandbox。
 - [产品定位](PRODUCT.md)与[设计规范](DESIGN.md)：产品与界面的长期约定。
 - [历史记录](docs/archive/README.md)：迭代与审计快照，具体能力以现行说明和代码为准。
 
@@ -58,6 +59,8 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 - **共享 UI / Storybook**：`pnpm storybook` → http://localhost:6006；`pnpm build-storybook` 构建静态文档
 
 ## 快速开始
+
+Cloudflare 本地开发：配置现有 PostgreSQL 与 DeepSeek 后，运行 `pnpm cf:db:migrate`，再运行 **`pnpm dev:cf`**。同一个命令启动前端与 Wrangler，Docker Sandbox 按需运行；无需额外 Node API 或 Redis。完整配置见[本地 Cloudflare 开发](docs/development/cloudflare-local.md)。原有 `pnpm dev` 继续使用 Node 模式。
 
 使用构建后的前端、Node API 和后台 worker 在本机同源运行，见 [本地 Node 部署](docs/local-node.md)。
 项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`，共享界面位于 `packages/ui`（`@tabdo/ui`，含独立 Storybook）。包之间通过 `workspace:*` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
