@@ -19,7 +19,7 @@ threadsRoute.use("*", async (c, next) => {
 });
 const id = (value: string) => z.uuid().parse(value);
 const dto = (thread: typeof chatThreads.$inferSelect) => ({
-  id: thread.id, title: thread.title, status: thread.status, custom: thread.custom,
+  id: thread.id, kind: thread.kind, scheduledTaskId: thread.scheduledTaskId, title: thread.title, status: thread.status, custom: thread.custom,
   lastMessageAt: thread.lastMessageAt, updatedAt: thread.updatedAt,
 });
 
@@ -27,9 +27,9 @@ threadsRoute.get("/", async (c) => {
   const actor = c.get("actor");
   const after = c.req.query("after");
   let cursor: typeof chatThreads.$inferSelect | undefined;
-  if (after) cursor = await requireThread(id(after), actor);
+  if (after) { cursor = await requireThread(id(after), actor); if (cursor.kind !== "chat") throw new HTTPException(400, { message: "分页游标不属于普通对话" }); }
   const threads = await db.select().from(chatThreads).where(and(
-    eq(chatThreads.userId, actor.userId), eq(chatThreads.organizationId, actor.organizationId),
+    eq(chatThreads.userId, actor.userId), eq(chatThreads.organizationId, actor.organizationId), eq(chatThreads.kind, "chat"),
     cursor ? or(lt(chatThreads.createdAt, cursor.createdAt), and(eq(chatThreads.createdAt, cursor.createdAt), lt(chatThreads.id, cursor.id))) : undefined,
   )).orderBy(desc(chatThreads.createdAt), desc(chatThreads.id)).limit(101);
   return c.json({ threads: threads.slice(0, 100).map(dto), nextCursor: threads.length > 100 ? threads[99].id : undefined });
@@ -38,9 +38,11 @@ threadsRoute.get("/", async (c) => {
 threadsRoute.post("/", async (c) => {
   const input = z.object({ clientId: z.string().min(1).max(200), context: z.unknown(), agentId: z.string().nullable().optional() }).parse(await c.req.json());
   const actor = c.get("actor");
-  const { resourceKey } = await resolveChatContext(input.context, actor);
+  const { resourceKey, context } = await resolveChatContext(input.context, actor);
+  if (context.scheduledTaskId) throw new HTTPException(400, { message: "定时任务会话由运行创建，请打开已有运行" });
   const [thread] = await db.insert(chatThreads).values({ userId: actor.userId, organizationId: actor.organizationId, clientId: input.clientId, custom: { resourceKey, agentId: input.agentId ?? null } })
     .onConflictDoUpdate({ target: [chatThreads.userId, chatThreads.organizationId, chatThreads.clientId], set: { clientId: input.clientId } }).returning();
+  if (thread.kind !== "chat") throw new HTTPException(409, { message: "不能将任务运行变成普通对话" });
   if (thread.custom.resourceKey !== resourceKey) throw new HTTPException(409, { message: "对话属于其他资源" });
   return c.json(dto(thread), 201);
 });
@@ -50,6 +52,7 @@ threadsRoute.patch("/:id", async (c) => {
   const actor = c.get("actor"), threadId = id(c.req.param("id"));
   const thread = await requireThread(threadId, actor);
   const input = z.object({ title: z.string().trim().min(1).max(200).optional(), custom: z.record(z.string(), z.unknown()).optional() }).strict().parse(await c.req.json());
+  if (thread.kind === "scheduled_task" && input.custom && Object.hasOwn(input.custom, "agentId") && input.custom.agentId !== thread.custom.agentId) throw new HTTPException(409, { message: "任务运行不能更换智能体" });
   if (input.custom?.resourceKey && input.custom.resourceKey !== thread.custom.resourceKey) throw new HTTPException(409, { message: "不能更换已有对话的资源绑定" });
   const [updated] = await db.update(chatThreads).set({ ...input, custom: input.custom ? { ...thread.custom, ...input.custom, resourceKey: thread.custom.resourceKey } : thread.custom, updatedAt: new Date() }).where(threadScope(threadId, actor)).returning();
   return c.json(dto(updated));

@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Save, X } from "lucide-react";
+import { Save, X } from "lucide-react";
 import type { AutomationRule, AutomationSource } from "@tabdo/shared";
-import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { ListErrorState } from "@/components/shell/ListErrorState";
-import { AutomationRunsSheet } from "@/components/automation/AutomationRunsSheet";
 import { ScheduleFields } from "@/components/automation/ScheduleFields";
 import { Button } from "@tabdo/ui/components/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@tabdo/ui/components/card";
@@ -45,12 +43,12 @@ export function ScheduledTaskDetailPage() {
     savingRef.current = true; setSaving(true); setError(null);
     try {
       const data = { name: name.trim(), source, enabled, trigger: { type: "schedule_due" as const }, conditions: [], eventConditions: [], conditionLogic: "and" as const, actions: [{ type: "run_agent" as const, agentUserId, prompt: prompt.trim() }] };
-      if (rule) await api.updateAutomation(rule.id, data); else await api.createSourceAutomation(data);
-      notifyDataChanged(); navigate("/app/schedules");
+      const saved = rule ? await api.updateAutomation(rule.id, data) : await api.createSourceAutomation(data);
+      notifyDataChanged(); navigate(`/app/schedules/${saved.id}`);
     } catch (error) { setError(error instanceof Error ? error.message : t("saveFailed")); }
     finally { savingRef.current = false; setSaving(false); }
   };
-  return <AppPage contentWidth="standard" header={<AppPageHeader page="schedules" description={automationId ? rule?.name ?? t("scheduled.edit") : t("scheduled.new")}><Button variant="ghost" size="sm" disabled={saving} onClick={() => navigate("/app/schedules")}><ArrowLeft data-icon="inline-start" />{t("backToList")}</Button>{rule && <AutomationRunsSheet automationId={rule.id} name={rule.name} />}</AppPageHeader>}>
+  return <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 md:p-8">
     {loading ? <p role="status">{t("loading")}</p> : automationId && !rule ? <ListErrorState description={error} onRetry={() => setRetry(value => value + 1)} /> : <Card padding="lg" className="mx-auto my-auto w-full max-w-3xl shrink-0" data-testid="scheduled-task-editor">
       <CardHeader><CardTitle>{t(automationId ? "scheduled.edit" : "scheduled.new")}</CardTitle><CardDescription>{t("scheduled.description")}</CardDescription></CardHeader>
       <CardContent><fieldset disabled={saving} className="flex min-w-0 flex-col gap-6">
@@ -60,7 +58,7 @@ export function ScheduledTaskDetailPage() {
         <Separator /><FieldSet className="gap-3"><FieldLegend variant="label">{t("scheduled.configureTime")}</FieldLegend><ScheduleFields value={source} onChange={setSource} disabled={saving} /></FieldSet>
         {error && <FieldDescription role="alert">{error}</FieldDescription>}
       </fieldset></CardContent>
-      <CardFooter className="mt-6 justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={() => navigate("/app/schedules")}><X data-icon="inline-start" />{t("cancel")}</Button><Button type="button" disabled={saving || !name.trim() || !agentUserId || !prompt.trim()} onClick={() => void save()}><Save data-icon="inline-start" />{t(saving ? "saving" : "save")}</Button></CardFooter>
+      <CardFooter className="mt-6 justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={() => navigate(rule ? `/app/schedules/${rule.id}` : "/app/schedules")}><X data-icon="inline-start" />{t("cancel")}</Button><Button type="button" disabled={saving || !name.trim() || !agentUserId || !prompt.trim()} onClick={() => void save()}><Save data-icon="inline-start" />{t(saving ? "saving" : "save")}</Button></CardFooter>
     </Card>}
-  </AppPage>;
+  </div>;
 }

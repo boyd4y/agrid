@@ -21,7 +21,9 @@ const { beginNativeRun } = await import("../../src/harness/runs.js");
 const { createNativeChatStream } = await import("../../src/harness/chat-stream.js");
 const { discardQuestionSandbox } = await import("../../src/harness/question-sandboxes.js");
 const { chatRoute } = await import("../../src/routes/chat.js");
-const app = new Hono().route("/api/chat", chatRoute);
+const { threadsRoute } = await import("../../src/routes/threads.js");
+const { listScheduledRuns, getScheduledRunThread } = await import("../../src/automation/scheduled-runs.js");
+const app = new Hono().route("/api/chat", chatRoute).route("/api/threads", threadsRoute);
 app.onError((error, c) => "getResponse" in error && typeof error.getResponse === "function" ? error.getResponse() : c.json({ error: error.message }, 500));
 const org = randomUUID(), owner = randomUUID(), ownerMember = randomUUID(), agentUser = randomUUID(), agentMember = randomUUID(), profileId = randomUUID();
 const actor: Actor = { kind: "human", userId: owner, memberId: ownerMember, organizationId: org, role: "owner", name: "Automation owner", email: `${owner}@local.test` };
@@ -215,4 +217,46 @@ test("native automation mutates its trigger row, parks a real question, then rec
   assert.equal((await db.select().from(automationStepReceipts).where(eq(automationStepReceipts.runId, automationRun.id))).length, 3);
   assert.equal(await reconcileNativeAutomations(25, org), 0);assert.equal(await executeNext(event.id, nextFence), "done");assert.equal(requests.length, initialCalls + 3);
   assert.deepEqual(providerErrors, []);mutationInput = undefined;
+});
+
+
+test("scheduled occurrences are separate session types, private and continuable through the same native runtime", { timeout: 30000 }, async () => {
+  const action = { type: "run_agent" as const, agentUserId: agentUser, prompt: "Summarize a scheduled task." };
+  const rule = await createAutomation({ organizationId: org, actorId: owner, name: "Scheduled session proof", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" }, actions: [action] });
+  const saved = (await db.insert(automationRuns).values({ automationId: rule.id, triggerType: "schedule_due", status: "running", ruleSnapshot: rule as unknown as Record<string, unknown> }).returning())[0];
+  runIds.push(saved.id); mutationName = `Scheduled native mutation ${randomUUID()}`;
+  const result = await runAutomationAgentAction({ runId: saved.id, step: 0, organizationId: org, actorUserId: owner, action, eventContext: { scheduledFor: new Date().toISOString() }, tableId: null });
+  assert.equal(result.status, "completed", result.error); assert(result.threadId);
+  const [thread] = await db.select().from(chatThreads).where(eq(chatThreads.id, result.threadId));
+  assert.equal(thread.kind, "scheduled_task"); assert.equal(thread.scheduledTaskId, rule.id); assert.equal(thread.custom.resourceKey, `schedule:${rule.id}`);
+  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const ordinary = await (await app.request("http://localhost/api/threads", { headers })).json();
+  assert(!ordinary.threads.some((item: { id: string }) => item.id === thread.id));
+  assert.equal((await app.request(`http://localhost/api/threads?after=${thread.id}`, { headers })).status, 400);
+  const card = (await listScheduledRuns(rule.id, actor)).runs[0];
+  assert.equal(card.threadId, thread.id); assert.match(card.preview ?? "", /Native automation finished/); assert.equal(card.prompt, action.prompt);
+  assert.equal((await listScheduledRuns(rule.id, { ...actor, userId: agentUser })).runs.length, 0);
+  assert.equal((await getScheduledRunThread(rule.id, thread.id, actor)).id, thread.id);
+  await assert.rejects(getScheduledRunThread(rule.id, thread.id, { ...actor, userId: agentUser }));
+  await assert.rejects(getScheduledRunThread(ruleId, thread.id, actor));
+  assert.equal((await app.request(`http://localhost/api/threads/${thread.id}`, { method: "PATCH", headers, body: JSON.stringify({ custom: { agentId: owner } }) })).status, 409);
+  assert.equal((await app.request("http://localhost/api/threads", { method: "POST", headers, body: JSON.stringify({ clientId: randomUUID(), context: { page: "schedules", scheduledTaskId: rule.id }, agentId: agentMember }) })).status, 400);
+  const [runtimeBefore] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
+  const before = requests.length;
+  const followUp = await app.request("http://localhost/api/chat", { method: "POST", headers, body: JSON.stringify({ id: thread.id, agentId: agentMember,
+    context: { page: "schedules", scheduledTaskId: rule.id }, messages: [{ id: randomUUID(), role: "user", parts: [{ type: "text", text: "Continue this scheduled result." }] }] }) });
+  assert.equal(followUp.status, 200, await followUp.clone().text()); assert.match(await followUp.text(), /Native automation finished/);
+  assert.equal(requests.length, before + 1, "continuation does not repeat the accepted mutation");
+  const records = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
+  assert.equal(records.length, 1); assert.equal(records[0].id, runtimeBefore.id);
+  const messages = await db.select().from(chatMessages).where(eq(chatMessages.threadId, thread.id));
+  assert.equal(messages.filter(message => message.content.role === "user").length, 2);
+  assert.equal((await db.select().from(tables).where(and(eq(tables.organizationId, org), eq(tables.name, mutationName)))).length, 1);
+  assert.equal((await db.select().from(chatThreads).where(eq(chatThreads.id, thread.id)))[0].kind, "scheduled_task");
+  const extra = (await db.insert(automationRuns).values({ automationId: rule.id, triggerType: "schedule_due", status: "queued", ruleSnapshot: rule as unknown as Record<string, unknown> }).returning())[0];
+  runIds.push(extra.id);
+  const pageOne = await listScheduledRuns(rule.id, actor, 0, 1), pageTwo = await listScheduledRuns(rule.id, actor, 1, 1);
+  assert(pageOne.hasMore); assert(!pageTwo.hasMore); assert.equal(pageOne.runs.length, 1); assert.equal(pageTwo.runs.length, 1);
+  assert.notEqual(pageOne.runs[0].id, pageTwo.runs[0].id);
+  assert.deepEqual(providerErrors, []);
 });

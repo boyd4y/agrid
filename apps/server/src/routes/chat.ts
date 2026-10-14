@@ -58,6 +58,7 @@ chatRoute.post("/", async (c) => {
 
   const context = await resolveChatContext(body.context, actor);
   const thread = await requireThread(body.id, actor);
+  if (thread.kind === "scheduled_task" && thread.scheduledTaskId !== context.context.scheduledTaskId) return c.json({ error: "请在定时任务中打开此运行" }, 409);
   if (thread.status !== "regular") return c.json({ error: "对话状态无效，请刷新后重试" }, 409);
   if (thread.custom.resourceKey !== context.resourceKey) return c.json({ error: "对话与当前页面资源不一致，请新建对话" }, 409);
 
@@ -71,6 +72,7 @@ chatRoute.post("/", async (c) => {
         if (!lastText.trim()) throw new HTTPException(400, { message: "请输入要执行的任务" });
       }
     } });
+  if (thread.kind === "scheduled_task" && ![profile.memberId, profile.userId].includes(String(thread.custom.agentId))) return c.json({ error: "此运行需要使用原智能体继续" }, 409);
   c.req.raw.signal.throwIfAborted();
   const lease = await claimRuntimeLease(body.id, actor);
   try {

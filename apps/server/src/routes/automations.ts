@@ -1,3 +1,4 @@
+import { listScheduledRuns, getScheduledRunThread } from "../automation/scheduled-runs.js";
 import { Hono } from "hono";
 import { z } from "zod";
 import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA } from "@tabdo/shared";
@@ -133,4 +134,17 @@ automationsRoute.post("/automations/schedule-preview", async c => {
   try { const body = z.object({ cron: z.string(), timeZone: z.string() }).strict().parse(await c.req.json());
     return c.json({ occurrences: schedulePreview(body.cron, body.timeZone) }); }
   catch (error) { return c.json({ error: error instanceof Error ? error.message : "时间计划无效" }, 400); }
+});
+
+automationsRoute.get("/schedules/:id/runs", async c => {
+  const scope = await requireActorOrg(c.req.raw);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  const offset = z.coerce.number().int().min(0).max(1_000_000).parse(c.req.query("offset") ?? 0);
+  const limit = z.coerce.number().int().min(1).max(100).parse(c.req.query("limit") ?? 20);
+  return c.json(await listScheduledRuns(z.uuid().parse(c.req.param("id")), scope.actor, offset, limit));
+});
+automationsRoute.get("/schedules/:id/runs/:threadId", async c => {
+  const scope = await requireActorOrg(c.req.raw);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  return c.json(await getScheduledRunThread(z.uuid().parse(c.req.param("id")), z.uuid().parse(c.req.param("threadId")), scope.actor));
 });

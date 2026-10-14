@@ -31,7 +31,7 @@ const mappingScope = (input: ActionInput) => and(eq(automationAgentActions.runId
 /** Associate the task with its private conversation before any native model starts. */
 async function associate(input: ActionInput): Promise<{ actor: Actor; mapping: Mapping }> {
   return db.transaction(async tx => {
-    const [rule] = await tx.select({ id: automationRuns.id, creator: automations.createdByUserId, name: automations.name })
+    const [rule] = await tx.select({ id: automationRuns.id, creator: automations.createdByUserId, name: automations.name, source: automations.source, taskId: automations.id })
       .from(automationRuns).innerJoin(automations, eq(automations.id, automationRuns.automationId))
       .where(and(eq(automationRuns.id, input.runId), eq(automations.organizationId, input.organizationId))).for("update");
     if (!rule || !rule.creator || rule.creator !== input.actorUserId) throw new Error("自动化创建者不存在，无法启动私有智能体对话");
@@ -53,9 +53,11 @@ async function associate(input: ActionInput): Promise<{ actor: Actor; mapping: M
       return { actor, mapping: existing };
     }
     const threadId = randomUUID(), userMessageId = randomUUID();
-    await tx.insert(chatThreads).values({ id: threadId, userId: actor.userId, organizationId: actor.organizationId,
-      clientId: `automation:${input.runId}:${input.step}`, title: `自动化 · ${rule.name}`,
-      custom: { resourceKey: "workspace", agentId: input.action.agentUserId ?? null, automationRunId: input.runId, automationStep: input.step } });
+    const scheduled = rule.source.kind === "schedule";
+    await tx.insert(chatThreads).values({ id: threadId,
+      kind: scheduled ? "scheduled_task" : "chat", scheduledTaskId: scheduled ? rule.taskId : null, userId: actor.userId, organizationId: actor.organizationId,
+      clientId: `automation:${input.runId}:${input.step}`, title: `${scheduled ? "定时任务" : "自动化"} · ${rule.name}`,
+      custom: { resourceKey: scheduled ? `schedule:${rule.taskId}` : "workspace", agentId: input.action.agentUserId ?? null, automationRunId: input.runId, automationStep: input.step } });
     const [mapping] = await tx.insert(automationAgentActions).values({ runId: input.runId, step: input.step, threadId, userMessageId }).returning();
     return { actor, mapping };
   });

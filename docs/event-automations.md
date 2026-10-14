@@ -64,3 +64,9 @@
 测试使用隔离 `tabdo_agent_test` 与本地真实协议/model fixtures，没有调用用户邮箱、付费模型、S3或用户数据库。生产AgentMail连接和远程Sandbox需配置自己的真实凭证再验收；不能把本地协议测试说成已经收取用户邮件。
 
 原生接口依据：[HarnessAgent](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)、[Harness Skills](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)。调度依据：[cron-parser](https://github.com/harrisiirak/cron-parser)。
+
+## 定时任务工作台与会话隔离
+
+定时任务在 `/app/schedules` 中使用左侧任务导航、右侧运行卡片布局。新建与编辑在右侧表单中完成；运行卡片显示触发时间、状态、当时的任务描述与最新回复摘要。选择运行后，在 `/app/schedules/:id/runs/:threadId` 中打开同一聊天会话，可继续发送消息、处理原生问题与停止/恢复。
+
+迁移 `0025_scheduled_sessions.sql` 在 `chat_threads` 增加 `kind`（`chat` / `scheduled_task`）和 `scheduled_task_id`，并用数据库检查约束绑定类型与任务 ID。历史定时运行按真实动作映射补齐类型，不复制消息或原生状态。普通 `/threads` 列表在 SQL 层仅查询 `chat`，任务会话的分页与读取保持创建者账户和工作区隔离。消息、run、checkpoint 和 Harness session 仍复用现有聊天链路；继续任务运行不会变成普通对话，也不能切换到其他智能体。

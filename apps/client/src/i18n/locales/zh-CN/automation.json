@@ -207,7 +207,21 @@
     "task": "任务描述",
     "taskPlaceholder": "例如：每周一整理过去一周新增的阅读笔记，提炼重点并写入周报。",
     "noAgents": "还没有可用智能体。",
-    "createAgent": "创建智能体"
+    "createAgent": "创建智能体",
+    "workspaceDescription": "按计划运行智能体，在每次运行中查看结果并继续对话。",
+    "tasks": "定时任务",
+    "noTasks": "还没有定时任务",
+    "paused": "已暂停",
+    "runsEmptyDescription": "任务按设定时间执行后，每次运行会显示在这里。",
+    "openRunNamed": "打开 {{date}} 的运行",
+    "runAt": "{{date}} 的运行",
+    "finishedAt": "完成于 {{date}}",
+    "openRun": "查看对话并继续",
+    "openRunFirst": "请先打开已有的任务运行",
+    "runPreview": {
+      "running": "任务正在准备或执行，结果会显示在这里。",
+      "empty": "打开这次运行，查看完整对话或继续任务。"
+    }
   },
   "sourceEmpty": {
     "table": {

@@ -135,3 +135,9 @@ pnpm --filter @tabdo/client test:browser -- name-conflicts kanban-overflow
 ```
 
 名称测试覆盖数据库直接写入、作用域重名、并发、历史重复与批量回滚。看板测试检查中文、连续长文本和换行内容在两种密度下的实际宽度与省略号，并确认详情交互。成员测试使用官方 Pi Harness 与本地模型 fixture，依次读取成员工具的真实结果、更新 person 字段、检查已保存 userId；同时核对跨工作区隔离、智能体查询与分页。测试不发送真实模型请求，不修改已有工作区数据，也不生成截图。
+
+## 定时任务会话
+
+`browser/scheduled-sessions.mjs` 验证左侧任务与右侧运行卡片、空状态、原生会话继续、结果摘要更新、编辑返回以及窄屏布局。它只创建隔离工作区，使用本地模型 fixture，普通 `/threads` 列表不能返回定时任务会话。
+
+`test/harness/automation-agent-action.test.ts` 验证由实际定时动作创建的 `scheduled_task` 会话、任务归属、私人会话权限、运行分页，以及继续消息仍使用同一个原生 runtime session、不会重复已完成的工具操作。`test/routes/chat.test.ts` 中手动取消不再保存停止系统提示，超时仍保留原因与工具结果。

@@ -18,6 +18,8 @@ import { TablesPage } from "@/pages/app/TablesPage";
 import { TableDetailPage } from "@/pages/app/TableDetailPage";
 import { TableAutomationsPage } from "@/pages/app/TableAutomationsPage";
 import { AutomationsPage } from "@/pages/app/AutomationsPage";
+import { SchedulesPage } from "@/pages/app/SchedulesPage";
+import { ScheduledTaskRunsPage, ScheduledRunChatPage, ScheduledTasksEmpty } from "@/pages/app/ScheduledTaskRunsPage";
 import { ScheduledTaskDetailPage } from "@/pages/app/ScheduledTaskDetailPage";
 import { AutomationDetailPage } from "@/pages/app/AutomationDetailPage";
 const ReportsPage = lazy(() => import("@/pages/app/ReportsPage").then((module) => ({ default: module.ReportsPage })));
@@ -61,9 +63,13 @@ export default function App() {
           <Route index element={<WorkspaceHomePage />} />
           <Route path="tables" element={<TablesPage />} />
           <Route path="integrations" element={<Navigate to="/app/settings?tab=agentmail" replace />} />
-          <Route path="schedules" element={<AutomationsPage scheduled />} />
-          <Route path="schedules/new" element={<ScheduledTaskDetailPage />} />
-          <Route path="schedules/:automationId" element={<ScheduledTaskDetailPage />} />
+          <Route path="schedules" element={<SchedulesPage />}>
+            <Route index element={<ScheduledTasksEmpty />} />
+            <Route path="new" element={<ScheduledTaskDetailPage />} />
+            <Route path=":automationId" element={<ScheduledTaskRunsPage />} />
+            <Route path=":automationId/edit" element={<ScheduledTaskDetailPage />} />
+            <Route path=":automationId/runs/:threadId" element={<ScheduledRunChatPage />} />
+          </Route>
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="automations/new" element={<AutomationDetailPage />} />
           <Route path="automations/:automationId" element={<AutomationDetailPage />} />

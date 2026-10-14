@@ -9,6 +9,7 @@ import {
   boolean,
   index,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
 
 export { COLUMN_TYPES } from "@tabdo/shared";
@@ -461,6 +462,8 @@ export const chatThreads = pgTable("chat_threads", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   clientId: text("client_id").notNull(),
+  kind: text("kind").$type<"chat" | "scheduled_task">().default("chat").notNull(),
+  scheduledTaskId: uuid("scheduled_task_id").references(() => automations.id, { onDelete: "cascade" }),
   title: text("title"),
   status: text("status").$type<"regular">().default("regular").notNull(),
   custom: jsonb("custom").$type<Record<string, unknown>>().default({}).notNull(),
@@ -469,7 +472,10 @@ export const chatThreads = pgTable("chat_threads", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
 }, (t) => [uniqueIndex("chat_threads_client_idx").on(t.userId, t.organizationId, t.clientId),
-  index("chat_threads_owner_idx").on(t.userId, t.organizationId, t.updatedAt, t.id)]);
+  index("chat_threads_owner_idx").on(t.userId, t.organizationId, t.updatedAt, t.id),
+  index("chat_threads_kind_owner_idx").on(t.userId, t.organizationId, t.kind, t.createdAt, t.id),
+  index("chat_threads_scheduled_task_idx").on(t.scheduledTaskId, t.userId, t.createdAt, t.id),
+  check("chat_threads_kind_check", sql`(${t.kind}='chat' AND ${t.scheduledTaskId} IS NULL) OR (${t.kind}='scheduled_task' AND ${t.scheduledTaskId} IS NOT NULL)`)]);
 
 export const chatMessages = pgTable("chat_messages", {
   id: uuid("id").defaultRandom().primaryKey(),

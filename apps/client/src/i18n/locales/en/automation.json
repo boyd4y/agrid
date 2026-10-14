@@ -207,7 +207,21 @@
     "task": "Task",
     "taskPlaceholder": "Every Monday, summarize last week’s reading notes and write a weekly report.",
     "noAgents": "No agents available.",
-    "createAgent": "Create agent"
+    "createAgent": "Create agent",
+    "workspaceDescription": "Run agents on a schedule, review results and continue each run.",
+    "tasks": "Scheduled tasks",
+    "noTasks": "No scheduled tasks yet",
+    "paused": "Paused",
+    "runsEmptyDescription": "Each scheduled run will appear here after the task starts.",
+    "openRunNamed": "Open run from {{date}}",
+    "runAt": "Run from {{date}}",
+    "finishedAt": "Finished {{date}}",
+    "openRun": "View and continue conversation",
+    "openRunFirst": "Open an existing task run first",
+    "runPreview": {
+      "running": "The task is preparing or running. Results will appear here.",
+      "empty": "Open this run to review the conversation or continue the task."
+    }
   },
   "sourceEmpty": {
     "table": {

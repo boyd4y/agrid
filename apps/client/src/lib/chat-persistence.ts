@@ -4,9 +4,10 @@ import { createAssistantStream } from "assistant-stream";
 import i18n from "@/i18n";
 
 export type ChatPageContext = {
-  page: "ai" | "tables" | "table" | "automations" | "reports" | "skills" | "agents" | "members" | "settings";
+  page: "ai" | "tables" | "table" | "automations" | "reports" | "skills" | "agents" | "members" | "settings" | "schedules";
   tableId: string | null;
   reportId?: string | null;
+  scheduledTaskId?: string | null;
 };
 type ThreadRow = { id: string; title: string | null; status: "regular"; custom: Record<string, unknown>; lastMessageAt: string | null };
 type StoredMessage = { id: string; parentId: string | null; format: string; content: unknown };
@@ -50,13 +51,15 @@ function useThreadAdapters() {
 }
 
 /** The adapter identity is stable; initialization snapshots the current page. */
-export function createThreadAdapter(getContext: () => { context: ChatPageContext; agentId: string | null }): RemoteThreadListAdapter {
+export function createThreadAdapter(getContext: () => { context: ChatPageContext; agentId: string | null }, pinnedThreadId?: string): RemoteThreadListAdapter {
   return {
     list: async (params) => {
+      if (pinnedThreadId) return { threads: [metadata(await request<ThreadRow>(`/api/threads/${pinnedThreadId}`))] };
       const result = await request<{ threads: ThreadRow[]; nextCursor?: string }>(`/api/threads${params?.after ? `?after=${encodeURIComponent(params.after)}` : ""}`);
       return { threads: result.threads.map(metadata), nextCursor: result.nextCursor };
     },
     initialize: async (clientId) => {
+      if (pinnedThreadId) throw new Error(i18n.t("automation:scheduled.openRunFirst"));
       const row = await request<ThreadRow>("/api/threads", { clientId, ...getContext() });
       return { remoteId: row.id };
     },

@@ -201,3 +201,11 @@ export function triggerMatches(
 
   return false;
 }
+
+/** A scheduled occurrence projects its private native conversation, without copying messages. */
+export type ScheduledTaskRun = {
+  id: string; automationId: string; status: AutomationRunStatus;
+  createdAt: string | Date; finishedAt: string | Date | null; error: string | null;
+  threadId: string | null; title: string | null; prompt: string;
+  preview: string | null; nativeStatus: import("./chat.js").AgentRunStatus | null;
+};

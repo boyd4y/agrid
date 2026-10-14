@@ -305,7 +305,7 @@ export const api = {
       organization: { id: string; name: string; slug: string } | null;
     }>("/api/members/me"),
 
-  getChatThread: (id: string) => request<{ id: string }>(`/api/threads/${encodeURIComponent(id)}`),
+  getChatThread: (id: string) => request<{ id: string; kind: "chat" | "scheduled_task"; scheduledTaskId: string | null }>(`/api/threads/${encodeURIComponent(id)}`),
 
   listAutomations: (tableId: string) =>
     request<AutomationRule[]>(`/api/tables/${tableId}/automations`),
@@ -336,6 +336,8 @@ export const api = {
     request<AutomationRule>("/api/automations", { method: "POST", body: JSON.stringify(data) }),
   updateAutomation: (id: string, data: Omit<import("@tabdo/shared").UpdateAutomationInput, "automationId">) =>
     request<AutomationRule>(`/api/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  listScheduledRuns: (id: string, offset: number, limit: number, signal?: AbortSignal) => request<{ runs: import("@tabdo/shared").ScheduledTaskRun[]; hasMore: boolean }>(`/api/schedules/${id}/runs?offset=${offset}&limit=${limit}`, { signal }),
+  getScheduledRunThread: (taskId: string, threadId: string) => request<{ id: string; title: string | null; custom: Record<string, unknown> }>(`/api/schedules/${taskId}/runs/${threadId}`),
   listRuleRuns: (id: string) => request<AutomationRun[]>(`/api/automations/${id}/runs`),
   listIntegrations: () => request<{ connections: import("@tabdo/shared").IntegrationConnection[]; canManage: boolean }>("/api/integrations"),
   createIntegration: (data: { provider: "agentmail"; name: string; apiKey: string }) => request<{ connection: import("@tabdo/shared").IntegrationConnection }>("/api/integrations", { method: "POST", body: JSON.stringify(data) }),

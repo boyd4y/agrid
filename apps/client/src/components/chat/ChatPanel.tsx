@@ -67,8 +67,11 @@ export type OpenPreviewPayload = {
 type Props = {
   tableId: string | null;
   onMutated: (tableId?: string | null) => void;
-  /** home = split chat pane; drawer = right AI drawer */
-  variant?: "drawer" | "home";
+  /** home = workspace chat; drawer = floating chat; session = one existing task run */
+  variant?: "drawer" | "home" | "session";
+  remoteThreadId?: string;
+  scheduledTaskId?: string;
+  sessionAgentId?: string;
   /** Open/close the right UI Slot plugin panel (tool-driven). */
   onOpenPreview?: (payload: OpenPreviewPayload) => void;
   previewOpen?: boolean;
@@ -223,6 +226,9 @@ function ScopedChatPanel({
   previewOpen = false,
   onTogglePreview,
   resourceKey: resourceKeyProp,
+  remoteThreadId,
+  scheduledTaskId,
+  sessionAgentId,
 }: Props) {
   const { t, i18n } = useTranslation("chat");
   const welcomeSuggestions = useMemo(
@@ -260,13 +266,14 @@ function ScopedChatPanel({
   const [agentId, setAgentId] = useState<string | null>(null);
   const selectSavedAgent = useCallback(
     (id: string) => {
-      if (agents.some((agent) => agent.id === id)) setAgentId(id);
+      const match = agents.find(agent => agent.id === id || agent.userId === id);
+      if (match) setAgentId(match.id);
     },
     [agents],
   );
   const { pathname, search: locationSearch } = useLocation();
   const page: ChatPageContext["page"] =
-    variant === "home"
+    scheduledTaskId ? "schedules" : variant === "home"
       ? "ai"
       : /^\/app\/skills(?:\/|$)/.test(pathname)
         ? "skills"
@@ -301,12 +308,12 @@ function ScopedChatPanel({
 
   const requestRef = useRef<RequestBody>({
     agentId: null,
-    context: { page, tableId: boundTableId, reportId },
+    context: { page, tableId: boundTableId, reportId, scheduledTaskId },
   });
-  requestRef.current = { agentId, context: { page, tableId: boundTableId, reportId } };
+  requestRef.current = { agentId, context: { page, tableId: boundTableId, reportId, scheduledTaskId } };
   const threadAdapter = useMemo(
-    () => createThreadAdapter(() => requestRef.current),
-    [],
+    () => createThreadAdapter(() => requestRef.current, remoteThreadId),
+    [remoteThreadId],
   );
 
   const onMutatedRef = useRef(onMutated);
@@ -326,6 +333,7 @@ function ScopedChatPanel({
           const list = (r.members ?? []).filter((m) => m.kind === "agent");
           setAgents(list);
           setAgentId((prev) => {
+            if (variant === "session") return list.find(agent => agent.id === sessionAgentId || agent.userId === sessionAgentId)?.id ?? null;
             if (prev && list.some((a) => a.id === prev)) return prev;
             return list[0]?.id ?? null;
           });
@@ -346,7 +354,7 @@ function ScopedChatPanel({
       cancelled = true;
       window.removeEventListener("tabdo:agents-changed", onAgentsChanged);
     };
-  }, []);
+  }, [variant, sessionAgentId]);
 
   const transport = useMemo(
     () =>
@@ -434,8 +442,9 @@ function ScopedChatPanel({
   );
 
   const [showFloatingThreads, setShowFloatingThreads] = useState(false);
-  const isHome = variant === "home";
-  const noAgents = !agentsLoading && agents.length === 0;
+  const isHome = variant !== "drawer";
+  const showThreadNavigation = variant === "home";
+  const noAgents = !agentsLoading && (agents.length === 0 || variant === "session" && !agentId);
   const selectAgent = async (next: string) => {
     if (next === agentId) return;
     if (runtime.thread.getState().isRunning) { toast.info(t("stopBeforeSwitch"));return; }
@@ -453,7 +462,7 @@ function ScopedChatPanel({
     <AssistantRuntimeProvider runtime={runtime} config={auiConfig}>
       <AskUserQuestionsUI />
       <ChatRunsProvider onRecovered={() => onMutatedRef.current()}>
-      <ResourceScopedThreads resourceKey={resourceKey} remoteThreadId={variant === "home" ? new URLSearchParams(locationSearch).get("thread") : null} />
+      <ResourceScopedThreads resourceKey={resourceKey} remoteThreadId={remoteThreadId ?? (variant === "home" ? new URLSearchParams(locationSearch).get("thread") : null)} />
       <ThreadAgentBinding onSelect={selectSavedAgent} />
       <FloatingAssistantFrame
         floating={!isHome}
@@ -467,7 +476,7 @@ function ScopedChatPanel({
           data-testid="chat-panel"
           data-resource-key={resourceKey}
         >
-          {isHome && !noAgents && (
+          {showThreadNavigation && !noAgents && (
             <aside
               id={threadSidebarId}
               className={cn(
@@ -490,7 +499,7 @@ function ScopedChatPanel({
                 data-testid="chat-toolbar"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-1">
-                  {isHome && !noAgents && (
+                  {showThreadNavigation && !noAgents && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -515,7 +524,7 @@ function ScopedChatPanel({
                       )}
                     </Button>
                   )}
-                  {isHome && !noAgents && (
+                  {showThreadNavigation && !noAgents && (
                     <SessionSwitcher
                       resourceKey={resourceKey}
                       className={cn(
@@ -535,6 +544,8 @@ function ScopedChatPanel({
                     <span className="text-[12px] text-muted-foreground">
                       {t("noAgentSelected")}
                     </span>
+                  ) : agentId && variant === "session" ? (
+                    <span className="truncate text-sm font-medium">{agents.find(agent => agent.id === agentId)?.name}</span>
                   ) : agentId ? (
                     <ModelSelector
                       key={agentOptions.map((o) => o.id).join(",")}

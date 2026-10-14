@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
@@ -32,6 +33,7 @@ function isEmptyUnboundTitle(title: string | undefined): boolean {
  */
 export function ResourceScopedThreads({ resourceKey, remoteThreadId }: Props) {
   const aui = useAui();
+  const navigate = useNavigate();
   const mainThreadId = useAuiState((s) => s.threads.mainThreadId);
   const threadItems = useAuiState((s) => s.threads.threadItems);
   const isLoading = useAuiState((s) => s.threads.isLoading);
@@ -65,8 +67,11 @@ export function ResourceScopedThreads({ resourceKey, remoteThreadId }: Props) {
     // Serialize SDK switches so rapid navigation cannot apply an older selection last.
     const open = switchQueue.current.then(async () => {
       if (cancelled) return;
-      await api.getChatThread(remoteThreadId);
+      const thread = await api.getChatThread(remoteThreadId);
       if (cancelled) return;
+      if (thread.kind === "scheduled_task" && thread.scheduledTaskId && resourceKey !== `schedule:${thread.scheduledTaskId}`) {
+        navigate(`/app/schedules/${thread.scheduledTaskId}/runs/${thread.id}`, { replace: true }); return;
+      }
       await aui.threads.switchToThread(remoteThreadId);
       if (cancelled) return;
       openedRemoteRef.current = remoteThreadId;
@@ -82,7 +87,7 @@ export function ResourceScopedThreads({ resourceKey, remoteThreadId }: Props) {
     });
     switchQueue.current = open;
     return () => { cancelled = true; };
-  }, [remoteThreadId, resourceKey, aui]);
+  }, [remoteThreadId, resourceKey, aui, navigate]);
 
   // Switch pool when resourceKey changes (after thread list is ready)
   useEffect(() => {
