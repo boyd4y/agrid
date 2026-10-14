@@ -1,5 +1,7 @@
 # Column type audit (shadcn-only) — 2026-10-11
 
+> 历史记录：保留当时的设计、实现与验证结论，不作为当前功能承诺。现行说明见[文档索引](../README.md)。
+
 ## Checklist
 
 | Type | Display | Editor | Filter | Status |

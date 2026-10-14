@@ -21,7 +21,7 @@
 | View switch | Table page: Grid \| Board \| **Form** (and optional public `/f/:formId` later) |
 | Agent role | Design + open preview slot; humans (or share link) submit |
 | Formula columns | **Read-only** on form (computed after save / display-only on edit) |
-| Multi-tenant | Same as `MULTI_TENANT.md` — all form defs filtered by org via table FK |
+| Multi-tenant | Same as [multi-tenant design](multi-tenant.md) — all form defs filtered by org via table FK |
 | Presentation (v2) | Typeform-like **themes** + layout modes (card / one-at-a-time); not a Typeform clone |
 | Builder (v2) | **Drag-drop** field order + right inspector for **question-type settings** |
 

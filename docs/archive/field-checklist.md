@@ -1,5 +1,7 @@
 # 表格字段操作完整性清单
 
+> 历史记录：保留当时的设计、实现与验证结论，不作为当前功能承诺。现行说明见[文档索引](../README.md)。
+
 审计并补全（Feishu / Notion 风格 MVP）。UI 与 Agent（`/api/commands` + AI tools）共用 `@tabdo/shared` 命令层与 `applyFilters`。
 
 | 能力 | 审计前 | 现状 | 说明 |

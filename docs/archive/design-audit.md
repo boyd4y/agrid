@@ -1,5 +1,7 @@
 # Dark/light consistency audit — 2026-10-12
 
+> 历史记录：保留当时的设计、实现与验证结论，不作为当前功能承诺。现行说明见[文档索引](../README.md)。
+
 Internal implementation notes; not a public documentation page.
 
 ## Findings and changes

@@ -32,7 +32,7 @@ Web app. Public marketing/docs/blog. Authenticated workspace with left nav; `/ap
 ## Constraints
 - UI: shadcn/ui + Tailwind semantic tokens; no native form controls
 - One command layer (`POST /api/commands`); no forked agent API
-- Shared domain commands for UI and agent mutations; external MCP coverage is tracked separately in ITERATIONS.md
+- Shared domain commands for UI and agent mutations; external MCP coverage is tracked separately in [the iteration history](docs/archive/iterations.md)
 - Brand: **tabdo**
 - Primary brand domain: **tabdo.ai**; alternate domain: **tabdo.dev**
 

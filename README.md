@@ -7,6 +7,13 @@
 React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。  
 人机能做同一套操作：共享命令层、看板、右侧 AI（Codex / Claude / Pi）。
 
+## 仓库文档
+
+- [文档索引](docs/README.md)：功能说明、架构、开发与部署指南。
+- [贡献指南](AGENTS.md)：目录结构、开发命令、代码和测试约定。
+- [产品定位](PRODUCT.md)与[设计规范](DESIGN.md)：产品与界面的长期约定。
+- [历史记录](docs/archive/README.md)：迭代与审计快照，具体能力以现行说明和代码为准。
+
 ## 功能
 
 ### 营销站与认证
@@ -146,7 +153,7 @@ TABDO_API_URL=http://localhost:3001 TABDO_API_KEY=agt_… \
 | `POST /api/tables/:id/rows/query` | Keyset 窗口查询（filters/sort/cursor/kanban） |
 | `GET /api/tables/:id/rows` | 同上（querystring） |
 
-字段完整性见 [`FIELD_CHECKLIST.md`](./FIELD_CHECKLIST.md)。
+字段操作历史清单见 [字段审计记录](docs/archive/field-checklist.md)；当前字段约束见 [名称唯一性](docs/name-uniqueness.md)、[关联与汇总](docs/table-relations.md)和[文件字段](docs/file-storage.md)。
 
 
 ## 自动化（飞书 when / if / then）
@@ -178,8 +185,8 @@ pnpm --filter @tabdo/server queue:status
 API 启动 `node dist/index.js`，后台启动 `node dist/queue/main.js`。
 单个 `automation` 队列和后台入口，同时运行 relay 与动作消费者；增加后台副本时，数据库原子分配投递批次，Redis 分配执行任务。
 Compose 样例见 `docker-compose.workers.yml`；生产 Redis 使用专用持久化 HA 服务，
-不能与可驱逐 key 的缓存共用。部署与验证范围见 [AUTOMATION-RELIABILITY.md](./AUTOMATION-RELIABILITY.md)。
+不能与可驱逐 key 的缓存共用。部署与验证范围见 [自动化可靠性](docs/automation-reliability.md)。
 
-关联与汇总已实现，详见 [TABLE-RELATIONS.md](./TABLE-RELATIONS.md)。新增迁移 `0012_table_relations`，本地执行 `pnpm db:migrate`。
+关联与汇总已实现，详见 [关联与汇总](docs/table-relations.md)。新增迁移 `0012_table_relations`，本地执行 `pnpm db:migrate`。
 
 Workspace 包统一为 `@tabdo/client`、`@tabdo/server`、`@tabdo/shared`、`@tabdo/mcp`；根包名称为 `tabdo`。
