@@ -156,6 +156,12 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 
 每阶段单独提交。移动文件不算完成解耦；底层包能处理非 Tabdo 消息和普通对象 key，业务测试行为不变，才算第一阶段完成。
 
+### 并行实施批次（2026-10-14）
+
+用户已要求 agent team 并行实施。三条线分别负责平台请求依赖、独立执行器、CF 协调/触发；公共接口、迁移和最终接线由主代理汇总。平台资源使用显式作用域，禁止跨请求修改共享 DB/Auth；runner 只接收持久 Run/执行引用，从 PG 重建权限、输入与检查点，不接收工具闭包。通用 execution 包只管理计算资源，不拥有产品 Run 状态。CF 协调与队列入口接收注入的持久服务，不能靠空成功回调或代理常驻 Node API 宣称完成。
+
+各线独立提交前必须完成相应真实用例；共用构建、安装、锁文件、数据库迁移及全仓回归统一执行，避免并行清理 dist 导致虚假失败。验收区分通用能力、产品接线、本地 workerd/跨进程证明和远程部署，不提前勾选完整双模式完成。
+
 ## 10. 验收要求
 
 - 底层 queue/storage 的 source、类型和 public exports 不含 automation/table/user/org 协议，不依赖 shared/platform/schema。默认入口与 CF adapter 的 bundle 不包含 Node-only 供应商模块。
