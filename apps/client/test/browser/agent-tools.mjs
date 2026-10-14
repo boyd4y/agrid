@@ -12,10 +12,10 @@ try {
   assert(formToolIds.includes('create_form_view'));
   assert(catalog.tools.every(tool => tool.source === 'platform'), 'catalog configures platform tools only');
   assert.equal(catalog.tools.some(tool => ['get_task_state', 'create_goal', 'update_goal', 'update_plan'].includes(tool.id)), false, 'retired task controls are absent');
-  const expectedGroups = ['platform-tables', 'platform-forms', 'platform-reports', 'platform-automations', 'platform-skills'].sort();
+  const expectedGroups = ['platform-tables', 'platform-forms', 'platform-reports', 'platform-automations'].sort();
   const assertPlatformGroups = async () => {
-    assert.deepEqual(await page.getByTestId('agent-tool-fields').locator('[data-tool-group]').evaluateAll(nodes => nodes.map(node => node.dataset.toolGroup).sort()), expectedGroups, 'exactly five platform groups; no native or task group');
-    assert.equal(await page.getByTestId('agent-tool-fields').getByRole('switch').count(), 5);
+    assert.deepEqual(await page.getByTestId('agent-tool-fields').locator('[data-tool-group]').evaluateAll(nodes => nodes.map(node => node.dataset.toolGroup).sort()), expectedGroups, 'exactly four platform groups; no native or task group');
+    assert.equal(await page.getByTestId('agent-tool-fields').getByRole('switch').count(), 4);
   };
   const group = id => page.getByTestId('agent-tool-fields').locator(`[data-tool-group="${id}"]`);
   const toggle = id => group(id).getByRole('switch');
@@ -31,9 +31,9 @@ try {
   await page.locator('#agentName').fill('能力配置助手');
   await toolsStep();
   assert.equal(await page.getByTestId('agent-tool-fields').locator('[role="switch"][aria-checked="false"]').count(), 0);
-  assert.equal(await page.locator('details[open]').count(), 0, 'API details start collapsed');
+  assert.equal(await page.locator('[data-slot=collapsible][data-state=open]').count(), 0, 'API details start collapsed');
   await toggle('platform-tables').click();
-  await group('platform-tables').locator('summary').click(); await group('platform-tables').locator('[data-tool-id="create_table"]').waitFor();
+  await group('platform-tables').locator('[data-slot=collapsible-trigger]').click(); await group('platform-tables').locator('[data-tool-id="create_table"]').waitFor();
   assert.equal(await group('platform-tables').locator('[data-tool-id]').getByRole('switch').count(), 0, 'API detail rows are read-only');
 
   await basicsStep(); await selectHarness('Codex'); await toolsStep();
@@ -58,12 +58,19 @@ try {
   assert.equal(await page.getByRole('button', { name: '保存修改', exact: true }).isDisabled(), true);
   const basicTab = page.getByRole('tab', { name: '基础信息', exact: true });
   await basicTab.focus(); await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Skill');
+  await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('[role="tab"][aria-label="Skill"]')?.getAttribute('aria-selected') === 'true');
-  await page.keyboard.press('ArrowDown'); await toggle('platform-tables').waitFor(); await assertPlatformGroups();
+  await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '工具');
+  await page.keyboard.press('Enter'); await toggle('platform-tables').waitFor(); await assertPlatformGroups();
   await page.locator('#agent-tool-search').focus(); // Measure the tab surface after moving the keyboard focus ring.
   const activeStyle = await page.getByRole('tab', { name: '工具', exact: true }).evaluate(node => ({ background: getComputedStyle(node).backgroundColor, shadow: getComputedStyle(node).boxShadow }));
-  assert.equal(activeStyle.background, 'rgba(0, 0, 0, 0)'); assert(activeStyle.shadow === 'none' || /^(?:rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(?:, )?)+$/.test(activeStyle.shadow), 'line tabs have no visible shadow; keyboard focus retains its ring');
+  assert.notEqual(activeStyle.background, 'rgba(0, 0, 0, 0)', 'the current editor navigation has a selected background');
+  assert.equal(await page.getByRole('tab', { name: '工具', exact: true }).evaluate(node => getComputedStyle(node, '::after').display), 'none', 'no selected white dot');
   assert.equal(await page.getByRole('tablist', { name: '智能体配置', exact: true }).getAttribute('data-orientation'), 'vertical');
+  assert.equal(await page.getByRole('tablist', { name: '智能体配置', exact: true }).getAttribute('data-variant'), 'navigation');
+  assert.equal(await page.getByTestId('agent-editor').locator('aside').count(), 1);
   assert.equal(await group('platform-tables').getAttribute('data-mixed'), 'true');
   await toggle('platform-forms').click();
   assert.equal(await group('platform-forms').getAttribute('data-mixed'), 'false'); assert.equal(await group('platform-tables').getAttribute('data-mixed'), 'true', 'toggling forms preserves the existing table exception');
@@ -100,5 +107,5 @@ try {
   const humanAvatar = await memberEditor.getByTestId('avatar-field').locator(':scope > div > span').first().boundingBox(); assert(humanAvatar.width <= 40 && humanAvatar.height <= 40, 'member and agent avatar editors share density');
   await memberEditor.getByRole('button', { name: '取消', exact: true }).click(); await memberEditor.waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);
-  console.log('PASS five platform capability groups/no native or task config, mixed legacy platform choices, shared Harness settings, create/edit persistence, cancel/failed save/retry, vertical line tabs and keyboard, member avatar density, light/dark/700/320/footer; no model calls or screenshots');
+  console.log('PASS four platform capability groups without duplicate skill reader/no native or task config, mixed legacy platform choices, shared Harness settings, create/edit persistence, cancel/failed save/retry, settings-style vertical navigation without dot and keyboard, member avatar density, light/dark/700/320/footer; no model calls or screenshots');
 } finally { await fixture.close(); }

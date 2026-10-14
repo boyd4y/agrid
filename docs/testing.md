@@ -115,10 +115,12 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 
 `test/automation/` 验证真实数据命令与receipt原子事务、顺序引用、已提交步骤不重放、邮件补正文后条件match/skip，以及并发计划去重和DST。原生智能体 fixture 使用实际官方Pi、平台数据工具、askUserQuestions和普通chat答案续接；断言同一native run/input及单次工具副作用。所有fixture精确清理自己组织，不truncate其他测试组织。
 
-`integrations.test.ts` 用官方Svix、固定origin的AgentMail协议fixture和真实DB测试投递、认证、body上限、事务故障不ACK、幂等与生命周期。不会连接真实AgentMail。`event-automations` browser suite 覆盖端点一次性token、schedule预览、typed动作保存、事件绑定/重载、失败草稿重试与自动化运行Sheet；集成界面验证四个设置tabs、无内部搜索/tabs、单创建入口、居中Dialog、错误重试与注册失败保留选择。首次连接的上游响应使用浏览器fixture，凭证创建与修改实际写入隔离库，不宣称已连接真实邮箱。
+`integrations.test.ts` 用官方Svix、固定origin的AgentMail协议fixture和真实DB测试投递、认证、body上限、事务故障不ACK、幂等与生命周期。不会连接真实AgentMail。`event-automations` browser suite 覆盖端点一次性token、定时/事件分页隔离、typed动作保存、事件绑定/重载、失败草稿重试与自动化运行Sheet；集成界面验证四个设置tabs、无内部搜索/tabs、单创建入口、居中Dialog、错误重试与注册失败保留选择。首次连接的上游响应使用浏览器fixture，凭证创建与修改实际写入隔离库，不宣称已连接真实邮箱。
 
 新来源配置接口、模型与远程执行边界见 [事件自动化](event-automations.md)与[集成部署](integrations.md)。生产外部服务凭证验收不包含在本地PASS范围。
 
 ## 设置标签页与个人密钥
 
 `api-keys` browser suite 验证个人密钥创建/真实删除及失败重试，删除后GET列表为空且旧Bearer立即401，并核对设置框架、垂直标签、深链、刷新、浏览器返回、旧集成地址跳转和未知标签归一化。两个suite直接检查选中菜单伪元素不显示、整行高亮、列表四边边框与间距、真实hover/focus反馈及统一删除颜色。320px验证先收起现有AppShell侧栏，局部tabpanel核对scrollWidth/clientWidth，不用全局隐藏溢出冒充通过；它不代表全站侧栏已实现手机自动收起。常规只保留外观/语言，没有布局开关。
+
+`automation-sources` 验证内联来源卡片的固定高度和底部间距、表格/邮件/邮箱空状态、菜单图标一致性、窄屏与深浅模式；定时任务使用专门单页表单，保存真正的 `run_agent` 智能体与任务描述、时间/时区，失败保留输入，列表与旧链接独立路由。`native-controls.test.mjs` 扫描应用和 UI 包，禁止原生 picker、datalist、单选/滑条和 details 表面；共享组件以 Storybook 展示。浏览器文件选择仅保留隐藏的系统文件选择入口，不在产品中渲染原生文件控件。
