@@ -23,6 +23,10 @@ import { HTTPException } from "hono/http-exception";
 import { questionContinuation, resumeQuestionRun } from "../harness/questions.js";
 import type { NativeQuestionResultRequest } from "@tabdo/shared";
 
+import { acquireChatAdmission, releaseChatAdmission } from "../harness/admission.js";
+import { chatRequestLimits } from "../harness/limits.js";
+import { readChatRequestBody, validateChatMessageBudget, validateChatPromptBudget } from "../harness/request-budget.js";
+
 export const chatRoute = new Hono();
 
 chatRoute.get("/status", (c) => {
@@ -42,11 +46,12 @@ chatRoute.post("/", async (c) => {
   if (!actor?.organizationId) return c.json({ error: "未授权" }, 401);
   const common = z.object({ id: z.uuid(), agentId: z.string().min(1), context: z.unknown() });
   const body = z.discriminatedUnion("intent", [common.extend({ intent: z.literal("message"),
-    messages: z.array(z.object({ id: z.string().min(1).max(200), role: z.enum(["user", "assistant"]), parts: z.array(z.object({ type: z.string() }).passthrough()).max(500) }).passthrough()).min(1),
+    messages: z.array(z.object({ id: z.string().min(1).max(200), role: z.enum(["user", "assistant"]), parts: z.array(z.object({ type: z.string() }).passthrough()).max(500) }).passthrough()).min(1).max(chatRequestLimits().maxMessagesPerRequest),
   }), common.extend({ intent: z.literal("tool-result"), assistantMessageId: z.string().min(1),
     toolResults: z.array(z.object({ toolCallId: z.string().min(1), output: z.unknown() })).min(1),
-  })]).parse({ intent: "message", ...await c.req.json() });
+  })]).parse({ intent: "message", ...await readChatRequestBody(c.req.raw) as object });
   const messages = (body.intent === "message" ? body.messages : []) as UIMessage[];
+  validateChatMessageBudget(messages);
   const agentId = body.agentId;
 
   if (!agentId) {
@@ -67,6 +72,7 @@ chatRoute.post("/", async (c) => {
   const { profile, harness, modelId, mode, disabledTools, skills, tools, agentsDocument, system, piModel } =
     await prepareNativeChatAgent({ actor, agentId, context, validateInput: harness => {
       lastText = lastUser ? prepareHarnessUserPrompt({ harness, parts: lastUser.parts }) : "";
+      validateChatPromptBudget(lastText);
       if (body.intent === "message") {
         if (!lastUser) throw new HTTPException(400, { message: "缺少用户消息" });
         if (!lastText.trim()) throw new HTTPException(400, { message: "请输入要执行的任务" });
@@ -74,8 +80,10 @@ chatRoute.post("/", async (c) => {
     } });
   if (thread.kind === "scheduled_task" && ![profile.memberId, profile.userId].includes(String(thread.custom.agentId))) return c.json({ error: "此运行需要使用原智能体继续" }, 409);
   c.req.raw.signal.throwIfAborted();
-  const lease = await claimRuntimeLease(body.id, actor);
+  const admission = acquireChatAdmission(actor);
+  let lease: Awaited<ReturnType<typeof claimRuntimeLease>> | undefined;
   try {
+    lease = await claimRuntimeLease(body.id, actor);
     const record = await prepareRuntimeRecord(lease, actor, { profileId: profile.id, harness, mode });
     c.req.raw.signal.throwIfAborted();
     const pendingQuestion = questionContinuation(record);
@@ -84,7 +92,7 @@ chatRoute.post("/", async (c) => {
     const { id: userMessageId, ...userContent } = lastUser ?? { id: "", role: "user", parts: [] };
     const run = resumed?.run ?? await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
     return createUIMessageStreamResponse({ stream: createNativeChatStream({
-      actor, lease, record, run, harness, modelId, piModel, instructions: system, agentsDocument,
+      actor, admission, lease, record, run, harness, modelId, piModel, instructions: system, agentsDocument,
       // The claimed Run owns cancellation. Closing the browser detaches its
       // projection; explicit stop is persisted through the Run cancel API.
       tools, disabledTools, skills, prompt: lastText, messages: resumed?.messages ?? messages,
@@ -95,7 +103,8 @@ chatRoute.post("/", async (c) => {
       metadata: { agentId: profile.memberId, harness, modelId, runtime: mode },
     }), consumeSseStream: ({ stream }) => { void consumeStream({ stream }); } });
   } catch (error) {
-    await releaseRuntimeLease(lease);
+    try { if (lease) await releaseRuntimeLease(lease); }
+    finally { releaseChatAdmission(admission); }
     throw error;
   }
 });

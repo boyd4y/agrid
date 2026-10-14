@@ -1,13 +1,16 @@
 import { mkdir, open, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { pipeline } from "node:stream/promises";
+import { createWriteStream } from "node:fs";
 import { Readable } from "node:stream";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 export type StorageDriver = "local" | "s3";
 export type StorageAdapter = {
   driver: StorageDriver;
-  put(key: string, bytes: Uint8Array, mimeType: string): Promise<void>;
+  put(key: string, bytes: Uint8Array | Blob, mimeType: string): Promise<void>;
   open(key: string): Promise<ReadableStream<Uint8Array>>;
   remove(key: string): Promise<void>;
 };
@@ -54,7 +57,13 @@ export function createStorageAdapter(config: StorageConfig): StorageAdapter {
     const objectPath = (key: string) => { assertKey(key); return path.join(config.localDir, key); };
     return {
       driver: "local",
-      async put(key, bytes) { const target = objectPath(key); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, bytes, { flag: "wx", mode: 0o600 }); },
+      async put(key, bytes) {
+        const target = objectPath(key);
+        await mkdir(path.dirname(target), { recursive: true });
+        if (bytes instanceof Blob) {
+          await pipeline(Readable.fromWeb(bytes.stream() as NodeReadableStream), createWriteStream(target, { flags: "wx", mode: 0o600 }));
+        } else await writeFile(target, bytes, { flag: "wx", mode: 0o600 });
+      },
       async open(key) { const handle = await open(objectPath(key), "r"); return Readable.toWeb(handle.createReadStream()) as ReadableStream<Uint8Array>; },
       async remove(key) { await unlink(objectPath(key)).catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT") throw error; }); },
     };
@@ -64,7 +73,15 @@ export function createStorageAdapter(config: StorageConfig): StorageAdapter {
   const client = new S3Client({ endpoint: settings.endpoint, region: settings.region, forcePathStyle: settings.forcePathStyle, credentials: settings.accessKeyId && settings.secretAccessKey ? { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey } : undefined, maxAttempts: 3 });
   return {
     driver: "s3",
-    async put(key, bytes, mimeType) { assertKey(key); await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: mimeType })); },
+    async put(key, bytes, mimeType) {
+      assertKey(key);
+      await client.send(new PutObjectCommand({
+        Bucket: bucket, Key: key,
+        Body: bytes instanceof Blob ? Readable.fromWeb(bytes.stream() as NodeReadableStream) : bytes,
+        ContentLength: bytes instanceof Blob ? bytes.size : bytes.byteLength,
+        ContentType: mimeType,
+      }));
+    },
     async open(key) { assertKey(key); const object = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key })); if (!object.Body) throw new Error("S3 object has no body"); return object.Body.transformToWebStream(); },
     async remove(key) { assertKey(key); await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })); },
   };

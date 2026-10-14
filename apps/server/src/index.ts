@@ -1,3 +1,4 @@
+import { runFileGcOnce } from "./storage/gc.js";
 import "./load-env.js";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
@@ -97,15 +98,22 @@ console.log(`API listening on http://localhost:${port}`);
   );
 }
 const server = serve({ fetch: app.fetch, port });
+let gcRunning: Promise<unknown> | undefined;
+const gcTimer = setInterval(() => {
+  if (!gcRunning) gcRunning = runFileGcOnce().catch(error => console.error("file.gc sweep failed", error)).finally(() => { gcRunning = undefined; });
+}, 30_000);
+gcTimer.unref();
 let shutdown: Promise<void> | undefined;
 function drainAndStop() {
   if (shutdown) return shutdown;
+  clearInterval(gcTimer);
   beginNativeDrain();
   console.log(`[api] stopping after ${activeNativeRunCount()} native Run(s) have saved`);
   shutdown = (async () => {
     const connectionsClosed = new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     if ("closeIdleConnections" in server) server.closeIdleConnections();
     await Promise.all([waitForNativeDrain(), connectionsClosed]);
+    await gcRunning;
     await client.end();
     if (process.connected) process.disconnect();
   })().catch((error) => { console.error("[api] shutdown failed", error); process.exitCode = 1; });

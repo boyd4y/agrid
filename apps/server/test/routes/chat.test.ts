@@ -10,6 +10,7 @@ if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a d
 for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
 const { db, client } = await import("../../src/db/index.js");
 const { auth } = await import("../../src/auth/index.js");
+const { acquireChatAdmission, releaseChatAdmission } = await import("../../src/harness/admission.js");
 const { chatRoute } = await import("../../src/routes/chat.js");
 const { threadsRoute } = await import("../../src/routes/threads.js");
 const { tablesRoute } = await import("../../src/routes/tables.js");
@@ -28,7 +29,7 @@ app.onError((err, c) => {
 const orgId = randomUUID(), otherOrg = randomUUID();
 const users: string[] = [];
 let cookie = "", otherCookie = "", ownerId = "", agentId = "", agentUserId = "", threadId = "", tableId = "", foreignTableId = "";
-const req = async (path: string, body?: unknown, method = "POST", authCookie = cookie) => app.request(`http://localhost:3001/api${path}`, { method: body === undefined && method === "POST" ? "GET" : method, headers: { Cookie: authCookie, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+const req = async (path: string, body?: unknown, method = "POST", authCookie = cookie, signal?: AbortSignal) => app.request(`http://localhost:3001/api${path}`, { signal, method: body === undefined && method === "POST" ? "GET" : method, headers: { Cookie: authCookie, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 const actor = () => ({ userId: ownerId, organizationId: orgId, kind: "human" as const, memberId: "owner", role: "owner", name: "Owner", email: "test@local.test" });
 
 async function signUp() {
@@ -558,7 +559,7 @@ test("native persona policy updates survive new turns and generate internal AGEN
   }
 });
 
-for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as const) test(`native run ${stop} stops a waiting model, checkpoints the result and never repeats the completed mutation`, { timeout: 15_000 }, async () => {
+for (const stop of ["cancel", "timeout", "first-output", "step", "chunk", "disconnect"] as const) test(`native run ${stop} stops a waiting model, checkpoints the result and never repeats the completed mutation`, { timeout: 15_000 }, async () => {
   let requests = 0, reachedSecond!: () => void;
   const waiting = new Promise<void>((resolve) => { reachedSecond = resolve; });
   const tableName = `Cancellation-${randomUUID()}`;
@@ -584,17 +585,24 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
   const previousLimits = Object.fromEntries(limitNames.map((name) => [name, process.env[name]]));
   process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
   process.env.OPENROUTER_API_KEY = "local-test-provider"; process.env.AI_RUN_POLL_MS = "200";
-  if (stop === "timeout") process.env.AI_CHAT_TOTAL_MS = "1000";
+  if (stop === "timeout" || stop === "disconnect") process.env.AI_CHAT_TOTAL_MS = "1000";
   if (["first-output", "step", "chunk"].includes(stop)) process.env.AI_CHAT_TOTAL_MS = "3000";
   if (stop === "first-output") process.env.AI_CHAT_FIRST_CHUNK_MS = "350";
   if (stop === "step") process.env.AI_CHAT_STEP_MS = "350";
   if (stop === "chunk") process.env.AI_CHAT_CHUNK_MS = "350";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
-    const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "cancel-user", role: "user", parts: [{ type: "text", text: "创建表格后继续说明" }] }] });
+    const disconnect = new AbortController();
+    const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "cancel-user", role: "user", parts: [{ type: "text", text: "创建表格后继续说明" }] }] }, "POST", cookie, disconnect.signal);
     assert.equal(response.status, 200);
     const completion = response.text();
     await waiting;
+    if (stop === "disconnect") disconnect.abort();
+    const extraPermit = acquireChatAdmission(actor());
+    try {
+      const rejected = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "over-budget", role: "user", parts: [{ type: "text", text: "另外一个请求" }] }] });
+      assert.equal(rejected.status, 429);
+    } finally { releaseChatAdmission(extraPermit); }
     const active = await (await req(`/threads/${thread.id}/runs`)).json();
     assert.equal(active.runs[0].status, "running");
     assert.equal((await req(`/threads/${thread.id}`, undefined, "DELETE")).status, 409);
@@ -602,6 +610,8 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
     assert.equal(concurrent.status, 409); assert.match(await concurrent.text(), /正在运行/);
     if (stop === "cancel") assert.equal((await req(`/threads/${thread.id}/runs/${active.runs[0].id}/cancel`, {})).status, 200);
     const stream = await completion;
+    const restored = [acquireChatAdmission(actor()), acquireChatAdmission(actor())];
+    restored.forEach(releaseChatAdmission);
     const explanation = stop === "cancel" ? /已停止执行/ : stop === "first-output" ? /模型首个输出等待超时/ : stop === "step" ? /本轮步骤执行超时/ : stop === "chunk" ? /模型输出流超时/ : /本轮执行超时/;
     if (stop === "cancel") assert(!stream.includes("系统提示") && !stream.includes("已停止执行"));
     else assert.match(stream, explanation);
@@ -737,7 +747,9 @@ test("Pi keeps a real output budget for long context and reports actual length e
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address();assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL, previousBudget = process.env.PI_MAX_OUTPUT_TOKENS;
+  const previousURL = process.env.OPENROUTER_BASE_URL, previousBudget = process.env.PI_MAX_OUTPUT_TOKENS, previousPrompt = process.env.AI_CHAT_MAX_PROMPT_BYTES;
+  // This provider-budget regression intentionally opts into a larger input budget.
+  process.env.AI_CHAT_MAX_PROMPT_BYTES = "262144";
   process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-test-provider";process.env.PI_MAX_OUTPUT_TOKENS = "8192";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
@@ -754,6 +766,7 @@ test("Pi keeps a real output budget for long context and reports actual length e
     const persisted = await loadMessages(thread.id, actor());assert.match(JSON.stringify(persisted.messages.at(-1)?.content), /模型输出上限/);
   } finally {
     process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    if (previousPrompt === undefined) delete process.env.AI_CHAT_MAX_PROMPT_BYTES;else process.env.AI_CHAT_MAX_PROMPT_BYTES = previousPrompt;
     if (previousBudget === undefined) delete process.env.PI_MAX_OUTPUT_TOKENS;else process.env.PI_MAX_OUTPUT_TOKENS = previousBudget;
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -906,4 +919,12 @@ test("chat normalizes legacy native/task settings while disabled platform calls 
     process.env.OPENROUTER_API_KEY = ""; process.env.OPENROUTER_BASE_URL = "";
     await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()));
   }
+});
+
+test("chat rejects excessive message counts and UTF-8 text before model preparation", async () => {
+  const payload = { id: randomUUID(), agentId, context: { page: "ai" } };
+  const message = { id: "budget-user", role: "user", parts: [{ type: "text", text: "hello" }] };
+  assert.equal((await req("/chat", { ...payload, messages: Array.from({ length: 51 }, () => message) })).status, 400);
+  assert.equal((await req("/chat", { ...payload, messages: [{ ...message, parts: [{ type: "text", text: "中".repeat(22_000) }] }] })).status, 413);
+  assert.equal((await req("/chat", { ...payload, messages: [message], padding: "a".repeat(524_288) })).status, 413);
 });

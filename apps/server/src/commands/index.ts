@@ -1,3 +1,5 @@
+import { enqueueFileGc } from "../storage/gc.js";
+import { fileObjects } from "../db/schema.js";
 export { getWorkspace, listMembers } from "./workspace.js";
 import { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
 export { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
@@ -504,6 +506,7 @@ export async function deleteTable(input: { tableId: string } & OrgScoped) {
       );
     if (dependencies.length)
       throw new Error("表格存在关联字段，请先删除关联字段，再删除表格");
+    await enqueueFileGc(tx, await tx.select().from(fileObjects).where(eq(fileObjects.tableId, table.id)));
     await tx.delete(tables).where(eq(tables.id, table.id));
     return { ok: true as const };
   });

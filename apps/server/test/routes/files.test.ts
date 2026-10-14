@@ -8,13 +8,13 @@ if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a d
 const { db, client } = await import("../../src/db/index.js");
 const { auth } = await import("../../src/auth/index.js");
 const { filesRoute } = await import("../../src/routes/files.js");
-const { organization, member, session, user, tables, columns, fileObjects } = await import("../../src/db/schema.js");
+const { organization, member, session, user, tables, columns, fileObjects, storageGcJobs } = await import("../../src/db/schema.js");
 const app = new Hono().route("/api", filesRoute);
 app.onError((error, c) => "getResponse" in error && typeof error.getResponse === "function" ? error.getResponse() : c.json({ error: error.message }, 500));
 
 test("upload failures clean partial S3 objects and recheck column ownership/config before committing", async () => {
   const orgId = randomUUID(), tableId = randomUUID(), columnId = randomUUID(); let userId = "", cookie = "";
-  let mode: "fail-put" | "retype" = "fail-put", putCount = 0;
+  let mode: "fail-put" | "retype" | "success" = "fail-put", putCount = 0;
   const objects = new Map<string, Buffer>(), deletes: string[] = [], fixtureErrors: unknown[] = [];
   const fixture = createServer(async (request, response) => {
     try {
@@ -33,7 +33,7 @@ test("upload failures clean partial S3 objects and recheck column ownership/conf
   });
   await new Promise<void>(resolve => fixture.listen(0, "127.0.0.1", resolve));
   const address = fixture.address(); assert(address && typeof address !== "string");
-  const settings = { FILE_STORAGE_DRIVER: "s3", FILE_STORAGE_S3_ENDPOINT: `http://127.0.0.1:${address.port}`, FILE_STORAGE_S3_REGION: "us-east-1", FILE_STORAGE_S3_BUCKET: "failure-fixture", FILE_STORAGE_S3_ACCESS_KEY_ID: "failure-fixture", FILE_STORAGE_S3_SECRET_ACCESS_KEY: "failure-fixture-secret", FILE_STORAGE_S3_FORCE_PATH_STYLE: "true", FILE_UPLOAD_MAX_BYTES: "8", FILE_UPLOAD_MAX_FILES: "2", FILE_UPLOAD_MAX_REQUEST_BYTES: "4096" };
+  const settings = { FILE_STORAGE_DRIVER: "s3", FILE_STORAGE_S3_ENDPOINT: `http://127.0.0.1:${address.port}`, FILE_STORAGE_S3_REGION: "us-east-1", FILE_STORAGE_S3_BUCKET: "failure-fixture", FILE_STORAGE_S3_ACCESS_KEY_ID: "failure-fixture", FILE_STORAGE_S3_SECRET_ACCESS_KEY: "failure-fixture-secret", FILE_STORAGE_S3_FORCE_PATH_STYLE: "true", FILE_STORAGE_ORG_QUOTA_BYTES: "100", FILE_UPLOAD_MAX_BYTES: "8", FILE_UPLOAD_MAX_FILES: "2", FILE_UPLOAD_MAX_REQUEST_BYTES: "4096" };
   const previous = new Map(Object.keys(settings).map(key => [key, process.env[key]]));
   Object.assign(process.env, settings);
   const upload = (values: (Blob | string)[]) => {
@@ -62,13 +62,24 @@ test("upload failures clean partial S3 objects and recheck column ownership/conf
     assert.equal((await upload(["invalid form field"])).status, 400);
     assert.equal((await upload([small, small, small])).status, 400);
     assert.equal((await upload([new Blob([new Uint8Array(9)])])).status, 413);
+    process.env.FILE_STORAGE_ORG_QUOTA_BYTES = "2";
+    assert.equal((await upload([small])).status, 413, "quota rejects before put");
+    process.env.FILE_STORAGE_ORG_QUOTA_BYTES = "100";
     process.env.FILE_UPLOAD_MAX_REQUEST_BYTES = "32";
     assert.equal((await upload([small])).status, 413, "stream body is bounded without Content-Length");
     assert.equal(putCount, before, "invalid input never reaches storage");
+    mode = "success";
+    process.env.FILE_UPLOAD_MAX_REQUEST_BYTES = "4096";
+    assert.equal((await upload([small])).status, 201, "streamed upload commits metadata");
+    process.env.FILE_STORAGE_ORG_QUOTA_BYTES = "4";
+    const afterSuccess = putCount;
+    assert.equal((await upload([small])).status, 413, "quota includes stored file bytes");
+    assert.equal(putCount, afterSuccess);
     assert.deepEqual(fixtureErrors, []);
   } finally {
     for (const [key, value] of previous) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
     await db.delete(organization).where(eq(organization.id, orgId));
+    await db.delete(storageGcJobs).where(eq(storageGcJobs.organizationId, orgId));
     if (userId) await db.delete(user).where(eq(user.id, userId));
     await new Promise<void>((resolve, reject) => fixture.close(error => error ? reject(error) : resolve()));
     await client.end();

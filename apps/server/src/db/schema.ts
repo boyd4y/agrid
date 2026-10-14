@@ -252,6 +252,16 @@ export const fileObjects = pgTable("file_objects", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [index("file_objects_org_idx").on(t.organizationId), index("file_objects_column_idx").on(t.columnId), uniqueIndex("file_objects_storage_idx").on(t.storageDriver, t.storageKey)]);
 
+/** No tenant FK: cleanup must survive organization cascades. */
+export const storageGcJobs = pgTable("storage_gc_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull(),
+  storageDriver: text("storage_driver").$type<"local" | "s3">().notNull(),
+  storageKey: text("storage_key").notNull(),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull(),
+  status: text("status").default("pending").notNull(),
+}, t => [index("storage_gc_jobs_due_idx").on(t.status, t.availableAt)]);
+
 export const rows = pgTable(
   "rows",
   {
