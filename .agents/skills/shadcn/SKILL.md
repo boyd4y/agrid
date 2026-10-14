@@ -2,22 +2,31 @@
 name: shadcn
 description: Manages shadcn components and projects — adding, searching, fixing, debugging, styling, and composing UI, including chat interfaces. Provides project context, component docs, and usage examples. Applies when working with shadcn/ui, component registries, presets, --preset codes, or any project with a components.json file. Also triggers for "shadcn init", "create an app with --preset", "switch to --preset", and for building a design system or applying a DESIGN.md or brand spec to shadcn/ui.
 user-invocable: false
-allowed-tools: Bash(npx shadcn@latest *), Bash(pnpm dlx shadcn@latest *), Bash(bunx --bun shadcn@latest *)
+allowed-tools: Bash(pnpm shadcn *), Bash(pnpm shadcn:ui *)
 ---
 
 # shadcn/ui
 
 A framework for building ui, components and design systems. Components are added as source code to the user's project via the CLI.
 
-> **IMPORTANT:** Run all CLI commands using the project's package runner: `npx shadcn@latest`, `pnpm dlx shadcn@latest`, or `bunx --bun shadcn@latest` — based on the project's `packageManager`. Examples below use `npx shadcn@latest` but substitute the correct runner for the project.
+## Repository setup (Grok, Claude Code, Codex)
 
-## Current Project Context
+Run commands from the repository root through its pinned workspace wrapper:
 
-```json
-!`npx shadcn@latest info --json`
+```bash
+pnpm shadcn info --json
+pnpm shadcn docs select input button
 ```
 
-The JSON above contains the project config and installed components. Use `npx shadcn@latest docs <component>` to get documentation and example URLs for any component.
+Use `pnpm shadcn` for `apps/client`, and `pnpm shadcn:ui` for the shared
+`packages/ui` components. The wrapper supplies the correct `--cwd` and the
+repository's proxy handling. Substitute these commands for every
+`npx shadcn@latest` example in the references; do not run the CLI against the
+monorepo root or download a different version through `pnpm dlx`.
+
+Load project context with your harness's shell tool once before component work.
+The setup is explicit so all three harnesses use the same command; it does not
+rely on Claude-specific dynamic command interpolation in Markdown.
 
 ## Principles
 

@@ -129,7 +129,8 @@ pnpm db:smoke:perf          # 验证 cursor / filter / kanban window / 单格 pa
 
 - **公开文档**：http://localhost:5173/docs — 概念、命令层 API、MCP、Skill（Marketing 顶栏「文档」）
 - **MCP 包**：[`apps/mcp/`](./apps/mcp) → `@tabdo/mcp`，tools 与 `COMMANDS` 1:1，经 `POST /api/commands`
-- **Agent Skill**：[`skills/table-ops/SKILL.md`](./skills/table-ops/SKILL.md)
+- **开发工具 Skill 适配**：[Grok / Claude / Codex](./docs/contributor-skills.md)
+- **Agent Skill**：[`skills/table-ops/SKILL.md`](./.agents/skills/table-ops/SKILL.md)
 
 ```bash
 # MCP（需 API 在跑；Agent key 可选）
