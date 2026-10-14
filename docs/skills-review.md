@@ -28,3 +28,5 @@
 验证已通过：既有 `test:skills` 6项（仅 `_agent_test` 数据库）、`test/harness/skills-bundle.test.ts` 1项、四包 frontmatter/格式校验以及本地引用路径检查。前者验证文档解析、只读内置包、分配/启用及附件读取；后者用本机协议 fixture 与官方 Pi read/bash 验证渐进加载、完整引用文件、脚本挂载和撤销恢复。该 fixture 明确证明本地 just-bash 无 Python，不宣称 CSV 脚本已执行。
 
 这验证打包与原生读取契约，不代表真实模型已完成所有场景或真实外部收件、定时、文件解析。未调用真实模型、邮箱或用户数据库。
+
+读取技能统一交给官方 Harness 的原生能力。平台已删除重复的 `read_skill` 工具实现、工具目录项与能力开关；旧 `disabledTools` 中此项按已撤下配置归一化，不影响原生读取。平台仍按工作区启用状态与智能体分配筛选 Skill，再通过 SDK `skills` 挂载包。真实 Pi fixture 验证四个 Skill 及引用文件通过原生 `read`/`bash` 按需读取。

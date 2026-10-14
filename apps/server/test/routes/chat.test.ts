@@ -75,16 +75,16 @@ test("agent creation uses a human session, creates no key, and enforces roles", 
 test("agent platform tool settings normalize legacy IDs, persist, and enforce owner role", async () => {
   const catalog = await (await req("/members/agents/tools?harness=pi")).json();
   assert.equal(catalog.harness, "pi"); assert.equal(catalog.supportsFiltering, true);
-  for (const id of ["update_cell", "read_skill"]) assert(catalog.tools.some((item: {id:string}) => item.id === id));
+  for (const id of ["update_cell"]) assert(catalog.tools.some((item: {id:string}) => item.id === id));
   assert(catalog.tools.every((item: {source:string}) => item.source === "platform"));
-  assert(!catalog.tools.some((item: {id:string}) => item.id === "webSearch"));
+  assert(!catalog.tools.some((item: {id:string}) => ["webSearch", "read_skill"].includes(item.id)));
   assert.equal((await req("/members/agents/tools?harness=unsupported")).status, 400);
   assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: ["bash"] } }, "PATCH", otherCookie)).status, 403);
   for (const disabledTools of [["unknown_tool"], ["bash", "bash"]]) {
     assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools } }, "PATCH")).status, 400);
   }
   const legacy = ["bash", "update_cell", "read_skill", "update_plan"];
-  const disabled = ["update_cell", "read_skill"];
+  const disabled = ["update_cell"];
   assert.equal((await req(`/members/agents/${agentId}`, { persona: { disabledTools: legacy } }, "PATCH")).status, 200);
   const [profile] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentUserId));
   assert.deepEqual(profile.persona.disabledTools, disabled);

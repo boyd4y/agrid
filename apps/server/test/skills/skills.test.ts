@@ -87,13 +87,10 @@ test("agent creation and editing persist persona and assigned skills, with runti
   const context = await resolveAgentSkills(org, agent.agent.persona.skillNames);
   assert.deepEqual(context.skills.map((skill) => skill.name), ["report"]); // table is disabled in the workspace
   assert.ok(context.skills[0].files?.some((file) => file.path === "scripts/summarize-csv.py"));
-  const read = context.tools.read_skill.execute! as (input: { name: string; path?: string }, options: any) => Promise<any>;
-  const options = { toolCallId: "read-skill-test", messages: [] };
-  const instructions = await read({ name: "report" }, options); assert.match(instructions.content, /来源范围和统计口径/);
-  assert.match((await read({ name: "report", path: "scripts/summarize-csv.py" }, options)).content, /csv.DictReader/);
-  await assert.rejects(read({ name: "table" }, options), /未分配/);
-  await assert.rejects(read({ name: "form" }, options), /未分配/);
-  await assert.rejects(read({ name: "report", path: "../SKILL.md" }, options), /文件不存在/);
+  assert.match(context.skills[0].content, /来源范围和统计口径/);
+  assert.match(context.skills[0].files!.find(file => file.path === "scripts/summarize-csv.py")!.content, /csv.DictReader/);
+  assert.equal("tools" in context, false, "skills are bundled natively without an extra platform reader");
+  assert.equal(context.skills.some(skill => ["table", "form"].includes(skill.name)), false, "disabled and unassigned bundles are not exposed");
   const updated = await request(`/agents/${agent.id}`, { persona: { systemPrompt: "Collect only necessary information.", skillNames: ["form"] } }, "PATCH");
   assert.equal(updated.status, 200); const saved = (await updated.json()).member;
   assert.equal(saved.agent.persona.systemPrompt, "Collect only necessary information."); assert.deepEqual(saved.agent.persona.skillNames, ["form"]);

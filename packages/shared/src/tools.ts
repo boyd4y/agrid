@@ -58,8 +58,7 @@ export const PLATFORM_TOOL_IDS = [
   "update_board_view",
   "delete_view",
   "create_grid_view",
-  "create_board_view",
-  "read_skill"
+  "create_board_view"
 ] as const;
 // Accepted only to normalize previously saved configurations, never selectable.
 const legacyBuiltinToolIds = [
@@ -115,9 +114,9 @@ const legacyBuiltinToolIds = [
   "webSearch",
   "write"
 ] as const;
-const retiredTaskToolIds = ["get_task_state", "create_goal", "update_goal", "update_plan"] as const;
+const retiredToolIds = ["read_skill", "get_task_state", "create_goal", "update_goal", "update_plan"] as const;
 const platformToolIds = new Set<string>(PLATFORM_TOOL_IDS);
-export const DISABLED_TOOLS_SCHEMA = z.array(z.enum([...PLATFORM_TOOL_IDS, ...legacyBuiltinToolIds, ...retiredTaskToolIds]))
+export const DISABLED_TOOLS_SCHEMA = z.array(z.enum([...PLATFORM_TOOL_IDS, ...legacyBuiltinToolIds, ...retiredToolIds]))
   .max(160).refine(ids => new Set(ids).size === ids.length, "工具名称不能重复")
   .transform(ids => ids.filter((id): id is (typeof PLATFORM_TOOL_IDS)[number] => platformToolIds.has(id)));
 export type AgentToolCatalogItem = {

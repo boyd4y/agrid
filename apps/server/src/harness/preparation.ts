@@ -73,7 +73,7 @@ export async function prepareNativeChatAgent({ actor, agentId, context, boundTab
   const mode = profile.persona?.runtime ?? (harness === "pi" ? "local" : "sandbox");
   const disabledTools = validateDisabledTools(harness, profile.persona?.disabledTools ?? []);
   const skillContext = await resolveAgentSkills(actor.organizationId, profile.persona?.skillNames);
-  const tools = { ...createTableTools(tableId, actor.organizationId, actor.userId), ...skillContext.tools };
+  const tools = createTableTools(tableId, actor.organizationId, actor.userId);
   const personaPrompt = profile.persona?.systemPrompt?.trim();
   const agentsDocument = `# AGENTS.md\n\n${personaPrompt || "遵循 tabdo 工作区权限，使用实际工具验证结果，再向用户报告完成情况。"}`;
   const system = [

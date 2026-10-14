@@ -19,7 +19,7 @@ test("catalog lists only platform tools and normalizes old native/task settings"
       assert(item.supportedHarnesses.includes(harness));
     }
     assert.deepEqual(validateDisabledTools(harness, []), []);
-    assert.deepEqual(validateDisabledTools(harness, ["update_cell", "bash", "read", "webSearch", "create_goal", "update_goal", "update_plan", "get_task_state"]), ["update_cell"]);
+    assert.deepEqual(validateDisabledTools(harness, ["update_cell", "read_skill", "bash", "read", "webSearch", "create_goal", "update_goal", "update_plan", "get_task_state"]), ["update_cell"]);
     assert.throws(() => validateDisabledTools(harness, ["unknown"]), /未知/);
     assert.throws(() => validateDisabledTools(harness, ["update_cell", "update_cell"]), /重复/);
   }

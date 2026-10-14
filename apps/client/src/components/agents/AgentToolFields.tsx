@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Wrench, Loader2, RefreshCw, Table2, ClipboardList, ChartColumn, Zap, BookOpen } from "lucide-react";
+import { ChevronRight, Wrench, Loader2, RefreshCw, Table2, ClipboardList, ChartColumn, Zap } from "lucide-react";
 import type { AgentToolCatalogItem } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import type { HarnessId } from "@/lib/harness";
 import { Field, FieldGroup, FieldContent, FieldLabel, FieldDescription, FieldError, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
 import { Input } from "@tabdo/ui/components/input";
 import { Switch } from "@tabdo/ui/components/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tabdo/ui/components/collapsible";
 import { Button } from "@tabdo/ui/components/button";
 import { Badge } from "@tabdo/ui/components/badge";
 import { useTranslation } from "react-i18next";
@@ -13,7 +14,7 @@ import { groupAgentTools, setAgentToolGroup } from "./tool-groups";
 
 const capabilityIcons: Record<string, typeof Wrench> = {
   tables: Table2, forms: ClipboardList, reports: ChartColumn, automations: Zap,
-  skills: BookOpen, other: Wrench,
+  other: Wrench,
 };
 
 export function AgentToolFields({ harness, disabledTools, onChange, disabled }: {
@@ -62,12 +63,12 @@ export function AgentToolFields({ harness, disabledTools, onChange, disabled }: 
                   </FieldContent>
                   <Switch size="sm" id={`agent-group-${group.id}`} aria-label={t(`capabilities.${group.category}.name`)} aria-describedby={`agent-group-description-${group.id}`} checked={enabledCount === group.tools.length} disabled={disabled || !canToggle} onCheckedChange={checked => onChange(setAgentToolGroup(disabledTools, group.tools, checked))} />
                 </Field>
-                <details className="min-w-0" open={Boolean(query)}>
-                  <summary className="cursor-pointer text-xs text-muted-foreground">{t("enabledCount", { enabled: enabledCount, total: group.tools.length })} · {t("toolDetails")}</summary>
+                <Collapsible className="min-w-0" key={query ? "search" : "browse"} defaultOpen={Boolean(query)}>
+                  <CollapsibleTrigger asChild><Button type="button" variant="ghost" size="sm" className="max-w-full justify-start"><ChevronRight data-icon="inline-start" /><span className="truncate">{t("enabledCount", { enabled: enabledCount, total: group.tools.length })} · {t("toolDetails")}</span></Button></CollapsibleTrigger><CollapsibleContent>
                   <ul className="mt-2 grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2">
                     {group.tools.map(tool => <li key={tool.id} data-tool-id={tool.id} className="min-w-0 break-all text-xs text-muted-foreground"><code>{tool.name}</code>{disabledTools.includes(tool.id) && <span className="ml-1">· {t("toolOff")}</span>}</li>)}
                   </ul>
-                </details>
+                </CollapsibleContent></Collapsible>
               </div>;
             })}
           </FieldGroup>
