@@ -47,12 +47,12 @@ try {
   assert.match(await page.getByTestId('automation-configuration-step').innerText(), /Builder source/);
   await goto('/app/automations');
   await page.getByRole('button', { name: 'Edited automation自动化操作', exact: true }).click();
-  await page.getByRole('menuitem', { name: '删除规则', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除自动化', exact: true }).click();
   await page.getByRole('alertdialog', { name: '删除自动化规则？' }).waitFor();
   await page.getByRole('button', { name: '取消', exact: true }).click();
   assert((await api('/automations')).rules.some((r) => r.id === rule.id), 'cancel keeps automation');
   await page.getByRole('button', { name: 'Edited automation自动化操作', exact: true }).click();
-  await page.getByRole('menuitem', { name: '删除规则', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除自动化', exact: true }).click();
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
   await page.getByRole('alertdialog').waitFor({ state: 'detached' });
   assert(!(await api('/automations')).rules.some((r) => r.id === rule.id));

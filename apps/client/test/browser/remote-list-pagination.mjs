@@ -91,7 +91,7 @@ try {
   await pager().getByText('第 2 页', { exact: true }).waitFor();
   assert.equal(await ruleLinks().count(), 1, 'refresh preserves the current page');
   await page.getByRole('button', { name: /Paging rule .*自动化操作/ }).click();
-  await page.getByRole('menuitem', { name: '删除规则', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除自动化', exact: true }).click();
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
   await page.getByRole('alertdialog').waitFor({ state: 'detached' });
   await countIs('rules', 20); await pager().getByText('第 1 页', { exact: true }).waitFor();

@@ -93,7 +93,7 @@ try {
       assert.equal(new URL(page.url()).pathname, '/app/reports', 'report deletion does not follow the card link');
       await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click();
     } else if (scenario.path === 'automations') {
-      await item.getByRole('button').click(); await page.getByRole('menuitem', { name: '删除规则', exact: true }).waitFor();
+      await item.getByRole('button').click(); await page.getByRole('menuitem', { name: '删除自动化', exact: true }).waitFor();
       assert.equal(new URL(page.url()).pathname, '/app/automations', 'automation menu does not follow the row link');
       await page.keyboard.press('Escape');
     }
