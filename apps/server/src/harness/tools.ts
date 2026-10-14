@@ -1,3 +1,6 @@
+import { and, eq } from "drizzle-orm";
+import type { Actor } from "../auth/actor.js";
+import { member } from "../db/schema.js";
 import type { Transaction } from "../db/index.js";
 import { withToolTransaction } from "../ai/execution-context.js";
 import { asSchema, jsonSchema, InvalidToolInputError, type ToolSet, type TextStreamPart } from "ai";
@@ -19,6 +22,7 @@ export function nativeToolDenial(output: unknown): string | undefined {
 export function nativeHostTools(
   definitions: ToolSet,
   guard: <T>(operation: (transaction?: Transaction) => Promise<T>) => Promise<T>,
+  principal?: Pick<Actor, "userId" | "organizationId">,
 ) {
   const failures = new Map<string, string>();
   const tools: ToolSet = Object.fromEntries(Object.entries(definitions).map(([name, definition]) => {
@@ -32,7 +36,17 @@ export function nativeHostTools(
         try {
           const parsed = await schema.validate!(input);
           if (!parsed.success) throw new InvalidToolInputError({ toolName: name, toolInput: "[redacted]", cause: parsed.error });
-          const output = await guard(transaction => withToolTransaction(transaction, async () => definition.execute!(parsed.value, execution)));
+          const output = await guard(transaction => withToolTransaction(transaction, async () => {
+            if (principal) {
+              if (!transaction) throw new Error("Host authorization requires a lease transaction");
+              // Hold through commit: DELETE/role updates must serialize with this tool.
+              const [membership] = await transaction.select({ id: member.id }).from(member)
+                .where(and(eq(member.userId, principal.userId), eq(member.organizationId, principal.organizationId)))
+                .for("share");
+              if (!membership) throw new Error("工作区成员资格已撤销，无法执行工具");
+            }
+            return definition.execute!(parsed.value, execution);
+          }));
           // SDK work-dir projection treats non-JSON objects such as Date as {}.
           // Business tools cross a JSON boundary; canonicalize before projection.
           return output === undefined ? null : JSON.parse(JSON.stringify(output));

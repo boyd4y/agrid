@@ -12,7 +12,7 @@ const { apiKeysRoute } = await import("../../src/routes/api-keys.js");
 const { tablesRoute } = await import("../../src/routes/tables.js");
 const { commandsRoute } = await import("../../src/routes/commands.js");
 const { membersRoute } = await import("../../src/routes/members.js");
-const { organization, member, session, user, tables, userApiKeys, agentProfile, rows, invitation } = await import("../../src/db/schema.js");
+const { organization, member, session, user, tables, userApiKeys, agentProfile, rows, invitation, chatThreads, agentRuntimeSessions, agentRuns } = await import("../../src/db/schema.js");
 const app = new Hono().route("/api/user/api-keys", apiKeysRoute).route("/api/tables", tablesRoute).route("/api/commands", commandsRoute).route("/api/members", membersRoute);
 
 test("personal keys bind user + workspace, retain live permissions, and expose their secret only on creation", async () => {
@@ -102,6 +102,26 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
     assert.equal((await resolveActor(new Request("http://localhost/api/tables", { headers: { Authorization: `Bearer ${legacy}` } })))?.kind, "agent");
     assert.equal((await request("/user/api-keys", { Authorization: `Bearer ${legacy}` })).status, 403);
     assert.equal((await request("/tables", { Authorization: `Bearer ${legacy}` })).status, 200);
+    // Revocation cancels only active runs owned by this user in this workspace.
+    const [profile] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentId));
+    const runIds: string[] = [];
+    for (const [runUser, runOrg, status] of [
+      [recipient.id, orgA, "starting"], [recipient.id, orgA, "running"],
+      [recipient.id, orgA, "completed"], [recipient.id, orgB, "running"],
+      [ownerId, orgA, "running"],
+    ] as const) {
+      const [thread] = await db.insert(chatThreads).values({ userId: runUser, organizationId: runOrg, clientId: randomUUID() }).returning();
+      const [runtime] = await db.insert(agentRuntimeSessions).values({ threadId: thread.id, agentProfileId: profile.id, harness: "pi", mode: "local", sandboxId: randomUUID() }).returning();
+      const [run] = await db.insert(agentRuns).values({ threadId: thread.id, runtimeSessionId: runtime.id, userMessageId: randomUUID(), assistantMessageId: randomUUID(), fence: 1, status }).returning();
+      runIds.push(run.id);
+    }
+    const [recipientMember] = await db.select().from(member).where(and(eq(member.userId, recipient.id), eq(member.organizationId, orgA)));
+    assert.equal((await request(`/members/${recipientMember.id}`, undefined, undefined, "DELETE")).status, 200);
+    assert.equal((await db.select().from(member).where(eq(member.id, recipientMember.id))).length, 0);
+    for (const [index, id] of runIds.entries()) {
+      const [run] = await db.select().from(agentRuns).where(eq(agentRuns.id, id));
+      assert.equal(run.cancelRequestedAt !== null, index < 2, `cancel scope/status for run ${index}`);
+    }
     assert.equal((await db.select().from(userApiKeys).where(and(eq(userApiKeys.userId, ownerId), eq(userApiKeys.organizationId, orgB)))).length, 0);
   } finally {
     await db.delete(organization).where(eq(organization.id, orgA)); await db.delete(organization).where(eq(organization.id, orgB));

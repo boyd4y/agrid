@@ -33,7 +33,7 @@ test("host reads, writes, batches and report validation share the lease connecti
       const result = await execute(tx);
       if (rollback) throw new Error("deliberate rollback");
       return result;
-    }));
+    }), actor);
     const call = (name: string, input: unknown) => hosted.tools[name].execute!(input, { toolCallId: randomUUID(), messages: [], context: undefined });
     await call("update_cell", { rowId: row.id, columnId: title, value: "after" });
     assert.equal((await call("get_row", { rowId: row.id }) as any).cells[title], "after");
@@ -59,6 +59,14 @@ test("host reads, writes, batches and report validation share the lease connecti
     await assert.rejects(call("update_cell", { rowId: row.id, columnId: title, value: "rolled back" }), /deliberate rollback/);
     assert.equal((await cmds.getRow({ organizationId: org, rowId: row.id })).cells[title], "after");
     await assert.rejects(call("update_report", { reportId: report.id, name: "Rolled back" }), /deliberate rollback/);
+    assert.equal((await reports.getReport(report.id, org)).name, "Report");
+    rollback = false;
+    await db.delete(member).where(eq(member.userId, owner));
+    await assert.rejects(call("update_cell", { rowId: row.id, columnId: title, value: "revoked" }), /成员资格已撤销/);
+    await assert.rejects(call("batch_add_rows", { rows: [{ cells: { [title]: "revoked" } }] }), /成员资格已撤销/);
+    await assert.rejects(call("update_report", { reportId: report.id, name: "Revoked" }), /成员资格已撤销/);
+    assert.equal((await cmds.getRow({ organizationId: org, rowId: row.id })).cells[title], "after");
+    assert.equal((await cmds.queryRows({ organizationId: org, tableId: table.id })).rows.length, 2);
     assert.equal((await reports.getReport(report.id, org)).name, "Report");
     assert.equal(getToolTransaction(), undefined, "host context does not escape to model/provider work");
   } finally {
