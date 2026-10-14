@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { db, type Transaction } from "../db/index.js";
 import { tables, columns, rows } from "../db/schema.js";
 
 /** Tenant scope passed into commands from resolveActor (never trust client body alone). */
@@ -16,9 +16,10 @@ export function requireOrgId(organizationId: string | undefined | null): string 
 /** Load table; if organizationId set, hide cross-tenant as "not found". */
 export async function requireTableInOrg(
   tableId: string,
-  organizationId?: string | null
+  organizationId?: string | null,
+  transaction?: Transaction
 ) {
-  const [table] = await db.select().from(tables).where(eq(tables.id, tableId)).limit(1);
+  const [table] = await (transaction ?? db).select().from(tables).where(eq(tables.id, tableId)).limit(1);
   if (!table) throw new Error(`表格不存在: ${tableId}`);
   if (organizationId && table.organizationId !== organizationId) {
     throw new Error(`表格不存在: ${tableId}`);
@@ -26,8 +27,8 @@ export async function requireTableInOrg(
   return table;
 }
 
-export async function requireRowInOrg(rowId: string, organizationId?: string | null) {
-  const [hit] = await db
+export async function requireRowInOrg(rowId: string, organizationId?: string | null, transaction?: Transaction) {
+  const [hit] = await (transaction ?? db)
     .select({
       row: rows,
       organizationId: tables.organizationId,
@@ -46,9 +47,10 @@ export async function requireRowInOrg(rowId: string, organizationId?: string | n
 
 export async function requireColumnInOrg(
   columnId: string,
-  organizationId?: string | null
+  organizationId?: string | null,
+  transaction?: Transaction
 ) {
-  const [hit] = await db
+  const [hit] = await (transaction ?? db)
     .select({
       column: columns,
       organizationId: tables.organizationId,
@@ -65,8 +67,8 @@ export async function requireColumnInOrg(
   return hit;
 }
 
-export async function listTablesForOrg(organizationId: string) {
-  return db
+export async function listTablesForOrg(organizationId: string, transaction?: Transaction) {
+  return (transaction ?? db)
     .select()
     .from(tables)
     .where(eq(tables.organizationId, organizationId))

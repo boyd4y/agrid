@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { DISABLED_TOOLS_SCHEMA } from "@tabdo/shared";
 import { getAgentToolCatalog, validateDisabledTools } from "../harness/tool-catalog.js";
 import { db } from "../db/index.js";
-import { agentProfile, member, user, organization } from "../db/schema.js";
+import { agentProfile, member, user, organization, agentRuns, chatThreads } from "../db/schema.js";
 import { auth } from "../auth/index.js";
 import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
 import { validateSelectedSkills } from "../skills/service.js";
@@ -337,25 +337,20 @@ membersRoute.delete("/:memberId", async (c) => {
     return c.json({ error: "不能移除 owner" }, 400);
   }
 
-  // Agent: clear this org's profile/key only (memberId FK also cascades)
-  const [u] = await db.select().from(user).where(eq(user.id, mem.userId)).limit(1);
-  if (u?.kind === "agent") {
-    await db
-      .delete(agentProfile)
-      .where(
-        and(
-          eq(agentProfile.userId, mem.userId),
-          eq(agentProfile.organizationId, actor.organizationId)
-        )
-      );
-  }
-
-  // Remove org membership only — never delete the global user row
-  await db
-    .delete(member)
-    .where(
-      and(eq(member.id, memberId), eq(member.organizationId, actor.organizationId))
-    );
+  await db.transaction(async (tx) => {
+    // Delete first to serialize with host tools holding a membership SHARE lock.
+    await tx.delete(member).where(and(eq(member.id, memberId), eq(member.organizationId, actor.organizationId)));
+    await tx.delete(agentProfile).where(and(
+      eq(agentProfile.userId, mem.userId), eq(agentProfile.organizationId, actor.organizationId),
+    ));
+    const threads = tx.select({ id: chatThreads.id }).from(chatThreads).where(and(
+      eq(chatThreads.userId, mem.userId), eq(chatThreads.organizationId, actor.organizationId),
+    ));
+    await tx.update(agentRuns).set({ cancelRequestedAt: new Date() }).where(and(
+      inArray(agentRuns.threadId, threads), inArray(agentRuns.status, ["starting", "running"]),
+      isNull(agentRuns.cancelRequestedAt),
+    ));
+  });
   return c.json({ ok: true });
 });
 

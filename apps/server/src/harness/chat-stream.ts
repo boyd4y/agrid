@@ -132,13 +132,13 @@ export function createNativeChatStream(options: {
       };
       const { tools, projectErrors, failures } = nativeHostTools(options.tools, async (execute) => {
           signal.throwIfAborted();
-          const operation = withRuntimeLease(options.lease, async () => {
+          const operation = withRuntimeLease(options.lease, async (tx) => {
             signal.throwIfAborted();
-            return execute();
+            return execute(tx);
           });
           pendingTools.add(operation);
           try { return await operation; } finally { pendingTools.delete(operation); }
-      });
+      }, { userId: options.actor.userId, organizationId: options.actor.organizationId });
       const lifecycle: NonNullable<Parameters<typeof createNativeAgent>[0]["lifecycle"]> = {
         onStart: async () => { await report("waiting-model"); },
         onStepStart: async ({ stepNumber }) => { clearTimeout(stepDeadline);stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");step = stepNumber + 1;await report("waiting-model"); },

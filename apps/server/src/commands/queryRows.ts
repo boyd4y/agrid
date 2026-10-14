@@ -1,6 +1,6 @@
 import { cellExpression, rowProjection, relationPredicate, relatedId } from "./relation-reads.js";
 import { sql, eq, asc, desc, and, type SQL } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { db, type Transaction } from "../db/index.js";
 import { columns, rows, tables } from "../db/schema.js";
 import {
   clampLimit,
@@ -196,16 +196,17 @@ function orderParts(sort:QueryRowsInput["sort"],cols:ColumnDef[]) {
 
 export async function queryRowsWindowed(
   input: QueryRowsInput,
-  opts?: { maxLimit?: number; defaultLimit?: number }
+  opts?: { maxLimit?: number; defaultLimit?: number },
+  transaction?: Transaction
 ): Promise<QueryRowsResult> {
   const maxLimit = opts?.maxLimit ?? MAX_PAGE_SIZE;
   const defaultLimit = opts?.defaultLimit ?? DEFAULT_PAGE_SIZE;
   const limit = clampLimit(input.limit, defaultLimit, maxLimit);
 
-  const [table] = await db.select().from(tables).where(eq(tables.id, input.tableId));
+  const [table] = await (transaction ?? db).select().from(tables).where(eq(tables.id, input.tableId));
   if (!table) throw new Error(`表格不存在: ${input.tableId}`);
 
-  const cols = await db
+  const cols = await (transaction ?? db)
     .select()
     .from(columns)
     .where(eq(columns.tableId, input.tableId))
@@ -216,7 +217,7 @@ export async function queryRowsWindowed(
   const cursorPart = keysetSql(input,cols as ColumnDef[]);
   const whereClause = cursorPart ? and(baseWhere, cursorPart)! : baseWhere;
 
-  const page = await db
+  const page = await (transaction ?? db)
     .select(rowProjection(cols as ColumnDef[]))
     .from(rows)
     .where(whereClause)
@@ -244,7 +245,7 @@ export async function queryRowsWindowed(
 
   let totalMatched: number | undefined;
   if (input.includeTotal) {
-    const [cnt] = await db
+    const [cnt] = await (transaction ?? db)
       .select({ value: sql<number>`count(*)::int` })
       .from(rows)
       .where(baseWhere);
@@ -260,8 +261,8 @@ export async function queryRowsWindowed(
   };
 }
 
-export async function countTableRows(tableId: string): Promise<number> {
-  const [cnt] = await db
+export async function countTableRows(tableId: string, transaction?: Transaction): Promise<number> {
+  const [cnt] = await (transaction ?? db)
     .select({ value: sql<number>`count(*)::int` })
     .from(rows)
     .where(eq(rows.tableId, tableId));

@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { db, type Transaction } from "../db/index.js";
+import { db, inTransaction, type Transaction } from "../db/index.js";
 import { columns, tables, tableViews, type FormViewConfigJson, type FormFieldConfigJson } from "../db/schema.js";
 import { requireOrgId, requireTableInOrg } from "../tenant/scope.js";
 import type {
@@ -80,11 +80,11 @@ function toTableView(row: typeof tableViews.$inferSelect): TableView {
   };
 }
 
-async function requireViewInOrg(viewId: string, organizationId?: string) {
+async function requireViewInOrg(viewId: string, organizationId?: string, transaction?: Transaction) {
   const orgId = requireOrgId(organizationId);
-  const [view] = await db.select().from(tableViews).where(eq(tableViews.id, viewId));
+  const [view] = await (transaction ?? db).select().from(tableViews).where(eq(tableViews.id, viewId));
   if (!view) throw new Error(`视图不存在: ${viewId}`);
-  await requireTableInOrg(view.tableId, orgId);
+  await requireTableInOrg(view.tableId, orgId, transaction);
   return view;
 }
 
@@ -119,8 +119,8 @@ async function lockTable(tx: Transaction, tableId: string) {
 }
 
 /** All operations that can change the default serialize on the same parent row. */
-async function insertView(tableId: string, values: Omit<typeof tableViews.$inferInsert, "tableId" | "sortOrder" | "isDefault">) {
-  return db.transaction(async (tx) => {
+async function insertView(tableId: string, values: Omit<typeof tableViews.$inferInsert, "tableId" | "sortOrder" | "isDefault">, transaction?: Transaction) {
+  return inTransaction(transaction, async (tx) => {
     await lockTable(tx, tableId);
     const siblings = await tx.select({ sortOrder: tableViews.sortOrder, isDefault: tableViews.isDefault }).from(tableViews).where(eq(tableViews.tableId, tableId));
     const [row] = await tx.insert(tableViews).values({ ...values, tableId, sortOrder: Math.max(-1, ...siblings.map((view) => view.sortOrder)) + 1, isDefault: !siblings.some((view) => view.isDefault) }).returning();
@@ -135,18 +135,18 @@ async function validateBoardConfig(tableId: string, config: BoardViewConfig, que
   if (config.statusColumnId && !cols.some((column) => column.id === config.statusColumnId && column.type === "select")) throw new Error("看板分组需要该表的单选字段");
 }
 
-export async function renameView({ organizationId, ...input }: RenameViewInput & OrgScoped): Promise<TableView> {
+export async function renameView({ organizationId, ...input }: RenameViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
   const { viewId, name } = RENAME_VIEW_SCHEMA.parse({ viewId: input.viewId, name: input.name });
-  const view = await requireViewInOrg(viewId, organizationId);
-  const [row] = await db.update(tableViews).set({ name, updatedAt: new Date() }).where(and(eq(tableViews.id, viewId), eq(tableViews.tableId, view.tableId))).returning();
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
+  const [row] = await (transaction ?? db).update(tableViews).set({ name, updatedAt: new Date() }).where(and(eq(tableViews.id, viewId), eq(tableViews.tableId, view.tableId))).returning();
   if (!row) throw new Error("视图已被删除");
   return toTableView(row);
 }
 
-export async function setDefaultView({ organizationId, ...input }: SetDefaultViewInput & OrgScoped): Promise<TableView> {
+export async function setDefaultView({ organizationId, ...input }: SetDefaultViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
   const { viewId } = SET_DEFAULT_VIEW_SCHEMA.parse({ viewId: input.viewId });
-  const view = await requireViewInOrg(viewId, organizationId);
-  return db.transaction(async (tx) => {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
+  return inTransaction(transaction, async (tx) => {
     await lockTable(tx, view.tableId);
     const [current] = await tx.select().from(tableViews).where(eq(tableViews.id, viewId));
     if (!current) throw new Error("视图已被删除");
@@ -156,12 +156,12 @@ export async function setDefaultView({ organizationId, ...input }: SetDefaultVie
   });
 }
 
-export async function updateBoardView({ organizationId, ...input }: UpdateBoardViewInput & OrgScoped): Promise<TableView> {
+export async function updateBoardView({ organizationId, ...input }: UpdateBoardViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
   // API routes also pass actorId; keep it outside the public schema.
   const { viewId, config } = UPDATE_BOARD_VIEW_SCHEMA.parse({ viewId: input.viewId, config: input.config });
-  const view = await requireViewInOrg(viewId, organizationId);
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "board") throw new Error("仅支持更新看板视图");
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     await lockTable(tx, view.tableId);
     const [current] = await tx.select().from(tableViews).where(eq(tableViews.id, viewId)).for("update");
     if (!current) throw new Error("视图已被删除");
@@ -173,9 +173,10 @@ export async function updateBoardView({ organizationId, ...input }: UpdateBoardV
 }
 
 async function resolveFormView(
-  view: typeof tableViews.$inferSelect
+  view: typeof tableViews.$inferSelect,
+  transaction?: Transaction
 ): Promise<ResolvedFormView> {
-  const cols = await loadColumns(view.tableId);
+  const cols = await loadColumns(view.tableId, transaction);
   const byId = new Map(cols.map((c) => [c.id, c]));
   const config = asFormConfig(view.config);
   let fields = config.fields ?? [];
@@ -206,9 +207,9 @@ async function resolveFormView(
 export async function listViews({
   tableId,
   organizationId,
-}: ListViewsInput & OrgScoped): Promise<TableView[]> {
-  await requireTableInOrg(tableId, organizationId);
-  const rows = await db
+}: ListViewsInput & OrgScoped, transaction?: Transaction): Promise<TableView[]> {
+  await requireTableInOrg(tableId, organizationId, transaction);
+  const rows = await (transaction ?? db)
     .select()
     .from(tableViews)
     .where(eq(tableViews.tableId, tableId))
@@ -219,9 +220,9 @@ export async function listViews({
 export async function getView({
   viewId,
   organizationId,
-}: GetViewInput & OrgScoped): Promise<TableView | ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
-  if (view.type === "form") return resolveFormView(view);
+}: GetViewInput & OrgScoped, transaction?: Transaction): Promise<TableView | ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
+  if (view.type === "form") return resolveFormView(view, transaction);
   return toTableView(view);
 }
 
@@ -229,9 +230,9 @@ export async function getView({
 export async function deleteView({
   viewId,
   organizationId,
-}: DeleteViewInput & OrgScoped): Promise<{ ok: true }> {
-  const view = await requireViewInOrg(viewId, organizationId);
-  return db.transaction(async (tx) => {
+}: DeleteViewInput & OrgScoped, transaction?: Transaction): Promise<{ ok: true }> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
+  return inTransaction(transaction, async (tx) => {
     await lockTable(tx, view.tableId);
     const siblings = await tx.select().from(tableViews).where(eq(tableViews.tableId, view.tableId)).orderBy(asc(tableViews.sortOrder), asc(tableViews.createdAt), asc(tableViews.id));
     const current = siblings.find((candidate) => candidate.id === viewId);
@@ -247,17 +248,17 @@ export async function createGridView({
   tableId,
   name,
   organizationId,
-}: CreateGridViewInput & OrgScoped): Promise<TableView> {
-  await requireTableInOrg(tableId, organizationId);
-  const row = await insertView(tableId, { type: "grid", name: name === undefined ? "表格" : VIEW_NAME_SCHEMA.parse(name), config: {} });
+}: CreateGridViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
+  await requireTableInOrg(tableId, organizationId, transaction);
+  const row = await insertView(tableId, { type: "grid", name: name === undefined ? "表格" : VIEW_NAME_SCHEMA.parse(name), config: {} }, transaction);
   return toTableView(row);
 }
 
-export async function createBoardView({ tableId, name, config, organizationId }: CreateBoardViewInput & OrgScoped): Promise<TableView> {
-  await requireTableInOrg(tableId, organizationId);
+export async function createBoardView({ tableId, name, config, organizationId }: CreateBoardViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
+  await requireTableInOrg(tableId, organizationId, transaction);
   const settings = BOARD_VIEW_CONFIG_SCHEMA.parse(config ?? {});
-  await validateBoardConfig(tableId, settings);
-  const row = await insertView(tableId, { type: "board", name: name === undefined ? "看板" : VIEW_NAME_SCHEMA.parse(name), config: settings });
+  await validateBoardConfig(tableId, settings, transaction);
+  const row = await insertView(tableId, { type: "board", name: name === undefined ? "看板" : VIEW_NAME_SCHEMA.parse(name), config: settings }, transaction);
   return toTableView(row);
 }
 
@@ -267,9 +268,9 @@ export async function createFormView({
   config,
   fields,
   organizationId,
-}: CreateFormViewInput & OrgScoped): Promise<ResolvedFormView> {
-  await requireTableInOrg(tableId, organizationId);
-  const cols = await loadColumns(tableId);
+}: CreateFormViewInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  await requireTableInOrg(tableId, organizationId, transaction);
+  const cols = await loadColumns(tableId, transaction);
   const formFields = fields?.length ? fields : defaultFieldsFromColumns(cols);
   const colIds = new Set(cols.map((c) => c.id));
   for (const f of formFields) {
@@ -295,9 +296,9 @@ export async function createFormView({
     ending: config?.ending,
   };
 
-  const row = await insertView(tableId, { type: "form", name: name === undefined ? VIEW_NAME_SCHEMA.parse(formConfig.title || "表单") : VIEW_NAME_SCHEMA.parse(name), config: formConfig });
+  const row = await insertView(tableId, { type: "form", name: name === undefined ? VIEW_NAME_SCHEMA.parse(formConfig.title || "表单") : VIEW_NAME_SCHEMA.parse(name), config: formConfig }, transaction);
 
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function updateFormView({
@@ -305,8 +306,8 @@ export async function updateFormView({
   name,
   config,
   organizationId,
-}: UpdateFormViewInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: UpdateFormViewInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持更新表单视图");
   const prev = asFormConfig(view.config);
   const next: FormViewConfigJson = {
@@ -326,7 +327,7 @@ export async function updateFormView({
     ...(config?.ending !== undefined ? { ending: config.ending } : {}),
     fields: (config?.fields ?? prev.fields) as FormFieldConfigJson[],
   };
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       ...(name !== undefined ? { name: VIEW_NAME_SCHEMA.parse(name) } : {}),
@@ -335,23 +336,23 @@ export async function updateFormView({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function setFormFields({
   viewId,
   fields,
   organizationId,
-}: SetFormFieldsInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: SetFormFieldsInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
-  const cols = await loadColumns(view.tableId);
+  const cols = await loadColumns(view.tableId, transaction);
   const colIds = new Set(cols.map((c) => c.id));
   for (const f of fields) {
     if (!colIds.has(f.columnId)) throw new Error(`列不属于该表: ${f.columnId}`);
   }
   const prev = asFormConfig(view.config);
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -359,23 +360,23 @@ export async function setFormFields({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function addFormField({
   viewId,
   field,
   organizationId,
-}: AddFormFieldInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: AddFormFieldInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
-  const cols = await loadColumns(view.tableId);
+  const cols = await loadColumns(view.tableId, transaction);
   if (!cols.some((c) => c.id === field.columnId)) {
     throw new Error(`列不属于该表: ${field.columnId}`);
   }
   const prev = asFormConfig(view.config);
   const fields = [...(prev.fields ?? []).filter((f) => f.columnId !== field.columnId), field];
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -383,19 +384,19 @@ export async function addFormField({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function removeFormField({
   viewId,
   columnId,
   organizationId,
-}: RemoveFormFieldInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: RemoveFormFieldInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
   const fields = (prev.fields ?? []).filter((f) => f.columnId !== columnId);
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -403,15 +404,15 @@ export async function removeFormField({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function reorderFormFields({
   viewId,
   columnIds,
   organizationId,
-}: ReorderFormFieldsInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: ReorderFormFieldsInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
   const byId = new Map((prev.fields ?? []).map((f) => [f.columnId, f]));
@@ -423,7 +424,7 @@ export async function reorderFormFields({
   for (const f of prev.fields ?? []) {
     if (!columnIds.includes(f.columnId)) ordered.push(f);
   }
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, fields: ordered as FormFieldConfigJson[] },
@@ -431,18 +432,18 @@ export async function reorderFormFields({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function setFormSections({
   viewId,
   sections,
   organizationId,
-}: SetFormSectionsInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: SetFormSectionsInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, sections },
@@ -450,7 +451,7 @@ export async function setFormSections({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function setFormTheme({
@@ -458,14 +459,14 @@ export async function setFormTheme({
   preset,
   overrides,
   organizationId,
-}: SetFormThemeInput & OrgScoped): Promise<ResolvedFormView> {
+}: SetFormThemeInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
   if (!(FORM_THEME_PRESETS as readonly string[]).includes(preset)) {
     throw new Error(`未知主题: ${preset}`);
   }
-  const view = await requireViewInOrg(viewId, organizationId);
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: {
@@ -476,21 +477,21 @@ export async function setFormTheme({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function setFormLayout({
   viewId,
   layout,
   organizationId,
-}: SetFormLayoutInput & OrgScoped): Promise<ResolvedFormView> {
+}: SetFormLayoutInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
   if (!(FORM_LAYOUT_MODES as readonly string[]).includes(layout)) {
     throw new Error(`未知布局: ${layout}`);
   }
-  const view = await requireViewInOrg(viewId, organizationId);
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, layout },
@@ -498,7 +499,7 @@ export async function setFormLayout({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function setFormFieldSettings({
@@ -506,8 +507,8 @@ export async function setFormFieldSettings({
   columnId,
   patch,
   organizationId,
-}: SetFormFieldSettingsInput & OrgScoped): Promise<ResolvedFormView> {
-  const view = await requireViewInOrg(viewId, organizationId);
+}: SetFormFieldSettingsInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
+  const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
   const fields = (prev.fields ?? []).map((f) =>
@@ -516,7 +517,7 @@ export async function setFormFieldSettings({
   if (!fields.some((f) => f.columnId === columnId)) {
     throw new Error(`表单中没有该字段: ${columnId}`);
   }
-  const [row] = await db
+  const [row] = await (transaction ?? db)
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -524,7 +525,7 @@ export async function setFormFieldSettings({
     })
     .where(eq(tableViews.id, viewId))
     .returning();
-  return resolveFormView(row);
+  return resolveFormView(row, transaction);
 }
 
 export async function setFormChrome({

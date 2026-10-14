@@ -1,3 +1,4 @@
+import { getToolTransaction } from "./execution-context.js";
 import { MEMBER_LIST_SCHEMA } from "@tabdo/shared";
 import { createBatchTools } from "./batch-tools.js";
 import { RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, BOARD_VIEW_CONFIG_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
@@ -43,25 +44,25 @@ export function createTableTools(
   return {
     ...createReportTools(organizationId),
     ...createBatchTools(defaultTableId, organizationId, actorId),
-    get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow({...input,...org})}),
-    query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords({...input,...org})}),
-    set_relation: tool({description:"整体替换已有关联字段中的目标记录。此工具不创建字段；创建关联字段用 add_column(type=relation, relation={targetTableId,...})。传 expectedVersion 防止覆盖并发修改。清空传 recordIds=[]，不删除记录。",inputSchema:zodSchema(relationRecordSchema.extend({expectedVersion:z.number().int().optional()})),execute:async input=>cmds.setRelation({...input,...org})}),
-    add_relation: tool({description:"向已有的关联字段增量添加目标记录，幂等，不覆盖其他并发添加。此工具不创建关联字段或表格关系定义；创建单双向字段用 add_column(type=relation, relation={targetTableId,inverseName,...})。需要实际字段 UUID 和目标记录 UUID 数组。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.addRelation({...input,...org})}),
-    remove_relation: tool({description:"从已有关联字段增量解除指定记录，不删除目标记录，也不删除关联字段。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.removeRelation({...input,...org})}),
+    get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow({...input,...org}, getToolTransaction())}),
+    query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords({...input,...org}, getToolTransaction())}),
+    set_relation: tool({description:"整体替换已有关联字段中的目标记录。此工具不创建字段；创建关联字段用 add_column(type=relation, relation={targetTableId,...})。传 expectedVersion 防止覆盖并发修改。清空传 recordIds=[]，不删除记录。",inputSchema:zodSchema(relationRecordSchema.extend({expectedVersion:z.number().int().optional()})),execute:async input=>cmds.setRelation({...input,...org}, getToolTransaction())}),
+    add_relation: tool({description:"向已有的关联字段增量添加目标记录，幂等，不覆盖其他并发添加。此工具不创建关联字段或表格关系定义；创建单双向字段用 add_column(type=relation, relation={targetTableId,inverseName,...})。需要实际字段 UUID 和目标记录 UUID 数组。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.addRelation({...input,...org}, getToolTransaction())}),
+    remove_relation: tool({description:"从已有关联字段增量解除指定记录，不删除目标记录，也不删除关联字段。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.removeRelation({...input,...org}, getToolTransaction())}),
     get_workspace: tool({
       description: "获取当前工作区名称和当前执行成员身份。工作区范围由服务器确定。",
       inputSchema: zodSchema(z.strictObject({})),
-      execute: async () => cmds.getWorkspace(org),
+      execute: async () => cmds.getWorkspace(org, getToolTransaction()),
     }),
     list_members: tool({
       description: "查询当前工作区成员与智能体，可按姓名/邮箱搜索、kind=human或agent筛选并分页。分配负责人前先查询；person字段填返回的userId，不要填姓名或成员id。智能体动作agentUserId使用kind=agent的userId。",
       inputSchema: zodSchema(MEMBER_LIST_SCHEMA),
-      execute: async input => cmds.listMembers({ ...input, ...org }),
+      execute: async input => cmds.listMembers({ ...input, ...org }, getToolTransaction()),
     }),
     list_tables: tool({
       description: "列出当前工作区的多维表格",
       inputSchema: zodSchema(z.object({})),
-      execute: async () => cmds.listTables(org),
+      execute: async () => cmds.listTables(org, getToolTransaction()),
     }),
 
     create_table: tool({
@@ -69,34 +70,34 @@ export function createTableTools(
       inputSchema: zodSchema(z.object({ name: z.string().min(1).max(200), description: z.string().optional() })),
       execute: async (input) => {
         if (!organizationId) throw new Error("缺少工作区上下文");
-        return cmds.createTable({ ...input, organizationId });
+        return cmds.createTable({ ...input, organizationId }, getToolTransaction());
       },
     }),
 
     list_automations: tool({
       description: "列出当前工作区的所有来源自动化，包括表格、邮件、Webhook和定时；tableId可选以筛选指定表格，按offset分页，每页最多100条。",
       inputSchema: zodSchema(AUTOMATION_LIST_SCHEMA),
-      execute: async input => cmds.listAutomations({ ...input, ...org }),
+      execute: async input => cmds.listAutomations({ ...input, ...org }, getToolTransaction()),
     }),
     create_automation: tool({
       description: "创建持续生效的自动化：表格变更、Webhook、已接入的AgentMail邮箱或定时计划，执行数据命令或指定智能体任务。一次性mock/导入用batch_add_rows。来源必须实际配置；先get_table取得字段ID。智能体动作必须选真实agentUserId+prompt。",
       inputSchema: zodSchema(AUTOMATION_CREATE_SCHEMA),
-      execute: async input => cmds.createAutomation({ ...input, ...(input.source ? {} : { tableId: tableIdOrDefault(input.tableId) }), ...org }),
+      execute: async input => cmds.createAutomation({ ...input, ...(input.source ? {} : { tableId: tableIdOrDefault(input.tableId) }), ...org }, getToolTransaction()),
     }),
     update_automation: tool({
       description: "修改自动化条件、数据动作、智能体任务或时间计划；enabled控制启用。",
       inputSchema: zodSchema(AUTOMATION_UPDATE_SCHEMA.extend({ automationId: z.string().uuid() })),
-      execute: async input => cmds.updateAutomation({ ...input, ...org }),
+      execute: async input => cmds.updateAutomation({ ...input, ...org }, getToolTransaction()),
     }),
     delete_automation: tool({
       description: "删除自动化规则并停止后续执行。",
       inputSchema: zodSchema(z.object({ automationId: z.string().uuid() })),
-      execute: async (input) => cmds.deleteAutomation({ ...input, ...org }),
+      execute: async (input) => cmds.deleteAutomation({ ...input, ...org }, getToolTransaction()),
     }),
     list_automation_runs: tool({
       description: "查看当前工作区的自动化执行记录和失败原因，可按automationId查询任意来源规则，或按tableId筛选；最多200条。",
       inputSchema: zodSchema(AUTOMATION_RUN_LIST_SCHEMA),
-      execute: async input => cmds.listAutomationRuns({ ...input, ...org }),
+      execute: async input => cmds.listAutomationRuns({ ...input, ...org }, getToolTransaction()),
     }),
 
     get_table: tool({
@@ -108,7 +109,7 @@ export function createTableTools(
         })
       ),
       execute: async ({ tableId }) => {
-        const t = await cmds.getTable({ tableId, includeFirstPage: false, ...org });
+        const t = await cmds.getTable({ tableId, includeFirstPage: false, ...org }, getToolTransaction());
         // Explicitly strip any rows to keep agent payloads small
         return {
           id: t.id,
@@ -131,7 +132,7 @@ export function createTableTools(
           expectedVersion: z.number().int().optional(),
         })
       ),
-      execute: async (input) => cmds.updateCell({ ...input, ...org }),
+      execute: async (input) => cmds.updateCell({ ...input, ...org }, getToolTransaction()),
     }),
 
     update_cells: tool({
@@ -143,7 +144,7 @@ export function createTableTools(
           expectedVersion: z.number().int().optional(),
         })
       ),
-      execute: async (input) => cmds.updateCells({ ...input, ...org }),
+      execute: async (input) => cmds.updateCells({ ...input, ...org }, getToolTransaction()),
     }),
 
     add_row: tool({
@@ -157,14 +158,14 @@ export function createTableTools(
       execute: async ({ tableId, cells }) => {
         const id = tableId || defaultTableId;
         if (!id) throw new Error("缺少 tableId");
-        return cmds.addRow({ tableId: id, cells, ...org });
+        return cmds.addRow({ tableId: id, cells, ...org }, getToolTransaction());
       },
     }),
 
     delete_row: tool({
       description: "删除一行",
       inputSchema: zodSchema(z.object({ rowId: z.string().uuid() })),
-      execute: async ({ rowId }) => cmds.deleteRow({ rowId, ...org }),
+      execute: async ({ rowId }) => cmds.deleteRow({ rowId, ...org }, getToolTransaction()),
     }),
 
     add_column: tool({
@@ -210,14 +211,14 @@ export function createTableTools(
               : {}),
           },
           ...org,
-        });
+        }, getToolTransaction());
       },
     }),
 
     delete_column: tool({
       description: "删除一列",
       inputSchema: zodSchema(z.object({ columnId: z.string().uuid() })),
-      execute: async ({ columnId }) => cmds.deleteColumn({ columnId, ...org }),
+      execute: async ({ columnId }) => cmds.deleteColumn({ columnId, ...org }, getToolTransaction()),
     }),
 
     set_status: tool({
@@ -230,7 +231,7 @@ export function createTableTools(
           statusOptionId: z.string().nullable().describe("选项 id，如 todo/doing/done"),
         })
       ),
-      execute: async (input) => cmds.setStatus({ ...input, ...org }),
+      execute: async (input) => cmds.setStatus({ ...input, ...org }, getToolTransaction()),
     }),
 
     move_card: tool({
@@ -242,7 +243,7 @@ export function createTableTools(
           statusOptionId: z.string().nullable(),
         })
       ),
-      execute: async (input) => cmds.moveCard({ ...input, ...org }),
+      execute: async (input) => cmds.moveCard({ ...input, ...org }, getToolTransaction()),
     }),
 
     query_rows: tool({
@@ -309,7 +310,7 @@ export function createTableTools(
           statusColumnId: input.statusColumnId,
           statusValue: input.statusValue,
           ...org,
-        });
+        }, getToolTransaction());
       },
     }),
 
@@ -363,7 +364,7 @@ export function createTableTools(
             ...(formulaResultType !== undefined ? { formulaResultType } : {}),
           },
           ...org,
-        }),
+        }, getToolTransaction()),
     }),
 
     reorder_columns: tool({
@@ -374,7 +375,7 @@ export function createTableTools(
           columnIds: z.array(z.string().uuid()),
         })
       ),
-      execute: async (input) => cmds.reorderColumns({ ...input, ...org }),
+      execute: async (input) => cmds.reorderColumns({ ...input, ...org }, getToolTransaction()),
     }),
 
     open_preview: tool({
@@ -405,11 +406,11 @@ export function createTableTools(
       execute: async ({ kind, tableId, viewId, open }) => {
         let id = tableId || defaultTableId || null;
         if (open !== false && viewId) {
-          const view = await cmds.getView({ viewId, ...org });
+          const view = await cmds.getView({ viewId, ...org }, getToolTransaction());
           if (id && id !== view.tableId) throw new Error("视图不属于指定的表格");
           id = view.tableId;
         }
-        if (open !== false && id) await cmds.getTable({ tableId: id, includeFirstPage: false, ...org });
+        if (open !== false && id) await cmds.getTable({ tableId: id, includeFirstPage: false, ...org }, getToolTransaction());
         return {
           ok: true,
           open: open !== false,
@@ -423,13 +424,13 @@ export function createTableTools(
     list_views: tool({
       description: "列出表格的视图（grid/board/form）",
       inputSchema: zodSchema(z.object({ tableId: z.string().uuid() })),
-      execute: async ({ tableId }) => cmds.listViews({ tableId, ...org }),
+      execute: async ({ tableId }) => cmds.listViews({ tableId, ...org }, getToolTransaction()),
     }),
 
     get_view: tool({
       description: "获取视图详情；form 视图会带 resolvedFields",
       inputSchema: zodSchema(z.object({ viewId: z.string().uuid() })),
-      execute: async ({ viewId }) => cmds.getView({ viewId, ...org }),
+      execute: async ({ viewId }) => cmds.getView({ viewId, ...org }, getToolTransaction()),
     }),
 
     create_form_view: tool({
@@ -467,7 +468,7 @@ export function createTableTools(
           config: { title, description, submitLabel, successMessage, mode: "create" },
           fields,
           ...org,
-        });
+        }, getToolTransaction());
       },
     }),
 
@@ -490,7 +491,7 @@ export function createTableTools(
           name,
           config: { title, description, submitLabel, successMessage, mode },
           ...org,
-        }),
+        }, getToolTransaction()),
     }),
 
     set_form_fields: tool({
@@ -511,7 +512,7 @@ export function createTableTools(
           ),
         })
       ),
-      execute: async (input) => cmds.setFormFields({ ...input, ...org }),
+      execute: async (input) => cmds.setFormFields({ ...input, ...org }, getToolTransaction()),
     }),
 
     add_form_field: tool({
@@ -530,7 +531,7 @@ export function createTableTools(
           viewId,
           field: { columnId, label, helpText, required },
           ...org,
-        }),
+        }, getToolTransaction()),
     }),
 
     remove_form_field: tool({
@@ -541,7 +542,7 @@ export function createTableTools(
           columnId: z.string().uuid(),
         })
       ),
-      execute: async (input) => cmds.removeFormField({ ...input, ...org }),
+      execute: async (input) => cmds.removeFormField({ ...input, ...org }, getToolTransaction()),
     }),
 
     reorder_form_fields: tool({
@@ -552,7 +553,7 @@ export function createTableTools(
           columnIds: z.array(z.string().uuid()),
         })
       ),
-      execute: async (input) => cmds.reorderFormFields({ ...input, ...org }),
+      execute: async (input) => cmds.reorderFormFields({ ...input, ...org }, getToolTransaction()),
     }),
 
     set_form_sections: tool({
@@ -569,7 +570,7 @@ export function createTableTools(
           ),
         })
       ),
-      execute: async (input) => cmds.setFormSections({ ...input, ...org }),
+      execute: async (input) => cmds.setFormSections({ ...input, ...org }, getToolTransaction()),
     }),
 
     set_form_theme: tool({
@@ -582,7 +583,7 @@ export function createTableTools(
         })
       ),
       execute: async ({ viewId, preset }) =>
-        cmds.setFormTheme({ viewId, preset, ...org }),
+        cmds.setFormTheme({ viewId, preset, ...org }, getToolTransaction()),
     }),
 
     set_form_layout: tool({
@@ -593,7 +594,7 @@ export function createTableTools(
           layout: z.enum(["classic", "focus"]),
         })
       ),
-      execute: async (input) => cmds.setFormLayout({ ...input, ...org }),
+      execute: async (input) => cmds.setFormLayout({ ...input, ...org }, getToolTransaction()),
     }),
 
     set_form_field_settings: tool({
@@ -618,18 +619,18 @@ export function createTableTools(
           columnId,
           patch: { ...rest, settings: settings as never },
           ...org,
-        }),
+        }, getToolTransaction()),
     }),
 
 
-    rename_view: tool({ description: "重命名任意表格、看板或表单视图，不改变其配置。", inputSchema: zodSchema(RENAME_VIEW_SCHEMA), execute: async (input) => cmds.renameView({ ...input, ...org }) }),
-    set_default_view: tool({ description: "设置表格唯一默认视图，整个工作区共享。", inputSchema: zodSchema(SET_DEFAULT_VIEW_SCHEMA), execute: async (input) => cmds.setDefaultView({ ...input, ...org }) }),
-    update_board_view: tool({ description: "更新看板分组单选字段、卡片显示字段（visibleColumnIds按显示顺序）及hideEmpty、density（comfortable宽松/compact精简）；标题始终显示，人员和日期固定在页脚。", inputSchema: zodSchema(UPDATE_BOARD_VIEW_SCHEMA), execute: async (input) => cmds.updateBoardView({ ...input, ...org }) }),
+    rename_view: tool({ description: "重命名任意表格、看板或表单视图，不改变其配置。", inputSchema: zodSchema(RENAME_VIEW_SCHEMA), execute: async (input) => cmds.renameView({ ...input, ...org }, getToolTransaction()) }),
+    set_default_view: tool({ description: "设置表格唯一默认视图，整个工作区共享。", inputSchema: zodSchema(SET_DEFAULT_VIEW_SCHEMA), execute: async (input) => cmds.setDefaultView({ ...input, ...org }, getToolTransaction()) }),
+    update_board_view: tool({ description: "更新看板分组单选字段、卡片显示字段（visibleColumnIds按显示顺序）及hideEmpty、density（comfortable宽松/compact精简）；标题始终显示，人员和日期固定在页脚。", inputSchema: zodSchema(UPDATE_BOARD_VIEW_SCHEMA), execute: async (input) => cmds.updateBoardView({ ...input, ...org }, getToolTransaction()) }),
 
     delete_view: tool({
       description: "删除视图。同一表格至少保留一个视图。",
       inputSchema: zodSchema(z.object({ viewId: z.string().uuid() })),
-      execute: async ({ viewId }) => cmds.deleteView({ viewId, ...org }),
+      execute: async ({ viewId }) => cmds.deleteView({ viewId, ...org }, getToolTransaction()),
     }),
     create_grid_view: tool({
       description: "按需创建表格（grid）视图",
@@ -642,7 +643,7 @@ export function createTableTools(
       execute: async ({ tableId, name }) => {
         const id = tableId || defaultTableId;
         if (!id) throw new Error("缺少 tableId");
-        return cmds.createGridView({ tableId: id, name, ...org });
+        return cmds.createGridView({ tableId: id, name, ...org }, getToolTransaction());
       },
     }),
 
@@ -664,7 +665,7 @@ export function createTableTools(
           name,
           config: { ...config, ...(statusColumnId ? { statusColumnId } : {}) },
           ...org,
-        });
+        }, getToolTransaction());
       },
     }),
   };

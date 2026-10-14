@@ -72,9 +72,9 @@ function requireColumnFromMap<
   return col;
 }
 
-export async function listTables(input: OrgScoped = {}) {
+export async function listTables(input: OrgScoped = {}, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
-  return listTablesForOrg(organizationId);
+  return listTablesForOrg(organizationId, transaction);
 }
 
 /**
@@ -85,16 +85,16 @@ export async function getTable({
   tableId,
   includeFirstPage,
   organizationId,
-}: GetTableInput & OrgScoped) {
-  const table = await requireTableInOrg(tableId, organizationId);
+}: GetTableInput & OrgScoped, transaction?: Transaction) {
+  const table = await requireTableInOrg(tableId, organizationId, transaction);
 
-  const cols = await db
+  const cols = await (transaction ?? db)
     .select()
     .from(columns)
     .where(eq(columns.tableId, tableId))
     .orderBy(asc(columns.sortOrder));
 
-  const rowCount = await countTableRows(tableId);
+  const rowCount = await countTableRows(tableId, transaction);
 
   let rowList: (typeof rows.$inferSelect)[] = [];
   if (includeFirstPage) {
@@ -102,7 +102,7 @@ export async function getTable({
       tableId,
       limit: DEFAULT_PAGE_SIZE,
       includeTotal: false,
-    });
+    }, undefined, transaction);
     rowList = page.rows as typeof rowList;
   }
 
@@ -114,9 +114,9 @@ export async function createTable(input: {
   organizationId: string;
   name: string;
   description?: string;
-}) {
+}, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
-  return inTransaction(undefined, async tx => {
+  return inTransaction(transaction, async tx => {
     const [table] = await tx.insert(tables).values({ organizationId, name: input.name.trim(), description: input.description }).returning();
     await tx.insert(columns).values({ tableId: table.id, name: "标题", type: "text", sortOrder: 0, width: 220 });
     return table;
@@ -528,9 +528,9 @@ export async function reorderColumns(input: ReorderColumnsInput & OrgScoped, tra
 }
 
 /** Windowed query — SQL filter pushdown + keyset cursor. Never returns unbounded rows. */
-export async function queryRows(input: QueryRowsInput & OrgScoped) {
-  await requireTableInOrg(input.tableId, input.organizationId);
-  return queryRowsWindowed(input);
+export async function queryRows(input: QueryRowsInput & OrgScoped, transaction?: Transaction) {
+  await requireTableInOrg(input.tableId, input.organizationId, transaction);
+  return queryRowsWindowed(input, undefined, transaction);
 }
 
 export async function setStatus(input: SetStatusInput & OrgScoped & { skipAutomation?: boolean }, transaction?: Transaction) {
