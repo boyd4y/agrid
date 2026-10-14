@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
 import { createTestHarness } from "wrangler";
-import { createDatabase } from "@tabdo/platform/database";
-import { agentExecutions, agentExecutionChunks, agentRuns, agentRuntimeSessions, agentProfile, chatThreads, member, organization, user, userApiKeys } from "@tabdo/platform/schema";
+import { createDatabase } from "@tabdo/backend/database";
+import { agentExecutions, agentExecutionChunks, agentRuns, agentRuntimeSessions, agentProfile, chatThreads, member, organization, user, userApiKeys } from "@tabdo/backend/schema";
 
 const connectionString = process.env.DATABASE_URL ?? "";
 if (!connectionString || !new URL(connectionString).pathname.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");

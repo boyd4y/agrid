@@ -6,7 +6,7 @@ import {
   type CellValue,
   type ColumnDef,
 } from "@tabdo/shared";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Database, type Transaction } from "../db/context.js";
 import { columns, rows } from "../db/schema.js";
 import { queryRowsWindowed } from "./queryRows.js";

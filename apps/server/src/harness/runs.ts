@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { ChatActivity, AgentRunSummary } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { agentRuns, agentRunEvents, chatMessages, chatThreads, agentRuntimeSessions, agentThreadLeases, member } from "../db/schema.js";
 import { requireThread, saveMessageInTransaction, threadScope, type StoredMessage } from "../chat/store.js";

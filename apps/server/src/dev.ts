@@ -7,12 +7,12 @@ import "./load-env.js";
 const cli = createRequire(import.meta.url).resolve("tsx/cli");
 const cwd = process.cwd();
 let closing = false;
-const api = superviseApi({ entry: "src/index.ts", cwd, watchPaths: [resolve(cwd, "src"), resolve(cwd, "../../packages/shared/src"), resolve(cwd, "../../packages/queue/src"), resolve(cwd, "../../packages/storage/src"), resolve(cwd, "../../packages/harness/src"), resolve(cwd, "../../packages/sandbox/src"), resolve(cwd, "../../packages/platform/src"), resolve(cwd, "../../packages/execution/src")],
+const api = superviseApi({ entry: "src/index.ts", cwd, watchPaths: [resolve(cwd, "src"), resolve(cwd, "../../packages/shared/src"), resolve(cwd, "../../packages/core/src"), resolve(cwd, "../../packages/platform-node/src"), resolve(cwd, "../../packages/backend/src")],
   env: { ...process.env, DB_POOL_MAX: process.env.DB_POOL_MAX ?? "10" },
   onFailure: (code) => { process.exitCode = code; void shutdown(); },
 });
 const worker = process.argv.includes("--api-only") ? undefined : spawn(process.execPath, [cli, "watch", "--conditions=development",
-  "--include", "../../packages/shared/src/**/*.ts", "--include", "../../packages/queue/src/**/*.ts", "--include", "../../packages/storage/src/**/*.ts", "--include", "../../packages/harness/src/**/*.ts", "--include", "../../packages/sandbox/src/**/*.ts", "--include", "../../packages/platform/src/**/*.ts", "--include", "../../packages/execution/src/**/*.ts", "src/queue/main.ts"], { stdio: "inherit", env: { ...process.env, DB_POOL_MAX: "4" } });
+  "--include", "../../packages/shared/src/**/*.ts", "--include", "../../packages/core/src/**/*.ts", "--include", "../../packages/platform-node/src/**/*.ts", "--include", "../../packages/backend/src/**/*.ts", "src/queue/main.ts"], { stdio: "inherit", env: { ...process.env, DB_POOL_MAX: "4" } });
 async function shutdown() {
   if (closing) return; closing = true;
   const workerStopped = worker && worker.exitCode === null && worker.signalCode === null

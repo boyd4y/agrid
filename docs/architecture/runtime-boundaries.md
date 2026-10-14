@@ -1,6 +1,6 @@
 # tabdo 运行时与包边界
 
-日期：2026-10-14。状态：架构修订，尚未迁移代码。本文细化[双部署架构](dual-deployment.md)的包边界；Cloudflare 优先，本地使用 Wrangler、Docker 与现有 PostgreSQL 验证。Cloudflare 模式采用 Workers + Durable Object + Sandbox，不要求额外常驻 Node 服务。
+日期：2026-10-14。状态：平台包隔离与身份服务已实施，完整产品 CF 派发仍待接线。本文细化[双部署架构](dual-deployment.md)的包边界；Cloudflare 优先，本地使用 Wrangler、Docker 与现有 PostgreSQL 验证。Cloudflare 模式采用 Workers + Durable Object + Sandbox，不要求额外常驻 Node 服务。
 
 ## 1. 已确认的约束
 
@@ -41,7 +41,7 @@ apps/
   mcp/                            # 共用命令协议，按实际传输方式装配
 ```
 
-这是目标目录，不能把当前目录存在与否当作完成状态。是否拆分 HTTP/Queue 为不同 Worker，由独立扩缩、权限和故障隔离需求决定，不再为每个能力增加部署应用。
+core、两个 platform 包及 backend 已存在并被应用使用；agent-runtime、完整业务服务和产品 Worker 尚待提取，不能把目录存在当作全链路完成。是否拆分 HTTP/Queue 为不同 Worker，由独立扩缩、权限和故障隔离需求决定。
 
 ## 3. 依赖方向与装配
 
@@ -150,19 +150,21 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 
 本地验证覆盖 Hono/Auth、PG 事务、DO 重建、Queue/R2 行为，以及 Docker 内的原生 Harness 生命周期。Hyperdrive 本地连接直接到 PG，不模拟线上池/查询缓存；远程资源、TLS/网络、容器冷启动/休眠与计费另做验收。先完成 CF 路线，再用同一业务服务保持 Node 回归，不等待所有可选 Sandbox 供应商适配。
 
-本轮本地核实：Wrangler 4.149.0、Docker 29.4.0 和本地 PG 可用；实际 `platform-coordination.test.ts` 在 Workers 环境通过，覆盖真实 Better Auth/API Key、PG 输出、完整私有执行引用、取消持久化和成员撤销。只使用 `tabdo_agent_test`，没有迁移或写入用户业务库。此用例不包含原生模型执行或 CF Sandbox，不能据此标记完整 CF 模式完成。
+本轮本地核实：Wrangler 4.149.0、Docker 29.4.0 和 PG 可用，149 项 server 与 CF PG/Auth/DO 用例通过，只使用隔离 `tabdo_agent_test`。另一个[真实 Sandbox 用例](../../apps/cloudflare/sandbox/README.md)验证完整 Pi SDK 的工具/待答冷恢复，不使用 PG 或真实模型。两条门槛都通过，但还未接成产品 PG/Sandbox 执行链路。
 
 ## 9. 进入迁移前的验收门槛
 
 - [x] 恢复 Node/Cloudflare 双部署目标；确认 Cloudflare Workers + DO + Sandbox，Sandbox 内允许 Node 原生 Harness。
 - [x] 明确框架契约、产品服务、平台实现与薄入口的归属。
 - [x] 明确 Worker 控制侧与 Node/Sandbox 执行侧的依赖图隔离，不要求更换原生 Harness。
-- [ ] 用 Wrangler + PG + Docker 验证 Cloudflare Sandbox 内的完整原生 Harness：DeepSeek/Pi、产品工具、取消、待答冷恢复、重复启动和现有输出协议。
+- [x] 物理迁移 core、Node/CF 平台实现与 backend，应用已接入；独立类型、依赖、通用 DO 与原生 SDK 回归通过。
+- [x] 真实 Wrangler/DO/Docker 下的 Pi 工具、待答 detach、销毁与冷恢复无重放；本地模型夹具，不等于 DeepSeek 网络或产品工具 gateway 已验收。
+- [ ] 产品 PG + DO/Sandbox 接线：模型配置、产品工具、取消、待答恢复、重复启动和现有输出协议。
 - [ ] 验证 DO/队列持久接受、Sandbox 生命周期与现有 PG checkpoint 的交接/补偿。
 - [ ] 再按边界迁移包、清除隐式 service 依赖，更新 Wrangler/类型/构建。
 - [ ] 聊天、定时、自动化、MCP、文件和权限撤销完成真实双模式验收；其他 Harness 单独验证。
 
-本轮仅纠正架构边界与记录，不新建空实现包，不迁移代码，不把 Cloudflare Sandbox 集成标记为已完成。
+当前已完成真实平台实现分包和局部显式依赖，不新建空 agent-runtime 包，不把 Sandbox 夹具或 PG 工厂验收标记为完整产品部署完成。
 
 ## 调研依据
 
@@ -173,4 +175,4 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 - [Hyperdrive 本地开发](https://developers.cloudflare.com/hyperdrive/configuration/local-development/)：本地连接真实 PG，线上池/缓存单独验证。
 - [Containers 本地开发](https://developers.cloudflare.com/containers/guides/local-dev/)：Wrangler 与 Docker 的本地容器链路。
 - [Queue ACK/retry](https://developers.cloudflare.com/queues/configuration/batching-retries/)：显式逐消息确认和重试。
-- 本地安装源码：`packages/harness/node_modules/@ai-sdk/harness-{pi,codex,claude-code}`；此次只读审查，没有修改第三方源码或运行生产模型。
+- 原生 SDK：`packages/platform-node/node_modules/@ai-sdk/harness-{pi,codex,claude-code}`；未修改第三方源码。测试使用本地模型夹具，没有调用生产模型。

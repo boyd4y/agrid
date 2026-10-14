@@ -1,11 +1,21 @@
 import { HTTPException } from "hono/http-exception";
-import { HarnessConfigurationError } from "@tabdo/harness";
-import type { PiAdapterConfig } from "@tabdo/harness/adapters/pi";
+import { HarnessConfigurationError } from "@tabdo/core/harness";
 import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata } from "./model-contracts.js";
 import type { HarnessId, RuntimeMode, RuntimeEnvironment } from "./contracts.js";
 
+/** Validated product settings only; official SDK assembly belongs to the execution environment. */
+export type PiProviderConfiguration = {
+  providerId: string;
+  apiKey: string;
+  baseUrl: string;
+  model: { id: string; contextWindow: number; maxTokens: number; reasoning: boolean };
+  maxTokensField: "max_tokens" | "max_completion_tokens";
+  samplingParams?: Record<string, unknown>;
+  reattachInProcess: boolean;
+};
+
 export type NativeConfiguration =
-  | { harness: "pi"; mode: RuntimeMode; adapter: Omit<PiAdapterConfig, "onMessageEnd" | "consumeContinuationInput"> }
+  | { harness: "pi"; mode: RuntimeMode; adapter: PiProviderConfiguration }
   | { harness: "codex" | "claude"; mode: RuntimeMode; adapter: { apiKey: string; baseUrl?: string; model?: string } };
 
 const value = (env: RuntimeEnvironment, name: string) =>

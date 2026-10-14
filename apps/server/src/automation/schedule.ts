@@ -2,7 +2,7 @@ import { CronExpressionParser } from "cron-parser";
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { AutomationRule } from "@tabdo/shared";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import { automations, automationSchedules, automationOccurrences } from "../db/schema.js";
 import { appendExternalAutomationEvent } from "./events.js";

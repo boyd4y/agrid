@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { positiveInt } from "./config.js";
 import { automationDeliveryId, parseAutomationDelivery, type AutomationDelivery } from "@tabdo/shared";
-import type { QueuePublisher } from "@tabdo/queue";
+import type { QueuePublisher } from "@tabdo/core/queue";
 
 type Delivery = { id: string; payload: AutomationDelivery; generation: number; claim_token: string; attempts: number };
 

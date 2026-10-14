@@ -1,6 +1,6 @@
 import type { UIMessageChunk } from "ai";
 import { HTTPException } from "hono/http-exception";
-import { withPlatformResources, type PlatformResources } from "@tabdo/platform/resources";
+import { withPlatformResources, type PlatformResources } from "@tabdo/backend/resources";
 import { resolveActor } from "../auth/actor.js";
 import { requestRunCancellation } from "../harness/runs.js";
 import { readNativeExecutionOutput, type NativeExecutionReference } from "../runner/repository.js";

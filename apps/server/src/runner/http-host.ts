@@ -1,6 +1,6 @@
-import type { ExecutionAdapter, ExecutionHandle } from "@tabdo/execution";
-import { createExecutionHttpHost, type ExecutionSnapshot } from "@tabdo/execution/transport/http-host";
-import type { InternalAuthenticationOptions } from "@tabdo/execution/internal-auth";
+import type { ExecutionAdapter, ExecutionHandle } from "@tabdo/core/execution";
+import { createExecutionHttpHost, type ExecutionSnapshot } from "@tabdo/core/transport/execution-http-host";
+import type { InternalAuthenticationOptions } from "@tabdo/core/internal-auth";
 import { z } from "zod";
 import { withNodeResources } from "../resources/node.js";
 import { requestRunCancellation } from "../harness/runs.js";

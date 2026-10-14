@@ -1,6 +1,6 @@
 import { Worker, DelayedError, UnrecoverableError } from "bullmq";
 import { eq } from "drizzle-orm";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { automationEvents } from "../db/schema.js";
 import { claimExecution, executeNext, recordFailure, PermanentError, FenceLostError } from "../automation/execution.js";

@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import { columns, fileObjects, tables } from "../db/schema.js";
 import { requireActorOrg } from "../tenant/http.js";

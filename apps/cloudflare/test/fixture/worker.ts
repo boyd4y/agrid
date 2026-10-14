@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { InternalAuthenticationError, verifyInternalRequest } from "../../src/internal-auth.js";
-import { parseQueueMessage } from "@tabdo/queue";
-import { createCloudflarePublisher } from "@tabdo/queue/adapters/cloudflare";
+import { parseQueueMessage } from "@tabdo/core/queue";
+import { createCloudflarePublisher } from "@tabdo/platform-cloudflare/queue";
 import { createSessionCoordinator } from "../../src/coordinator.js";
 import { createCloudflareTriggers } from "../../src/triggers.js";
 import { CoordinationError, parseExecutionReference, type AccessCredentials, type ExecutionReference, type OutputPage } from "../../src/contracts.js";

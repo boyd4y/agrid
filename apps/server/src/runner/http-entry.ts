@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import { createNodeProcessExecution } from "@tabdo/execution/adapters/node-process";
+import { createNodeProcessExecution } from "@tabdo/platform-node/execution/node-process";
 import { nodeJobResources } from "../resources/node.js";
 import { createNativeExecutionHttpHost } from "./http-host.js";
 

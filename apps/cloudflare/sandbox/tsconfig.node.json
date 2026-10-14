@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@tabdo/platform-node/*": ["../../../packages/platform-node/src/*"],
+      "@tabdo/core/*": ["../../../packages/core/src/*"],
+      "just-bash": ["../../../packages/platform-node/node_modules/just-bash"],
+      "zod": ["../../../packages/shared/node_modules/zod"]
+    }
+  },
+  "include": ["native-entry.ts", "local.test.ts"]
+}

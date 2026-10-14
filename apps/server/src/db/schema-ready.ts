@@ -1,4 +1,4 @@
-import { getDatabaseClient } from "@tabdo/platform/resources";
+import { getDatabaseClient } from "@tabdo/backend/resources";
 
 /**
  * Detect common "forgot to migrate" failure modes that surface as opaque 500s

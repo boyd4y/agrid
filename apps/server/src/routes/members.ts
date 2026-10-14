@@ -3,10 +3,10 @@ import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { DISABLED_TOOLS_SCHEMA } from "@tabdo/shared";
 import { getAgentToolCatalog, validateDisabledTools } from "../harness/tool-catalog.js";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { agentProfile, member, user, organization, agentRuns, chatThreads } from "../db/schema.js";
-import { getAuth } from "@tabdo/platform/resources";
+import { getAuth } from "@tabdo/backend/resources";
 import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
 import { validateSelectedSkills } from "../skills/service.js";
 import { avatarImageSchema, botAvatarSchema, memberAvatarUrl } from "../auth/avatar.js";

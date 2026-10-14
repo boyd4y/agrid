@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
-import { createDatabase } from "@tabdo/platform/database";
+import { createDatabase } from "@tabdo/backend/database";
 import { user } from "../../src/db/schema.js";
-import { createPlatformAuth, assertProductionAuthSecret } from "@tabdo/platform/auth";
+import { createPlatformAuth, assertProductionAuthSecret } from "@tabdo/backend/auth";
 import { createApp } from "../../src/app.js";
 import { client } from "../../src/db/index.js";
 

@@ -2,13 +2,13 @@
 
 更新：2026-10-14。按用户要求持续推进；独立功能完成、自检后单独提交并推送。
 
-## 双部署 framework（当前架构梳理）
+## 双部署 framework（CF 优先实施中）
 
-Cloudflare 优先，继续支持 Node/Cloudflare 双部署；Cloudflare 使用 Workers + DO + Sandbox，在 Sandbox 内执行原生 Harness，不要求额外常驻 Node 服务。保留现有 PostgreSQL、Drizzle 与 Better Auth。当前依据为[双部署架构](architecture/dual-deployment.md)和[包边界](architecture/runtime-boundaries.md)：core 通用契约、backend 显式依赖 services、agent-runtime 产品装配、独立 platform-cloudflare 与 platform-node。Worker 与 Sandbox 制品分别构建，不要求换 Pi Durable。本轮纠正文档并核对本地 CF/PG 链路，尚未迁移包。
+Cloudflare 优先，继续支持 Node/Cloudflare 双部署；Cloudflare 使用 Workers + DO + Sandbox，在 Sandbox 内执行原生 Harness，不要求额外常驻 Node 服务。保留 PostgreSQL、Drizzle 与 Better Auth。依据为[双部署架构](architecture/dual-deployment.md)和[包边界](architecture/runtime-boundaries.md)。core/platform-node/platform-cloudflare 已隔离，platform 已改名 backend 并提取显式身份服务；agent-runtime 与其余业务仍待提取。Worker 与 Sandbox 分别构建，不更换原生 Harness。
 
-- 已完成：明确包职责和静态依赖方向；识别隐式 DB/Auth scope 不满足最终 services 约束；恢复 DO 协调/Sandbox 承载完整 Harness 的边界，撤下纯 Workers 执行与禁止 Node 的错误限定。
-- 本轮本地验证：Wrangler/Docker/PG 可用；实际 CF/PG 协调用例通过，验证 Better Auth/API Key、私有输出、取消持久化与成员撤销，仅连接隔离 `tabdo_agent_test`，不代表完整 Sandbox 执行已完成。
-- 待完成：Wrangler + PG + Docker 下的 Sandbox 原生 Harness 生命周期、待答恢复、重复启动与输出协议验证；之后迁移平台包与显式依赖，接通实际 Queue/Cron、完整产品入口和双模式验收。远程 Hyperdrive 池/缓存和容器生命周期独立验收。
+- 已完成：平台包与类型/依赖图分离；通用 DO 不再绑定 Run/Thread/AI 协议；身份服务显式 DB/session resolver，无 ALS/Node 依赖；应用、测试、构建和冻结锁更新。
+- 本轮验证：149 项 server 回归、core/Node/CF 能力与 PG/DO/Auth 用例通过；真实 Wrangler/DO/Docker 下 Pi 在容器销毁后冷续接，工具未重放；源/测试类型、全仓构建、架构检查和冻结离线安装通过。只使用隔离 PG/Redis和本地模型夹具。
+- 待完成：共用业务 repositories/services 与 agent-runtime 完整提取；产品 PG 持久派发接 DO/Sandbox 和工具 gateway；聊天/自动化/定时、实际 Queue/Cron、完整 Worker 的本地端到端验收。远程 Hyperdrive 池/缓存与容器行为另验。
 
 ### 已有双部署实施记录（新包隔离尚未实施）
 

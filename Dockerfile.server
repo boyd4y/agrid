@@ -4,24 +4,20 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/ui/package.json packages/ui/package.json
-COPY packages/queue/package.json packages/queue/package.json
-COPY packages/storage/package.json packages/storage/package.json
-COPY packages/harness/package.json packages/harness/package.json
-COPY packages/sandbox/package.json packages/sandbox/package.json
-COPY packages/platform/package.json packages/platform/package.json
-COPY packages/execution/package.json packages/execution/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/platform-node/package.json packages/platform-node/package.json
+COPY packages/platform-cloudflare/package.json packages/platform-cloudflare/package.json
+COPY packages/backend/package.json packages/backend/package.json
 COPY apps/cloudflare/package.json apps/cloudflare/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/client/package.json apps/client/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
-COPY packages/queue packages/queue
-COPY packages/storage packages/storage
-COPY packages/harness packages/harness
-COPY packages/sandbox packages/sandbox
-COPY packages/platform packages/platform
-COPY packages/execution packages/execution
+COPY packages/core packages/core
+COPY packages/platform-node packages/platform-node
+COPY packages/platform-cloudflare packages/platform-cloudflare
+COPY packages/backend packages/backend
 COPY apps/server apps/server
 RUN pnpm --filter @tabdo/server... build
 

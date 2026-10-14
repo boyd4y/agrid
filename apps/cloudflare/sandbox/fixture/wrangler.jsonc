@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tabdo-native-sandbox-fixture",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-13",
+  "upload_source_maps": true,
+  "observability": { "enabled": true },
+  "containers": [{
+    "class_name": "NativeHarnessContainer",
+    "scheduling_policy": "durable_object",
+    "images": { "runner": { "dockerfile": "../Dockerfile", "build_context": "../../../.." } }
+  }],
+  "durable_objects": { "bindings": [{ "name": "NATIVE_SANDBOX", "class_name": "NativeHarnessContainer" }] },
+  "exports": { "NativeHarnessContainer": { "type": "durable-object", "storage": "sqlite" } }
+}

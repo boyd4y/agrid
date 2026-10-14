@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { integrationConnections, integrationDeliveries, webhookEndpoints } from "../db/schema.js";
 import { appendExternalAutomationEvent, type ExternalAutomationEvent } from "../automation/events.js";

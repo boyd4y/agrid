@@ -1,2 +1,2 @@
 // Compatibility entry; the shared platform owns this implementation.
-export * from "@tabdo/platform/schema";
+export * from "@tabdo/backend/schema";

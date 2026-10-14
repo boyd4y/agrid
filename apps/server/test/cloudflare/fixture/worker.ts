@@ -1,7 +1,7 @@
 // Local factory contract test only. This is not the Tabdo product Worker entry.
-import { createDatabase } from "@tabdo/platform/database";
-import { createPlatformAuth } from "@tabdo/platform/auth";
-import { getAuth, getDatabaseClient, requirePlatformResources, withPlatformResources } from "@tabdo/platform/resources";
+import { createDatabase } from "@tabdo/backend/database";
+import { createPlatformAuth } from "@tabdo/backend/auth";
+import { getAuth, getDatabaseClient, requirePlatformResources, withPlatformResources } from "@tabdo/backend/resources";
 import { resolveActor } from "../../../src/auth/actor.js";
 import { resolveChatAgentConfiguration, buildChatAgentInstructions } from "../../../src/harness/agent-admission.js";
 import { resolveNativeConfiguration } from "../../../src/harness/runtime-configuration.js";

@@ -1,0 +1,87 @@
+{
+  "name": "@tabdo/backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "workerd": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./database": {
+      "types": "./src/db/factory.ts",
+      "workerd": "./src/db/factory.ts",
+      "development": "./src/db/factory.ts",
+      "import": "./dist/db/factory.js",
+      "default": "./dist/db/factory.js"
+    },
+    "./auth": {
+      "types": "./src/auth/factory.ts",
+      "workerd": "./src/auth/factory.ts",
+      "development": "./src/auth/factory.ts",
+      "import": "./dist/auth/factory.js",
+      "default": "./dist/auth/factory.js"
+    },
+    "./schema": {
+      "types": "./src/db/schema.ts",
+      "workerd": "./src/db/schema.ts",
+      "development": "./src/db/schema.ts",
+      "import": "./dist/db/schema.js",
+      "default": "./dist/db/schema.js"
+    },
+    "./checkpoints": {
+      "types": "./src/agent/checkpoints.ts",
+      "workerd": "./src/agent/checkpoints.ts",
+      "development": "./src/agent/checkpoints.ts",
+      "import": "./dist/agent/checkpoints.js",
+      "default": "./dist/agent/checkpoints.js"
+    },
+    "./resources": {
+      "types": "./src/resources.ts",
+      "workerd": "./src/resources.ts",
+      "development": "./src/resources.ts",
+      "import": "./dist/resources.js",
+      "default": "./dist/resources.js"
+    },
+    "./auth/actor": {
+      "types": "./src/auth/actor.ts",
+      "workerd": "./src/auth/actor.ts",
+      "development": "./src/auth/actor.ts",
+      "import": "./dist/auth/actor.js",
+      "default": "./dist/auth/actor.js"
+    },
+    "./auth/avatar": {
+      "types": "./src/auth/avatar.ts",
+      "workerd": "./src/auth/avatar.ts",
+      "development": "./src/auth/avatar.ts",
+      "import": "./dist/auth/avatar.js",
+      "default": "./dist/auth/avatar.js"
+    },
+    "./database-types": {
+      "types": "./src/db/types.ts",
+      "workerd": "./src/db/types.ts",
+      "development": "./src/db/types.ts",
+      "import": "./dist/db/types.js",
+      "default": "./dist/db/types.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tabdo/shared": "workspace:*",
+    "better-auth": "^1.7.7",
+    "@better-auth/drizzle-adapter": "^1.7.7",
+    "drizzle-orm": "^0.45.4",
+    "postgres": "^3.4.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "typescript": "^5.8.3"
+  }
+}

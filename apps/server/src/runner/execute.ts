@@ -1,7 +1,7 @@
 import type { ToolResultPart, UIMessage } from "ai";
 import { and, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { chatMessages, member } from "../db/schema.js";
 import { resolveChatContext } from "../chat/context.js";
 import { chatErrorText } from "../ai/errors.js";

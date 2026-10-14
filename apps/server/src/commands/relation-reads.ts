@@ -1,6 +1,6 @@
 import { sql, eq, type SQL, getTableColumns } from "drizzle-orm";
 import { rows } from "../db/schema.js";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import type { ColumnDef, RowData } from "@tabdo/shared";
 

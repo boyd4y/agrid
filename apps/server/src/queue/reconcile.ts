@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { reconcileStaleMs, reconcileBatch, queueName } from "./config.js";
 import { acquireRowLease, createLeaseClient } from "./lease.js";

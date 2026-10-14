@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { resolveActor, type Actor } from "../auth/actor.js";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { chatThreads, agentThreadLeases, agentRuntimeSessions } from "../db/schema.js";
 import { resolveChatContext } from "../chat/context.js";

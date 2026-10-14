@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
 import { and, eq } from "drizzle-orm";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { getReport } from "../reports/service.js";
 import { organization, tables, automations } from "../db/schema.js";

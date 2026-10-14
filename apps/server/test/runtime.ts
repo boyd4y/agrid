@@ -1,5 +1,5 @@
 import { test as nodeTest, before as nodeBefore, after as nodeAfter } from "node:test";
-import { withPlatformResources } from "@tabdo/platform/resources";
+import { withPlatformResources } from "@tabdo/backend/resources";
 
 async function runWithFixture<T>(work: () => T): Promise<Awaited<T>> {
   const name = new URL(process.env.DATABASE_URL ?? "").pathname;

@@ -1,6 +1,6 @@
 import { HTTPException } from "hono/http-exception";
-import { getDatabase } from "@tabdo/platform/resources";
-import type { PlatformDatabase } from "@tabdo/platform/database";
+import { getDatabase } from "@tabdo/backend/resources";
+import type { PlatformDatabase } from "@tabdo/backend/database";
 import { nameConflictMessage } from "./name-errors.js";
 
 export type Transaction = Parameters<Parameters<PlatformDatabase["transaction"]>[0]>[0];

@@ -4,7 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { Webhook } from "svix";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 
 import { integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { integrationActor, canManageIntegrations, endpointFields, ownedEndpoint, publicEndpoint } from "../integrations/management.js";

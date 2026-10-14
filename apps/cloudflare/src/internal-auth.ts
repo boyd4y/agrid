@@ -1,5 +1,5 @@
-/** Portable transport authentication is owned by the execution capability, not the deployment entry. */
+/** Compatibility entry; authentication is portable, without loading a platform runtime. */
 export {
   InternalAuthenticationError, signInternalRequest, verifyInternalRequest,
   type InternalAuthenticationOptions, type VerifiedInternalRequest,
-} from "@tabdo/execution/internal-auth";
+} from "@tabdo/platform-cloudflare/internal-auth";

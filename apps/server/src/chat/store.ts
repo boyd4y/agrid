@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import { agentRuns, agentRuntimeSessions, chatMessages, chatThreads } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";

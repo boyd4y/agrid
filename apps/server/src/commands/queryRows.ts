@@ -1,6 +1,6 @@
 import { cellExpression, rowProjection, relationPredicate, relatedId } from "./relation-reads.js";
 import { sql, eq, asc, desc, and, type SQL } from "drizzle-orm";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import { columns, rows, tables } from "../db/schema.js";
 import {

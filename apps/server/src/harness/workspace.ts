@@ -1,6 +1,6 @@
 import { InMemoryFs } from "just-bash";
-import { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/platform/checkpoints";
-export { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/platform/checkpoints";
+import { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/backend/checkpoints";
+export { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/backend/checkpoints";
 import { posix } from "node:path";
 
 const MAX_BYTES = 32 * 1024 * 1024;

@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
 import type { Actor } from "../auth/actor.js";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import {
   agentProfile,
@@ -21,7 +21,7 @@ import {
 import {
   workspaceSnapshotSchema,
   type WorkspaceSnapshot,
-} from "@tabdo/platform/checkpoints";
+} from "@tabdo/backend/checkpoints";
 
 export type RuntimeLease = { threadId: string; token: string; fence: number };
 export type RuntimeRecord = typeof agentRuntimeSessions.$inferSelect;

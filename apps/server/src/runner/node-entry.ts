@@ -1,4 +1,4 @@
-import { runNodeExecution } from "@tabdo/execution/adapters/node-worker";
+import { runNodeExecution } from "@tabdo/platform-node/execution/node-worker";
 import { withNodeResources, nodeJobResources } from "../resources/node.js";
 import { executeAcceptedNativeRun } from "./execute.js";
 

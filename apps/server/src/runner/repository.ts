@@ -2,7 +2,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { ToolResultPart, UIMessageChunk } from "ai";
 import { z } from "zod";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { agentExecutions, agentExecutionChunks, agentRuns, agentRuntimeSessions, agentThreadLeases, agentProfile, chatThreads, chatMessages, member, user } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
 import { chatContextSchema, type ChatContext } from "../chat/context.js";

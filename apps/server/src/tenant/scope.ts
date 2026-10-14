@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import { tables, columns, rows } from "../db/schema.js";
 

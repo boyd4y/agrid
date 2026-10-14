@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
-import { createDatabase } from "@tabdo/platform/database";
-import { createPlatformAuth } from "@tabdo/platform/auth";
-import { withPlatformResources } from "@tabdo/platform/resources";
+import { createDatabase } from "@tabdo/backend/database";
+import { createPlatformAuth } from "@tabdo/backend/auth";
+import { withPlatformResources } from "@tabdo/backend/resources";
 import { createPlatformSessionServices } from "../../../server/src/coordination/session-services.js";
 import { CoordinationError, parseExecutionReference, type SessionServices } from "../../src/contracts.js";
 import { createSessionCoordinator } from "../../src/coordinator.js";

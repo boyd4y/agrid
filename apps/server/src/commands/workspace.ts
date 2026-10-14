@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { MEMBER_LIST_SCHEMA } from "@tabdo/shared";
-import { getDatabase } from "@tabdo/platform/resources";
+import { getDatabase } from "@tabdo/backend/resources";
 import { type Transaction } from "../db/context.js";
 import { organization, member, user } from "../db/schema.js";
 import { listOrgMembers } from "../auth/actor.js";

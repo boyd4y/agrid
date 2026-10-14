@@ -1,4 +1,4 @@
-import { createBullMQQueue, closeBullMQQueue, createBullMQPublisher } from "@tabdo/queue/adapters/bullmq";
+import { createBullMQQueue, closeBullMQQueue, createBullMQPublisher } from "@tabdo/platform-node/queue/bullmq";
 import { automationDeliveryId, type AutomationDelivery } from "@tabdo/shared";
 import { queueName, prefix, redisOptions, attempts } from "./config.js";
 export type AutomationJob = AutomationDelivery;
