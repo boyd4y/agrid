@@ -8,7 +8,8 @@
     "agents": "智能体",
     "skills": "技能",
     "settings": "设置",
-    "integrations": "集成"
+    "integrations": "集成",
+    "schedules": "定时任务"
   },
   "shell": {
     "workspace": "工作区",
@@ -194,5 +195,11 @@
     "newRule": "新建规则",
     "emptyTitle": "还没有自动化",
     "emptyDescription": "用「当 / 如果 / 就」让字段回写或智能体跟进。"
+  },
+  "schedules": {
+    "new": "新建定时任务",
+    "description": "选择智能体和任务，让它按计划替你干活。",
+    "emptyTitle": "创建你的第一个定时任务",
+    "emptyDescription": "让智能体定时整理笔记、汇总进展，或完成你指定的任务。"
   }
 }

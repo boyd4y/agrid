@@ -192,6 +192,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
             titleHint={t("shell.automationsHint")}
             activeMatch={(pathname) => pathname.includes("/automations")}
           />
+          <NavItem {...nav("schedules")} collapsed={sidebarCollapsed} />
           <NavItem {...nav("reports")} collapsed={sidebarCollapsed} />
           {tables.filter((table) => table.pinned).map((table) => <SidebarTable key={table.id} table={table} collapsed={sidebarCollapsed} onTogglePin={onTogglePin} />)}
         </div>

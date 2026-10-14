@@ -8,7 +8,8 @@
     "agents": "Agents",
     "skills": "Skills",
     "settings": "Settings",
-    "integrations": "Integrations"
+    "integrations": "Integrations",
+    "schedules": "Scheduled tasks"
   },
   "shell": {
     "workspace": "Workspace",
@@ -194,5 +195,11 @@
     "newRule": "New rule",
     "emptyTitle": "No automations yet",
     "emptyDescription": "Use when / if / then to update fields or follow up with an agent."
+  },
+  "schedules": {
+    "new": "New scheduled task",
+    "description": "Choose an agent and a task to run on a schedule.",
+    "emptyTitle": "Create your first scheduled task",
+    "emptyDescription": "Have an agent summarize notes, report progress, or complete your task on a schedule."
   }
 }

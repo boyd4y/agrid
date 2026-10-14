@@ -80,9 +80,9 @@ async function validateRule(tx: Transaction, rule: Pick<AutomationRule, "source"
     }
   }
 }
-export async function listWorkspaceAutomations(organizationId: string, offset = 0, limit = 100) {
+export async function listWorkspaceAutomations(organizationId: string, offset = 0, limit = 100, kind?: "event" | "schedule") {
   const hits = await db.select({ rule: automations, sourceName: tables.name }).from(automations).leftJoin(tables, eq(tables.id, automations.tableId))
-    .where(and(eq(automations.organizationId, organizationId), isNull(automations.deletedAt))).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
+    .where(and(eq(automations.organizationId, organizationId), isNull(automations.deletedAt), kind === "schedule" ? sql`${automations.source}->>'kind' = 'schedule'` : kind === "event" ? sql`${automations.source}->>'kind' <> 'schedule'` : undefined)).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
   return { rules: hits.slice(0, limit).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > limit };
 }
 export async function getWorkspaceAutomation(id: string, organizationId: string) {

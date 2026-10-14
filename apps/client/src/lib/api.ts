@@ -309,7 +309,7 @@ export const api = {
 
   listAutomations: (tableId: string) =>
     request<AutomationRule[]>(`/api/tables/${tableId}/automations`),
-  listWorkspaceAutomations: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ rules: (AutomationRule & { sourceName: string | null })[]; hasMore: boolean }>(`/api/automations?offset=${offset}&limit=${limit}`, { signal }),
+  listWorkspaceAutomations: (offset = 0, limit = 100, signal?: AbortSignal, kind?: "event" | "schedule") => request<{ rules: (AutomationRule & { sourceName: string | null })[]; hasMore: boolean }>(`/api/automations?offset=${offset}&limit=${limit}${kind ? `&kind=${kind}` : ""}`, { signal }),
   getAutomation: (id: string) => request<AutomationRule & { sourceName: string | null }>(`/api/automations/${id}`),
   listReports: (offset = 0, limit = 100, signal?: AbortSignal) => request<{ reports: import("@tabdo/shared").Report[]; hasMore: boolean }>(`/api/reports?offset=${offset}&limit=${limit}`, { signal }),
   getReport: (id: string) => request<import("@tabdo/shared").Report>(`/api/reports/${id}`),
@@ -337,8 +337,6 @@ export const api = {
   updateAutomation: (id: string, data: Omit<import("@tabdo/shared").UpdateAutomationInput, "automationId">) =>
     request<AutomationRule>(`/api/automations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   listRuleRuns: (id: string) => request<AutomationRun[]>(`/api/automations/${id}/runs`),
-  previewAutomationSchedule: (data: { cron: string; timeZone: string }) =>
-    request<{ occurrences: string[] }>("/api/automations/schedule-preview", { method: "POST", body: JSON.stringify({ cron: data.cron, timeZone: data.timeZone }) }),
   listIntegrations: () => request<{ connections: import("@tabdo/shared").IntegrationConnection[]; canManage: boolean }>("/api/integrations"),
   createIntegration: (data: { provider: "agentmail"; name: string; apiKey: string }) => request<{ connection: import("@tabdo/shared").IntegrationConnection }>("/api/integrations", { method: "POST", body: JSON.stringify(data) }),
   updateIntegration: (id: string, data: { name?: string; apiKey?: string; enabled?: boolean }) => request<{ connection: import("@tabdo/shared").IntegrationConnection }>(`/api/integrations/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

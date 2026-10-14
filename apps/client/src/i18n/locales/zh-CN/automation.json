@@ -174,7 +174,6 @@
       "time": "时间",
       "weekday": "星期",
       "timeZone": "时区",
-      "preview": "预览接下来的执行时间",
       "days": {
         "0": "周日",
         "1": "周一",
@@ -183,7 +182,9 @@
         "4": "周四",
         "5": "周五",
         "6": "周六"
-      }
+      },
+      "hour": "小时",
+      "minute": "分钟"
     },
     "fieldName": "字段名称",
     "fieldType": "字段类型",
@@ -191,5 +192,43 @@
     "missingField": "此字段已不可用，原配置仍保留在高级输入中。",
     "eventField": "事件字段",
     "customPath": "自定义字段路径"
+  },
+  "scheduled": {
+    "new": "新建定时任务",
+    "edit": "编辑定时任务",
+    "configureTime": "设置执行时间",
+    "delete": "删除定时任务",
+    "deleteTitle": "删除定时任务？",
+    "deleteDescription": "删除「{{name}}」后，将不再按计划执行。",
+    "actionsNamed": "{{name}}定时任务操作",
+    "description": "选择智能体，告诉它要做什么，再设置执行时间。",
+    "name": "名称",
+    "namePlaceholder": "例如：每周整理阅读笔记",
+    "task": "任务描述",
+    "taskPlaceholder": "例如：每周一整理过去一周新增的阅读笔记，提炼重点并写入周报。",
+    "noAgents": "还没有可用智能体。",
+    "createAgent": "创建智能体"
+  },
+  "sourceEmpty": {
+    "table": {
+      "title": "还没有可用表格",
+      "description": "创建一张表格，再为记录变化设置自动化。",
+      "action": "前往表格"
+    },
+    "agentmail": {
+      "title": "还没有可用的邮件连接",
+      "description": "在设置中连接 AgentMail，再选择接收邮件的邮箱。",
+      "action": "设置 AgentMail"
+    },
+    "webhook": {
+      "title": "还没有可用的 Webhook",
+      "description": "在设置中添加接收地址，再用外部事件触发自动化。",
+      "action": "设置 Webhook"
+    },
+    "inbox": {
+      "title": "这个连接还没有邮箱",
+      "description": "在 AgentMail 中创建邮箱，然后刷新重新选择。"
+    },
+    "pickConnection": "先选择左侧的邮件连接，再选择邮箱。"
   }
 }

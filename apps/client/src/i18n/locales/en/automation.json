@@ -174,7 +174,6 @@
       "time": "Time",
       "weekday": "Weekday",
       "timeZone": "Time zone",
-      "preview": "Preview upcoming runs",
       "days": {
         "0": "Sunday",
         "1": "Monday",
@@ -183,7 +182,9 @@
         "4": "Thursday",
         "5": "Friday",
         "6": "Saturday"
-      }
+      },
+      "hour": "Hour",
+      "minute": "Minute"
     },
     "fieldName": "Field name",
     "fieldType": "Field type",
@@ -191,5 +192,43 @@
     "missingField": "This field is unavailable. Its original input is preserved in advanced settings.",
     "eventField": "Event field",
     "customPath": "Custom field path"
+  },
+  "scheduled": {
+    "new": "New scheduled task",
+    "edit": "Edit scheduled task",
+    "configureTime": "Set execution time",
+    "delete": "Delete scheduled task",
+    "deleteTitle": "Delete scheduled task?",
+    "deleteDescription": "“{{name}}” will stop running on its schedule.",
+    "actionsNamed": "Actions for scheduled task {{name}}",
+    "description": "Choose an agent, describe its task, and set when it should run.",
+    "name": "Name",
+    "namePlaceholder": "For example: Weekly reading notes",
+    "task": "Task",
+    "taskPlaceholder": "Every Monday, summarize last week’s reading notes and write a weekly report.",
+    "noAgents": "No agents available.",
+    "createAgent": "Create agent"
+  },
+  "sourceEmpty": {
+    "table": {
+      "title": "No tables available",
+      "description": "Create a table to automate changes to its records.",
+      "action": "Go to tables"
+    },
+    "agentmail": {
+      "title": "No email connections available",
+      "description": "Connect AgentMail in Settings, then choose an inbox.",
+      "action": "Set up AgentMail"
+    },
+    "webhook": {
+      "title": "No webhooks available",
+      "description": "Add a receiving endpoint in Settings to automate external events.",
+      "action": "Set up Webhook"
+    },
+    "inbox": {
+      "title": "No inboxes in this connection",
+      "description": "Create an inbox in AgentMail, then reload to select it."
+    },
+    "pickConnection": "Choose an email connection to see its inboxes."
   }
 }
