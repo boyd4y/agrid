@@ -59,8 +59,29 @@ Redis 暂时不可用不会让已接受的触发无声丢失，也不会阻塞�
 | 入队明确失败 | 释放领取状态，退避后重试 |
 
 成功入队后的 worker 重启由 BullMQ 恢复。已 published 的任务不在 pending 轮询中；
-当前没有重建 Redis 已接受但随后丢失的任务的补偿扫描。Redis 必须使用专用持久化实例。
+后台补偿扫描会重建 Redis 已接受但随后丢失的受限任务。Redis 仍须使用专用持久化实例。
 AOF everysec 仍有最近写入丢失窗口，HA/failover 和备份需要在部署环境验收。
+
+## Published 丢失任务补偿（#6 / P1-04）
+
+后台循环独立运行 published reconciler，默认 AUTOMATION_RECONCILE_STALE_MS=60000、
+AUTOMATION_RECONCILE_BATCH=25，均通过 positiveInt 校验。仅选择同 generation、未完成且
+状态为 matched/retrying 的事件，published_at 必须超过宽限期。FOR UPDATE SKIP LOCKED
+原子写入 claim_token/claim_until；检查在事务外进行，跳过的记录保留到期冷却，避免健康任务
+长期占满首批。进程崩溃或 Redis 检查失败后，领取到期可重试。
+
+确定性 jobId(eventId, generation) 在 Redis 中存在时全部跳过（包括 waiting/active/delayed/
+prioritized/paused，以及保留的 completed/failed）。只有 job 缺失才尝试取得现有 Redis 行租约，
+并在锁定事件后重新校验状态、generation、领取凭据与有效期，将 outbox 恢复 pending，
+清空 published_at/领取字段，由原 relay 使用同一 generation/jobId 再投递。
+不改变 fence、动作游标或凭据；已提交步骤由 PG 凭据防止重复写回。
+
+这是受限补偿，不是 Redis AOF 丢失窗口上的 exactly-once 保证。running 一律不接管：
+现有 DB fence 只是计数器，没有可据以判断失效的租期，updated_at 也不是外部动作心跳。
+waiting_input、unknown 和终态均不补偿；存在 unknown/waiting_input 子运行的事件同样跳过，
+native 未知副作用不能盲目重放。
+丢失的 running job 或仍保留终态 Redis job 的未完成事件仍需人工检查/原生运行对账，
+本补偿不会移除这些 job 或自动增加 generation。人工重放继续使用原有新 generation 语义。
 
 ## 动作执行与重试
 
@@ -125,6 +146,15 @@ DATABASE_URL=postgresql://tableapp:tableapp@127.0.0.1:5432/agrid_queue_test \
 REDIS_URL=redis://127.0.0.1:6381 QUEUE_PREFIX=agrid-queue-test \
 QUEUE_TEST_REDIS_CONTAINER=agrid-queue-test-redis pnpm --filter @tabdo/server test:queue
 ```
+
+仅运行本问题新增回归（使用 Node 22+ 和上述独立 PG/Redis 环境变量）：
+
+```bash
+pnpm --filter @tabdo/server exec tsx --test --test-name-pattern='published reconciler' test/queue/queue.test.ts
+```
+
+覆盖确认后丢失 Redis job、宽限期、并发补偿、同 generation 再投递、已提交步骤不重复，
+以及 waiting_input/running/unknown、有效行租约和现存 job 跳过条件。
 
 Redis 停止测试只允许专用 agrid-queue-test-redis 容器及 6381 端口。
 覆盖匹配过滤、事务/同值更新、快照、版本保护、动作凭据、fencing、租户隔离、
