@@ -1,9 +1,10 @@
 import { ServiceError } from "../errors.js";
 import { z } from "zod";
 
-import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata } from "./model-contracts.js";
+import { DEFAULT_PI_OUTPUT_TOKENS, isKnownDeepSeekReasoningModel, type PiModelMetadata } from "./model-contracts.js";
 import type { RuntimeEnvironment } from "./contracts.js";
-export { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata, type PiCompletion } from "./model-contracts.js";
+export { DEFAULT_PI_OUTPUT_TOKENS, isKnownDeepSeekReasoningModel, type PiModelMetadata, type PiCompletion } from "./model-contracts.js";
+import { resolvePiThinkingLevel, resolvePiProvider } from "./runtime-configuration.js";
 const catalog = z.object({ data: z.array(z.object({ id: z.string(), context_length: z.number().int().positive(),
   top_provider: z.object({ max_completion_tokens: z.number().int().positive().nullable().optional() }).nullable().optional(),
   supported_parameters: z.array(z.string()).optional(),
@@ -20,12 +21,15 @@ function configuredLimit(env: RuntimeEnvironment, name: string, fallback: number
 
 /** Pi must receive real model limits: an invented 32k window clamps long prompts to one token. */
 export async function resolvePiModelMetadata(modelId: string | undefined, env: RuntimeEnvironment): Promise<PiModelMetadata> {
-  if (!env.OPENROUTER_API_KEY?.trim()) return {
+  const level = resolvePiThinkingLevel(env);
+  const provider = resolvePiProvider(env);
+  if (provider?.provider !== "openrouter") return {
     contextWindow: configuredLimit(env, "PI_CONTEXT_WINDOW", 32768),
-    maxTokens: configuredLimit(env, "PI_MAX_OUTPUT_TOKENS", DEFAULT_PI_OUTPUT_TOKENS), reasoning: false,
+    maxTokens: configuredLimit(env, "PI_MAX_OUTPUT_TOKENS", DEFAULT_PI_OUTPUT_TOKENS),
+    reasoning: isKnownDeepSeekReasoningModel(env.PI_BASE_URL?.trim(), modelId?.trim() || env.PI_MODEL?.trim()) || (level !== undefined && level !== "off"),
   };
-  const id = modelId?.trim() || env.PI_MODEL?.trim() || env.OPENROUTER_MODEL?.trim() || "openrouter/free";
-  const base = (env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+  const id = modelId?.trim() || provider.defaultModel!;
+  const base = provider.baseUrl.replace(/\/$/, "");
   const outputLimit = configuredLimit(env, "PI_MAX_OUTPUT_TOKENS", DEFAULT_PI_OUTPUT_TOKENS);
   const fallback = (): PiModelMetadata => ({
     contextWindow: configuredLimit(env, "PI_CONTEXT_WINDOW", 32768),

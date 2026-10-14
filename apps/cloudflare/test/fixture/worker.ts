@@ -28,9 +28,9 @@ const BaseCoordinator = createSessionCoordinator<CoordinationTestEnv>((env) => (
     await authorizedRow(env, reference, credentials);
     const sql = sqlFor(env);
     try {
-      const [row] = await sql`select terminal,status from cf_coordination_fixture_runs where execution_id=${reference.executionId}`;
+      const [row] = await sql`select terminal,status,(select coalesce(max(cursor),0) from cf_coordination_fixture_output where execution_id=${reference.executionId}) as last_cursor from cf_coordination_fixture_runs where execution_id=${reference.executionId}`;
       const events = await sql`select cursor,chunk from cf_coordination_fixture_output where execution_id=${reference.executionId} and cursor>${after} order by cursor limit ${limit}`;
-      return { events: events.map(event => ({ cursor: Number(event.cursor), chunk: event.chunk })), terminal: row.terminal, status: row.status } as OutputPage;
+      return { events: events.map(event => ({ cursor: Number(event.cursor), chunk: event.chunk })), terminal: row.terminal && Number(events.at(-1)?.cursor ?? after) >= Number(row.last_cursor), status: row.status } as OutputPage;
     } finally { await sql.end(); }
   },
   async cancel({ reference, credentials }) {

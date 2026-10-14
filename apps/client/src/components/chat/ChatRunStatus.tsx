@@ -48,7 +48,7 @@ export function ChatRunStatus() {
   }, [running, activity?.runId, activity?.updatedAt]);
   if (!running) return <RecoveredRunStatus />;
 
-  const phase = activity?.phase === "finished" ? undefined : activity?.phase;
+  const phase = activity?.phase === "finished" ? "starting" : activity?.phase ?? "starting";
   const label = phase === "tool"
     ? t("runningTool", { tool: toolLabel(activity?.toolName) })
     : phase === "reasoning" ? t("phase.reasoning")

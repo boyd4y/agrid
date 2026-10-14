@@ -10,7 +10,7 @@ import { createProductChatHandlers } from "./chat.js";
 import { prepareProductAgent } from "./agent-preparation.js";
 import { executionJob,type ProductJob } from "./queue.js";
 import { acquireResources } from "./resources.js";
-import { runtimeEnvironment,type ProductEnvironment } from "./configuration.js";
+import { runtimeEnvironment,piStatusConfiguration,type ProductEnvironment } from "./configuration.js";
 import type { ExecutionReference } from "./contracts.js";
 
 export function program(env: ProductEnvironment) {
@@ -24,7 +24,7 @@ export function program(env: ProductEnvironment) {
       variables[key]=address.toString();
     } else variables[key]=value;
   }
-  return { imageKey:"runner",entrypoint:["sleep","infinity"],command:["node","--conditions=development","--import","tsx","/workspace/apps/cloudflare/sandbox/runtime/entry.ts"],
+  return { imageKey:"runner",entrypoint:["sleep","infinity"],command:["node","/workspace/apps/cloudflare/sandbox/runtime/dist/entry.mjs"],
     cwd:"/workspace",enableInternet:true,env:variables };
 }
 export const publisher = (env: ProductEnvironment) => createCloudflarePublisher<ProductJob>(env.JOBS);
@@ -62,6 +62,15 @@ export async function cleanupCompute(env: ProductEnvironment,id: string) {
   await new Promise(resolve=>setTimeout(resolve,300));
   await env.EXECUTIONS.getByName(`execution:${id}`).terminateExecution(id);
 }
+/** Only a wakeup; output and access still come from the durable PG cursor. */
+export async function notifyOutput(env: ProductEnvironment,executionId: string) {
+  const scope = await acquireResources(env);
+  try {
+    const [reference] = await scope.runtime.database.select({executionId:agentExecutions.id,runId:agentRuns.id,threadId:agentRuns.threadId})
+      .from(agentExecutions).innerJoin(agentRuns,eq(agentRuns.id,agentExecutions.runId)).where(eq(agentExecutions.id,executionId));
+    if (reference) await env.SESSIONS.getByName(`thread:${reference.threadId}`).notify(reference);
+  } finally { await scope.close(); }
+}
 export async function acquire(env: ProductEnvironment) {
   const scope = await acquireResources(env);
   return { ...scope, async discardRuntime(_runtimeId: string,executionIds: readonly string[] = []) {
@@ -86,17 +95,22 @@ export async function cancelRun(env: ProductEnvironment,request: Request,threadI
   return {ok:true};
 }
 export const chat = createProductChatHandlers<ProductEnvironment>({
-  acquire,dispatch,subscribe,
+  acquire,subscribe,
+  async dispatch(env,reference) {
+    // The accepted receipt is already durable. Interactive chat can start its
+    // DO immediately instead of waiting for a background queue batch window.
+    try { await startExecution(env,reference.executionId); }
+    catch { await dispatch(env,reference); }
+  },
   async prepare(env,scope,input) {
     if(input.configuration.harness!=="pi" || input.configuration.mode!=="local") throw new ServiceError(503,{message:"此执行环境当前支持 Pi 本地工作区；其他原生执行模式尚未接入"});
     await prepareProductAgent(scope,runtimeEnvironment(env),input.configuration,input.context);
   },
   validateQuestions:(env,pairs)=>env.VALIDATORS.getByName(`validation:${crypto.randomUUID()}`).validateQuestions(pairs),
   status(env) {
-    const configured = Boolean(env.OPENROUTER_API_KEY || (env.PI_API_KEY && env.PI_BASE_URL));
-    const model = env.PI_MODEL || (env.OPENROUTER_API_KEY ? env.OPENROUTER_MODEL || "openrouter/free":"__harness_default__");
+    const { configured, model, provider } = piStatusConfiguration(runtimeEnvironment(env));
     return { mode:configured?"live":"unconfigured",providers:[],harnesses:[
-      {id:"pi",label:"Pi",available:configured,provider:env.OPENROUTER_API_KEY?"openrouter":"pi",models:[{id:model,label:model}],defaultModel:model,runtimeModes:["local"],defaultRuntime:"local",hint:configured?undefined:"请配置 DeepSeek 或 Pi 模型提供商"},
+      {id:"pi",label:"Pi",available:configured,provider,models:[{id:model,label:model}],defaultModel:model,runtimeModes:["local"],defaultRuntime:"local",hint:configured?undefined:"请配置 DeepSeek 或 Pi 模型提供商"},
       ...[{id:"codex",label:"Codex"},{id:"claude",label:"Claude Code"}].map(value=>({...value,available:false,models:[],defaultModel:"__harness_default__",runtimeModes:["sandbox"],defaultRuntime:"sandbox",hint:"此执行环境尚未接入"})),
     ] };
   },

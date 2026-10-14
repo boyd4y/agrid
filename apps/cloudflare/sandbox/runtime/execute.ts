@@ -2,6 +2,7 @@ import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
 import { tool, jsonSchema, type ToolSet, type TextStreamPart } from "ai";
+import { createBatchedOutput } from "@tabdo/agent-runtime/batched-output";
 import { executeNativeRun } from "@tabdo/agent-runtime/execution";
 import type { NativeExecutorPorts } from "@tabdo/agent-runtime/ports";
 import { createExecutionGatewayClient, GatewayError, type GatewayCredentials } from "@tabdo/agent-runtime/gateway";
@@ -87,12 +88,17 @@ export async function executeSandboxRun(launch: GatewayCredentials & { gatewayUr
     completeUninvokedPiRun: async (_lease, _actor, _recordId, message, run) => { await client.call("uninvoked", { message, status: run.status, error: run.error }); },
     saveMessage: async message => { await client.call("saveMessage", { message }); },
   };
+  const output = createBatchedOutput({ async writeBatch(chunks) {
+    if (chunks.length === 1 && new TextEncoder().encode(JSON.stringify(chunks)).byteLength > 900 * 1024)
+      await client.call("append",{chunk:chunks[0]});
+    else await client.call("appendBatch",{chunks});
+  } });
   let failure: string | undefined;
   try {
     await executeNativeRun(ports, { actor: bootstrap.actor, lease: bootstrap.lease, record: bootstrap.record, run: bootstrap.run,
       ...prepared, tools: definitions, prompt: bootstrap.prompt, messages: bootstrap.messages, toolResultContinuations: bootstrap.toolResultContinuations,
       signal: options?.signal, metadata: bootstrap.metadata },
-    undefined, { write: async chunk => { await client.call("append", { chunk }); } });
+    undefined, output);
   } catch (error) { failure = chatErrorText(error);throw error; }
   finally { await client.call("settle", { error: failure }); }
 }

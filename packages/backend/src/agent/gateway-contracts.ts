@@ -28,6 +28,7 @@ export type GatewayActions = {
   activity: { input: { activity: ChatActivity }; output: { recorded: boolean } };
   tool: { input: { toolCallId: string; name: string; input: unknown }; output: { result: unknown } };
   append: { input: { chunk: UIMessageChunk }; output: { ok: true } };
+  appendBatch: { input: { chunks: readonly UIMessageChunk[] }; output: { ok: true } };
   checkpoint: { input: { checkpoint: RuntimeCheckpoint; message: StoredMessage; status: AgentRunStatus; error?: string }; output: { ok: true } };
   uninvoked: { input: { message: StoredMessage; status: "failed" | "cancelled"; error: string }; output: { ok: true } };
   saveMessage: { input: { message: StoredMessage }; output: { ok: true } };

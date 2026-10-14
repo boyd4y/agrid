@@ -1,6 +1,6 @@
 import { ServiceError } from "../errors.js";
 import { HarnessConfigurationError } from "@tabdo/core/harness";
-import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata } from "./model-contracts.js";
+import { DEFAULT_PI_OUTPUT_TOKENS, PI_THINKING_LEVELS, isDeepSeekEndpoint, isKnownDeepSeekReasoningModel, type PiThinkingLevel, type PiModelMetadata } from "./model-contracts.js";
 import type { HarnessId, RuntimeMode, RuntimeEnvironment } from "./contracts.js";
 
 /** Validated product settings only; official SDK assembly belongs to the execution environment. */
@@ -12,6 +12,7 @@ export type PiProviderConfiguration = {
   maxTokensField: "max_tokens" | "max_completion_tokens";
   samplingParams?: Record<string, unknown>;
   reattachInProcess: boolean;
+  thinkingLevel?: PiThinkingLevel;
 };
 
 export type NativeConfiguration =
@@ -20,6 +21,27 @@ export type NativeConfiguration =
 
 const value = (env: RuntimeEnvironment, name: string) =>
   env[name]?.trim() || undefined;
+
+/** Select a complete provider as one unit; never mix one provider's model with another's credentials. */
+export function resolvePiProvider(env: RuntimeEnvironment): {
+  provider: "pi" | "openrouter"; providerId: string; apiKey: string; baseUrl: string; defaultModel: string | undefined;
+} | undefined {
+  const key = value(env, "PI_API_KEY"), base = value(env, "PI_BASE_URL");
+  if (key && base) return { provider: "pi", providerId: "tabdo-pi", apiKey: key, baseUrl: base, defaultModel: value(env, "PI_MODEL") };
+  const openRouter = value(env, "OPENROUTER_API_KEY");
+  if (openRouter) return { provider: "openrouter", providerId: "openrouter", apiKey: openRouter,
+    baseUrl: value(env, "OPENROUTER_BASE_URL") || "https://openrouter.ai/api/v1", defaultModel: value(env, "OPENROUTER_MODEL") || "openrouter/free" };
+  return undefined;
+}
+
+export function resolvePiThinkingLevel(env: RuntimeEnvironment): PiThinkingLevel | undefined {
+  const level = value(env, "PI_THINKING_LEVEL");
+  if (level === undefined) return undefined;
+  if (!(PI_THINKING_LEVELS as readonly string[]).includes(level)) throw new ServiceError(503, {
+    message: `PI_THINKING_LEVEL 必须是 ${PI_THINKING_LEVELS.join(" / ")}`,
+  });
+  return level as PiThinkingLevel;
+}
 
 /** Validate product configuration without loading or constructing a native SDK. */
 export function resolveNativeConfiguration(options: { harness: HarnessId; mode: RuntimeMode; modelId?: string; piModel?: PiModelMetadata; env: RuntimeEnvironment }): NativeConfiguration {
@@ -32,21 +54,14 @@ export function resolveNativeConfiguration(options: { harness: HarnessId; mode: 
 
 
   if (options.harness === "pi") {
-    const openRouterKey = value(env, "OPENROUTER_API_KEY"),
-      directKey = value(env, "PI_API_KEY");
-    const directBase = value(env, "PI_BASE_URL");
-    if (!openRouterKey && !(directKey && directBase))
+    const provider = resolvePiProvider(env);
+    if (!provider)
       throw new ServiceError(503, {
         message:
           "Pi 未配置模型提供商：请设置 OPENROUTER_API_KEY，或 PI_API_KEY 与 PI_BASE_URL",
       });
-    const provider = openRouterKey ? "openrouter" : "tabdo-pi";
-    const modelId =
-      options.modelId?.trim() ||
-      value(env, "PI_MODEL") ||
-      (openRouterKey
-        ? value(env, "OPENROUTER_MODEL") || "openrouter/free"
-        : undefined);
+    const openRouter = provider.provider === "openrouter";
+    const modelId = options.modelId?.trim() || provider.defaultModel;
     if (!modelId)
       throw new ServiceError(400, {
         message: "自定义 Pi 提供商需要配置模型 ID",
@@ -54,19 +69,21 @@ export function resolveNativeConfiguration(options: { harness: HarnessId; mode: 
     const maxTokens = options.piModel?.maxTokens ?? (Number(env.PI_MAX_OUTPUT_TOKENS) || DEFAULT_PI_OUTPUT_TOKENS);
     const contextWindow = options.piModel?.contextWindow ?? (Number(env.PI_CONTEXT_WINDOW) || 32768);
     for (const limit of [maxTokens, contextWindow]) if (!Number.isSafeInteger(limit) || limit < 1) throw new HarnessConfigurationError("Invalid model token limits");
-    let deepSeekDirect = false;
-    if (!openRouterKey && directBase) {
-      try { deepSeekDirect = new URL(directBase).hostname === "api.deepseek.com"; } catch { /* Endpoint validation stays with the native provider. */ }
-    }
-    const maxTokensField = openRouterKey || deepSeekDirect ? "max_tokens" : "max_completion_tokens";
+    const thinkingLevel = resolvePiThinkingLevel(env);
+    const deepSeekDirect = !openRouter && isDeepSeekEndpoint(provider.baseUrl);
+    const reasoning = options.piModel?.reasoning ?? ((!openRouter && isKnownDeepSeekReasoningModel(provider.baseUrl, modelId))
+      || (thinkingLevel !== undefined && thinkingLevel !== "off"));
+    const maxTokensField = openRouter || deepSeekDirect ? "max_tokens" : "max_completion_tokens";
     return { harness: "pi", mode: options.mode, adapter: {
-      providerId: provider,
-      baseUrl: openRouterKey ? value(env, "OPENROUTER_BASE_URL") || "https://openrouter.ai/api/v1" : directBase!,
-      apiKey: openRouterKey || directKey!,
-      model: { id: modelId, reasoning: options.piModel?.reasoning ?? false,
+      providerId: provider.providerId,
+      baseUrl: provider.baseUrl,
+      apiKey: provider.apiKey,
+      model: { id: modelId, reasoning,
         contextWindow, maxTokens },
       maxTokensField,
-      samplingParams: openRouterKey ? { reasoning: { enabled: false, effort: "none" } }
+      thinkingLevel,
+      // Preserve native defaults. Only an explicit off setting disables thinking.
+      samplingParams: thinkingLevel !== "off" ? undefined : openRouter ? { reasoning: { enabled: false, effort: "none" } }
         : deepSeekDirect ? { thinking: { type: "disabled" } } : undefined,
       // Current warm-session behavior is preserved until platform cold resume is wired.
       reattachInProcess: true,

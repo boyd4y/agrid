@@ -19,6 +19,7 @@ export function createSessionCoordinator<Env>(services: (env: Env) => SessionSer
       return { executionId: url.searchParams.get("executionId"), runId: url.searchParams.get("runId"), threadId: url.searchParams.get("threadId") };
     },
     headers: { "connection": "keep-alive", "x-vercel-ai-ui-message-stream": "v1", "x-accel-buffering": "no" },
+    openFrame: ": connected\n\n",
     errorFrame: 'data: {"type":"error","errorText":"Unable to continue the stream."}\n\n',
     endFrame: "data: [DONE]\n\n",
   }, options);

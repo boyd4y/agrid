@@ -5,6 +5,7 @@
   },
   "include": [
     "product-live.test.ts",
-    "automation-live.test.ts"
+    "automation-live.test.ts",
+    "streaming-live.test.ts"
   ]
 }

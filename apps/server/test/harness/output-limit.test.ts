@@ -53,7 +53,7 @@ test("native Pi observes output limits without losing partial text or misclassif
         assert.equal(result.text, scenario.text, "reasoning stays separate and partial final text survives the output limit");
         assert.equal(requests.length, index + 1, "observer never retries a truncated completion");
         assert.equal(requests[index].max_tokens ?? requests[index].max_completion_tokens, 16384, "actual native OpenRouter request receives the configured default budget");
-        assert.deepEqual(requests[index].reasoning, { enabled: false, effort: "none" }, "dynamic router reasoning is explicitly disabled on the wire");
+        assert.equal(requests[index].reasoning, undefined, "the platform does not force-disable dynamic router reasoning");
         assert.equal(completions.length, 1, "one official message_end notification per assistant completion");
         assert.equal(completions[0].finishReason, scenario.reason, "length remains length; a normal stop is not an output limit");
         assert.equal(completions[0].outputTokens, scenario.output, "native usage retains all completion tokens, including reasoning");

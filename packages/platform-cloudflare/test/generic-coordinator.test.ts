@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createTestHarness } from "wrangler";
 
-type Metadata = { tables: string[]; scopeRows: { scope_key: string }[]; kvCount: number; constructorMarker: string };
+type Metadata = { tables: string[]; scopeRows: { scope_key: string }[]; kvCount: number; constructorMarker: string;readCalls: number };
 const headers = { authorization: "Bearer fixture-delivery-reader" };
 const packet = (payload: string) => ({ category: "mailbox-packet", payload });
 const query = (mailbox = "postbox-alpha", room = "generic-scope-probe") => new URLSearchParams({ mailbox, group: "morning-packets", room }).toString();
@@ -41,6 +41,9 @@ test("generic mailbox DO injects arbitrary reference/payload/state and keeps onl
     assert.deepEqual((await metadata("postbox-beta","cancel-probe")).scopeRows, [], "failed cancellation credentials cannot reserve a scope");
     assert.equal((await server.fetch(`/cancel-event?${query("postbox-beta")}`)).status, 404);
 
+    assert.equal((await server.fetch(`/notify?${query("postbox-beta","notify-unbound")}`,{ method: "POST" })).status,204);
+    assert.deepEqual((await metadata("postbox-beta","notify-unbound")).scopeRows,[],"notifications never reserve a scope or substitute for authorization");
+
     const response = await server.fetch(`/stream?${query()}`, { headers });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("x-mailbox-stream"), "packet-json-v3");
@@ -57,10 +60,11 @@ test("generic mailbox DO injects arbitrary reference/payload/state and keeps onl
 
     const opaque = await (await server.fetch(`/replay?${query()}`, { headers })).json() as { status: string; terminal: boolean; events: { chunk: unknown }[] };
     assert.equal(opaque.status, "archive-ready", "application state is opaque to the coordinator");
-    assert.equal(opaque.terminal, true);
+    assert.equal(opaque.terminal, false,"a page with unread committed packets is not terminal");
     assert.deepEqual(opaque.events[0].chunk, packets[0]);
     const resumed = await (await server.fetch(`/stream?${query()}`, { headers: { ...headers, "last-event-id": "2" } })).text();
     assert.deepEqual(packetFrames(resumed), packets.slice(2).map((value,index) => ({ cursor: index+3, packet: value })));
+    assert.equal((await server.fetch(`/notify?${query("postbox-beta")}`,{ method: "POST" })).status,409,"notifications respect a bound scope");
     const wrongScope = await server.fetch(`/stream?${query("postbox-beta")}`, { headers });
     assert.equal(wrongScope.status, 409, "a valid second mailbox cannot reuse a bound coordinator");
     const independent = await (await server.fetch(`/stream?${query("postbox-beta","independent-mailbox")}`, { headers })).text();
@@ -86,10 +90,44 @@ test("generic mailbox DO injects arbitrary reference/payload/state and keeps onl
     assert.deepEqual(fresh.events.map(event => event.chunk), updated, "output/state are reloaded from the injected archive, not DO storage");
 
     await archive("postbox-alpha", { packets: [], complete: false });
+    const openedAt = Date.now();
+    const waiting = await server.fetch(`/stream?${query()}`,{ headers });
+    const reader = waiting.body!.getReader();
+    const firstByte = await reader.read();
+    assert(Date.now() - openedAt < 1000,"an empty authorized page immediately flushes its transport preamble");
+    assert.equal(new TextDecoder().decode(firstByte.value),": mailbox-connected\n\n");
+    assert(!firstByte.done);
+    assert(!new TextDecoder().decode(firstByte.value).includes("id:"),"connection bytes create neither a message nor an output cursor");
+    const delivered = (async () => {
+      const decoder = new TextDecoder();let value = decoder.decode(firstByte.value);
+      try {
+        for (;;) { const part = await reader.read();if (part.done) return value;value += decoder.decode(part.value,{ stream: true }); }
+      } finally { reader.releaseLock(); }
+    })();
+    const latest = [packet("Notified one"),packet("Notified two")];
+    await archive("postbox-alpha",{ packets: latest,complete: true });
+    const readsBeforeNotify = (await metadata()).readCalls;
+    const notifiedAt = Date.now();
+    await server.fetch(`/notify?${query()}`,{ method: "POST" });
+    await server.fetch(`/notify?${query()}`,{ method: "POST" });
+    const notified = await delivered;
+    assert(Date.now() - notifiedAt < 1000,"notification delivers immediately despite the 5-second fallback interval");
+    assert.deepEqual(packetFrames(notified),latest.map((value,index) => ({ cursor: index+1,packet: value })),"duplicate notifications cannot duplicate a committed cursor");
+    assert(notified.endsWith("event: archive-complete\ndata: delivered\n\n"),"a full terminal page immediately flushes its completion frame");
+    const finishedReads = (await metadata()).readCalls;
+    assert(finishedReads > readsBeforeNotify);
+    await server.fetch(`/notify?${query()}`,{ method: "POST" });
+    await new Promise(done => setTimeout(done,100));
+    assert.equal((await metadata()).readCalls,finishedReads,"without a live subscription, notifications trigger no repository reads");
+
+    await archive("postbox-alpha", { packets: [], complete: false });
     const revocable = await server.fetch(`/stream?${query()}`, { headers });
     await archive("postbox-alpha", { accessAllowed: false, packets: [], complete: false });
+    const revokedAt = Date.now();
+    await server.fetch(`/notify?${query()}`,{ method: "POST" });
     const revoked = await revocable.text();
-    assert.equal(revoked, "event: delivery-error\ndata: archive-unavailable\n\n", "a live subscription rechecks credentials and uses the caller's redacted error frame");
+    assert(Date.now() - revokedAt < 1000,"notification still rechecks revoked authorization immediately");
+    assert.equal(revoked, ": mailbox-connected\n\nevent: delivery-error\ndata: archive-unavailable\n\n", "a live subscription rechecks credentials and uses the caller's redacted error frame");
     assert.deepEqual((await metadata()).scopeRows, bound.scopeRows);
   } finally { await server.close(); }
 });

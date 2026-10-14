@@ -68,3 +68,32 @@ test("catalog timeout is short and falls back; direct configuration remains vali
   assert.deepEqual(await resolvePiModelMetadata(undefined, { PI_CONTEXT_WINDOW: "64000", PI_MAX_OUTPUT_TOKENS: "5000" }), { contextWindow: 64000, maxTokens: 5000, reasoning: false });
   await assert.rejects(resolvePiModelMetadata(undefined, { PI_MAX_OUTPUT_TOKENS: "invalid" }), /必须是正整数/);
 });
+
+
+test("documented DeepSeek models retain reasoning capabilities while thinking preference stays optional", async () => {
+  for (const model of ["deepseek-flash", "deepseek-v4-pro"]) {
+    const metadata = await resolvePiModelMetadata(model, { PI_BASE_URL: "https://api.deepseek.com/v1", PI_CONTEXT_WINDOW: "1048576" });
+    assert.equal(metadata.reasoning, true);
+    assert.equal(metadata.contextWindow, 1048576);
+    assert.equal((await resolvePiModelMetadata(model, { PI_BASE_URL: "https://api.deepseek.com/v1", PI_THINKING_LEVEL: "off" })).reasoning, true);
+  }
+  assert.equal((await resolvePiModelMetadata("custom", { PI_BASE_URL: "https://other.fixture/v1" })).reasoning, false);
+  assert.equal((await resolvePiModelMetadata("custom", { PI_BASE_URL: "https://other.fixture/v1", PI_THINKING_LEVEL: "low" })).reasoning, true, "an explicit non-off setting declares custom provider support");
+  await assert.rejects(resolvePiModelMetadata("custom", { PI_THINKING_LEVEL: "invalid" }), /PI_THINKING_LEVEL/);
+});
+
+
+test("explicit direct Pi metadata never queries a stale OpenRouter catalog", async t => {
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => { calls++; throw new Error("unused OpenRouter provider must not be queried"); });
+  const metadata = await resolvePiModelMetadata(undefined, { PI_API_KEY: "direct-key", PI_BASE_URL: "https://api.deepseek.com/v1", PI_MODEL: "deepseek-flash",
+    PI_CONTEXT_WINDOW: "1048576", OPENROUTER_API_KEY: "old-key", OPENROUTER_MODEL: "old/model" });
+  assert.deepEqual(metadata, { contextWindow: 1048576, maxTokens: 16384, reasoning: true });
+  assert.equal(calls, 0);
+});
+
+test("OpenRouter fallback metadata uses its own default model when direct configuration is incomplete", async t => {
+  t.mock.method(globalThis, "fetch", async () => response([{ id: "router/model", context_length: 123456, supported_parameters: ["reasoning"] }]));
+  const metadata = await resolvePiModelMetadata(undefined, { ...environment("selected-router-fallback"), PI_API_KEY: "", PI_BASE_URL: "https://api.deepseek.com/v1", PI_MODEL: "deepseek-flash", OPENROUTER_MODEL: "router/model" });
+  assert.deepEqual(metadata, { contextWindow: 123456, maxTokens: 16384, reasoning: true });
+});

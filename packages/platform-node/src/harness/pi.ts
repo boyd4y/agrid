@@ -23,7 +23,9 @@ export function createPiAdapter(options: PiAdapterConfig): HarnessAdapter {
   const harness = createPi({
     auth: {},
     reattachInProcess: options.reattachInProcess ?? true,
-    thinkingLevel: options.thinkingLevel ?? "off",
+    // The old platform persisted off in native journals. For declared reasoning
+    // models, use Pi's own default to repair those sessions; explicit off wins.
+    thinkingLevel: options.thinkingLevel ?? (options.model.reasoning ? "medium" : undefined),
     extensionFactories: options.onMessageEnd || options.consumeContinuationInput ? [(pi) => {
       if (options.consumeContinuationInput) pi.on("input", (event) => {
         if (event.text !== "") return { action: "continue" };

@@ -91,7 +91,7 @@ test("DeepSeek shortcut fills direct Pi defaults and supports provider overrides
   assert.equal(custom.PI_MODEL, "deepseek-v4-pro");
 });
 
-test("explicit Pi key wins over DeepSeek; an old OpenRouter key must be cleared explicitly", () => {
+test("explicit Pi key wins over DeepSeek; unused OpenRouter keys stay available for explicit fallback", () => {
   const base = { DATABASE_URL: database, DEEPSEEK_API_KEY: "fake-deepseek", OPENROUTER_API_KEY: "fake-old-openrouter" };
   const direct = settings({ ...base, PI_API_KEY: "fake-direct", PI_BASE_URL: "https://direct.fixture", PI_MODEL: "direct" }).variables;
   assert.equal(direct.PI_API_KEY, "fake-direct");
@@ -105,12 +105,13 @@ test("explicit Pi key wins over DeepSeek; an old OpenRouter key must be cleared 
 });
 
 test("only allowlisted runtime settings are extracted; database and unrelated secrets remain separate", () => {
-  const input = Object.freeze({ DATABASE_URL: database, PI_API_KEY: "fake-model", PI_MODEL: "fixture", AI_RUN_POLL_MS: "250",
+  const input = Object.freeze({ DATABASE_URL: database, PI_API_KEY: "fake-model", PI_MODEL: "fixture", PI_THINKING_LEVEL: "low", AI_RUN_POLL_MS: "250",
     RESEND_API_KEY: "fake-mail", EMAIL_FROM: "fixture@example.test", INTEGRATION_ENCRYPTION_KEY: "fixture-encryption",
     UNRELATED_SECRET: "must-not-forward", CLOUDFLARE_API_TOKEN: "must-not-forward-either" });
   const result = settings(input);
   assert.equal(result.database, database);
   assert.equal(result.variables.PI_API_KEY, "fake-model");
+  assert.equal(result.variables.PI_THINKING_LEVEL, "low");
   assert.equal(result.variables.AI_RUN_POLL_MS, "250");
   assert.equal(result.variables.RESEND_API_KEY, "fake-mail");
   assert.equal(result.variables.INTEGRATION_ENCRYPTION_KEY, "fixture-encryption");
@@ -200,4 +201,16 @@ test("dotenv serialization rejects multiline, NUL and unsafe quoting without exp
       return true;
     });
   }
+});
+
+
+test("an isolated development directory leaves the default configuration untouched", async t => {
+  const { root } = await fixture(t);
+  const normal = await prepareLocalFiles(root, settings({ DATABASE_URL: database, PI_API_KEY: "first-fixture" }));
+  const before = await readFile(resolve(normal.directory, ".dev.vars"), "utf8");
+  const isolated = await prepareLocalFiles(root, settings({ DATABASE_URL: database, CF_DEV_DIRECTORY: ".local/cf-stream-test", PI_API_KEY: "second-fixture" }));
+  assert.notEqual(isolated.directory, normal.directory);
+  assert.notEqual(isolated.statePath, normal.statePath);
+  assert.equal(await readFile(resolve(normal.directory, ".dev.vars"), "utf8"), before);
+  assert.match(await readFile(resolve(isolated.directory, ".dev.vars"), "utf8"), /second-fixture/);
 });

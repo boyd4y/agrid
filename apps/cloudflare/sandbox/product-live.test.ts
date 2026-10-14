@@ -7,7 +7,7 @@ import { createDatabase } from "@tabdo/backend/database";
 import { user, organization, member, fileObjects, agentExecutions, agentRuns, agentExecutionGateways } from "@tabdo/backend/schema";
 
 /** Opt in against an already running dev:cf stack. This test never starts Wrangler. */
-test("live product Worker + Queue + DO + Docker Sandbox preserves public chat and files", { skip: process.env.TABDO_CF_PRODUCT_LIVE !== "1", timeout: 240_000 }, async () => {
+test("live product Worker + DO + Docker Sandbox preserves public chat and files", { skip: process.env.TABDO_CF_PRODUCT_LIVE !== "1", timeout: 240_000 }, async () => {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
   const origin = process.env.TABDO_CF_FRONTEND_ORIGIN || "http://localhost:5189";
@@ -109,7 +109,7 @@ test("live product Worker + Queue + DO + Docker Sandbox preserves public chat an
     assert(!((await cancelStream).includes("系统提示：已停止执行")));
     await waitFor(async () => (await json<{ runs: { status: string }[] }>(`/threads/${cancelThread}/runs`)).runs[0]?.status === "cancelled", "persisted cancelled Run", 15_000);
     const history = await json<{ messages: { content: unknown }[] }>(`/threads/${cancelThread}/messages`);assert(!JSON.stringify(history).includes("系统提示：已停止执行"));
-    console.info("CF live verified: signup/org, agent, Queue→DO→native Pi, tool write, question cold resume, R2 upload/download, persisted cancel");
+    console.info("CF live verified: signup/org, agent, DO→native Pi, tool write, question cold resume, R2 upload/download, persisted cancel");
   } finally {
     // Ask the public application to destroy only this fixture's own containers.
     for (const threadId of threadIds) {

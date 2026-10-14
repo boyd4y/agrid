@@ -34,7 +34,7 @@
     "dev": "wrangler dev --local",
     "types": "wrangler types src/env.d.ts --config wrangler.jsonc --env-interface Env --include-runtime=false",
     "typecheck:worker": "tsc -p tsconfig.worker.json",
-    "test:product": "tsx --test --test-concurrency=1 sandbox/product-live.test.ts sandbox/automation-live.test.ts",
+    "test:product": "tsx --test --test-concurrency=1 sandbox/product-live.test.ts sandbox/automation-live.test.ts sandbox/streaming-live.test.ts",
     "typecheck:product": "tsc -p sandbox/tsconfig.product.json",
     "build:product": "wrangler deploy --dry-run --config wrangler.jsonc"
   },

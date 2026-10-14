@@ -5,6 +5,7 @@ import {
 } from "./contracts.js";
 
 export interface SessionCoordinatorRpc<Reference, Chunk, State = unknown> {
+  notify(reference: Reference): Promise<void>;
   replay(input: OutputRequest<Reference>): Promise<OutputPage<Chunk, State>>;
   cancel(input: Readonly<{ reference: Reference; credentials: AccessCredentials }>): Promise<void>;
 }
@@ -14,6 +15,8 @@ export type CoordinatorRouting<Reference> = Readonly<{
   scopeKeyOf(reference: Reference): string;
   referenceFromRequest(request: Request): unknown;
   headers?: HeadersInit;
+  /** Optional transport preamble, emitted only after the first authorized replay. */
+  openFrame?: string;
   errorFrame?: string;
   endFrame?: string;
 }>;
@@ -26,12 +29,15 @@ export function createSessionCoordinator<Env, Reference, Chunk, State = unknown>
   routing: CoordinatorRouting<Reference>,
   options: Readonly<{ pollIntervalMs?: number; pageSize?: number }> = {},
 ): CoordinatorClass<Env, Reference, Chunk, State> {
-  const pollIntervalMs = options.pollIntervalMs ?? 1000;
+  const pollIntervalMs = options.pollIntervalMs ?? 5000;
   const pageSize = options.pageSize ?? 64;
   if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 10 || pollIntervalMs > 30000) throw new Error("Invalid polling interval");
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new Error("Invalid output page size");
 
   return class SessionCoordinator extends DurableObject<Env> implements SessionCoordinatorRpc<Reference, Chunk, State> {
+    #revision = 0;
+    #waiters = new Set<() => void>();
+
     constructor(ctx: DurableObjectState, env: Env) {
       super(ctx, env);
       // Only reconstructable routing metadata lives here, never authoritative business state.
@@ -48,6 +54,15 @@ export function createSessionCoordinator<Env, Reference, Chunk, State = unknown>
       this.#checkScope(scopeKey);
       this.ctx.storage.sql.exec("INSERT OR IGNORE INTO coordination_scope(singleton, scope_key) VALUES (1, ?)", scopeKey);
       this.#checkScope(scopeKey);
+    }
+
+    async notify(input: Reference): Promise<void> {
+      const reference = routing.parseReference(input);
+      // A notification carries no output or permission. It cannot bind an unused
+      // object, and every awakened subscription still reads its authenticated port.
+      this.#checkScope(routing.scopeKeyOf(reference));
+      this.#revision = (this.#revision + 1) % Number.MAX_SAFE_INTEGER;
+      for (const wake of [...this.#waiters]) wake();
     }
 
     async replay(input: OutputRequest<Reference>): Promise<OutputPage<Chunk, State>> {
@@ -88,6 +103,7 @@ export function createSessionCoordinator<Env, Reference, Chunk, State = unknown>
           authorization: request.headers.get("authorization") ?? undefined,
         });
         let cursor = after;
+        let revision = this.#revision;
         let page = await this.replay({ reference, after: cursor, limit: pageSize, credentials });
         let index = 0;
         let canceled = false;
@@ -100,6 +116,11 @@ export function createSessionCoordinator<Env, Reference, Chunk, State = unknown>
           wake?.();
         };
         const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            // The authorized replay above must finish before even transport
+            // bytes reach the client. This preamble never advances its cursor.
+            if (routing.openFrame) controller.enqueue(encoder.encode(routing.openFrame));
+          },
           pull: async (controller) => {
             try {
               while (!canceled) {
@@ -112,22 +133,29 @@ export function createSessionCoordinator<Env, Reference, Chunk, State = unknown>
                   controller.enqueue(encoder.encode(`id: ${cursor}\ndata: ${payload}\n\n`));
                   return;
                 }
-                if (page.terminal && page.events.length < pageSize) {
+                if (page.terminal) {
                   if (routing.endFrame) controller.enqueue(encoder.encode(routing.endFrame));
                   controller.close();
                   stopSubscription();
                   return;
                 }
-                if (page.events.length < pageSize) {
+                if (page.events.length < pageSize && revision === this.#revision) {
                   await new Promise<void>((resolve) => {
-                    wake = resolve;
-                    timer = setTimeout(resolve, pollIntervalMs);
+                    const finish = () => {
+                      if (timer !== undefined) clearTimeout(timer);
+                      timer = undefined;
+                      this.#waiters.delete(finish);
+                      wake = undefined;
+                      resolve();
+                    };
+                    wake = finish;
+                    this.#waiters.add(finish);
+                    timer = setTimeout(finish, pollIntervalMs);
                   });
-                  timer = undefined;
-                  wake = undefined;
                   if (canceled) return;
                 }
                 // Every page rechecks current membership; no credential-derived principal is cached in the DO.
+                revision = this.#revision;
                 page = await this.replay({ reference, after: cursor, limit: pageSize, credentials });
                 index = 0;
               }

@@ -81,7 +81,7 @@ async function validatorsFor<Env>(options: ProductChatOptions<Env>,env: Env,reco
 export function createProductChatHandlers<Env>(options: ProductChatOptions<Env>) {
   return {
     status(_request: Request,env: Env) { return Response.json(options.status?.(env) ?? { mode: "unconfigured",providers: [],harnesses: [] }); },
-    async post(request: Request,env: Env): Promise<Response> {
+    async post(request: Request,env: Env,executionContext?: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
       const scope = await options.acquire(env);
       try {
         const actor = await resolveActor(request,scope.identity);
@@ -122,7 +122,11 @@ export function createProductChatHandlers<Env>(options: ProductChatOptions<Env>)
         } finally { await releaseRuntimeLease(scope.runtime,lease); }
         // Queue publication / Container spawn acknowledge bounded acceptance only.
         // A failed wakeup never rolls back or resubmits the already accepted input.
-        await options.dispatch(env,reference).catch(() => console.warn("agent.dispatch.pending"));
+        const wake = options.dispatch(env,reference).catch(() => console.warn("agent.dispatch.pending"));
+        // Return the durable SSE subscription while finite container startup runs.
+        // Only process-spawn acknowledgement is held here, never the agent turn.
+        if (executionContext) executionContext.waitUntil(wake);
+        else await wake;
         return await options.subscribe(env,request,reference);
       } finally { await scope.close(); }
     },

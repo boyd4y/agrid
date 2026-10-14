@@ -6,7 +6,7 @@ import { ServiceError } from "@tabdo/backend/errors";
 import { prepareProductExecution,executeProductTool } from "./agent-preparation.js";
 import type { AcquireProductScope } from "./product-scope.js";
 
-const actions = z.enum(["bootstrap","renew","cancelled","activity","tool","append","checkpoint","uninvoked","saveMessage","fail","release","settle"]);
+const actions = z.enum(["bootstrap","renew","cancelled","activity","tool","append","appendBatch","checkpoint","uninvoked","saveMessage","fail","release","settle"]);
 
 /** Bounded JSON avoids buffering an unlimited private checkpoint into a Worker. */
 export async function readGatewayJson(request: Request,maxBytes = 48 * 1024 * 1024): Promise<unknown> {
@@ -29,6 +29,7 @@ export async function readGatewayJson(request: Request,maxBytes = 48 * 1024 * 10
 export function createProductGatewayHandler<Env>(options: Readonly<{
   acquire: AcquireProductScope<Env>;
   runtimeEnvironment(env: Env): RuntimeEnvironment;
+  afterChanged?(env: Env,executionId: string): Promise<void>;
   afterSettled?(env: Env,executionId: string): Promise<void>;
 }>) {
   return async (request: Request,env: Env,executionId: string,context?: Pick<ExecutionContext,"waitUntil">): Promise<Response> => {
@@ -44,6 +45,10 @@ export function createProductGatewayHandler<Env>(options: Readonly<{
         prepare: loaded => prepareProductExecution(scope,options.runtimeEnvironment(env),loaded),
         executeTool: input => executeProductTool(scope,input),
       });
+      if (options.afterChanged && ["append","appendBatch","checkpoint","settle"].includes(envelope.action)) {
+        const notify = options.afterChanged(env,executionId).catch(() => console.warn("agent.output.notify-pending"));
+        if (context) context.waitUntil(notify);else await notify;
+      }
       if(envelope.action === "settle" && context && options.afterSettled) context.waitUntil(options.afterSettled(env,executionId).catch(()=>console.warn("agent.cleanup.pending")));
       return Response.json(result);
     } catch (error) {

@@ -11,7 +11,7 @@ export function createNodeExecution(env: NodeJS.ProcessEnv) {
   const childEnv: Record<string, string> = {};
   // Trusted runner configuration remains in the control process, never the launch body.
   for (const name of ["PATH", "NODE_ENV", "DATABASE_URL", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL",
-    "PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_CONTEXT_WINDOW", "PI_MAX_OUTPUT_TOKENS", "PI_MODEL_METADATA_TIMEOUT_MS",
+    "PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_CONTEXT_WINDOW", "PI_MAX_OUTPUT_TOKENS", "PI_THINKING_LEVEL", "PI_MODEL_METADATA_TIMEOUT_MS",
     "OPENAI_API_KEY", "OPENAI_BASE_URL", "CODEX_API_KEY", "CODEX_BASE_URL", "CODEX_MODEL",
     "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_API_KEY", "CLAUDE_MODEL",
     "VERCEL_TOKEN", "VERCEL_TEAM_ID", "VERCEL_PROJECT_ID", "VERCEL_OIDC_TOKEN",

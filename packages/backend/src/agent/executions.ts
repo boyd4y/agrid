@@ -122,17 +122,34 @@ export async function claimNativeExecution(deps: RuntimeDependencies, loaded: Lo
   }, transaction);
 }
 
-/** Await each append; cursor+chunk commit in one transaction under the active Run fence. */
-export async function appendNativeExecutionChunk(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunk: UIMessageChunk, transaction?: Transaction): Promise<void> {
+/** Bounded chunks and their consecutive cursors commit atomically under one Run fence. */
+async function appendNativeExecutionValues(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunks: readonly UIMessageChunk[], maxBytes: number, transaction?: Transaction): Promise<void> {
+  const values = z.array(z.object({ type: z.string().min(1).max(120) }).passthrough()).min(1).max(128).parse(chunks);
+  const encoded = JSON.stringify(values);
+  if (new TextEncoder().encode(encoded).byteLength > maxBytes) throw new ServiceError(413, { message: "执行输出批次过大" });
+  // Snapshot before awaiting locks: a caller cannot mutate already accepted chunks.
+  const documents = JSON.parse(encoded) as Record<string, unknown>[];
   await withRuntimeLease(deps, loaded.lease, async tx => {
     const [run] = await tx.select({ id: agentRuns.id }).from(agentRuns).where(and(eq(agentRuns.id, loaded.run.id), eq(agentRuns.fence, loaded.lease.fence)));
     if (!run) throw new ServiceError(409, { message: "运行已被接管" });
-    const [execution] = await tx.update(agentExecutions).set({ lastCursor: sql`${agentExecutions.lastCursor}+1` })
+    const [execution] = await tx.update(agentExecutions).set({ lastCursor: sql`${agentExecutions.lastCursor}+${documents.length}` })
       .where(and(eq(agentExecutions.id, loaded.execution.id), eq(agentExecutions.fence, loaded.lease.fence), eq(agentExecutions.status, "invoking")))
       .returning({ cursor: agentExecutions.lastCursor });
     if (!execution) throw new ServiceError(409, { message: "执行输出已关闭" });
-    await tx.insert(agentExecutionChunks).values({ executionId: loaded.execution.id, cursor: execution.cursor, chunk: chunk as unknown as Record<string, unknown> });
+    await tx.insert(agentExecutionChunks).values(documents.map((chunk,index) => ({
+      executionId: loaded.execution.id,cursor: execution.cursor - documents.length + index + 1,chunk,
+    })));
   }, transaction);
+}
+
+/** Public batching limit is fixed; clients cannot choose their own memory bound. */
+export async function appendNativeExecutionChunks(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunks: readonly UIMessageChunk[], transaction?: Transaction): Promise<void> {
+  return appendNativeExecutionValues(deps,loaded,chunks,1024 * 1024,transaction);
+}
+
+/** Preserve the existing gateway's 48MiB single-chunk capability for large tool results. */
+export async function appendNativeExecutionChunk(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunk: UIMessageChunk, transaction?: Transaction): Promise<void> {
+  return appendNativeExecutionValues(deps,loaded,[chunk],48 * 1024 * 1024,transaction);
 }
 
 /** Settled describes this computing attempt; authoritative business outcome remains agent_runs. */

@@ -54,6 +54,8 @@ export interface NativeRunOutput {
 /** Durable projection append participates in execution lifetime and backpressure. */
 export interface NativeRunDurableOutput {
   write(chunk: UIMessageChunk): Promise<void>;
+  /** Wait for accepted buffered chunks before a checkpoint or lease release. */
+  flush?(): Promise<void>;
 }
 
 /** Await native completion, atomic checkpoint persistence and lease cleanup. */
@@ -188,14 +190,21 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
   };
 
   const cleanup = async () => {
+    if (closed) return;
     try {
       closed = true;clearTimeout(timeout);clearInterval(heartbeat);clearTimeout(stepDeadline);clearModelDeadlines();
       await Promise.allSettled([...pendingTools]);
       await phaseWrites;
-      // Pi stop before its first native turn may return data:{}; never commit it.
-      if (session && !invocationStarted) await session.stop().catch((error) => ports.logger.error("agent.session.cleanup", ports.chatErrorText(error)));
-      if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => ports.logger.error("agent.sandbox.stop", ports.chatErrorText(error)));
-      await ports.releaseRuntimeLease(options.lease);
+      try {
+        await outputWrites;
+        await durableOutput?.flush?.();
+      } finally {
+        // A failed output barrier must not strand the native session or lease.
+        // Pi stop before its first native turn may return data:{}; never commit it.
+        if (session && !invocationStarted) await session.stop().catch((error) => ports.logger.error("agent.session.cleanup", ports.chatErrorText(error)));
+        if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => ports.logger.error("agent.sandbox.stop", ports.chatErrorText(error)));
+        await ports.releaseRuntimeLease(options.lease);
+      }
     } finally { releaseNativeRun(); }
   };
   const persist = async (message: UIMessage, status: AgentRunStatus) => {
@@ -212,6 +221,8 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     // Pi's native stop saves its own journal. Missing it must not become empty history on reload.
     if (fs && !fs.getAllPaths().some((path) => path.endsWith(".jsonl"))) throw new Error("原生会话日志未保存，不能继续此对话；请核对已完成的数据修改");
     const { id, ...content } = message;
+    await outputWrites;
+    await durableOutput?.flush?.();
     await ports.completeRuntimeTurn(options.lease, options.actor, options.record.id, {
       resumeState, workspace, sandboxId: sandbox!.id,
       userMessageId: options.run.userMessageId, assistantMessageId: id,
@@ -380,7 +391,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
           errorText = ports.chatErrorText(error);
           await ports.failNativeRun(options.lease, options.run.id, errorText).catch(() => {});
           throw error;
-        } finally { await cleanup(); }
+        }
       },
     });
     const reader = output.getReader();
@@ -397,7 +408,8 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
       throw error;
     } finally { reader.releaseLock(); }
   } catch (error) {
-    // onFinish already persisted or failed the invoked turn and cleaned up.
+    // onFinish already persisted or failed the invoked turn. Cleanup below
+    // drains all output before releasing its lease.
     // A projection/checkpoint failure must not run startup handling a second time.
     if (projectionStarted) {
       if (!closed) {
@@ -409,5 +421,5 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
       throw error;
     }
     try { await startupFailure(error); } finally { await cleanup(); }
-  }
+  } finally { await cleanup(); }
 }

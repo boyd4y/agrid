@@ -78,7 +78,9 @@ export function ChatRunsProvider({ children, onRecovered }: PropsWithChildren<{ 
   const refresh = useCallback(() => setRevision((n) => n + 1), []);
   useEffect(() => { setSnapshot({ threadId, runs: [] }); setError(null); imported.current = null; observed.current = null; }, [threadId]);
   useEffect(() => {
-    if (!threadId) return;
+    // The live SSE already carries activity and terminal events. Only observe
+    // a persisted active Run when recovering without a live transport.
+    if (!threadId || running) { setLoading(false);return; }
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
@@ -103,7 +105,10 @@ export function ChatRunsProvider({ children, onRecovered }: PropsWithChildren<{ 
       } catch (failure) {
         if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : i18n.t("chat:syncRunFailed"));
       } finally {
-        if (!controller.signal.aborted) { setLoading(false); timer = setTimeout(() => void load(), active || running ? 2000 : 8000); }
+        if (!controller.signal.aborted) {
+          setLoading(false);
+          if (active) timer = setTimeout(() => void load(), 2000);
+        }
       }
     };
     void load();

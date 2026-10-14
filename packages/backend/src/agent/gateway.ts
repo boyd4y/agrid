@@ -8,7 +8,7 @@ import { sha256 } from "../auth/hash.js";
 import { agentExecutionGateways, agentExecutionToolCalls } from "../db/gateway-schema.js";
 import { agentExecutions, agentRuns, chatMessages, member } from "../db/schema.js";
 import { saveMessageInTransaction } from "../chat/store.js";
-import { loadNativeExecution, recoverAcceptedNativeExecution, claimNativeExecution, appendNativeExecutionChunk, settleNativeExecution, type LoadedNativeExecution } from "./executions.js";
+import { loadNativeExecution, recoverAcceptedNativeExecution, claimNativeExecution, appendNativeExecutionChunk, appendNativeExecutionChunks, settleNativeExecution, type LoadedNativeExecution } from "./executions.js";
 import { releaseRuntimeLease, withRuntimeLease, completeRuntimeTurn, completeUninvokedPiRun } from "./runtime-store.js";
 import { recordRunActivity, runCancellationRequested, failNativeRun } from "./runs.js";
 import type { GatewayAction, GatewayActions, GatewayCredentials, GatewayPreparedAgent } from "./gateway-contracts.js";
@@ -133,6 +133,7 @@ export async function handleExecutionGateway<Action extends GatewayAction>(deps:
       }
       case "tool": return executeGatewayTool(deps, credentials, loaded, payload as GatewayActions["tool"]["input"], services);
       case "append": await withGatewayAuthority(deps, credentials, loaded, tx => appendNativeExecutionChunk(deps, loaded, (payload as GatewayActions["append"]["input"]).chunk, tx));break;
+      case "appendBatch": await withGatewayAuthority(deps, credentials, loaded, tx => appendNativeExecutionChunks(deps, loaded, (payload as GatewayActions["appendBatch"]["input"]).chunks, tx));break;
       case "checkpoint": {
         const body = payload as GatewayActions["checkpoint"]["input"];
         if (body.message.id !== loaded.run.assistantMessageId || body.message.parentId !== loaded.run.userMessageId

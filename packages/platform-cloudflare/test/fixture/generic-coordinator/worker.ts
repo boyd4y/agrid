@@ -40,7 +40,7 @@ const BaseCoordinator = createSessionCoordinator<MailboxCoordinatorEnv, MailboxR
     if (archive.failReads) throw new Error("Private archive provider failure must stay hidden");
     return {
       events: archive.packets.slice(after, after+limit).map((chunk, index) => ({ cursor: after+index+1, chunk })),
-      terminal: archive.complete,
+      terminal: archive.complete && after + limit >= archive.packets.length,
       status: archive.deliveryState,
     };
   },
@@ -57,17 +57,23 @@ const BaseCoordinator = createSessionCoordinator<MailboxCoordinatorEnv, MailboxR
     return { mailboxKey: url.searchParams.get("mailbox"), packetGroup: url.searchParams.get("group") };
   },
   headers: { "x-mailbox-stream": "packet-json-v3", "x-custom-delivery": "archive" },
+  openFrame: ": mailbox-connected\n\n",
   errorFrame: "event: delivery-error\ndata: archive-unavailable\n\n",
   endFrame: "event: archive-complete\ndata: delivered\n\n",
-}, { pageSize: 2, pollIntervalMs: 25 });
+}, { pageSize: 2 });
 
 export class MailboxCoordinator extends BaseCoordinator {
   #constructorMarker = crypto.randomUUID();
+  #readCalls = 0;
+  override async replay(input: Parameters<InstanceType<typeof BaseCoordinator>["replay"]>[0]) {
+    this.#readCalls++;
+    return super.replay(input);
+  }
   async metadata() {
     const tables = this.ctx.storage.sql.exec<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'").toArray()
       .map(row => row.name).filter(name => !name.startsWith("_") && !name.startsWith("sqlite_"));
     const scopeRows = this.ctx.storage.sql.exec<{ scope_key: string }>("SELECT scope_key FROM coordination_scope").toArray();
-    return { tables, scopeRows, kvCount: (await this.ctx.storage.list()).size, constructorMarker: this.#constructorMarker };
+    return { tables, scopeRows, kvCount: (await this.ctx.storage.list()).size, constructorMarker: this.#constructorMarker,readCalls: this.#readCalls };
   }
   evict(): void { this.ctx.abort("Reconstruct generic coordinator"); }
 }
@@ -86,6 +92,10 @@ export default {
       return event ? new Response(event.body, { headers: { "content-type": "application/json" } }) : new Response(null, { status: 404 });
     }
     const coordinator = env.MAILBOX_COORDINATORS.getByName(url.searchParams.get("room") ?? `mailbox:${reference.mailboxKey}`);
+    if (url.pathname === "/notify") {
+      try { await coordinator.notify(reference);return new Response(null,{ status: 204 }); }
+      catch { return new Response(null,{ status: 409 }); }
+    }
     if (url.pathname === "/metadata") return Response.json(await coordinator.metadata());
     if (url.pathname === "/evict") {
       try { await coordinator.evict(); } catch { /* Expected abort drops this RPC. */ }

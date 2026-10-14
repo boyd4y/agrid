@@ -33,6 +33,12 @@
       "development": "./src/gateway.ts",
       "import": "./dist/gateway.js",
       "default": "./dist/gateway.js"
+    },
+    "./batched-output": {
+      "types": "./src/batched-output.ts",
+      "development": "./src/batched-output.ts",
+      "import": "./dist/batched-output.js",
+      "default": "./dist/batched-output.js"
     }
   },
   "scripts": {

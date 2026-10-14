@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, chmod } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { resolve, dirname, isAbsolute } from "node:path";
 
-export const modelKeys = ["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_CONTEXT_WINDOW", "PI_MAX_OUTPUT_TOKENS",
+export const modelKeys = ["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "PI_CONTEXT_WINDOW", "PI_MAX_OUTPUT_TOKENS","PI_THINKING_LEVEL",
   "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OPENROUTER_MODEL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "CODEX_API_KEY", "CODEX_MODEL",
   "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_MODEL", "AI_CHAT_MAX_STEPS", "AI_CHAT_TOTAL_MS", "AI_CHAT_STEP_MS", "AI_CHAT_FIRST_CHUNK_MS", "AI_CHAT_CHUNK_MS", "AI_RUN_POLL_MS"];
 
@@ -41,7 +41,7 @@ export function settings(configuration) {
   for (const key of ["RESEND_API_KEY","EMAIL_FROM","INTEGRATION_ENCRYPTION_KEY"]) if (configuration[key]) variables[key] = configuration[key];
   const auth = configuration.BETTER_AUTH_SECRET;
   if (auth && auth.trim().length >= 32 && auth !== "dev-only-secret-change-me-32chars-min!!") variables.BETTER_AUTH_SECRET = auth;
-  return { clientPort, workerPort, inspectorPort, database, variables };
+  return { clientPort, workerPort, inspectorPort, database, variables, directory: configuration.CF_DEV_DIRECTORY || ".local/cf" };
 }
 function dotenvValue(key, value) {
   // dotenv does not understand JSON's escaped quotes. Choose a delimiter absent
@@ -54,7 +54,7 @@ function dotenvValue(key, value) {
   throw new Error(`Unsupported CF development variable ${key}: use a single-line value with a safe dotenv delimiter`);
 }
 export async function prepareLocalFiles(root, values) {
-  const directory = resolve(root, ".local/cf");
+  const directory = resolve(root, values.directory || ".local/cf");
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await chmod(directory, 0o700);
   const secretPath = resolve(directory,"secrets.json");

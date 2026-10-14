@@ -7,6 +7,7 @@ export type OutputRequest<Reference> = Readonly<{
 }>;
 export type OutputPage<Chunk, State = unknown> = Readonly<{
   events: readonly Readonly<{ cursor: number; chunk: Chunk }>[];
+  /** True only when this page drains the final committed event. */
   terminal: boolean;
   status: State;
 }>;

@@ -9,7 +9,7 @@
 ```dotenv
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DATABASE
 DEEPSEEK_API_KEY=YOUR_KEY
-# 切换 DeepSeek 时清空旧提供商配置
+# 可选：清除不用的旧配置；完整 Pi 直连配置会优先
 OPENROUTER_API_KEY=
 PI_API_KEY=
 ```
@@ -29,9 +29,11 @@ pnpm dev:cf
 
 优先级为 **启动进程的环境变量 > `.env.cf` > `.env`**，空字符串也会覆盖前一层。Shell 中已经导出的旧 Key 不会被文件中的空值覆盖，需要先 `unset OPENROUTER_API_KEY PI_API_KEY`，或显式以空值启动。
 
-未设置 `PI_API_KEY` 时，`DEEPSEEK_API_KEY` 映射为 Pi 的直接提供商配置，默认 `PI_BASE_URL=https://api.deepseek.com/v1`、`PI_MODEL=deepseek-flash`、`PI_CONTEXT_WINDOW=1048576`（未显式配置时）；可用 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL` 覆盖。显式 `PI_API_KEY` 优先，此时同时配置 `PI_BASE_URL` 与 `PI_MODEL`。非空 `OPENROUTER_API_KEY` 在原生模型配置中优先于 Pi 直接提供商，使用 DeepSeek 时应清空它。
+未设置 `PI_API_KEY` 时，`DEEPSEEK_API_KEY` 映射为 Pi 的直接提供商配置，默认 `PI_BASE_URL=https://api.deepseek.com/v1`、`PI_MODEL=deepseek-flash`、`PI_CONTEXT_WINDOW=1048576`（未显式配置时）；可用 `DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL` 覆盖。显式 `PI_API_KEY` 优先，此时同时配置 `PI_BASE_URL` 与 `PI_MODEL`。完整的 `PI_API_KEY` + `PI_BASE_URL` 优先于遗留的 `OPENROUTER_API_KEY`，执行、模型元数据和状态接口使用同一选择结果。只有直连配置不完整时才回退 OpenRouter，并使用它的 `OPENROUTER_MODEL`（默认 `openrouter/free`），不会混用直连模型名；切换到 OpenRouter 时需清空直连 Key 或地址。
 
-DeepSeek 模型及窗口依据[官方模型说明](https://api-docs.deepseek.com/quick_start/pricing/)。默认输出上限保持 16384，可用 `PI_MAX_OUTPUT_TOKENS` 调整。直连 `api.deepseek.com` 使用 `max_tokens`，并显式传 `thinking: { type: "disabled" }`，与当前非推理模式一致；协议依据[官方 Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
+DeepSeek 模型及窗口依据[官方模型说明](https://api-docs.deepseek.com/quick_start/pricing/)。默认输出上限保持 16384，可用 `PI_MAX_OUTPUT_TOKENS` 调整。直连 `api.deepseek.com` 使用 `max_tokens`，推理模式遵循原生 Pi SDK 默认值（当前 `medium`）；协议依据[官方 Chat Completions 文档](https://api-docs.deepseek.com/api/create-chat-completion/)。
+
+可通过 `PI_THINKING_LEVEL` 显式配置 `off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`。已知支持推理的模型不配置时使用 SDK 默认 `medium`，也会修正旧平台在原生会话中写入的 `off`；只有显式 `off` 禁用。未知模型保留原生能力判断；实际推理强度由提供商映射。仅模型返回的推理内容会展示并保存，普通文本不会被伪装为推理。参见 [Pi 默认级别](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/defaults.ts)及 [DeepSeek 推理协议](https://api-docs.deepseek.com/guides/thinking_mode/)。
 
 启动脚本自动设置本地 `APP_URL`、`BETTER_AUTH_URL`。模型 Key 等允许的配置写入私有 `.dev.vars`；值需为可安全引用的单行文本，无法表示时会明确报错。数据库连接只通过本地 Hyperdrive 环境变量交给 Wrangler，不写入生成的 `.dev.vars` 或 Docker 构建配置。
 
@@ -60,18 +62,33 @@ node --test scripts/test/cf-dev.test.mjs
 ```bash
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/tabdo_agent_test \
 CF_CLIENT_PORT=5189 CF_WORKER_PORT=8791 CF_INSPECTOR_PORT=9241 \
+CF_DEV_DIRECTORY=.local/cf-product-test \
 OPENROUTER_API_KEY= PI_API_KEY=fixture-not-production \
 PI_BASE_URL=http://127.0.0.1:18973/v1 PI_MODEL=fixture-native \
-PI_CONTEXT_WINDOW=262144 PI_MAX_OUTPUT_TOKENS=1024 pnpm dev:cf
+PI_THINKING_LEVEL=medium PI_CONTEXT_WINDOW=262144 PI_MAX_OUTPUT_TOKENS=1024 pnpm dev:cf
 ```
 
-另一个终端执行；两套用例串行运行，避免协议服务端口冲突：
+另一个终端执行；三套用例串行运行，避免协议服务端口冲突：
 
 ```bash
 DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/tabdo_agent_test \
-TABDO_CF_PRODUCT_LIVE=1 TABDO_CF_AUTOMATION_LIVE=1 \
+TABDO_CF_PRODUCT_LIVE=1 TABDO_CF_AUTOMATION_LIVE=1 TABDO_CF_STREAMING_LIVE=1 \
 TABDO_CF_FRONTEND_ORIGIN=http://localhost:5189 \
 TABDO_CF_WORKER_URL=http://localhost:8791 pnpm test:cloudflare:product
 ```
 
 覆盖前端代理、认证、原生聊天、工具写入、容器冷续接、R2、取消，以及实际 Queue 数据动作和 Cron 定时任务历史。用例清理自己的 PG 数据与运行；上传的本地 R2 测试对象会输出精确 key，必要时通过 Wrangler 仅删除这些 key。未开启对应变量时用例明确跳过。此回归不等于真实 DeepSeek 或线上 CF 验收。
+
+## 聊天延迟与排查
+
+聊天在 PostgreSQL 接受后直接启动执行 DO，不等待后台 Queue 批次；有限的启动确认由 `waitUntil` 托管。通过授权的 SSE 立即发送连接注释，容器初始化期间也能确认连接。自动化和定时任务仍通过 Queue 投递。
+
+Sandbox 将输出按 50ms / 64 段 / 256KiB 有界批量落库，提交后唤醒订阅 DO；断开浏览器不会取消执行。检查点与释放租约前必须等待输出全部提交。健康的聊天流和空闲对话不定时轮询 `/runs`；重载后的活动运行恢复仍会查询状态。
+
+流式测试输出 JSON trace，分开记录发送到模型、响应头、模型首推理和最终输出延迟。它使用本地模型协议端点，不代表 DeepSeek 实际首 token 或线上性能。Apple Silicon 本地运行的 amd64 容器存在架构模拟成本，不能将本地冷启动时间等同于线上冷启动。
+
+并行启动测试栈时务必配置独立 `CF_DEV_DIRECTORY` 及三个端口；该目录隔离配置、私有密钥、DO 和 R2 状态，不覆盖正在使用的默认 `.local/cf`。
+
+Sandbox 镜像构建时仅预编译项目源码，SDK/npm 包保留原有路径；固定 Node 版本的代码缓存随镜像预热。运行时直接执行 JavaScript，避免每个 Run 重新加载 tsx。此构建发生在 Docker 镜像内，Worker 仍由 Wrangler 打包。
+
+2026-10-15 本机独立 Wrangler + Docker + 测试 PG 的对照记录：同一协议端点下，发送到模型接收从 11.34s 降到 5.30s，前端连接确认从 9.55s 降到 56ms；优化后的模型结束到前端流结束约 408ms。240 个推理/正文分片及数据库内容完整，工具、问答冷恢复、取消、自动化和定时任务回归通过。这是本地架构模拟环境的观测，未与 Vercel 实测对比，也未调用真实 DeepSeek。
