@@ -12,6 +12,7 @@ import { claimExecution, executeNext, FenceLostError } from "../../src/automatio
 import { startWorker } from "../../src/queue/workers.js";
 import { redisOptions, prefix } from "../../src/queue/config.js";
 import { createQueue, closeQueue, jobId, type AutomationJob } from "../../src/queue/queues.js";
+import { createPublishedReconciler } from "../../src/queue/reconcile.js";
 import { createRelay } from "../../src/queue/relay.js";
 import { acquireRowLease } from "../../src/queue/lease.js";
 
@@ -205,6 +206,70 @@ test("multiple BullMQ workers consume directly; retry after action commit does n
   const duplicate = await queue.add("duplicate", f.job.data, { jobId: `duplicate-${randomUUID()}` });
   await eventually(async () => await duplicate.getState() === "completed");
   const [same] = await db.select().from(rows).where(eq(rows.id, f.row.id)); assert.equal(same.version, 2);
+});
+
+test("published reconciler restores a missing Redis job without repeating committed steps", async () => {
+  for (const runtime of runtimes) await runtime.worker.pause();
+  const reconciler = createPublishedReconciler();
+  const f = await fixture({ twoSteps: true }); assert.ok(f.job);
+  try {
+    // Commit one step before a transient retry, preserving the same generation and receipts.
+    const fence = (await claimExecution(f.event.id))!;
+    await executeNext(f.event.id, fence);
+    await db.update(automationEvents).set({ status: "retrying" }).where(eq(automationEvents.id, f.event.id));
+    const delivery = (await relay.claim(100)).find((d) => d.id === f.delivery!.id)!;
+    assert.equal(await relay.publish(delivery), true);
+    const id = jobId(f.event.id, f.event.generation);
+    await (await queue.getJob(id))!.remove();
+    await reconciler.tick();
+    assert.equal((await db.select().from(automationOutbox).where(eq(automationOutbox.id, delivery.id)))[0].status, "published", "Grace protects recent publications");
+    await db.update(automationOutbox).set({ publishedAt: new Date(0) }).where(eq(automationOutbox.id, delivery.id));
+    await Promise.all([reconciler.tick(), reconciler.tick()]);
+    const [reset] = await db.select().from(automationOutbox).where(eq(automationOutbox.id, delivery.id));
+    assert.equal(reset.status, "pending"); assert.equal(reset.generation, delivery.generation);
+    assert.equal(reset.publishedAt, null); assert.equal(reset.claimToken, null); assert.equal(reset.claimUntil, null);
+    const replacement = (await relay.claim(100)).find((d) => d.id === delivery.id)!;
+    assert.equal(await relay.publish(replacement), true);
+    assert.ok(await queue.getJob(id));
+    await runDirect(replacement.payload); await runDirect(replacement.payload);
+    assert.equal((await eventState(f.event.id)).status, "completed");
+    const [row] = await db.select().from(rows).where(eq(rows.id, f.row.id));
+    assert.equal(row.version, 3); assert.equal(row.cells[f.output.id], "step two");
+    const [run] = await db.select().from(automationRuns).where(eq(automationRuns.eventId, f.event.id));
+    assert.equal((await db.select().from(automationStepReceipts).where(eq(automationStepReceipts.runId, run.id))).length, 2);
+  } finally { await reconciler.close(); }
+});
+
+test("published reconciler skips waiting input, running fences, unknown native runs, live row leases and existing jobs", async () => {
+  for (const runtime of runtimes) await runtime.worker.pause();
+  const reconciler = createPublishedReconciler();
+  const fixtures = await Promise.all(Array.from({ length: 5 }, () => fixture()));
+  const deliveries = await relay.claim(100);
+  let lease: Awaited<ReturnType<typeof acquireRowLease>> = null;
+  try {
+    for (const f of fixtures) {
+      await relay.publish(deliveries.find((d) => d.id === f.delivery!.id)!);
+      await db.update(automationOutbox).set({ publishedAt: new Date(0) }).where(eq(automationOutbox.id, f.delivery!.id));
+    }
+    for (const f of fixtures.slice(0, 3)) await (await queue.getJob(jobId(f.event.id)))!.remove();
+    await db.update(automationEvents).set({ status: "waiting_input" }).where(eq(automationEvents.id, fixtures[0].event.id));
+    await claimExecution(fixtures[1].event.id);
+    lease = await acquireRowLease(redis, fixtures[2].org, fixtures[2].row.id); assert.ok(lease);
+    await db.update(automationRuns).set({ status: "unknown" }).where(eq(automationRuns.eventId, fixtures[4].event.id));
+    await (await queue.getJob(jobId(fixtures[4].event.id)))!.remove();
+    await reconciler.tick();
+    for (const f of fixtures) {
+      const [delivery] = await db.select().from(automationOutbox).where(eq(automationOutbox.id, f.delivery!.id));
+      assert.equal(delivery.status, "published");
+    }
+  } finally {
+    await lease?.release(); await reconciler.close();
+    for (const f of fixtures) {
+      await db.update(automationRuns).set({ status: "queued" }).where(eq(automationRuns.eventId, f.event.id));
+      await db.update(automationEvents).set({ status: "matched" }).where(eq(automationEvents.id, f.event.id));
+      await runDirect(f.job!.data);
+    }
+  }
 });
 
 test("retry exhaustion and outbox-backed manual replay resume only unfinished steps", async () => {

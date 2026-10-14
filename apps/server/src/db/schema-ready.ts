@@ -32,6 +32,30 @@ export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; mi
   `;
   if (!reports) missing.push("reports (run pnpm db:migrate — migration 0013)");
 
+  for (const name of ["automations", "automation_runs", "table_views", "agent_runtime_sessions", "agent_runs", "file_objects"]) {
+    const [{ present }] = await client`SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS present`;
+    if (!present) missing.push(`${name} (run pnpm db:migrate)`);
+  }
+  const [{ viewPreferences }] = await client`
+    SELECT EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='table_views' AND column_name='is_default') AS "viewPreferences"
+  `;
+  if (!viewPreferences) missing.push("table_views.is_default (run pnpm db:migrate — migration 0020; audit recorded migration if still missing)");
+  const [{ scopedNames }] = await client`
+    SELECT count(*) = 2 AS "scopedNames" FROM pg_trigger
+    WHERE NOT tgisinternal AND tgenabled IN ('O', 'A') AND
+      ((tgrelid = to_regclass('public.tables') AND tgname = 'tables_org_name_unique') OR
+       (tgrelid = to_regclass('public.columns') AND tgname = 'columns_table_name_unique'))
+  `;
+  if (!scopedNames) missing.push("scoped name constraint triggers (run pnpm db:migrate — migration 0024)");
+  const [{ orgRequired, eventAutomations }] = await client`
+    SELECT
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tables' AND column_name='organization_id' AND is_nullable='NO') AS "orgRequired",
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='automations' AND column_name='organization_id') AS "eventAutomations"
+  `;
+  if (!orgRequired) missing.push("tables.organization_id NOT NULL (run pnpm db:migrate — migration 0004)");
+  if (!eventAutomations) missing.push("automations.organization_id (run pnpm db:migrate — migration 0023)");
+
   return missing.length ? { ok: false, missing } : { ok: true };
 }
 

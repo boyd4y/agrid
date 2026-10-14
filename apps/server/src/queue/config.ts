@@ -12,6 +12,9 @@ export const queueName = "automation";
 export const attempts = positiveInt("AUTOMATION_ATTEMPTS", 5);
 export const leaseMs = positiveInt("AUTOMATION_LEASE_MS", 30000);
 
+export const reconcileStaleMs = positiveInt("AUTOMATION_RECONCILE_STALE_MS", 60000);
+export const reconcileBatch = positiveInt("AUTOMATION_RECONCILE_BATCH", 25);
+
 export function redisOptions(worker: boolean): RedisOptions {
   if (!redisUrl) throw new Error("REDIS_URL must be set for queue processes");
   const url = new URL(redisUrl);
