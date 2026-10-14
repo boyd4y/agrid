@@ -1,9 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { nameConflictMessage } from "./name-errors.js";
 import "../load-env.js";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as schema from "./schema.js";
+import { createDatabase } from "./factory.js";
 
 const DEV_DATABASE_URL =
   "postgresql://tableapp:tableapp@localhost:5432/tableapp";
@@ -15,8 +13,9 @@ if (!connectionString) {
 
 const poolMax = Number(process.env.DB_POOL_MAX ?? 10);
 if (!Number.isInteger(poolMax) || poolMax < 1) throw new Error("Invalid DB_POOL_MAX");
-const client = postgres(connectionString, { max: poolMax, connect_timeout: 5, idle_timeout: 20 });
-export const db = drizzle(client, { schema });
+const resource = createDatabase({ connectionString, poolMax });
+const client = resource.client;
+export const db = resource.db;
 export type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type Database = typeof db | Transaction;
 export { client };

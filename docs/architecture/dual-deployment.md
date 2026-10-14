@@ -162,14 +162,15 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 - [x] Pars 与现有运行链路调研；第一版发布/存储抽取通过 Node 和 workerd 测试。
 - [x] 架构修订：按能力包 + 包内 adapters，补充基础设施与业务解耦边界、依赖图和新实施顺序。
 - [x] 按修订迁移 queue/storage 与包内 adapters；业务消息协议移至 shared、文件 namespace 留在 server；移除旧 core/runtime 包，更新 exports、optional peers、开发构建、Docker 与回归。
-- [ ] 平台 app/auth/PG factory 与业务执行服务提取。
+- [x] 第一批平台工厂：HTTP app 与 Node 启停分离；Better Auth 和 PG resource 接收显式配置，当前 Node 入口已接入。
+- [ ] 平台请求作用域资源、业务执行服务与独立 platform 包提取。
 - [ ] 独立 Harness runner、Sandbox/Execution 实现与平台跨实例续接。
 - [ ] CF DO/队列/调度入口接通共同业务与长任务。
 - [ ] 完整双模式本地与远程验收。
 
 本阶段验证：queue/storage 6 项通用用例（真实 BullMQ、workerd Queues/R2）、shared 11 项业务契约、server 18 项队列故障与 3 项文件存储用例通过。全仓 build、typecheck、typecheck:test、冻结锁文件安装与两份 fixture dry-run 通过；CF bundle 不包含 Node/BullMQ/AWS/业务协议。
 
-当前落地包见 [queue](../../packages/queue/README.md) 与 [storage](../../packages/storage/README.md)。通用队列/存储与独立 workerd fixtures 已实现；平台工厂、Harness runner、DO 协调仍按以上清单待实施，不代表整个 CF 平台已可部署。Wrangler 4.149.0 本地可运行；既有登录已过期，远程验收需恢复登录。本地 fixture 按固定二进制支持的 `2026-10-13` compatibility date，并生成 binding 类型。
+当前落地包见 [queue](../../packages/queue/README.md) 与 [storage](../../packages/storage/README.md)。通用队列/存储、workerd fixtures 和首批 Node 平台工厂已实现；请求作用域平台资源、Harness runner、DO 协调仍按以上清单待实施，不代表整个 CF 平台已可部署。Wrangler 4.149.0 本地可运行；既有登录已过期，远程验收需恢复登录。本地 fixture 按固定二进制支持的 `2026-10-13` compatibility date，并生成 binding 类型。
 
 ## 12. 调研依据
 
@@ -181,3 +182,5 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 - [Hyperdrive / Postgres.js](https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/postgres-js/)
 - [Sandbox 1.x](https://developers.cloudflare.com/sandbox/reference/)、[Container API](https://developers.cloudflare.com/containers/api/)
 - [DO pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/)、[Containers pricing](https://developers.cloudflare.com/containers/platform/pricing/)
+
+平台工厂阶段：真实 Better Auth 注册/session 签名隔离、API Key 邀请与撤销、31 项聊天回归及源码/测试类型检查通过。app 仍引用现有 Node 业务图；尚未声明可进入 Workers bundle，后续先移除执行侧传递依赖与全局资源。
