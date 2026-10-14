@@ -1,3 +1,4 @@
+import { nameConflictMessage } from "../db/name-errors.js";
 import { InvalidToolInputError, NoSuchToolError, type TextStreamPart, type ToolSet } from "ai";
 import { ZodError } from "zod";
 
@@ -48,6 +49,8 @@ export function chatErrorText(error: unknown): string {
   }
   if (validation) return `参数错误：${validationDetails(validation)}`;
 
+  const nameConflict = nameConflictMessage(error);
+  if (nameConflict) return nameConflict;
   const database = chain.find((cause) => typeof cause === "object" && cause !== null && "code" in cause && typeof cause.code === "string" && /^\d{2}[\dA-Z]{3}$/.test(cause.code)) as { code: string } | undefined;
   if (database) {
     const reasons: Record<string, string> = {

@@ -63,7 +63,10 @@ function AppShellInner() {
   }, [tableMatch?.params.tableId, setActiveTableId]);
 
   const createTable = useCallback(async () => {
-    const name = i18n.t("app:tables.newTableName", { n: tables.length + 1 });
+    const names = new Set(tables.map(table => table.name.trim().toLocaleLowerCase()));
+    let n = tables.length + 1;
+    let name = i18n.t("app:tables.newTableName", { n });
+    while (names.has(name.toLocaleLowerCase())) name = i18n.t("app:tables.newTableName", { n: ++n });
     try {
       const t = await api.createTable(name);
       setTables((prev) => [...prev, t]);

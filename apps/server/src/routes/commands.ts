@@ -1,5 +1,6 @@
 import { COMMANDS } from "@tabdo/shared";
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { resolveActor } from "../auth/actor.js";
 import * as cmds from "../commands/index.js";
@@ -59,7 +60,7 @@ commandsRoute.post("/", async (c) => {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "命令执行失败";
-    const status = msg.includes("版本冲突") ? 409 : 400;
+    const status = e instanceof HTTPException ? e.status : msg.includes("版本冲突") ? 409 : 400;
     return c.json({ error: msg }, status);
   }
 });

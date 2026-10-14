@@ -115,22 +115,11 @@ export async function createTable(input: {
   description?: string;
 }) {
   const organizationId = requireOrgId(input.organizationId);
-  const [table] = await db
-    .insert(tables)
-    .values({
-      organizationId,
-      name: input.name,
-      description: input.description,
-    })
-    .returning();
-  await db.insert(columns).values({
-    tableId: table.id,
-    name: "标题",
-    type: "text",
-    sortOrder: 0,
-    width: 220,
+  return inTransaction(undefined, async tx => {
+    const [table] = await tx.insert(tables).values({ organizationId, name: input.name.trim(), description: input.description }).returning();
+    await tx.insert(columns).values({ tableId: table.id, name: "标题", type: "text", sortOrder: 0, width: 220 });
+    return table;
   });
-  return table;
 }
 
 export async function updateCell(input: UpdateCellInput & OrgScoped, transaction?: Transaction) {

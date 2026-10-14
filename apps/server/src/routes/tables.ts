@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../db/index.js";
+import { inTransaction } from "../db/index.js";
 import { tables } from "../db/schema.js";
 import * as cmds from "../commands/index.js";
 import { requireActorOrg } from "../tenant/http.js";
@@ -20,7 +20,7 @@ tablesRoute.post("/", async (c) => {
   const organizationId = scope.organizationId;
   const body = z
     .object({
-      name: z.string().min(1).max(200),
+      name: z.string().trim().min(1).max(200),
       description: z.string().optional(),
     })
     .parse(await c.req.json());
@@ -55,14 +55,14 @@ tablesRoute.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const body = z
     .object({
-      name: z.string().min(1).max(200).optional(),
+      name: z.string().trim().min(1).max(200).optional(),
       description: z.string().nullable().optional(),
       icon: z.string().trim().min(1).max(100).nullable().optional(),
       pinned: z.boolean().optional(),
     })
     .parse(await c.req.json());
 
-  const [updated] = await db
+  const [updated] = await inTransaction(undefined, tx => tx
     .update(tables)
     .set({
       ...(body.name !== undefined ? { name: body.name } : {}),
@@ -72,7 +72,7 @@ tablesRoute.patch("/:id", async (c) => {
       updatedAt: new Date(),
     })
     .where(and(eq(tables.id, id), eq(tables.organizationId, organizationId)))
-    .returning();
+    .returning());
 
   if (!updated) return c.json({ error: "表格不存在" }, 404);
   return c.json(updated);

@@ -28,7 +28,7 @@ columnsRoute.post("/tables/:id/columns", async (c) => {
   const tableId = c.req.param("id");
   const body = z
     .object({
-      name: z.string().min(1).max(100),
+      name: z.string().trim().min(1).max(100),
       type: z.enum(COLUMN_TYPES),
       config: z
         .object({
@@ -74,7 +74,7 @@ columnsRoute.patch("/columns/:id", async (c) => {
   const id = c.req.param("id");
   const body = z
     .object({
-      name: z.string().min(1).max(100).optional(),
+      name: z.string().trim().min(1).max(100).optional(),
       type: z.enum(COLUMN_TYPES).optional(),
       config: z
         .object({

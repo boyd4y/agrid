@@ -217,7 +217,7 @@ export const tables = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("tables_org_idx").on(t.organizationId)]
+  (t) => [index("tables_org_idx").on(t.organizationId), index("tables_org_name_lookup").on(t.organizationId, sql`public.tabdo_name_key(${t.name})`)]
 );
 
 export const columns = pgTable(
@@ -234,7 +234,7 @@ export const columns = pgTable(
     sortOrder: integer("sort_order").default(0).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("columns_table_sort_idx").on(t.tableId, t.sortOrder)]
+  (t) => [index("columns_table_sort_idx").on(t.tableId, t.sortOrder), index("columns_table_name_lookup").on(t.tableId, sql`public.tabdo_name_key(${t.name})`)]
 );
 
 /** Uploaded blobs are retained independently of cell references and editor drafts. */

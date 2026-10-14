@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, type Transaction } from "../db/index.js";
+import { db, inTransaction, type Transaction } from "../db/index.js";
 import {
   columns,
   rows,
@@ -79,7 +79,7 @@ export async function createRelationColumn(
     width?: number;
   } & Scope,
 ) {
-  return db.transaction((tx) => createRelationColumnInTransaction(tx, input));
+  return inTransaction(undefined, (tx) => createRelationColumnInTransaction(tx, input));
 }
 export async function createRelationColumnInTransaction(
   tx: Transaction,

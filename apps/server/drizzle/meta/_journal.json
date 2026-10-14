@@ -169,6 +169,13 @@
       "when": 1791862800000,
       "tag": "0023_event_automations",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791862900000,
+      "tag": "0024_scoped_names",
+      "breakpoints": true
     }
   ]
 }
