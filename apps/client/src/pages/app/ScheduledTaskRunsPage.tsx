@@ -16,7 +16,6 @@ import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { ListItemLink } from "@/components/controls/list-item-link";
 import { ListPagination } from "@/components/controls/list-pagination";
 import type { AppOutletContext } from "@/layouts/AppShell";
-import { scheduleLabel } from "./SchedulesPage";
 
 export function ScheduledTasksEmpty() {
   const { t } = useTranslation("automation");
@@ -38,7 +37,7 @@ export function ScheduledTaskRunsPage() {
   useEffect(() => { let cancelled = false; setTask(null); setError(null); void api.getAutomation(automationId).then(task => { if (!cancelled) setTask(task); }).catch(error => { if (!cancelled) setError(error.message); }); return () => { cancelled = true; }; }, [automationId]);
   useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden) void list.refresh(); }, 5000); return () => window.clearInterval(timer); }, [list.refresh]);
   return <section className="flex min-h-0 flex-1 flex-col" data-testid="scheduled-runs">
-    <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border p-5"><div className="min-w-0"><h2 className="truncate text-lg font-semibold">{task?.name ?? t("runs")}</h2>{task && <p className="mt-1 text-xs text-muted-foreground">{scheduleLabel(task, t)}</p>}</div><div className="flex items-center gap-2"><DataRefreshButton disabled={list.loading} onRefresh={list.refresh} /><Button asChild variant="outline" size="sm"><Link to={`/app/schedules/${automationId}/edit`}><Pencil data-icon="inline-start" />{t("scheduled.edit")}</Link></Button></div></header>
+    <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3"><h2 className="min-w-0 truncate text-base font-semibold">{task?.name ?? t("runs")}</h2><div className="flex items-center gap-2"><DataRefreshButton disabled={list.loading} onRefresh={list.refresh} /><Button asChild variant="outline" size="sm"><Link to={`/app/schedules/${automationId}/edit`}><Pencil data-icon="inline-start" />{t("common:edit")}</Link></Button></div></header>
     <div className="min-h-0 flex-1 overflow-y-auto p-5 md:p-8">
       {error || list.error ? <ListErrorState description={error ?? list.error} onRetry={list.refresh} /> : null}
       {!list.items.length ? list.loading ? <p role="status">{t("loading")}</p> : !list.error && <AppEmptyState illustration={NOTIOLY.chill} title={t("noRunRecords")} description={t("scheduled.runsEmptyDescription")} /> : <>
@@ -61,8 +60,9 @@ export function ScheduledRunChatPage() {
   const { notifyTableMutated } = useOutletContext<AppOutletContext>();
   const [thread, setThread] = useState<{ title: string | null; custom: Record<string, unknown> } | null>(null), [error, setError] = useState<string | null>(null);
   useEffect(() => { let cancelled = false; setThread(null); setError(null); void api.getScheduledRunThread(automationId, threadId).then(thread => { if (!cancelled) setThread(thread); }).catch(error => { if (!cancelled) setError(error.message); }); return () => { cancelled = true; }; }, [automationId, threadId]);
+  const back = <Button asChild variant="ghost" size="sm"><Link to={`/app/schedules/${automationId}`}><ArrowLeft data-icon="inline-start" />{t("runs")}</Link></Button>;
   return <section className="flex min-h-0 flex-1 flex-col" data-testid="scheduled-run-chat">
-    <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3"><Button asChild variant="ghost" size="sm"><Link to={`/app/schedules/${automationId}`}><ArrowLeft data-icon="inline-start" />{t("runs")}</Link></Button><h2 className="truncate text-sm font-medium">{thread?.title ?? t("scheduled.openRun")}</h2></header>
-    {error ? <ListErrorState description={error} /> : !thread ? <p role="status" className="p-5">{t("loading")}</p> : <ChatPanel key={threadId} tableId={null} variant="session" remoteThreadId={threadId} scheduledTaskId={automationId} sessionAgentId={typeof thread.custom.agentId === "string" ? thread.custom.agentId : undefined} resourceKey={`schedule:${automationId}`} onMutated={notifyTableMutated} />}
+    {!thread && <div className="border-b border-border px-4 py-2">{back}</div>}
+    {error ? <ListErrorState description={error} /> : !thread ? <p role="status" className="p-5">{t("loading")}</p> : <ChatPanel key={threadId} tableId={null} variant="session" remoteThreadId={threadId} scheduledTaskId={automationId} sessionAgentId={typeof thread.custom.agentId === "string" ? thread.custom.agentId : undefined} toolbarActions={back} resourceKey={`schedule:${automationId}`} onMutated={notifyTableMutated} />}
   </section>;
 }

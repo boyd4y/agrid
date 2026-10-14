@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
   type FC,
+  type ReactNode,
 } from "react";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
@@ -72,6 +73,7 @@ type Props = {
   remoteThreadId?: string;
   scheduledTaskId?: string;
   sessionAgentId?: string;
+  toolbarActions?: ReactNode;
   /** Open/close the right UI Slot plugin panel (tool-driven). */
   onOpenPreview?: (payload: OpenPreviewPayload) => void;
   previewOpen?: boolean;
@@ -210,6 +212,25 @@ function ThreadAgentBinding({ onSelect }: { onSelect: (id: string) => void }) {
   return null;
 }
 
+function ChatAgentHeader({ agent, models, loading, fixed, onSelect, home }: {
+  agent?: MemberOption; models: ModelOption[]; loading: boolean; fixed: boolean;
+  onSelect: (id: string) => void; home: boolean;
+}) {
+  const { t } = useTranslation("chat");
+  const remoteId = useAuiState(state => state.threadListItem.remoteId);
+  const running = useAuiState(state => state.thread.isRunning);
+  if (loading) return <span className="text-xs text-muted-foreground">{t("loadingAgents")}</span>;
+  if (!agent) return <span className="text-xs text-muted-foreground">{t("noAgentSelected")}</span>;
+  if (fixed || remoteId || running) return <div className="flex h-8 min-w-0 items-center gap-2 px-1.5" data-testid="chat-agent-header">
+    <MemberAvatar name={agent.name} image={agent.image} kind="agent" className="size-5 shrink-0" />
+    <span className="truncate text-xs font-medium">{agent.name}</span>
+  </div>;
+  return <ModelSelector key={models.map(model => model.id).join(",")} models={models} value={agent.id} onValueChange={onSelect}
+    size="sm" variant="ghost" searchable={models.length > 4}
+    className={cn("h-8 min-w-0 shrink border-0 px-1.5 shadow-none", home ? "w-[160px]" : "w-[180px] max-w-full")}
+    contentClassName="w-[240px] min-w-[200px] max-w-[280px]" />;
+}
+
 function RunAwareThread(props: React.ComponentProps<typeof Thread>) {
   const { runs } = useContext(ChatRunsContext);
   const streaming = useAuiState((s) => s.thread.isRunning);
@@ -229,6 +250,7 @@ function ScopedChatPanel({
   remoteThreadId,
   scheduledTaskId,
   sessionAgentId,
+  toolbarActions,
 }: Props) {
   const { t, i18n } = useTranslation("chat");
   const welcomeSuggestions = useMemo(
@@ -536,34 +558,8 @@ function ScopedChatPanel({
                     />
                   )}
 
-                  {agentsLoading ? (
-                    <span className="text-[12px] text-muted-foreground">
-                      {t("loadingAgents")}
-                    </span>
-                  ) : noAgents ? (
-                    <span className="text-[12px] text-muted-foreground">
-                      {t("noAgentSelected")}
-                    </span>
-                  ) : agentId && variant === "session" ? (
-                    <span className="truncate text-sm font-medium">{agents.find(agent => agent.id === agentId)?.name}</span>
-                  ) : agentId ? (
-                    <ModelSelector
-                      key={agentOptions.map((o) => o.id).join(",")}
-                      models={agentOptions}
-                      value={agentId}
-                      onValueChange={(next) => void selectAgent(next)}
-                      size="sm"
-                      variant="ghost"
-                      searchable={agentOptions.length > 4}
-                      className={cn(
-                        "h-8 min-w-0 justify-between border-0 px-1.5 text-[12px] shadow-none",
-                        isHome
-                          ? "w-[160px] shrink-0"
-                          : "w-[180px] max-w-full shrink",
-                      )}
-                      contentClassName="w-[240px] min-w-[200px] max-w-[280px]"
-                    />
-                  ) : null}
+                  <ChatAgentHeader agent={agents.find(agent => agent.id === agentId)} models={agentOptions} loading={agentsLoading}
+                    fixed={variant === "session"} home={isHome} onSelect={next => void selectAgent(next)} />
                 </div>
                 {!isHome && (
                   <FloatingThreadControls
@@ -591,6 +587,7 @@ function ScopedChatPanel({
                     )}
                   </Button>
                 )}
+                {toolbarActions}
               </div>
             )}
 

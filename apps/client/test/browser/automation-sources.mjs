@@ -99,7 +99,7 @@ try {
   await goto(`/app/automations/${scheduled.id}`);
   await page.waitForURL(`**/app/schedules/${scheduled.id}`);
   await page.getByTestId('scheduled-runs').waitFor();
-  await page.getByRole('link', { name: '编辑定时任务', exact: true }).click();
+  await page.getByRole('link', { name: '编辑', exact: true }).click();
   await editor.waitFor();
   assert.equal(await editor.getByLabel('任务描述', { exact: true }).inputValue(), 'Summarize the latest reading notes.');
   await editor.getByRole('button', { name: '取消', exact: true }).click();

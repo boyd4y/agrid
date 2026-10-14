@@ -52,7 +52,7 @@ threadsRoute.patch("/:id", async (c) => {
   const actor = c.get("actor"), threadId = id(c.req.param("id"));
   const thread = await requireThread(threadId, actor);
   const input = z.object({ title: z.string().trim().min(1).max(200).optional(), custom: z.record(z.string(), z.unknown()).optional() }).strict().parse(await c.req.json());
-  if (thread.kind === "scheduled_task" && input.custom && Object.hasOwn(input.custom, "agentId") && input.custom.agentId !== thread.custom.agentId) throw new HTTPException(409, { message: "任务运行不能更换智能体" });
+  if (typeof thread.custom.agentId === "string" && input.custom && Object.hasOwn(input.custom, "agentId") && input.custom.agentId !== thread.custom.agentId) throw new HTTPException(409, { message: "已有对话不能更换智能体" });
   if (input.custom?.resourceKey && input.custom.resourceKey !== thread.custom.resourceKey) throw new HTTPException(409, { message: "不能更换已有对话的资源绑定" });
   const [updated] = await db.update(chatThreads).set({ ...input, custom: input.custom ? { ...thread.custom, ...input.custom, resourceKey: thread.custom.resourceKey } : thread.custom, updatedAt: new Date() }).where(threadScope(threadId, actor)).returning();
   return c.json(dto(updated));

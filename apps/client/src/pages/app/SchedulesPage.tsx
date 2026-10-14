@@ -41,7 +41,7 @@ export function SchedulesPage() {
     if (location.pathname === "/app/schedules" && list.items.length) navigate(`/app/schedules/${list.items[0].id}`, { replace: true });
   }, [location.pathname, list.items, navigate]);
   return <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col" data-testid="schedules-workspace">
-    <AppPageHeader page="schedules" description={t("scheduled.workspaceDescription")} />
+    <AppPageHeader page="schedules" className="py-4" />
     <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
       <aside className="flex max-h-64 w-full shrink-0 flex-col border-b border-border bg-muted/30 md:max-h-none md:w-72 md:border-b-0 md:border-r" aria-label={t("scheduled.tasks")} data-testid="scheduled-task-sidebar">
         <div className="flex items-center justify-between gap-2 p-3"><span className="text-sm font-medium">{t("scheduled.tasks")}</span><div className="flex items-center gap-1"><DataRefreshButton onRefresh={list.refresh} disabled={list.loading} /><Button asChild variant="ghost" size="icon"><Link to="/app/schedules/new" aria-label={t("scheduled.new")}><Plus /></Link></Button></div></div>

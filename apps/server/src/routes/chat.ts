@@ -72,7 +72,7 @@ chatRoute.post("/", async (c) => {
         if (!lastText.trim()) throw new HTTPException(400, { message: "请输入要执行的任务" });
       }
     } });
-  if (thread.kind === "scheduled_task" && ![profile.memberId, profile.userId].includes(String(thread.custom.agentId))) return c.json({ error: "此运行需要使用原智能体继续" }, 409);
+  if (typeof thread.custom.agentId === "string" && ![profile.memberId, profile.userId].includes(thread.custom.agentId)) return c.json({ error: "此对话需要使用原智能体继续，请新建对话选择其他智能体" }, 409);
   c.req.raw.signal.throwIfAborted();
   const lease = await claimRuntimeLease(body.id, actor);
   try {
