@@ -20,7 +20,7 @@ try {
   sql = postgres(url.toString(), { max: 1 });
   await runMigrations(sql);
   const ledger = await sql`SELECT * FROM drizzle.__drizzle_migrations ORDER BY id`;
-  assert.equal(ledger.length, 25);
+  assert.equal(ledger.length, entries.length);
   await runMigrations(sql);
   assert.deepEqual(await sql`SELECT * FROM drizzle.__drizzle_migrations ORDER BY id`, ledger);
   console.log("PASS empty + latest idempotent");
@@ -45,7 +45,7 @@ try {
   process.env.MIGRATION_ORPHAN_ORG_ID = "explicit-org";
   await runMigrations(sql);
   assert.equal((await sql`SELECT organization_id FROM public.tables`)[0].organization_id, "explicit-org");
-  assert.equal((await sql`SELECT * FROM drizzle.__drizzle_migrations`).length, 25);
+  assert.equal((await sql`SELECT * FROM drizzle.__drizzle_migrations`).length, entries.length);
   await sql`DROP INDEX public.rows_cells_gin_idx`;
   await runMigrations(sql);
   assert.ok((await sql`SELECT to_regclass('public.rows_cells_gin_idx') AS reg`)[0].reg);

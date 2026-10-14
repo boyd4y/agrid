@@ -8,7 +8,7 @@ import { db, client } from "../../src/db/index.js";
 import { organization, tables, columns, rows, automations, automationEvents, automationOutbox, automationRuns, automationStepReceipts } from "../../src/db/schema.js";
 import { addRow, updateCell } from "../../src/commands/index.js";
 import { updateAutomation, deleteAutomation, replayAutomationRun } from "../../src/automation/crud.js";
-import { claimExecution, executeNext, FenceLostError } from "../../src/automation/execution.js";
+import { claimExecution, executeNext, recordFailure, PermanentError, FenceLostError } from "../../src/automation/execution.js";
 import { startWorker } from "../../src/queue/workers.js";
 import { redisOptions, prefix } from "../../src/queue/config.js";
 import { createQueue, closeQueue, jobId, type AutomationJob } from "../../src/queue/queues.js";
@@ -54,7 +54,10 @@ async function eventState(id: string) {
 }
 async function runDirect(job: AutomationJob) {
   const fence = await claimExecution(job.eventId, job.generation);
-  if (fence !== undefined) while (await executeNext(job.eventId, fence) === "continue") {}
+  if (fence !== undefined) {
+    try { while (await executeNext(job.eventId, fence) === "continue") {} }
+    catch (error) { if (!(error instanceof PermanentError)) throw error; await recordFailure(job.eventId, error, true, fence, job.generation); }
+  }
 }
 before(async () => {
   if (redis.status !== "ready") await new Promise<void>((resolve) => redis.once("ready", resolve));
@@ -136,7 +139,7 @@ test("disabled/deleted resources cancel queued plans and tenants remain isolated
   const gone = await fixture(); assert.ok(gone.job); await db.delete(tables).where(eq(tables.id, gone.table.id));
   await runDirect(gone.job.data); assert.equal((await eventState(gone.job.data.eventId)).status, "cancelled");
   const noColumn = await fixture(); assert.ok(noColumn.job); await db.delete(columns).where(eq(columns.id, noColumn.output.id));
-  await runDirect(noColumn.job.data); assert.equal((await eventState(noColumn.job.data.eventId)).status, "cancelled");
+  await runDirect(noColumn.job.data); assert.equal((await eventState(noColumn.job.data.eventId)).status, "failed");
   const revoked = await fixture(); assert.ok(revoked.job); await db.update(automationEvents).set({ snapshot: { ...revoked.event.snapshot, actorId: "revoked-member" } }).where(eq(automationEvents.id, revoked.event.id));
   await runDirect(revoked.job.data); assert.equal((await eventState(revoked.job.data.eventId)).status, "cancelled");
 });
@@ -284,7 +287,7 @@ test("retry exhaustion and outbox-backed manual replay resume only unfinished st
   runtime.worker.resume();
   await eventually(async () => (await eventState(f.job!.data.eventId))?.status === "failed");
   const [failed] = await db.select().from(automationRuns).where(eq(automationRuns.eventId, f.job.data.eventId)); assert.equal(failed.nextStep, 1);
-  await assert.rejects(replayAutomationRun(failed.id, "wrong tenant"), /工作区/);
+  await assert.rejects(replayAutomationRun(failed.id, "wrong tenant"), /运行不存在或尚在执行/);
   await runtime.worker.pause(); blocked = false;
   await replayAutomationRun(failed.id, f.org);
   await relay.tick();

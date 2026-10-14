@@ -5,7 +5,7 @@ import { orphanPolicy } from "../../src/db/migrate.js";
 
 test("all journal timestamps strictly increase without changing tag order", () => {
   const { entries } = JSON.parse(fs.readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8"));
-  assert.equal(entries.length, 25);
+  assert.equal(entries[25].tag, "0025_scheduled_sessions");
   entries.forEach((entry: { idx: number; tag: string; when: number }, i: number) => {
     assert.equal(entry.idx, i);
     assert.ok(entry.tag.startsWith(String(i).padStart(4, "0") + "_"));
