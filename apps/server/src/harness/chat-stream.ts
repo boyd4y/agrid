@@ -19,6 +19,8 @@ import { HTTPException } from "hono/http-exception";
 import { questionContinuation } from "./questions.js";
 import { parkQuestionSandbox, takeQuestionSandbox } from "./question-sandboxes.js";
 
+import { releaseChatAdmission, type ChatAdmission } from "./admission.js";
+
 function hasSavedPiJournal(record: RuntimeRecord): boolean {
   if (!record.resumeState) return true;
   const name = (record.resumeState.data as { sessionFileName?: unknown })?.sessionFileName;
@@ -37,6 +39,7 @@ function hasSavedPiJournal(record: RuntimeRecord): boolean {
 /** UI transport around the official agent; no application-owned tool loop or history replay. */
 export function createNativeChatStream(options: {
   actor: Actor;
+  admission?: ChatAdmission;
   lease: RuntimeLease;
   record: RuntimeRecord;
   run: AgentRun;
@@ -178,7 +181,7 @@ export function createNativeChatStream(options: {
           if (session && !invocationStarted) await session.stop().catch((error) => console.error("agent.session.cleanup", chatErrorText(error)));
           if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => console.error("agent.sandbox.stop", chatErrorText(error)));
           await releaseRuntimeLease(options.lease);
-        } finally { releaseNativeRun(); }
+        } finally { if (options.admission) releaseChatAdmission(options.admission);releaseNativeRun(); }
       };
       const persist = async (message: UIMessage, status: AgentRunStatus) => {
         await Promise.allSettled([...pendingTools]);
