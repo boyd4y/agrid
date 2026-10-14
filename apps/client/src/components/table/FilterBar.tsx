@@ -12,6 +12,7 @@ import {
 import { Plus, Trash2, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@tabdo/ui/components/collapsible";
 import { DatePicker } from "@/components/controls/date-picker";
 import {
   Select,
@@ -85,65 +86,54 @@ export function FilterBar({
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-border bg-muted/60 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 px-1.5 text-xs font-medium text-foreground"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          data-testid="filter-toggle"
-        >
-          {open ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          {t("filter")}
-          {filters.length > 0 && (
-            <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-              {activeCount > 0 ? activeCount : filters.length}
-            </span>
-          )}
-        </Button>
-        {!open && filters.length === 0 && (
-          <span className="text-[11px] text-muted-foreground">
-            {t("filterCollapsed")}
-          </span>
-        )}
-        {!open && filters.length > 0 && (
-          <span className="text-[11px] text-muted-foreground">
-            {activeCount > 0
-              ? t("filterActive", { count: activeCount })
-              : t("filterIncomplete", { count: filters.length })}
-          </span>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto h-7 text-xs"
-          onClick={add}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t("conditions")}
-        </Button>
-        {filters.length > 0 && (
+    <Collapsible open={open} onOpenChange={setOpen} className="mb-3 rounded-lg border border-border bg-muted/60">
+      <div className="flex min-h-11 items-center">
+        <CollapsibleTrigger asChild>
           <Button
+            type="button"
             variant="ghost"
             size="sm"
-            className="h-7 text-xs text-muted-foreground"
-            onClick={() => onChange([], filterLogic)}
+            className="h-11 min-w-0 flex-1 justify-start gap-1.5 rounded-l-lg rounded-r-none px-3"
+            data-testid="filter-toggle"
           >
-            {t("clearFilters")}
+            {open ? <ChevronDown /> : <ChevronRight />}
+            <Filter />
+            {t("filter")}
+            {filters.length > 0 && (
+              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                {activeCount > 0 ? activeCount : filters.length}
+              </span>
+            )}
+            {!open && (
+              <span className="truncate text-[11px] text-muted-foreground">
+                {filters.length === 0
+                  ? t("filterCollapsed")
+                  : activeCount > 0
+                    ? t("filterActive", { count: activeCount })
+                    : t("filterIncomplete", { count: filters.length })}
+              </span>
+            )}
           </Button>
-        )}
+        </CollapsibleTrigger>
+        <div className="flex shrink-0 items-center gap-2 px-3">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={add}>
+            <Plus data-icon="inline-start" />
+            {t("conditions")}
+          </Button>
+          {filters.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={() => onChange([], filterLogic)}
+            >
+              {t("clearFilters")}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {open && (
-        <div className="mt-2 border-t border-border/70 pt-2">
+      <CollapsibleContent className="mx-3 mb-2 border-t border-border/70 pt-2">
           {filters.length > 1 && (
             <div className="mb-2 flex rounded-md border border-border bg-background p-0.5 text-[11px] w-fit">
               {(["and", "or"] as FilterLogic[]).map((l) => (
@@ -268,9 +258,8 @@ export function FilterBar({
               })}
             </div>
           )}
-        </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
