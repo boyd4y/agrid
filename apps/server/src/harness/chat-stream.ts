@@ -240,9 +240,9 @@ export function createNativeChatStream(options: {
           return;
         }
         const uninvoked = !invocationStarted && safeStartupState;
-        const text = uninvoked ? `系统提示：${cancelled ? "本轮已停止" : `本轮未能启动：${errorText}`}。本轮没有执行操作，可以重新发送消息。`
+        const text = cancelled ? "" : uninvoked ? `系统提示：本轮未能启动：${errorText}。本轮没有执行操作，可以重新发送消息。`
           : `系统提示：本轮未能完成：${errorText}。已提交的数据修改会保留。`;
-        const message: UIMessage = { id: options.run.assistantMessageId, role: "assistant", parts: [{ type: "text", text }] };
+        const message: UIMessage = { id: options.run.assistantMessageId, role: "assistant", parts: text ? [{ type: "text", text }] : [] };
         if (uninvoked) {
           await phaseWrites;
           await completeUninvokedPiRun(options.lease, options.actor, options.record.id,
@@ -258,6 +258,7 @@ export function createNativeChatStream(options: {
           await report("finished");
         }
         writer.write({ type: "start", messageId: message.id });
+        if (!text) { writer.write({ type: "abort" }); return; }
         writer.write({ type: "text-start", id: "run-error" });
         writer.write({ type: "text-delta", id: "run-error", delta: text });
         writer.write({ type: "text-end", id: "run-error" });
@@ -329,9 +330,9 @@ export function createNativeChatStream(options: {
             if (part.type === "abort") {
               cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
               errorText ||= timedOut ? timeoutReason : lostLease ? "运行已被接管" : "已停止执行";
-              if (!terminalWritten) terminalText(controller, `${errorText}。已完成的工具结果会保留。`);
+              if (!terminalWritten && (!cancelled || timedOut || lostLease)) terminalText(controller, `${errorText}。已完成的工具结果会保留。`);
             }
-            if (part.type === "error" && !terminalWritten) terminalText(controller, `本轮未能完成：${errorText}。已完成的工具结果会保留。`);
+            if (part.type === "error" && !terminalWritten && (!cancelled || timedOut || lostLease)) terminalText(controller, `本轮未能完成：${errorText}。已完成的工具结果会保留。`);
             if (part.type === "finish" && piCompletion?.finishReason === "length" && !terminalWritten) {
               const usage = piCompletion.outputTokens ? `（${piCompletion.outputTokens} token${piCompletion.reasoningTokens ? `，其中推理 ${piCompletion.reasoningTokens}` : ""}）` : "";
               errorText = `本轮达到模型输出上限${usage}，回答尚未完成`;

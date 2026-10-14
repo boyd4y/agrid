@@ -603,12 +603,14 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
     if (stop === "cancel") assert.equal((await req(`/threads/${thread.id}/runs/${active.runs[0].id}/cancel`, {})).status, 200);
     const stream = await completion;
     const explanation = stop === "cancel" ? /已停止执行/ : stop === "first-output" ? /模型首个输出等待超时/ : stop === "step" ? /本轮步骤执行超时/ : stop === "chunk" ? /模型输出流超时/ : /本轮执行超时/;
-    assert.match(stream, explanation);
+    if (stop === "cancel") assert(!stream.includes("系统提示") && !stream.includes("已停止执行"));
+    else assert.match(stream, explanation);
     const finished = await (await req(`/threads/${thread.id}/runs`)).json();
     assert.equal(finished.runs[0].status, stop === "cancel" ? "cancelled" : "failed");
     const history = await loadMessages(thread.id, actor());
     assert.equal(history.messages.length, 2);
-    assert.match(JSON.stringify(history.messages[1].content), explanation);
+    if (stop === "cancel") assert(!JSON.stringify(history.messages[1].content).includes("系统提示"));
+    else assert.match(JSON.stringify(history.messages[1].content), explanation);
     if (stop === "chunk") assert.match(JSON.stringify(history.messages[1].content), /部分回复/);
     assert.match(JSON.stringify(history.messages[1].content), /cancel-create/);
     const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
