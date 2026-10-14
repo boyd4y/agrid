@@ -4,9 +4,9 @@
 
 ## 双部署 framework（当前实施）
 
-目标：平台业务和用户对 Node / Cloudflare 模式无感知；TypeScript 公共核心 + 独立部署扩展，Better Auth 和官方 Harness 保留。已完成 Pars 源码审阅与[最终目标架构](architecture/dual-deployment.md)，按文末实施记录区分落地与待验收。
+目标：业务和用户对 Node/Cloudflare 无感知，保留 Better Auth 与官方 Harness。实施依据是[修订架构](architecture/dual-deployment.md)：按 queue/storage/harness/sandbox 等能力组织包，供应商实现放包内 adapters，业务协议/权限/数据状态由平台拥有。
 
-第一批基础包已接入传统 Outbox 和本地/S3 文件存储。CF Queues/R2 在本地 workerd 真正验证，Node 队列故障、原生 Pi 跨进程问题续接和类型检查通过。继续实施共同平台工厂、请求作用域资源、独立 Harness 执行器与 DO 协调；当前不能宣称整个平台已能部署 Cloudflare。远程验收需要恢复已过期的 Wrangler 登录。
+第一版发布/存储已验证；当前先完成架构修订，再重新迁移能力包与业务边界。当前 core/runtime 结构将撤下；后续按文档推进共同平台工厂、独立 runner、恢复、DO/队列/调度和完整双模式验收。登录过期仅影响远程验收。
 
 ## 已完成并提交
 

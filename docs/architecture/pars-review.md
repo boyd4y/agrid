@@ -29,7 +29,7 @@
 
 ## 决策
 
-借鉴其 **core → service contracts → extension providers → deployment composition** 的分层，自有包只实现 tabdo 实际需要的边界。保留 Better Auth、Zod、Hono、Drizzle/PostgreSQL、assistant-ui 和官方 HarnessAgent，不引入 Pars auth，不重写原生模型/工具循环，不将平台业务拆成无需求的微服务。
+借鉴其 **按能力建包 → 包内 adapters → 显式 deployment composition**，业务通过稳定 service contract 调用基础设施。queue/storage 的共同接口与实现分别归属自己的包，Tabdo 消息协议、权限和文件 namespace 留在平台/shared；不按 Node/Cloudflare 把各种能力混装进 runtime 包。自有包只实现实际需要的边界。保留 Better Auth、Zod、Hono、Drizzle/PostgreSQL、assistant-ui 和官方 HarnessAgent，不引入 Pars auth，不重写原生模型/工具循环，不将平台业务拆成无需求的微服务。
 
 具体架构、配置和实施验收见[双部署模式架构](dual-deployment.md)。不直接复制 Pars 源码；若后续复制 MIT 代码，必须保留对应版权和许可。
 
