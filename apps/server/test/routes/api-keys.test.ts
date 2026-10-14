@@ -85,10 +85,13 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
     await db.insert(member).values({ id: ownerMembership, userId: ownerId, organizationId: orgA, role: "owner" });
     await db.update(session).set({ activeOrganizationId: orgA }).where(eq(session.userId, ownerId));
     assert.equal((await request("/tables", bearer)).status, 200);
-    const revokedResponse = await request(`/user/api-keys/${created.key.id}`, undefined, undefined, "DELETE");
-    assert.equal(revokedResponse.status, 200); assert.ok((await revokedResponse.json()).key.revokedAt);
-    assert.equal((await request("/tables", { ...bearer, Cookie: cookie })).status, 401, "a revoked credential never falls back to a valid cookie");
-    assert.equal((await request("/members/invite", bearer, { email: `revoked-${randomUUID()}@local.test`, role: "member" })).status, 401);
+    const deletedResponse = await request(`/user/api-keys/${created.key.id}`, undefined, undefined, "DELETE");
+    assert.equal(deletedResponse.status, 200); assert.deepEqual(await deletedResponse.json(), { id: created.key.id });
+    assert.equal((await db.select().from(userApiKeys).where(eq(userApiKeys.id, created.key.id))).length, 0, "the key row is physically deleted");
+    assert(!(await (await request("/user/api-keys")).json()).keys.some((key: { id: string }) => key.id === created.key.id));
+    assert.equal((await request(`/user/api-keys/${created.key.id}`, undefined, undefined, "DELETE")).status, 404);
+    assert.equal((await request("/tables", { ...bearer, Cookie: cookie })).status, 401, "a deleted credential never falls back to a valid cookie");
+    assert.equal((await request("/members/invite", bearer, { email: `deleted-${randomUUID()}@local.test`, role: "member" })).status, 401);
     assert.equal((await request("/tables", { Authorization: "Bearer tab_bad", Cookie: cookie })).status, 401);
     // Legacy agent credentials continue resolving their existing agent actor.
     const agentId = randomUUID(), agentMemberId = randomUUID(), legacy = `agt_${randomUUID()}`;

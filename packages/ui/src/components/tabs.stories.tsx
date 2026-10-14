@@ -3,7 +3,7 @@ import { User, Wrench } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { cn } from "@tabdo/ui/lib/utils";
 
-function TabsExample({ variant = "default", orientation = "horizontal" }: { variant?: "default" | "line"; orientation?: "horizontal" | "vertical" }) {
+function TabsExample({ variant = "default", orientation = "horizontal" }: { variant?: "default" | "line" | "navigation"; orientation?: "horizontal" | "vertical" }) {
   const vertical = orientation === "vertical";
   return <Tabs defaultValue="profile" orientation={orientation} className={cn("w-full max-w-lg", vertical && "flex-row gap-6")}>
     <TabsList variant={variant} className={cn(vertical && "h-auto w-44 shrink-0 flex-col items-stretch")}>
@@ -21,3 +21,4 @@ type Story = StoryObj<typeof TabsExample>;
 export const Default: Story = {};
 export const Line: Story = { args: { variant: "line" } };
 export const VerticalLine: Story = { args: { variant: "line", orientation: "vertical" } };
+export const VerticalNavigation: Story = { args: { variant: "navigation", orientation: "vertical" } };

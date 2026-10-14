@@ -171,7 +171,7 @@ CRM 可以另外作为跟进任务的变体，不承担首页定位。首批文�
 
 ### 可复现 setup 与首次体验
 
-1. 在 AgentMail 准备已有专用 inbox；tabdo 当前不提供创建邮箱工具。由 human owner/admin 在「设置 → 集成」连接 AgentMail，填写服务凭证，验证后选择 inbox 并完成连接；重新打开连接检查注册地址、邮箱和状态。
+1. 在 AgentMail 准备已有专用 inbox；tabdo 当前不提供创建邮箱工具。由 human owner/admin 在「设置 → AgentMail」填写服务凭证，验证后选择 inbox 并完成连接；重新打开连接检查注册地址、邮箱和状态。
 2. 服务按 [集成部署](../integrations.md) 配置 `INTEGRATION_ENCRYPTION_KEY` 与 `WEBHOOK_PUBLIC_URL`。AgentMail 服务 Key 与 tabdo 个人 API Key 是两种不同凭证：前者访问邮箱服务，后者以用户当前工作区权限访问 tabdo，不可互换，也不写进智能体提示词。
 3. 创建收信表与实际选项，例如处理状态“待整理、待跟进、已处理”。来源为：
 

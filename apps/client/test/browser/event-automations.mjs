@@ -9,7 +9,6 @@ const { page, api, errors } = fixture;
 page.setDefaultTimeout(10000);
 const choose = async (control, option) => { await control.click(); await page.getByRole('option', { name: option, exact: true }).click(); };
 const header = page.locator('[data-slot=app-page-header-content]');
-const integrationsToolbar = page.getByTestId('integrations-toolbar');
 const assertCentered = async (dialog, footerButton) => {
   await dialog.waitFor();
   await page.waitForFunction(testId => { const box = document.querySelector(`[data-testid="${testId}"]`)?.getBoundingClientRect(); return box && Math.abs(box.x + box.width / 2 - innerWidth / 2) < 3 && Math.abs(box.y + box.height / 2 - innerHeight / 2) < 3; }, await dialog.getAttribute('data-testid'));
@@ -17,6 +16,21 @@ const assertCentered = async (dialog, footerButton) => {
   assert(bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= viewport.width + 1 && bounds.y + bounds.height <= viewport.height + 1, 'centered integration dialog fits the viewport');
   assert(footer && footer.y >= bounds.y && footer.y + footer.height <= viewport.height + 1, 'dialog footer remains visible');
   assert.equal(await page.locator('[data-slot=sheet-content]').count(), 0, 'integrations use centered dialogs throughout');
+};
+const assertListFeedback = async (row, deleteButton) => {
+  await page.evaluate(() => document.activeElement?.blur()); await page.mouse.move(0, 0);
+  const rowElement = await row.elementHandle(), buttonElement = await deleteButton.elementHandle();
+  const idle = await row.evaluate(element => getComputedStyle(element).backgroundColor);
+  await row.hover();
+  await page.waitForFunction(({ element, idle }) => getComputedStyle(element).backgroundColor !== idle, { element: rowElement, idle });
+  await page.mouse.move(0, 0); await page.waitForFunction(({ element, idle }) => getComputedStyle(element).backgroundColor === idle, { element: rowElement, idle });
+  await deleteButton.focus();
+  await page.waitForFunction(({ element, idle }) => getComputedStyle(element).backgroundColor !== idle, { element: rowElement, idle });
+  const semantic = await page.evaluate(() => { const probe = document.createElement('span'); probe.hidden = true; probe.style.color = 'var(--destructive)'; probe.style.backgroundColor = 'color-mix(in oklab, var(--destructive) 10%, transparent)'; document.body.append(probe); const style = getComputedStyle(probe), result = { color: style.color, background: style.backgroundColor }; probe.remove(); return result; });
+  await deleteButton.hover();
+  await page.waitForFunction(({ element, semantic }) => { const style = getComputedStyle(element); return style.color === semantic.color && style.backgroundColor === semantic.background; }, { element: buttonElement, semantic });
+  assert.equal(await deleteButton.locator('svg').evaluate(element => getComputedStyle(element).color), semantic.color, 'trash icon uses the shared destructive color');
+  await page.evaluate(() => document.activeElement?.blur()); await page.mouse.move(0, 0);
 };
 try {
   const table = await api('/tables', { name: 'Event target' });
@@ -28,18 +42,31 @@ try {
     else await route.fallback();
   });
   await page.goto(frontend + '/app/integrations');
-  await page.waitForURL('**/app/settings?tab=integrations');
+  await page.waitForURL('**/app/settings?tab=agentmail');
   const settingsTabs = page.getByRole('tablist', { name: '设置分类', exact: true });
   assert.equal(await settingsTabs.getAttribute('aria-orientation'), 'vertical');
-  assert.equal(await settingsTabs.getByRole('tab', { name: '集成', exact: true }).getAttribute('aria-selected'), 'true');
-  assert.equal(await settingsTabs.getByRole('tab', { name: '集成', exact: true }).locator('svg').count(), 1, 'settings navigation includes the integration icon');
+  assert.equal(await settingsTabs.getAttribute('data-variant'), 'navigation');
+  const navigationStyles = await settingsTabs.evaluate(list => { const active = list.querySelector('[data-state=active]'), inactive = list.querySelector('[data-state=inactive]'); return { after: getComputedStyle(active, '::after').display, active: getComputedStyle(active).backgroundColor, inactive: getComputedStyle(inactive).backgroundColor }; });
+  assert.equal(navigationStyles.after, 'none', 'settings navigation has no dot pseudo-element');
+  assert.notEqual(navigationStyles.active, navigationStyles.inactive, 'the active navigation row has a selected background');
+  assert.equal(await settingsTabs.getByRole('tab', { name: 'AgentMail', exact: true }).getAttribute('aria-selected'), 'true');
+  const settingsFrame = page.getByTestId('settings-frame');
+  assert.equal(await settingsFrame.locator('aside').count(), 1);
+  await settingsFrame.getByRole('tabpanel', { name: 'AgentMail', exact: true }).waitFor();
+  assert.equal(await settingsTabs.getByRole('tab', { name: 'AgentMail', exact: true }).locator('svg').count(), 1, 'settings navigation includes the mail icon');
   assert.equal(await page.locator('a[href="/app/integrations"]').count(), 0, 'integrations are reached through settings, not a separate sidebar item');
   await page.getByRole('alert').getByText('Fixture directory load failure', { exact: true }).waitFor();
   assert.equal(await page.getByTestId('integrations-empty').count(), 0, 'load failure is not an empty directory');
   failDirectory = false;
   await page.getByRole('alert').getByRole('button', { name: '重新加载', exact: true }).click();
   await page.getByTestId('integrations-empty').getByRole('heading', { level: 2 }).waitFor();
+  assert.equal(await page.getByTestId('integrations-settings').getByRole('button', { name: '连接 AgentMail', exact: true }).count(), 1, 'empty mail settings have exactly one creation action');
+  await page.getByTestId('integrations-settings').getByRole('heading', { name: 'AgentMail', level: 3, exact: true }).waitFor();
+  await page.getByTestId('integrations-settings').getByText('接收邮箱事件，触发自动化与智能体任务。', { exact: true }).waitFor();
   assert.equal(await page.getByTestId('integrations-empty').locator('img').count(), 1, 'initial mail directory uses the shared illustrated empty state');
+  assert.equal(await page.getByTestId('integrations-settings').getByRole('textbox').count(), 0, 'mail settings have no directory search field');
+  assert.equal(await page.getByTestId('integrations-settings').getByRole('tablist').count(), 0, 'source navigation belongs to the left settings tabs');
+  assert.equal(await settingsTabs.getByRole('tab').count(), 4);
   const contentBounds = await page.locator('[data-slot=app-page-content]').boundingBox(), headerBounds = await header.boundingBox();
   assert.equal(Math.round(contentBounds.width), 1024); assert.equal(Math.round(headerBounds.width), 1024); assert.equal(Math.round(contentBounds.x), Math.round(headerBounds.x));
 
@@ -62,7 +89,7 @@ try {
     const connectionId = new URL(route.request().url()).pathname.split('/').at(-2);
     await route.fulfill({ status: failRegistration ? 502 : 201, contentType: 'application/json', body: JSON.stringify(failRegistration ? { error: 'Fixture mailbox registration failure' } : { endpoint: { id: crypto.randomUUID(), name: 'Browser wizard inbox', kind: 'agentmail', connectionId, inboxIds: [fixtureInbox.inboxId], receiveUrl: 'https://fixture.local/api/webhooks/agentmail/wizard', enabled: true, state: 'active', lastError: null, createdAt: new Date().toISOString() } }) });
   });
-  await integrationsToolbar.getByRole('button', { name: '连接 AgentMail', exact: true }).click();
+  await page.getByRole('button', { name: '连接 AgentMail', exact: true }).click();
   const mailDialog = page.getByTestId('integration-create-dialog');
   await assertCentered(mailDialog, mailDialog.getByRole('button', { name: '保存并继续', exact: true }));
   await mailDialog.getByLabel('名称', { exact: true }).fill('Browser wizard mail');
@@ -91,13 +118,12 @@ try {
   const wizardConnection = (await api('/integrations')).connections.find(item => item.name === 'Browser wizard mail');
   assert(wizardConnection && !Object.hasOwn(wizardConnection, 'apiKey') && !Object.hasOwn(wizardConnection, 'encryptedApiKey'), 'the directory returns only stored connection metadata');
   await page.getByRole('button', { name: wizardConnection.name, exact: true }).waitFor();
-  await page.getByLabel('搜索连接…', { exact: true }).fill('no-matching-fixture-connection');
-  await page.getByTestId('integrations-no-results').waitFor();
-  await page.getByTestId('integrations-no-results').getByRole('button').click();
-  assert.equal(await page.getByLabel('搜索连接…', { exact: true }).inputValue(), '', 'clear-search action restores the complete directory');
-  await page.getByRole('button', { name: wizardConnection.name, exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'Webhook', exact: true }).click();
-  await integrationsToolbar.getByRole('button', { name: '新增 Webhook', exact: true }).click();
+  await settingsTabs.getByRole('tab', { name: 'Webhook', exact: true }).click();
+  await page.getByTestId('integrations-empty').waitFor();
+  await page.getByTestId('integrations-settings').getByRole('heading', { name: 'Webhook', level: 3, exact: true }).waitFor();
+  await page.getByTestId('integrations-settings').getByText('接收外部事件，更新数据或运行智能体。', { exact: true }).waitFor();
+  assert.equal(await page.getByTestId('integrations-settings').getByRole('button', { name: '新增 Webhook', exact: true }).count(), 1, 'empty webhook settings have exactly one creation action');
+  await page.getByRole('button', { name: '新增 Webhook', exact: true }).click();
   const createDialog = page.getByTestId('integration-create-dialog');
   await assertCentered(createDialog, createDialog.getByRole('button', { name: '创建接收地址', exact: true }));
   await createDialog.getByLabel('名称', { exact: true }).fill('Browser incoming hook');
@@ -124,6 +150,16 @@ try {
   await assertCentered(editDialog, editDialog.getByRole('button', { name: '保存', exact: true }));
   assert.equal(await editDialog.getByLabel('令牌', { exact: true }).count(), 0, 'one-time token is not recovered on reopen');
   await page.keyboard.press('Escape');
+  const secondEndpoint = (await api('/webhook-endpoints', { name: 'Browser second hook' })).endpoint;
+  await page.getByTestId('integrations-toolbar').getByRole('button', { name: '刷新', exact: true }).click();
+  await page.getByRole('button', { name: secondEndpoint.name, exact: true }).waitFor();
+  const hookRows = page.getByTestId('integrations-settings').locator('[data-slot=list-item]');
+  const borders = await hookRows.evaluateAll(rows => rows.map(row => { const style = getComputedStyle(row), rect = row.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom, borders: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth].map(parseFloat), rounded: parseFloat(style.borderTopLeftRadius) }; }));
+  assert.equal(borders.length, 2);
+  assert(borders.every(row => row.borders.every(width => width > 0) && row.rounded > 0), 'each hook row has a complete rounded border');
+  assert(borders[1].top > borders[0].bottom, 'hook rows have a visible gap');
+  const hookDelete = page.getByRole('button', { name: `删除 ${endpoint.name}`, exact: true });
+  await assertListFeedback(hookRows.filter({ has: hookDelete }), hookDelete);
 
   const mail = (await api('/integrations', { provider: 'agentmail', name: 'Browser mail connection', apiKey: 'fixture-key-never-used-remotely' })).connection;
   const endpointDb = postgres(databaseUrl), mailHookId = crypto.randomUUID();
@@ -131,7 +167,7 @@ try {
   try {
     await endpointDb`insert into webhook_endpoints (id,organization_id,created_by_user_id,name,kind,connection_id,inbox_ids,encrypted_signing_secret,state,enabled,last_error) values (${mailHookId},${fixture.organizations[0]},${fixture.users[0]},'Browser registered inbox','agentmail',${mail.id},${endpointDb.json(['local-inbox'])},${endpointDb.json(encryptSecret('fixture-signing-secret', { organizationId: fixture.organizations[0], id: mailHookId, purpose: 'agentmail-signing' }))},'error',false,'Fixture registration failure')`;
   } finally { await endpointDb.end(); }
-  await page.getByRole('tab', { name: 'AgentMail', exact: true }).click();
+  await settingsTabs.getByRole('tab', { name: 'AgentMail', exact: true }).click();
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await page.getByRole('button', { name: mail.name, exact: true }).click();
   const registered = editDialog.getByTestId('connection-endpoint');
@@ -264,5 +300,5 @@ try {
   await page.getByText('Browser deep link persisted reply', { exact: true }).waitFor();
   assert.equal(attemptedMissingHistory, false, 'an invalid deep link is rejected before switching the SDK thread');
   assert.deepEqual(errors, []);
-  console.log('PASS event automation UI: centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, illustrated empty/error/search states, one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint/rule 400 retry retains draft, schedule preview+typed numeric command+source-back preservation, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
+  console.log('PASS event automation UI: navigation without dot+selected background, two rounded hook rows+gap+hover/focus/destructive feedback, centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, four left settings tabs without inner tabs/search+illustrated empty/error states, one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint/rule 400 retry retains draft, schedule preview+typed numeric command+source-back preservation, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
 } finally { await fixture.close(); }

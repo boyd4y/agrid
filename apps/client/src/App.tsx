@@ -59,7 +59,7 @@ export default function App() {
         >
           <Route index element={<WorkspaceHomePage />} />
           <Route path="tables" element={<TablesPage />} />
-          <Route path="integrations" element={<Navigate to="/app/settings?tab=integrations" replace />} />
+          <Route path="integrations" element={<Navigate to="/app/settings?tab=agentmail" replace />} />
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="automations/new" element={<AutomationDetailPage />} />
           <Route path="automations/:automationId" element={<AutomationDetailPage />} />

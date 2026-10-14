@@ -316,3 +316,10 @@
 - 设置改左侧带图标垂直tabs：常规、API Key、集成、快捷键；集成移除独立侧栏入口，旧路径redirect。使用URL保存页签，manual activation修复焦点导致浏览器返回重新push的问题，账号/工作区切换重置Key与集成界面。
 - 集成创建/查看/编辑全部改居中Dialog，共用凭证与邮箱控件；首次AgentMail凭证验证→选邮箱→完成，Webhook显示一次性token，固定操作区，失败保留输入与选择，已有连接重试不重复POST。
 - 统一列表、搜索、骨架、插画空态/搜索无结果/加载失败，内层tabs窄屏可换行。API Key和完整event-automations隔离浏览器suite通过；320设置先收起现有侧栏，直接检验局部tabpanel宽度而非被全局overflow隐藏。未重启用户服务，无用户DB、截图、真实邮箱或模型调用。
+
+## 2026-10-14 · 设置后续反馈收尾
+
+- 整个设置改同一双栏框架，左侧仅常规、API Key、AgentMail、Webhook，右侧统一分区/标题/说明，常规仅外观和语言；删除快捷键页、Layout两个开关、集成内部搜索及tabs。旧链接/旧tab兼容跳转。
+- 公共Tabs新增navigation样式与Storybook，整行选中/hover取代白点指示器；公共ListItem与Storybook统一边框/圆角/间距/hover/focus，APIkey、两类连接与接收地址均复用，trash与确认统一删除样式。
+- API Key改真正SQL DELETE，返回{id}，成功后移出列表且旧Bearer立即401；本人/工作区权限不变。单独数据库用例证明物理记录已删除，重复DELETE404。
+- 两个既有浏览器suite最终通过，包括真实计算的菜单伪元素/背景、记录边界、hover/focus、删除样式及320存在记录局部宽度；UI/client/server类型及客户端生产构建通过。文案独立提交统一“新建/删除自动化”，旧测试定位同步。没有用户数据库或真实外部服务调用。

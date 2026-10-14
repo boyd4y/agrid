@@ -5,15 +5,17 @@ import { toast } from "sonner";
 import { api, type UserApiKeyInfo } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@tabdo/ui/components/card";
 import { Button } from "@tabdo/ui/components/button";
-import { Badge } from "@tabdo/ui/components/badge";
 import { Input } from "@tabdo/ui/components/input";
+import { ListItem } from "@tabdo/ui/components/list-item";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
 import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
 import { ListErrorState } from "@/components/shell/ListErrorState";
+import { AppEmptyState } from "@/components/shell/AppEmptyState";
+import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 
 /** Only metadata survives closing the creation dialog; the secret stays in this component's memory. */
-export function ApiKeysSettings() {
+export function ApiKeysSettings({ bare = false }: { bare?: boolean }) {
   const { t, i18n } = useTranslation(["app", "common"]);
   const text = (key: string, values?: Record<string, string>) => t(`settings.apiKeys.${key}`, values);
   const id = useId();
@@ -27,7 +29,7 @@ export function ApiKeysSettings() {
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
   const [error, setError] = useState("");
-  const [revoking, setRevoking] = useState<UserApiKeyInfo | null>(null);
+  const [deleting, setDeleting] = useState<UserApiKeyInfo | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,20 +58,21 @@ export function ApiKeysSettings() {
     finally { creatingRef.current = false; setCreating(false); }
   }
 
-  return <Card className="shrink-0">
+  const Container = bare ? "section" : Card;
+  return <Container className="min-w-0 shrink-0">
     <CardHeader>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle className="flex items-center gap-2"><KeyRound className="size-4" aria-hidden />{text("title")}</CardTitle>
-        <Button size="sm" disabled={loading} onClick={() => changeOpen(true)}><Plus data-icon="inline-start" />{text("create")}</Button>
+        {(loading || loadError || keys.length > 0) && <Button size="sm" disabled={loading || loadError} onClick={() => changeOpen(true)}><Plus data-icon="inline-start" />{text("create")}</Button>}
       </div>
       <CardDescription>{text("description")}</CardDescription>
     </CardHeader>
     <CardContent>
       {loading ? <p role="status" className="py-4 text-sm text-muted-foreground">{t("common:loading")}</p>
         : loadError ? <ListErrorState title={text("loadFailed")} onRetry={() => setRefresh(value => value + 1)} className="min-h-0 py-5" />
-        : keys.length === 0 ? <p className="py-4 text-sm text-muted-foreground">{text("empty")}</p>
-        : <ul className="divide-y divide-border" aria-label={text("title")}>
-          {keys.map(key => <li key={key.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+        : keys.length === 0 ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("empty")} description={text("description")} action={<Button size="sm" onClick={() => changeOpen(true)}><Plus data-icon="inline-start" />{text("create")}</Button>} />
+        : <ul className="flex flex-col gap-3" aria-label={text("title")}>
+          {keys.map(key => <ListItem key={key.id} className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{key.name}</p>
               <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -77,9 +80,8 @@ export function ApiKeysSettings() {
                 <span>{text("createdAt", { date: new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium" }).format(new Date(key.createdAt)) })}</span>
               </p>
             </div>
-            {key.revokedAt ? <Badge variant="secondary">{text("revoked")}</Badge>
-              : <Button variant="destructive-ghost" size="icon" aria-label={text("revokeAria", { name: key.name })} onClick={() => setRevoking(key)}><Trash2 data-icon="inline-start" /></Button>}
-          </li>)}
+            <Button variant="destructive-ghost" size="icon" aria-label={text("deleteAria", { name: key.name })} onClick={() => setDeleting(key)}><Trash2 data-icon="inline-start" /></Button>
+          </ListItem>)}
         </ul>}
     </CardContent>
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -111,10 +113,10 @@ export function ApiKeysSettings() {
         </form>}
       </DialogContent>
     </Dialog>
-    <DeleteConfirmation open={!!revoking} onOpenChange={value => { if (!value) setRevoking(null); }} title={text("revokeTitle")} description={text("revokeDescription", { name: revoking?.name ?? "" })} labels={{ confirmDelete: text("revoke"), deleting: text("revoking") }} onConfirm={async () => {
-      if (!revoking) return;
-      const result = await api.revokeApiKey(revoking.id);
-      setKeys(previous => previous.map(key => key.id === result.key.id ? result.key : key));
+    <DeleteConfirmation open={!!deleting} onOpenChange={value => { if (!value) setDeleting(null); }} title={text("deleteTitle")} description={text("deleteDescription", { name: deleting?.name ?? "" })} labels={{ confirmDelete: text("delete"), deleting: text("deleting") }} onConfirm={async () => {
+      if (!deleting) return;
+      const result = await api.deleteApiKey(deleting.id);
+      setKeys(previous => previous.filter(key => key.id !== result.id));
     }} />
-  </Card>;
+  </Container>;
 }

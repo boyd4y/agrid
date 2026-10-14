@@ -138,12 +138,7 @@ try {
     "true",
     "theme remains selected",
   );
-  const side = page.getByRole("switch", { name: "收起左侧导航", exact: true });
-  await side.click();
-  await page.reload();
-  await side.waitFor();
-  assert.equal(await side.getAttribute("aria-checked"), "true");
-  await side.click();
+  assert.equal(await page.getByRole("switch").count(), 0, "general settings only exposes appearance and language");
   await page.getByRole("radio", { name: "浅色", exact: true }).click();
   assert.deepEqual(f.errors, [], "no page errors");
   console.log(

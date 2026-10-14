@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { userApiKeys } from "../db/schema.js";
@@ -8,7 +8,7 @@ import { hashApiKey, resolveActor, type Actor } from "../auth/actor.js";
 
 export const apiKeysRoute = new Hono<{ Variables: { actor: Actor } }>();
 function summary(record: typeof userApiKeys.$inferSelect) {
-  return { id: record.id, name: record.name, prefix: record.prefix, createdAt: record.createdAt.toISOString(), revokedAt: record.revokedAt?.toISOString() ?? null };
+  return { id: record.id, name: record.name, prefix: record.prefix, createdAt: record.createdAt.toISOString() };
 }
 apiKeysRoute.use("*", async (c, next) => {
   const actor = await resolveActor(c.req.raw);
@@ -20,7 +20,7 @@ apiKeysRoute.use("*", async (c, next) => {
 });
 apiKeysRoute.get("/", async c => {
   const actor = c.get("actor");
-  const records = await db.select().from(userApiKeys).where(and(eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId))).orderBy(desc(userApiKeys.createdAt), desc(userApiKeys.id));
+  const records = await db.select().from(userApiKeys).where(and(eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId), isNull(userApiKeys.revokedAt))).orderBy(desc(userApiKeys.createdAt), desc(userApiKeys.id));
   return c.json({ keys: records.map(summary) });
 });
 apiKeysRoute.post("/", async c => {
@@ -35,7 +35,7 @@ apiKeysRoute.delete("/:id", async c => {
   const actor = c.get("actor");
   const id = z.uuid().safeParse(c.req.param("id"));
   if (!id.success) return c.json({ error: "API Key 不存在" }, 404);
-  const [record] = await db.update(userApiKeys).set({ revokedAt: new Date() }).where(and(eq(userApiKeys.id, id.data), eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId))).returning();
+  const [record] = await db.delete(userApiKeys).where(and(eq(userApiKeys.id, id.data), eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId))).returning({ id: userApiKeys.id });
   if (!record) return c.json({ error: "API Key 不存在" }, 404);
-  return c.json({ key: summary(record) });
+  return c.json({ id: record.id });
 });

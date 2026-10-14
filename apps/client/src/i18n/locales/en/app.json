@@ -140,12 +140,6 @@
     },
     "appearance": "Appearance",
     "appearanceAria": "Workspace appearance",
-    "layout": "Layout",
-    "collapseNav": "Collapse left navigation",
-    "defaultAiDrawer": "Open chat drawer by default",
-    "shortcuts": "Shortcuts",
-    "shortcutSidebar": "Collapse / expand sidebar",
-    "shortcutAi": "Open / close AI",
     "language": "Language",
     "languageAria": "Interface language",
     "apiKeys": {
@@ -165,14 +159,14 @@
       "createFailed": "Unable to create the key. Please retry.",
       "empty": "No API keys in this workspace yet.",
       "loadFailed": "Unable to load API keys",
-      "revoke": "Revoke key",
-      "revokeAria": "Revoke {{name}}",
-      "revokeTitle": "Revoke this API key?",
-      "revokeDescription": "“{{name}}” will stop working immediately. Scripts using it will lose access.",
-      "revoking": "Revoking…",
-      "revoked": "Revoked",
-      "createdAt": "Created {{date}}"
-    }
+      "createdAt": "Created {{date}}",
+      "delete": "Delete key",
+      "deleteAria": "Delete {{name}}",
+      "deleteTitle": "Delete this API key?",
+      "deleteDescription": "Deleting “{{name}}” cannot be undone. Scripts using it will lose access immediately.",
+      "deleting": "Deleting…"
+    },
+    "generalDescription": "Adjust appearance and language."
   },
   "directory": {
     "loadingLabel": "Loading {{label}}",

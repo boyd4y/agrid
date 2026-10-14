@@ -140,12 +140,6 @@
     },
     "appearance": "外观",
     "appearanceAria": "工作区外观",
-    "layout": "布局",
-    "collapseNav": "收起左侧导航",
-    "defaultAiDrawer": "默认打开对话抽屉",
-    "shortcuts": "快捷键",
-    "shortcutSidebar": "收起 / 展开侧栏",
-    "shortcutAi": "打开 / 关闭 AI",
     "language": "语言",
     "languageAria": "界面语言",
     "apiKeys": {
@@ -165,14 +159,14 @@
       "createFailed": "创建失败，请重试。",
       "empty": "当前工作区还没有 API Key。",
       "loadFailed": "无法加载 API Key",
-      "revoke": "撤销密钥",
-      "revokeAria": "撤销 {{name}}",
-      "revokeTitle": "撤销此 API Key？",
-      "revokeDescription": "“{{name}}” 将立即失效，使用此密钥的脚本将无法继续访问。",
-      "revoking": "撤销中…",
-      "revoked": "已撤销",
-      "createdAt": "创建于 {{date}}"
-    }
+      "createdAt": "创建于 {{date}}",
+      "delete": "删除密钥",
+      "deleteAria": "删除 {{name}}",
+      "deleteTitle": "删除此 API Key？",
+      "deleteDescription": "删除“{{name}}”后无法恢复，使用此密钥的脚本将立即失去访问权限。",
+      "deleting": "删除中…"
+    },
+    "generalDescription": "调整外观和语言。"
   },
   "directory": {
     "loadingLabel": "加载{{label}}",
