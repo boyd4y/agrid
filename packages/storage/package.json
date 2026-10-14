@@ -1,0 +1,56 @@
+{
+  "name": "@tabdo/storage",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./adapters/local": {
+      "types": "./dist/adapters/local.d.ts",
+      "development": "./src/adapters/local.ts",
+      "import": "./dist/adapters/local.js",
+      "default": "./dist/adapters/local.js"
+    },
+    "./adapters/s3": {
+      "types": "./dist/adapters/s3.d.ts",
+      "development": "./src/adapters/s3.ts",
+      "import": "./dist/adapters/s3.js",
+      "default": "./dist/adapters/s3.js"
+    },
+    "./adapters/r2": {
+      "types": "./dist/adapters/r2.d.ts",
+      "development": "./src/adapters/r2.ts",
+      "import": "./dist/adapters/r2.js",
+      "default": "./dist/adapters/r2.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "pnpm build && tsx --test test/*.test.ts",
+    "types:fixture": "wrangler types test/fixture/env.d.ts --config test/fixture/wrangler.jsonc --env-interface StorageTestEnv --include-runtime=false",
+    "build:fixture": "pnpm build && wrangler deploy --dry-run --config test/fixture/wrangler.jsonc --outdir dist/fixture"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.1150.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "@cloudflare/workers-types": "5.20261014.1",
+    "wrangler": "4.149.0",
+    "@aws-sdk/client-s3": "^3.1150.0"
+  }
+}

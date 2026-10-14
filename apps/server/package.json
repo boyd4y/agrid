@@ -16,9 +16,9 @@
     "db:seed:tenants": "tsx src/db/seed-tenants.ts",
     "queue:status": "tsx src/queue/status.ts",
     "test:queue": "tsx --test test/queue/queue.test.ts",
-    "dev:api": "pnpm -r --filter @tabdo/core --filter @tabdo/runtime-node --filter @tabdo/shared build && tsx src/dev.ts --api-only",
+    "dev:api": "pnpm -r --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
-    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/core/src/**/*.ts' --include '../../packages/runtime-node/src/**/*.ts' src/queue/main.ts",
+    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/queue/src/**/*.ts' --include '../../packages/storage/src/**/*.ts' src/queue/main.ts",
     "queue:start": "node dist/queue/main.js",
     "test:chat": "tsx --test test/ai/errors.test.ts test/routes/chat.test.ts",
     "test:relations": "tsx --test test/commands/relations.test.ts",
@@ -56,8 +56,9 @@
     "svix": "^2.8.0",
     "yaml": "^2.8.1",
     "zod": "^4.6.5",
-    "@tabdo/core": "workspace:*",
-    "@tabdo/runtime-node": "workspace:*"
+    "@tabdo/queue": "workspace:*",
+    "@tabdo/storage": "workspace:*",
+    "@aws-sdk/client-s3": "^3.1150.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",

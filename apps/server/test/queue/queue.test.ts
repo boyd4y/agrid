@@ -157,7 +157,7 @@ test("outbox uses an injected publisher while preserving failures, claim tokens 
   const publications: AutomationJob[] = [];
   let fail = true;
   const peer = createRelay({ async publish(delivery) {
-    publications.push(delivery);
+    publications.push(delivery.body);
     if (fail) throw new Error("injected provider unavailable");
   } });
   try {

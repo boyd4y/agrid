@@ -229,21 +229,24 @@ importers:
       '@ai-sdk/sandbox-vercel':
         specifier: 1.0.149
         version: 1.0.149(ws@8.22.0)(zod@4.6.5)
+      '@aws-sdk/client-s3':
+        specifier: ^3.1150.0
+        version: 3.1150.0
       '@better-auth/drizzle-adapter':
         specifier: ^1.7.7
         version: 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(drizzle-orm@0.45.4(@cloudflare/workers-types@5.20261014.1)(@opentelemetry/api@1.9.1)(kysely@0.29.6)(postgres@3.4.9)(sql.js@1.14.2))
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.17(hono@4.13.13)
-      '@tabdo/core':
+      '@tabdo/queue':
         specifier: workspace:*
-        version: link:../../packages/core
-      '@tabdo/runtime-node':
-        specifier: workspace:*
-        version: link:../../packages/runtime-node
+        version: link:../../packages/queue
       '@tabdo/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@tabdo/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       ai:
         specifier: ^7.0.138
         version: 7.0.138(zod@4.6.5)
@@ -300,23 +303,7 @@ importers:
         specifier: ^5.8.3
         version: 5.8.3
 
-  packages/core:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.14.1
-        version: 22.20.5
-      tsx:
-        specifier: ^4.19.3
-        version: 4.23.15
-      typescript:
-        specifier: ^5.8.3
-        version: 5.8.3
-
-  packages/runtime-cloudflare:
-    dependencies:
-      '@tabdo/core':
-        specifier: workspace:*
-        version: link:../core
+  packages/queue:
     devDependencies:
       '@cloudflare/workers-types':
         specifier: 5.20261014.1
@@ -324,6 +311,12 @@ importers:
       '@types/node':
         specifier: ^22.14.1
         version: 22.20.5
+      bullmq:
+        specifier: '5'
+        version: 5.81.5
+      ioredis:
+        specifier: '5'
+        version: 5.11.1
       tsx:
         specifier: ^4.19.3
         version: 4.23.15
@@ -333,31 +326,6 @@ importers:
       wrangler:
         specifier: 4.149.0
         version: 4.149.0(@cloudflare/workers-types@5.20261014.1)(@types/node@22.20.5)
-
-  packages/runtime-node:
-    dependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.1150.0
-        version: 3.1150.0
-      '@tabdo/core':
-        specifier: workspace:*
-        version: link:../core
-      bullmq:
-        specifier: '5'
-        version: 5.81.5
-      ioredis:
-        specifier: '5'
-        version: 5.11.1
-    devDependencies:
-      '@types/node':
-        specifier: ^22.14.1
-        version: 22.20.5
-      tsx:
-        specifier: ^4.19.3
-        version: 4.23.15
-      typescript:
-        specifier: ^5.8.3
-        version: 5.8.3
 
   packages/shared:
     dependencies:
@@ -374,6 +342,27 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.8.3
+
+  packages/storage:
+    devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1150.0
+        version: 3.1150.0
+      '@cloudflare/workers-types':
+        specifier: 5.20261014.1
+        version: 5.20261014.1
+      '@types/node':
+        specifier: ^22.14.1
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.15
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+      wrangler:
+        specifier: 4.149.0
+        version: 4.149.0(@cloudflare/workers-types@5.20261014.1)(@types/node@22.20.5)
 
   packages/ui:
     dependencies:

@@ -161,13 +161,15 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 
 - [x] Pars 与现有运行链路调研；第一版发布/存储抽取通过 Node 和 workerd 测试。
 - [x] 架构修订：按能力包 + 包内 adapters，补充基础设施与业务解耦边界、依赖图和新实施顺序。
-- [ ] 按修订重新迁移 queue/storage，移除旧 core/runtime 包并完成回归。
+- [x] 按修订迁移 queue/storage 与包内 adapters；业务消息协议移至 shared、文件 namespace 留在 server；移除旧 core/runtime 包，更新 exports、optional peers、开发构建、Docker 与回归。
 - [ ] 平台 app/auth/PG factory 与业务执行服务提取。
 - [ ] 独立 Harness runner、Sandbox/Execution 实现与平台跨实例续接。
 - [ ] CF DO/队列/调度入口接通共同业务与长任务。
 - [ ] 完整双模式本地与远程验收。
 
-修订文档时的代码基线为 `5133d38`：尚有 core/runtime-node/runtime-cloudflare，不代表本文能力包结构已实现。迁移完成后更新本记录。Wrangler 4.149.0 本地可运行；既有登录已过期，远程验收需恢复登录。本地 fixture 按固定二进制支持的 `2026-10-13` compatibility date，并生成 binding 类型。
+本阶段验证：queue/storage 6 项通用用例（真实 BullMQ、workerd Queues/R2）、shared 11 项业务契约、server 18 项队列故障与 3 项文件存储用例通过。全仓 build、typecheck、typecheck:test、冻结锁文件安装与两份 fixture dry-run 通过；CF bundle 不包含 Node/BullMQ/AWS/业务协议。
+
+当前落地包见 [queue](../../packages/queue/README.md) 与 [storage](../../packages/storage/README.md)。通用队列/存储与独立 workerd fixtures 已实现；平台工厂、Harness runner、DO 协调仍按以上清单待实施，不代表整个 CF 平台已可部署。Wrangler 4.149.0 本地可运行；既有登录已过期，远程验收需恢复登录。本地 fixture 按固定二进制支持的 `2026-10-13` compatibility date，并生成 binding 类型。
 
 ## 12. 调研依据
 

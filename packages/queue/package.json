@@ -1,0 +1,55 @@
+{
+  "name": "@tabdo/queue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./adapters/bullmq": {
+      "types": "./dist/adapters/bullmq.d.ts",
+      "development": "./src/adapters/bullmq.ts",
+      "import": "./dist/adapters/bullmq.js",
+      "default": "./dist/adapters/bullmq.js"
+    },
+    "./adapters/cloudflare": {
+      "types": "./dist/adapters/cloudflare.d.ts",
+      "development": "./src/adapters/cloudflare.ts",
+      "import": "./dist/adapters/cloudflare.js",
+      "default": "./dist/adapters/cloudflare.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "pnpm build && tsx --test test/*.test.ts",
+    "types:fixture": "wrangler types test/fixture/env.d.ts --config test/fixture/wrangler.jsonc --env-interface QueueTestEnv --include-runtime=false",
+    "build:fixture": "pnpm build && wrangler deploy --dry-run --config test/fixture/wrangler.jsonc --outdir dist/fixture"
+  },
+  "peerDependencies": {
+    "bullmq": "5",
+    "ioredis": "5"
+  },
+  "peerDependenciesMeta": {
+    "bullmq": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "@cloudflare/workers-types": "5.20261014.1",
+    "wrangler": "4.149.0",
+    "bullmq": "5",
+    "ioredis": "5"
+  }
+}

@@ -1,8 +1,28 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createStorageAdapter, type StorageDriver, type StorageAdapter, type StorageConfig } from "@tabdo/runtime-node/storage";
-export { createStorageAdapter };
-export type { StorageDriver, StorageAdapter, StorageConfig };
+import type { ObjectStorage } from "@tabdo/storage";
+import { createLocalStorage } from "@tabdo/storage/adapters/local";
+import { createS3Storage, type S3StorageConfig } from "@tabdo/storage/adapters/s3";
+
+export type StorageDriver = "local" | "s3";
+export type StorageAdapter = ObjectStorage & { readonly driver: StorageDriver };
+export type StorageConfig = { driver: StorageDriver; localDir: string; s3?: S3StorageConfig };
+const fileKeyPattern = /^[a-f0-9]{2}\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+function assertFileKey(key: string) {
+  if (!fileKeyPattern.test(key)) throw new Error("Invalid object storage key");
+}
+export function createStorageAdapter(config: StorageConfig): StorageAdapter {
+  let provider: ObjectStorage;
+  if (config.driver === "local") provider = createLocalStorage(config.localDir);
+  else if (config.driver === "s3" && config.s3) provider = createS3Storage(config.s3);
+  else throw new Error("Missing S3 configuration");
+  return {
+    driver: config.driver,
+    async put(key, bytes, mimeType) { assertFileKey(key); await provider.put(key, bytes, mimeType); },
+    async open(key) { assertFileKey(key); return provider.open(key); },
+    async remove(key) { assertFileKey(key); await provider.remove(key); },
+  };
+}
 const defaultLocalDir = fileURLToPath(new URL("../../../../data/files", import.meta.url));
 function positiveInteger(value: string | undefined, fallback: number, name: string) {
   const result = value === undefined || value === "" ? fallback : Number(value);

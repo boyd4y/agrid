@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { positiveInt } from "./config.js";
-import type { AutomationDelivery, QueuePublisher } from "@tabdo/core";
+import { automationDeliveryId, parseAutomationDelivery, type AutomationDelivery } from "@tabdo/shared";
+import type { QueuePublisher } from "@tabdo/queue";
 
 type Delivery = { id: string; payload: AutomationDelivery; generation: number; claim_token: string; attempts: number };
 
@@ -41,7 +42,8 @@ export function createRelay(publisher: QueuePublisher<AutomationDelivery>) {
           AND claim_until > now() RETURNING id`);
       if (!owned.length) return false;
       try {
-        await publisher.publish(record.payload);
+        const body = parseAutomationDelivery(record.payload);
+        await publisher.publish({ id: automationDeliveryId(body), body });
         await db.execute(sql`UPDATE automation_outbox
           SET status = 'published', published_at = now(), claim_token = NULL, claim_until = NULL, last_error = NULL
           WHERE id = ${record.id}::uuid AND status = 'publishing'
