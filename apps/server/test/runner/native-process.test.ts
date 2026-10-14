@@ -13,7 +13,7 @@ import type { Actor } from "../../src/auth/actor.js";
 if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
 for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
 const { nodeJobResources, withNodeResources } = await import("../../src/resources/node.js");
-const { getDatabase } = await import("@tabdo/backend/resources");
+const { getDatabase } = await import("../../src/resources/scope.js");
 const schema = await import("../../src/db/schema.js");
 const { user, organization, member, agentProfile, chatThreads, tables, agentRuns, agentExecutions, agentThreadLeases } = schema;
 const { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease } = await import("../../src/harness/store.js");

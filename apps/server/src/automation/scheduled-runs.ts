@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Actor } from "../auth/actor.js";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { automations, automationRuns, automationAgentActions, chatThreads } from "../db/schema.js";
 import { requireThread } from "../chat/store.js";

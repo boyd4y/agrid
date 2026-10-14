@@ -8,6 +8,7 @@ import type { HarnessId } from "../ai/model.js";
 import { chatRunLimits } from "./limits.js";
 import { chatErrorText, normalizeChatToolErrors } from "../ai/errors.js";
 import { createNativeAgent, openNativeSandbox } from "./runtime.js";
+import { QUESTION_NOT_INVOKED } from "@tabdo/backend/agent/questions";
 import type { PiModelMetadata, PiCompletion } from "./model-metadata.js";
 import { nativeHostTools, nativeToolDenial } from "./tools.js";
 import { completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease, withRuntimeLease, type RuntimeRecord, type RuntimeLease } from "./store.js";
@@ -260,7 +261,13 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
         try { await persist(message, status); }
         catch (checkpointError) { errorText = chatErrorText(checkpointError);await failNativeRun(options.lease, options.run.id, errorText); }
       } else {
-        const { id, ...content } = message;
+        const { id, ...originalContent } = message;
+        const previousMetadata = originalContent.metadata && typeof originalContent.metadata === "object" && !Array.isArray(originalContent.metadata)
+          ? originalContent.metadata as Record<string, unknown> : {};
+        const content = !invocationStarted ? { ...originalContent, metadata: { ...previousMetadata,
+          nativeQuestionInvocation: { proof: QUESTION_NOT_INVOKED, runId: options.run.id, fence: options.lease.fence,
+            toolCallIds: options.toolResultContinuations.map(result => result.toolCallId).sort() },
+        } } : originalContent;
         await completeRuntimeTurn(options.lease, options.actor, options.record.id, {
           resumeState: options.record.resumeState as HarnessAgentResumeSessionState, workspace: options.record.workspace,
           sandboxId: options.record.sandboxId!, userMessageId: options.run.userMessageId, assistantMessageId: id,

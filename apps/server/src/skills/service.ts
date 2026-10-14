@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SkillDocument, SkillFile } from "@tabdo/shared";
 import type { HarnessV1Skill } from "@ai-sdk/harness";
 import { loadBuiltinSkillDocuments } from "./builtin-loader.js";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { skills, skillSettings } from "../db/schema.js";
 import { parseSkillDocument, validateSkillFiles, SkillError } from "./document.js";

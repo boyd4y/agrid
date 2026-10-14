@@ -15,7 +15,7 @@ import { webhookEndpointsRoute, webhooksRoute } from "./routes/webhooks.js";
 import { apiKeysRoute } from "./routes/api-keys.js";
 import { filesRoute } from "./routes/files.js";
 import { skillsRoute } from "./routes/skills.js";
-import { getAuth, withPlatformResources, type PlatformResources } from "@tabdo/backend/resources";
+import { getAuth, withPlatformResources, type PlatformResources } from "./resources/scope.js";
 import { checkSchemaReady } from "./db/schema-ready.js";
 import { nativeDrainStarted, registerNativeRun } from "./harness/drain.js";
 

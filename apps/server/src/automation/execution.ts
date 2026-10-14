@@ -2,7 +2,7 @@ import * as commands from "../commands/index.js";
 import { and, asc, eq, inArray, sql, isNull } from "drizzle-orm";
 import { validateCell, parseAutomationCommand, resolveAutomationBindings, type AutomationRule, type AutomationAction,
   type AutomationDataCommand, type RunAgentAction } from "@tabdo/shared";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 import { type Transaction } from "../db/context.js";
 import { automationEvents, automationOutbox, automationRuns, automationStepReceipts, automations, rows, tables, member,
   automationAgentActions, agentRuns } from "../db/schema.js";

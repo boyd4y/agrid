@@ -8,7 +8,7 @@ import type { ExecutionAdapter, ExecutionHandle } from "@tabdo/core/execution";
 import { createNodeProcessExecution } from "@tabdo/platform-node/execution/node-process";
 import { createDatabase } from "@tabdo/backend/database";
 import { createPlatformAuth } from "@tabdo/backend/auth";
-import { withPlatformResources } from "@tabdo/backend/resources";
+import { withPlatformResources } from "../../src/resources/scope.js";
 import { createApp } from "../../src/app.js";
 import { createDispatchedNativeStream, dispatchAcceptedNativeExecutions } from "../../src/harness/run-response.js";
 import { agentExecutions, agentProfile, agentRuns, chatMessages, member, organization, session, tables, user } from "../../src/db/schema.js";

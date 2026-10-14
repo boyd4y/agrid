@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { DatabaseResource } from "./db/factory.js";
-import type { PlatformAuth } from "./auth/factory.js";
+import type { DatabaseResource } from "@tabdo/backend/database";
+import type { PlatformAuth } from "@tabdo/backend/auth";
 
 /** A caller-owned resource scope, never inferred from environment or runtime. */
 export type PlatformResources = Readonly<{

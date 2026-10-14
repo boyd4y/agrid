@@ -38,4 +38,19 @@ for (const name of ["core", "platform-node", "platform-cloudflare"]) {
     if (name === "platform-cloudflare") assert(!/\b(?:threadId|runId|executionId)\b/.test(source), `${file}: product execution identity must be injected`);
   }
 }
-console.log("Architecture boundaries passed: portable core, isolated Node/Workers implementations, no product imports.");
+const backendDirectory = resolve(root, "packages/backend");
+const backendConfig = JSON.parse(await readFile(resolve(backendDirectory, "tsconfig.json"), "utf8"));
+assert.deepEqual(backendConfig.compilerOptions.types, [], "backend must not load Node or CF ambient globals");
+for (const file of await files(resolve(backendDirectory, "src"))) {
+  const source = await readFile(file, "utf8");
+  const imports = [...source.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+)["']/g)].map(match => match[1]);
+  for (const specifier of imports) {
+    assert(!specifier.startsWith("node:") && !specifier.startsWith("cloudflare:")
+      && !/^@tabdo\/(?:platform-node|platform-cloudflare|agent-runtime)(?:\/|$)/.test(specifier)
+      && !specifier.startsWith("@ai-sdk/harness") && !specifier.includes("apps/server"), `${file}: runtime/application import in backend: ${specifier}`);
+    if (!file.includes("/src/http/")) assert(!specifier.startsWith("hono"), `${file}: HTTP transport must stay in thin http entries`);
+  }
+  assert(!/\b(?:getDatabase|getAuth|AsyncLocalStorage)\s*\(/.test(source), `${file}: services require explicit dependencies`);
+  assert(!/\bprocess\.env\b/.test(source), `${file}: environment must be injected`);
+}
+console.log("Architecture boundaries passed: portable core, isolated implementations, explicit backend dependencies.");

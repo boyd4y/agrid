@@ -1,5 +1,5 @@
 import { and, eq, asc, desc, sql } from "drizzle-orm";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 import { inTransaction, type Transaction } from "../db/context.js";
 import { columns, reports, rows, tables } from "../db/schema.js";
 import { randomUUID } from "node:crypto";

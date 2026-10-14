@@ -1,4 +1,4 @@
-import { getDatabaseClient } from "@tabdo/backend/resources";
+import { getDatabaseClient } from "../resources/scope.js";
 
 /**
  * Detect common "forgot to migrate" failure modes that surface as opaque 500s

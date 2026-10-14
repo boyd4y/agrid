@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "@tabdo/backend/database";
 import { createPlatformAuth } from "@tabdo/backend/auth";
-import { getAuth, getDatabase, getDatabaseClient, requirePlatformResources, withPlatformResources } from "@tabdo/backend/resources";
+import { getAuth, getDatabase, getDatabaseClient, requirePlatformResources, withPlatformResources } from "../../src/resources/scope.js";
 import { createApp } from "../../src/app.js";
 import { member, organization, user } from "../../src/db/schema.js";
 import { createTable } from "../../src/commands/index.js";

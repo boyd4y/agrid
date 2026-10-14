@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { IntegrationConnection, WebhookEndpoint } from "@tabdo/shared";
 import { resolveActor, type Actor } from "../auth/actor.js";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { validUuid } from "./http.js";

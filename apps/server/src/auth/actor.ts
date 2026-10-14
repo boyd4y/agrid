@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { getAuth, getDatabase } from "@tabdo/backend/resources";
+import { getAuth, getDatabase } from "../resources/scope.js";
 import { resolveActor as resolveBackendActor, listOrgMembers as listBackendOrgMembers } from "@tabdo/backend/auth/actor";
 import type { Transaction } from "../db/context.js";
 

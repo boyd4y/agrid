@@ -1,4 +1,4 @@
-import { withPlatformResources, type PlatformResources } from "@tabdo/backend/resources";
+import { withPlatformResources, type PlatformResources } from "./scope.js";
 import { nodeDatabase } from "../db/index.js";
 
 /** Node application composition. Shared business modules never import this file. */

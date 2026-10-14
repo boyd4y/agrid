@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import type { IntegrationInbox } from "@tabdo/shared";
 import type { ExternalAutomationEvent } from "../automation/events.js";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { decryptSecret } from "./secrets.js";

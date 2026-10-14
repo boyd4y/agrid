@@ -2,7 +2,7 @@ import type { ExecutionAdapter } from "@tabdo/core/execution";
 import type { UIMessageChunk } from "ai";
 import type { ChatContext } from "../chat/context.js";
 import { and, eq, inArray, asc } from "drizzle-orm";
-import { getDatabase, requirePlatformResources, withPlatformResources } from "@tabdo/backend/resources";
+import { getDatabase, requirePlatformResources, withPlatformResources } from "../resources/scope.js";
 import { agentExecutions, agentRuns } from "../db/schema.js";
 import { resolveActor } from "../auth/actor.js";
 import { acceptNativeExecution, readNativeExecutionOutput } from "../runner/repository.js";

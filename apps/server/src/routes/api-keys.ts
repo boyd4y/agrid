@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { userApiKeys } from "../db/schema.js";
 import { hashApiKey, resolveActor, type Actor } from "../auth/actor.js";

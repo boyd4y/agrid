@@ -39,13 +39,6 @@
       "import": "./dist/agent/checkpoints.js",
       "default": "./dist/agent/checkpoints.js"
     },
-    "./resources": {
-      "types": "./src/resources.ts",
-      "workerd": "./src/resources.ts",
-      "development": "./src/resources.ts",
-      "import": "./dist/resources.js",
-      "default": "./dist/resources.js"
-    },
     "./auth/actor": {
       "types": "./src/auth/actor.ts",
       "workerd": "./src/auth/actor.ts",
@@ -66,6 +59,153 @@
       "development": "./src/db/types.ts",
       "import": "./dist/db/types.js",
       "default": "./dist/db/types.js"
+    },
+    "./dependencies": {
+      "types": "./src/dependencies.ts",
+      "workerd": "./src/dependencies.ts",
+      "development": "./src/dependencies.ts",
+      "import": "./dist/dependencies.js",
+      "default": "./dist/dependencies.js"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "workerd": "./src/errors.ts",
+      "development": "./src/errors.ts",
+      "import": "./dist/errors.js",
+      "default": "./dist/errors.js"
+    },
+    "./commands": {
+      "types": "./src/commands/index.ts",
+      "workerd": "./src/commands/index.ts",
+      "development": "./src/commands/index.ts",
+      "import": "./dist/commands/index.js",
+      "default": "./dist/commands/index.js"
+    },
+    "./commands/*": {
+      "types": "./src/commands/*.ts",
+      "workerd": "./src/commands/*.ts",
+      "development": "./src/commands/*.ts",
+      "import": "./dist/commands/*.js",
+      "default": "./dist/commands/*.js"
+    },
+    "./tenant/scope": {
+      "types": "./src/tenant/scope.ts",
+      "workerd": "./src/tenant/scope.ts",
+      "development": "./src/tenant/scope.ts",
+      "import": "./dist/tenant/scope.js",
+      "default": "./dist/tenant/scope.js"
+    },
+    "./database/context": {
+      "types": "./src/db/context.ts",
+      "workerd": "./src/db/context.ts",
+      "development": "./src/db/context.ts",
+      "import": "./dist/db/context.js",
+      "default": "./dist/db/context.js"
+    },
+    "./database/name-errors": {
+      "types": "./src/db/name-errors.ts",
+      "workerd": "./src/db/name-errors.ts",
+      "development": "./src/db/name-errors.ts",
+      "import": "./dist/db/name-errors.js",
+      "default": "./dist/db/name-errors.js"
+    },
+    "./storage/files": {
+      "types": "./src/storage/files.ts",
+      "workerd": "./src/storage/files.ts",
+      "development": "./src/storage/files.ts",
+      "import": "./dist/storage/files.js",
+      "default": "./dist/storage/files.js"
+    },
+    "./automation/events": {
+      "types": "./src/automation/events.ts",
+      "workerd": "./src/automation/events.ts",
+      "development": "./src/automation/events.ts",
+      "import": "./dist/automation/events.js",
+      "default": "./dist/automation/events.js"
+    },
+    "./automation/crud": {
+      "types": "./src/automation/crud.ts",
+      "workerd": "./src/automation/crud.ts",
+      "development": "./src/automation/crud.ts",
+      "import": "./dist/automation/crud.js",
+      "default": "./dist/automation/crud.js"
+    },
+    "./automation/schedule": {
+      "types": "./src/automation/schedule.ts",
+      "workerd": "./src/automation/schedule.ts",
+      "development": "./src/automation/schedule.ts",
+      "import": "./dist/automation/schedule.js",
+      "default": "./dist/automation/schedule.js"
+    },
+    "./agent/runtime-store": {
+      "types": "./src/agent/runtime-store.ts",
+      "workerd": "./src/agent/runtime-store.ts",
+      "development": "./src/agent/runtime-store.ts",
+      "import": "./dist/agent/runtime-store.js",
+      "default": "./dist/agent/runtime-store.js"
+    },
+    "./agent/runs": {
+      "types": "./src/agent/runs.ts",
+      "workerd": "./src/agent/runs.ts",
+      "development": "./src/agent/runs.ts",
+      "import": "./dist/agent/runs.js",
+      "default": "./dist/agent/runs.js"
+    },
+    "./agent/executions": {
+      "types": "./src/agent/executions.ts",
+      "workerd": "./src/agent/executions.ts",
+      "development": "./src/agent/executions.ts",
+      "import": "./dist/agent/executions.js",
+      "default": "./dist/agent/executions.js"
+    },
+    "./chat/store": {
+      "types": "./src/chat/store.ts",
+      "workerd": "./src/chat/store.ts",
+      "development": "./src/chat/store.ts",
+      "import": "./dist/chat/store.js",
+      "default": "./dist/chat/store.js"
+    },
+    "./chat/context-schema": {
+      "types": "./src/chat/context-schema.ts",
+      "workerd": "./src/chat/context-schema.ts",
+      "development": "./src/chat/context-schema.ts",
+      "import": "./dist/chat/context-schema.js",
+      "default": "./dist/chat/context-schema.js"
+    },
+    "./services/command-dispatch": {
+      "types": "./src/services/command-dispatch.ts",
+      "workerd": "./src/services/command-dispatch.ts",
+      "development": "./src/services/command-dispatch.ts",
+      "import": "./dist/services/command-dispatch.js",
+      "default": "./dist/services/command-dispatch.js"
+    },
+    "./services/sessions": {
+      "types": "./src/services/sessions.ts",
+      "workerd": "./src/services/sessions.ts",
+      "development": "./src/services/sessions.ts",
+      "import": "./dist/services/sessions.js",
+      "default": "./dist/services/sessions.js"
+    },
+    "./http/commands": {
+      "types": "./src/http/commands.ts",
+      "workerd": "./src/http/commands.ts",
+      "development": "./src/http/commands.ts",
+      "import": "./dist/http/commands.js",
+      "default": "./dist/http/commands.js"
+    },
+    "./agent/questions": {
+      "types": "./src/agent/questions.ts",
+      "workerd": "./src/agent/questions.ts",
+      "development": "./src/agent/questions.ts",
+      "import": "./dist/agent/questions.js",
+      "default": "./dist/agent/questions.js"
+    },
+    "./automation/outbox": {
+      "types": "./src/automation/outbox.ts",
+      "workerd": "./src/automation/outbox.ts",
+      "development": "./src/automation/outbox.ts",
+      "import": "./dist/automation/outbox.js",
+      "default": "./dist/automation/outbox.js"
     }
   },
   "scripts": {
@@ -78,10 +218,13 @@
     "@better-auth/drizzle-adapter": "^1.7.7",
     "drizzle-orm": "^0.45.4",
     "postgres": "^3.4.5",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "hono": "^4.7.8",
+    "cron-parser": "^5.6.0",
+    "ai": "7.0.138",
+    "@tabdo/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.14.1",
     "typescript": "^5.8.3"
   }
 }

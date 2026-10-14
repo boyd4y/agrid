@@ -2,4 +2,4 @@
 export type { PlatformDatabase } from "./db/factory.js";
 export type { PlatformAuth } from "./auth/factory.js";
 export type { DatabaseResource } from "./db/factory.js";
-export type { PlatformResources } from "./resources.js";
+export type { DatabaseDependencies, RuntimeDependencies, CommandDependencies } from "./dependencies.js";

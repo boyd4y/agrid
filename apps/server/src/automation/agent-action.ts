@@ -5,7 +5,7 @@ import { renderAutomationPrompt, type RunAgentAction } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
 import { resolveChatContext } from "../chat/context.js";
 import { threadScope } from "../chat/store.js";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { agentRuns, agentRuntimeSessions, automationAgentActions, automationRuns, automations,
   chatMessages, chatThreads, member, tables, user } from "../db/schema.js";

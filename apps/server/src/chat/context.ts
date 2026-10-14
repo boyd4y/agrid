@@ -1,27 +1,14 @@
-import { z } from "zod";
+import { chatContextSchema, contextResourceKey, type ChatContext } from "@tabdo/backend/chat/context-schema";
+export { chatContextSchema, contextResourceKey, type ChatContext } from "@tabdo/backend/chat/context-schema";
 import { HTTPException } from "hono/http-exception";
 import { and, eq } from "drizzle-orm";
-import { getDatabase } from "@tabdo/backend/resources";
+import { getDatabase } from "../resources/scope.js";
 
 import { getReport } from "../reports/service.js";
 import { organization, tables, automations } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
 
-export const chatContextSchema = z.object({
-  page: z.enum(["ai", "tables", "table", "automations", "reports", "skills", "agents", "members", "settings", "schedules"]).default("ai"),
-  tableId: z.uuid().nullable().optional(),
-  reportId: z.uuid().nullable().optional(),
-  scheduledTaskId: z.uuid().nullable().optional(),
-});
-export type ChatContext = z.infer<typeof chatContextSchema>;
 const pages = { ai: "AI 工作区", tables: "表格列表", table: "表格详情", automations: "自动化", reports: "报告", skills: "Skill 管理", agents: "智能体", members: "成员", settings: "设置", schedules: "定时任务" };
-
-export function contextResourceKey(context: ChatContext) {
-  if (context.scheduledTaskId) return `schedule:${context.scheduledTaskId}`;
-  if (context.reportId) return `report:${context.reportId}`;
-  if (context.tableId) return `table:${context.tableId}`;
-  return context.page === "ai" ? "workspace" : context.page;
-}
 
 export async function resolveChatContext(input: unknown, actor: Actor) {
   const context = chatContextSchema.parse(input ?? {});
