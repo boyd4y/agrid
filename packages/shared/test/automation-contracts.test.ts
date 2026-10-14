@@ -94,3 +94,10 @@ test("own-path lookup blocks inherited/prototype paths and prompt interpolation 
   assert.throws(() => renderAutomationPrompt("{{event.secret}}", context));
   assert.throws(() => renderAutomationPrompt("{{steps.1.count}}", context));
 });
+
+test("status commands allow clearing the selection as specified by their public input type", () => {
+  for (const command of ["setStatus", "moveCard"] as const) {
+    assert.deepEqual(parseAutomationCommand(command, { rowId, columnId, statusOptionId: null }), { rowId, columnId, statusOptionId: null });
+    assert.throws(() => parseAutomationCommand(command, { rowId, columnId, statusOptionId: 1 }));
+  }
+});

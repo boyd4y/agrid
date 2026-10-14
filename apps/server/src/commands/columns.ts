@@ -3,7 +3,7 @@ import { and, asc, eq, gt, inArray, max, or, sql } from "drizzle-orm";
 import { db, inTransaction, type Transaction } from "../db/index.js";
 import { columns, rows, tables, tableRelations, COLUMN_TYPES } from "../db/schema.js";
 import {
-  BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA,
+  ADD_COLUMN_SCHEMA, UPDATE_COLUMN_SCHEMA, BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA,
   COLUMN_CONFIG_SCHEMA, validateCell, type AddColumnInput, type UpdateColumnInput, type DeleteColumnInput,
   type BatchAddColumnsInput, type BatchUpdateColumnsInput, type BatchDeleteColumnsInput,
   type BatchColumnsResult, type BatchDeleteColumnsResult, type CellValue,
@@ -48,7 +48,9 @@ async function addColumnInTransaction(tx: Transaction, input: AddColumnInput & S
   if (type === "formula") await recomputeFormulasInTransaction(tableId, tx);
   return { ...column, affectedTableIds: [tableId] };
 }
-export async function addColumn(input: AddColumnInput & Scope, transaction?: Transaction) {
+export async function addColumn(raw: AddColumnInput & Scope, transaction?: Transaction) {
+  const { organizationId, actorId, ...publicInput } = raw;
+  const input = { ...ADD_COLUMN_SCHEMA.parse(publicInput), organizationId, actorId };
   return inTransaction(transaction, async (tx) => {
     await lockSchema(tx, [input.tableId, ...(input.type === "relation" && input.config?.relation ? [input.config.relation.targetTableId] : [])], input);
     return addColumnInTransaction(tx, input);
@@ -129,7 +131,9 @@ async function updateColumnInTransaction(tx: Transaction, input: UpdateColumnInp
     await recomputeFormulasInTransaction(column.tableId, tx);
   return updated;
 }
-export async function updateColumn(input: UpdateColumnInput & Scope, transaction?: Transaction) {
+export async function updateColumn(raw: UpdateColumnInput & Scope, transaction?: Transaction) {
+  const { organizationId, actorId, ...publicInput } = raw;
+  const input = { ...UPDATE_COLUMN_SCHEMA.parse(publicInput), organizationId, actorId };
   return inTransaction(transaction, async (tx) => {
     await lockSchema(tx, await tablesForColumns(tx, [input.columnId], input), input);
     return updateColumnInTransaction(tx, input);

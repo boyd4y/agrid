@@ -10,7 +10,7 @@ const value = z.union([z.string(), z.number().finite(), z.boolean(), z.array(z.s
 const cells = z.record(uuid, value);
 const version = z.number().int().positive().optional();
 const relation = z.object({ rowId: uuid, columnId: uuid, recordIds: z.array(uuid), expectedVersion: version }).strict();
-const status = z.object({ rowId: uuid, columnId: uuid, statusOptionId: z.string().min(1) }).strict();
+const status = z.object({ rowId: uuid, columnId: uuid, statusOptionId: z.string().min(1).nullable() }).strict();
 
 /** The same finite command surface for table, mail, webhook and scheduled actions. */
 export const AUTOMATION_DATA_COMMAND_SCHEMAS = {

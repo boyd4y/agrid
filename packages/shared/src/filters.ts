@@ -298,7 +298,7 @@ export function validateCell(
       return null;
     case "relation":
     case "multi_select":
-      if (!Array.isArray(value)) return "必须是字符串数组";
+      if (!Array.isArray(value) || value.some(id => typeof id !== "string")) return "必须是字符串数组";
       if (
         options?.length &&
         value.some((id) => !options.some((o) => o.id === id))
