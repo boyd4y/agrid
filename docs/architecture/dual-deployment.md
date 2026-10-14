@@ -137,6 +137,10 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 
 内部调用可使用同一 typed service contract 的 embedded/HTTP/binding transport，仅跨进程确有需要时使用 RPC。工具 gateway 使用有限期执行身份和 fence，不向不受信任脚本交付 DB 管理密钥。
 
+平台工厂必须先在真实 workerd 中验证：使用本地 Hyperdrive binding 连接隔离 PG，每请求创建/关闭 DB resource，复用 Better Auth factory 检查注册、签名和并发配置隔离。该 fixture 只验工厂，不把仍含全局依赖的产品 app 当作可部署 Worker。Hyperdrive 使用 Postgres.js 默认 `prepare: true`；官方已明确不推荐在其事务池中设 `prepare: false`。本地 binding 不模拟远程连接池/缓存，权限与 fence 路径仍需远程关闭查询缓存后验收。
+
+供应商核对（2026-10-14）：E2B `@e2b/ai-sdk-sandbox` 0.3.0 仍提供被当前 Harness 标记废弃的 `HarnessV1SandboxProvider`；创建用 session metadata 标识、恢复按此 metadata 查找，返回的物理 sandbox ID 与平台逻辑 ID 不相同。不能简单把 `sandboxId` 改名成 `sessionId` 就接入现有 create/resume。后续先明确并持久保存逻辑执行身份、供应商物理引用与检查点，再适配官方生命周期。Cloudflare Sandbox 1.x 则由 DO container API 管启停，SDK 提供容器内文件辅助；按完整 runner 与文件 Sandbox 各自实现，不沿用 0.x `getSandbox` 生命周期示例。
+
 部署模式、供应商 ID、容器 ID 和密钥不进入公开 API 或普通 UI。部署切换保留数据库/对象位置/Session 身份和 API schema，先停止新执行并保存/核对在途任务；不承诺任意供应商活跃内存热迁移。
 
 ## 9. 实施顺序
@@ -181,6 +185,8 @@ Harness/Sandbox 实现见 [harness](../../packages/harness/README.md)、[sandbox
 平台工厂阶段：真实 Better Auth 注册/session 签名隔离、API Key 邀请与撤销、31 项聊天回归及源码/测试类型检查通过。app 仍引用现有 Node 业务图；尚未声明可进入 Workers bundle，后续先移除执行侧传递依赖与全局资源。
 
 执行入口阶段：Harness 44 项、聊天 31 项回归通过。新增真实原生工具/PG 用例确认无输出端口的执行返回时最终消息、检查点与租约释放已完成；读流取消与关闭输出端口只断开投影，执行继续且下一轮不重放工具。输出端口目前是临时 UI 投影，持久 stream cursor 与独立 runner 仍待实施。
+
+Edge 工厂阶段：workerd + 本地 Hyperdrive binding + 隔离 PG 的真实 Better Auth HTTP 验收通过，包含注册、8 个并发请求的签名配置隔离、退出登录、新请求观察撤销及每请求连接释放。只使用共用工厂与 schema，不加载 Node 启动/global DB/auth。远程 Hyperdrive 事务池/缓存和完整产品入口仍待验收。
 
 ## 12. 调研依据
 
