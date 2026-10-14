@@ -32,6 +32,9 @@ export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; mi
   `;
   if (!reports) missing.push("reports (run pnpm db:migrate — migration 0013)");
 
+  const [{ fileGc }] = await client`SELECT to_regclass('public.storage_gc_jobs') IS NOT NULL AS "fileGc"`;
+  if (!fileGc) missing.push("storage_gc_jobs (run pnpm db:migrate — migration 0026)");
+
   return missing.length ? { ok: false, missing } : { ok: true };
 }
 

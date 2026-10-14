@@ -183,6 +183,13 @@
       "when": 1791863000000,
       "tag": "0025_scheduled_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791863100000,
+      "tag": "0026_storage_gc_jobs",
+      "breakpoints": true
     }
   ]
 }

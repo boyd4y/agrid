@@ -1,7 +1,8 @@
+import { enqueueFileGc } from "../storage/gc.js";
 import { HTTPException } from "hono/http-exception";
 import { and, asc, eq, gt, inArray, max, or, sql } from "drizzle-orm";
 import { db, inTransaction, type Transaction } from "../db/index.js";
-import { columns, rows, tables, tableRelations, COLUMN_TYPES } from "../db/schema.js";
+import { columns, rows, tables, tableRelations, fileObjects, COLUMN_TYPES } from "../db/schema.js";
 import {
   ADD_COLUMN_SCHEMA, UPDATE_COLUMN_SCHEMA, BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA,
   COLUMN_CONFIG_SCHEMA, validateCell, type AddColumnInput, type UpdateColumnInput, type DeleteColumnInput,
@@ -66,6 +67,7 @@ async function deleteColumnInTransaction(tx: Transaction, input: DeleteColumnInp
   await tx.select().from(columns).where(inArray(columns.id, ids)).orderBy(asc(columns.id)).for("update");
   await assertNoRollupDependency(ids, tx);
   const affectedTableIds = [...new Set([column.tableId, ...defs.flatMap((d) => [d.sourceTableId, d.targetTableId])])];
+  await enqueueFileGc(tx, await tx.select().from(fileObjects).where(inArray(fileObjects.columnId, ids)));
   await tx.delete(columns).where(inArray(columns.id, ids));
   for (const tableId of affectedTableIds) await recomputeFormulasInTransaction(tableId, tx);
   return { ok: true as const, affectedTableIds, deletedColumnIds: ids };

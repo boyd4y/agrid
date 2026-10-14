@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, type Transaction } from "../db/index.js";
-import { columns, fileObjects, tables } from "../db/schema.js";
+import { columns, fileObjects, tables, storageGcJobs } from "../db/schema.js";
 import { requireActorOrg } from "../tenant/http.js";
 import { getStorageAdapter, uploadLimits } from "../storage/adapter.js";
 import { storedFile } from "../storage/files.js";
+import { uploadBudgets } from "../storage/budgets.js";
+import { enqueueFileGc, lockFileStorage } from "../storage/gc.js";
 
 export const filesRoute = new Hono();
 const uuid = z.uuid();
@@ -27,21 +29,21 @@ async function boundedMultipart(request: Request, maxBytes: number): Promise<For
   if (!contentType.toLowerCase().startsWith("multipart/form-data;")) throw new HTTPException(400, { message: "请使用 multipart 文件上传" });
   if (Number(request.headers.get("content-length")) > maxBytes) throw new HTTPException(413, { message: "上传总大小超过限制" });
   if (!request.body) throw new HTTPException(400, { message: "请选择文件" });
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = []; let size = 0;
-  try {
-    for (;;) {
-      const { value, done } = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) { await reader.cancel(); throw new HTTPException(413, { message: "上传总大小超过限制" }); }
-      chunks.push(value);
-    }
-  } finally { reader.releaseLock(); }
-  const bytes = new Uint8Array(size); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  try { return await new Response(bytes, { headers: { "content-type": contentType } }).formData(); }
-  catch { throw new HTTPException(400, { message: "文件上传格式不正确" }); }
+  let size = 0;
+  const bounded = request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      size += chunk.byteLength;
+      if (size > maxBytes) throw new HTTPException(413, { message: "上传总大小超过限制" });
+      controller.enqueue(chunk);
+    },
+  }));
+  try { return await new Response(bounded, { headers: { "content-type": contentType } }).formData(); }
+  catch {
+    if (size > maxBytes) throw new HTTPException(413, { message: "上传总大小超过限制" });
+    throw new HTTPException(400, { message: "文件上传格式不正确" });
+  }
 }
+
 function fileName(name: string) {
   return Array.from((name.replace(/\\/g, "/").split("/").pop() || "file").replace(/[\u0000-\u001f\u007f]/g, "")).slice(0, 255).join("") || "file";
 }
@@ -56,35 +58,49 @@ filesRoute.post("/tables/:tableId/columns/:columnId/files", async c => {
   const { tableId, columnId } = c.req.param();
   if (invalidId(tableId) || invalidId(columnId)) return c.json({ error: "表格或字段不存在" }, 404);
   const column = await ownedFileColumn(db, scope.organizationId, tableId, columnId);
-  const limits = uploadLimits();
-  const form = await boundedMultipart(c.req.raw, limits.maxBodyBytes);
-  const uploads = form.getAll("files");
-  if (uploads.length === 0 || uploads.some(file => !(file instanceof File))) return c.json({ error: "请选择文件" }, 400);
-  if (uploads.length > limits.maxFiles) return c.json({ error: `每次最多上传 ${limits.maxFiles} 个文件` }, 400);
-  const files = uploads as File[];
-  assertCount(column, files.length);
-  if (files.some(file => file.size > limits.maxFileBytes)) return c.json({ error: `单个文件最大 ${limits.maxFileBytes} 字节` }, 413);
-  const adapter = getStorageAdapter();
-  const records = files.map(file => { const id = randomUUID(); return { id, name: fileName(file.name), size: file.size, mimeType: mimeType(file.type), organizationId: scope.organizationId, tableId, columnId, storageDriver: adapter.driver, storageKey: `${id.slice(0, 2)}/${id}` }; });
-  const attempted: string[] = [];
+  const permit = uploadBudgets.acquire(scope.organizationId);
   try {
-    for (let index = 0; index < files.length; index++) {
-      const record = records[index]; attempted.push(record.storageKey);
-      await adapter.put(record.storageKey, new Uint8Array(await files[index].arrayBuffer()), record.mimeType);
+    const limits = uploadLimits();
+    const form = await boundedMultipart(c.req.raw, limits.maxBodyBytes);
+    const uploads = form.getAll("files");
+    if (uploads.length === 0 || uploads.some(file => !(file instanceof File))) return c.json({ error: "请选择文件" }, 400);
+    if (uploads.length > limits.maxFiles) return c.json({ error: `每次最多上传 ${limits.maxFiles} 个文件` }, 400);
+    const files = uploads as File[];
+    assertCount(column, files.length);
+    if (files.some(file => file.size > limits.maxFileBytes)) return c.json({ error: `单个文件最大 ${limits.maxFileBytes} 字节` }, 413);
+    const adapter = getStorageAdapter();
+    const records = files.map(file => { const id = randomUUID(); return { id, name: fileName(file.name), size: file.size, mimeType: mimeType(file.type), organizationId: scope.organizationId, tableId, columnId, storageDriver: adapter.driver, storageKey: `${id.slice(0, 2)}/${id}` }; });
+    const attempted: string[] = [];
+    try {
+      // Persist all attempted identities before put: crashes become collectible orphans.
+      const journal = await enqueueFileGc(db, records);
+      const saved = await db.transaction(async tx => {
+        await lockFileStorage(tx, scope.organizationId);
+        const [{ bytes }] = await tx.select({ bytes: sql<string>`coalesce(sum(${fileObjects.size}), 0)` }).from(fileObjects).where(eq(fileObjects.organizationId, scope.organizationId));
+        permit.reserve(files.reduce((total, file) => total + file.size, 0), Number(bytes));
+        const current = await ownedFileColumn(tx, scope.organizationId, tableId, columnId, true);
+        assertCount(current, files.length);
+        // A request waiting longer than the grace period may already have been swept.
+        // Abort before put if its durable intent is no longer pending.
+        const pending = await tx.select({ id: storageGcJobs.id }).from(storageGcJobs).where(and(inArray(storageGcJobs.id, journal.map(job => job.id)), eq(storageGcJobs.status, "pending")));
+        if (pending.length !== records.length) throw new HTTPException(503, { message: "上传等待超时，请重试" });
+        for (let index = 0; index < files.length; index++) {
+          const record = records[index]; attempted.push(record.storageKey);
+          await adapter.put(record.storageKey, files[index], record.mimeType);
+        }
+        const rechecked = await ownedFileColumn(tx, scope.organizationId, tableId, columnId, true);
+        assertCount(rechecked, files.length);
+        return tx.insert(fileObjects).values(records).returning();
+      });
+      return c.json({ files: saved.map(storedFile) }, 201);
+    } catch (error) {
+      const cleanup = await Promise.allSettled(attempted.map(key => adapter.remove(key)));
+      if (cleanup.some(result => result.status === "rejected")) console.error("file.upload.cleanup failed", records.map(record => record.id));
+      if (error instanceof HTTPException) throw error;
+      console.error("file.upload failed", error instanceof Error ? error.name : "unknown");
+      return c.json({ error: "文件上传失败，请重试" }, 503);
     }
-    const saved = await db.transaction(async tx => {
-      const current = await ownedFileColumn(tx, scope.organizationId, tableId, columnId, true);
-      assertCount(current, files.length);
-      return tx.insert(fileObjects).values(records).returning();
-    });
-    return c.json({ files: saved.map(storedFile) }, 201);
-  } catch (error) {
-    const cleanup = await Promise.allSettled(attempted.map(key => adapter.remove(key)));
-    if (cleanup.some(result => result.status === "rejected")) console.error("file.upload.cleanup failed", records.map(record => record.id));
-    if (error instanceof HTTPException) throw error;
-    console.error("file.upload failed", error instanceof Error ? error.name : "unknown");
-    return c.json({ error: "文件上传失败，请重试" }, 503);
-  }
+  } finally { permit.release(); }
 });
 
 filesRoute.get("/files", async c => {
