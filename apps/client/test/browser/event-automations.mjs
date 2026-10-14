@@ -183,46 +183,19 @@ try {
   assert.equal((await api('/webhook-endpoints')).endpoints.some(endpoint => endpoint.id === mailHookId), true);
   await editDialog.getByRole('button', { name: '关闭', exact: true }).click();
 
-  await page.goto(frontend + '/app/automations/new');
+  const schedule = await api('/automations', { name: 'Existing scheduled data action', enabled: false, source: { kind: 'schedule', cron: '0 9 * * *', timeZone: 'Asia/Shanghai' }, trigger: { type: 'schedule_due' }, actions: [{ type: 'command', command: 'addRow', input: { tableId: table.id, cells: { [amount.id]: 42 } } }] });
+  assert.equal((await api('/automations?kind=schedule&limit=1')).rules[0].id, schedule.id);
+  assert.equal((await api('/automations?kind=event&limit=1')).rules.length, 0, 'source kind is filtered before pagination');
   const sourceStep = page.getByTestId('automation-source-step');
-  await sourceStep.getByRole('radio', { name: '定时', exact: true }).click();
-  await sourceStep.getByLabel('时区', { exact: true }).fill('Asia/Shanghai');
-  await sourceStep.getByRole('button', { name: '预览接下来的执行时间', exact: true }).click();
-  await sourceStep.locator('time').first().waitFor(); assert.equal(await sourceStep.locator('time').count(), 3);
-  await sourceStep.getByRole('button', { name: '下一步', exact: true }).click();
-  const editor = page.getByTestId('automation-editor'); await editor.waitFor();
-  await editor.getByPlaceholder('自动化名称').fill('Browser scheduled typed action');
-  await editor.getByRole('switch', { name: '启用', exact: true }).click();
-  await choose(editor.getByRole('combobox', { name: '数据操作', exact: true }), '新建记录');
-  await choose(editor.getByRole('combobox', { name: '目标表格', exact: true }), table.name);
-  await choose(editor.getByRole('combobox', { name: '添加字段', exact: true }), 'Amount');
-  await editor.getByPlaceholder('数字', { exact: true }).fill('42');
-  await page.getByRole('button', { name: '返回来源', exact: true }).click();
-  assert.equal(await sourceStep.getByLabel('时区', { exact: true }).inputValue(), 'Asia/Shanghai');
-  await sourceStep.getByRole('button', { name: '下一步', exact: true }).click();
-  assert.equal(await editor.getByPlaceholder('自动化名称').inputValue(), 'Browser scheduled typed action', 'same source preserves the configuration draft');
-  let rejectRule = true;
-  await page.route('**/api/automations', async route => {
-    if (route.request().method() === 'POST' && rejectRule) await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture rule save failure' }) });
-    else await route.fallback();
-  });
-  await editor.getByRole('button', { name: '保存', exact: true }).click();
-  await editor.getByRole('alert').getByText('Fixture rule save failure', { exact: true }).waitFor();
-  assert.equal(await editor.getByPlaceholder('数字', { exact: true }).inputValue(), '42');
-  rejectRule = false;
-  await editor.getByRole('button', { name: '保存', exact: true }).click();
-  await page.waitForURL('**/app/automations');
-  const schedule = (await api('/automations')).rules.find(rule => rule.name === 'Browser scheduled typed action');
-  assert(schedule); assert.equal(schedule.enabled, false); assert.equal(schedule.tableId, null);
-  assert.deepEqual(schedule.source, { kind: 'schedule', cron: '0 9 * * *', timeZone: 'Asia/Shanghai' });
-  assert.deepEqual(schedule.actions, [{ type: 'command', command: 'addRow', input: { tableId: table.id, cells: { [amount.id]: 42 } } }]);
-
+  const editor = page.getByTestId('automation-editor');
   await page.goto(frontend + '/app/automations/new');
-  await sourceStep.getByRole('radio', { name: 'Webhook', exact: true }).click();
-  await choose(sourceStep.getByRole('combobox', { name: 'Webhook 端点', exact: true }), endpoint.name);
-  await sourceStep.getByRole('button', { name: '下一步', exact: true }).click();
-  await editor.getByPlaceholder('自动化名称').fill('Browser webhook binding');
-  await editor.getByRole('switch', { name: '启用', exact: true }).click();
+  await sourceStep.waitFor();
+  assert.equal(await sourceStep.getByRole('radio', { name: 'Webhook', exact: true }).count(), 0);
+  assert.equal(await sourceStep.getByRole('radio', { name: '定时', exact: true }).count(), 0);
+  // Existing saved rules remain editable; webhook is no longer a creation source.
+  const legacyHook = await api('/automations', { name: 'Browser webhook binding', enabled: false, source: { kind: 'webhook', endpointId: endpoint.id }, trigger: { type: 'webhook_received' }, actions: [{ type: 'command', command: 'addRow', input: { tableId: table.id, cells: {} } }] });
+  await page.goto(`${frontend}/app/automations/${legacyHook.id}`);
+  await editor.waitFor();
   await choose(editor.getByRole('combobox', { name: '数据操作', exact: true }), '新建记录');
   await choose(editor.getByRole('combobox', { name: '目标表格', exact: true }), table.name);
   await choose(editor.getByRole('combobox', { name: '添加字段', exact: true }), 'Title');
@@ -255,7 +228,7 @@ try {
   assert.equal(await secondAction.getByLabel('结果字段路径', { exact: true }).inputValue(), 'id');
   await choose(secondAction.getByRole('combobox', { name: '添加字段', exact: true }), 'Amount');
   await secondAction.getByPlaceholder('数字', { exact: true }).fill('43');
-  await secondAction.locator('summary').click();
+  await secondAction.getByRole('button', { name: '高级配置', exact: true }).click();
   const json = secondAction.locator('.cm-content'); await json.waitFor();
   await json.click(); await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.insertText('{');
   await secondAction.getByRole('alert').getByText('请输入有效的 JSON 对象', { exact: true }).waitFor();
@@ -300,5 +273,5 @@ try {
   await page.getByText('Browser deep link persisted reply', { exact: true }).waitFor();
   assert.equal(attemptedMissingHistory, false, 'an invalid deep link is rejected before switching the SDK thread');
   assert.deepEqual(errors, []);
-  console.log('PASS event automation UI: navigation without dot+selected background, two rounded hook rows+gap+hover/focus/destructive feedback, centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, four left settings tabs without inner tabs/search+illustrated empty/error states, one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint/rule 400 retry retains draft, schedule preview+typed numeric command+source-back preservation, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
+  console.log('PASS event automation UI: navigation without dot+selected background, two rounded hook rows+gap+hover/focus/destructive feedback, centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, four left settings tabs without inner tabs/search+illustrated empty/error states, one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint 400 retry retains draft, schedule/event filtering before pagination, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
 } finally { await fixture.close(); }
