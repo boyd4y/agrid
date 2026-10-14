@@ -1,6 +1,7 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { agentRuns, agentRuntimeSessions, chatMessages, chatThreads } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
 
@@ -13,7 +14,7 @@ export function threadScope(id: string, actor: Actor) {
 }
 
 export async function requireThread(id: string, actor: Actor) {
-  const [thread] = await db
+  const [thread] = await getDatabase()
     .select()
     .from(chatThreads)
     .where(threadScope(id, actor));
@@ -97,17 +98,17 @@ export async function saveMessage(
   message: StoredMessage,
   serverFinal = false,
 ) {
-  return db.transaction((tx) =>
+  return getDatabase().transaction((tx) =>
     saveMessageInTransaction(tx, threadId, actor, message, serverFinal),
   );
 }
 
 export async function loadMessages(threadId: string, actor: Actor) {
   const thread = await requireThread(threadId, actor);
-  const [latest] = await db.select({ run: agentRuns, session: agentRuntimeSessions }).from(agentRuns)
+  const [latest] = await getDatabase().select({ run: agentRuns, session: agentRuntimeSessions }).from(agentRuns)
     .innerJoin(agentRuntimeSessions, eq(agentRuns.runtimeSessionId, agentRuntimeSessions.id))
     .where(eq(agentRuns.threadId, threadId)).orderBy(desc(agentRuns.startedAt), desc(agentRuns.id)).limit(1);
-  const messages = await db
+  const messages = await getDatabase()
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.threadId, threadId))

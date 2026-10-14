@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { Transaction } from "../db/index.js";
+import type { Transaction } from "../db/context.js";
 
 const executionTransaction = new AsyncLocalStorage<Transaction>();
 

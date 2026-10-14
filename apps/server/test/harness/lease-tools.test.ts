@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { test } from "node:test";
+import { test } from "../runtime.js";
 import { eq } from "drizzle-orm";
 import { getToolTransaction } from "../../src/ai/execution-context.js";
 

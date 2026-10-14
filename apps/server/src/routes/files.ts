@@ -3,7 +3,8 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { columns, fileObjects, tables } from "../db/schema.js";
 import { requireActorOrg } from "../tenant/http.js";
 import { getStorageAdapter, uploadLimits } from "../storage/adapter.js";
@@ -12,7 +13,7 @@ import { storedFile } from "../storage/files.js";
 export const filesRoute = new Hono();
 const uuid = z.uuid();
 function invalidId(id: string) { return !uuid.safeParse(id).success; }
-async function ownedFileColumn(database: typeof db | Transaction, organizationId: string, tableId: string, columnId: string, lock = false) {
+async function ownedFileColumn(database: ReturnType<typeof getDatabase> | Transaction, organizationId: string, tableId: string, columnId: string, lock = false) {
   const query = database.select().from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, organizationId)));
   const [table] = await (lock ? query.for("update") : query);
   if (!table) throw new HTTPException(404, { message: "表格不存在" });
@@ -55,7 +56,7 @@ filesRoute.post("/tables/:tableId/columns/:columnId/files", async c => {
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const { tableId, columnId } = c.req.param();
   if (invalidId(tableId) || invalidId(columnId)) return c.json({ error: "表格或字段不存在" }, 404);
-  const column = await ownedFileColumn(db, scope.organizationId, tableId, columnId);
+  const column = await ownedFileColumn(getDatabase(), scope.organizationId, tableId, columnId);
   const limits = uploadLimits();
   const form = await boundedMultipart(c.req.raw, limits.maxBodyBytes);
   const uploads = form.getAll("files");
@@ -72,7 +73,7 @@ filesRoute.post("/tables/:tableId/columns/:columnId/files", async c => {
       const record = records[index]; attempted.push(record.storageKey);
       await adapter.put(record.storageKey, new Uint8Array(await files[index].arrayBuffer()), record.mimeType);
     }
-    const saved = await db.transaction(async tx => {
+    const saved = await getDatabase().transaction(async tx => {
       const current = await ownedFileColumn(tx, scope.organizationId, tableId, columnId, true);
       assertCount(current, files.length);
       return tx.insert(fileObjects).values(records).returning();
@@ -92,7 +93,7 @@ filesRoute.get("/files", async c => {
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const ids = (c.req.query("ids") || "").split(",");
   if (ids.length > 100 || ids.some(invalidId) || new Set(ids).size !== ids.length) return c.json({ error: "文件 ID 参数不正确" }, 400);
-  const found = await db.select().from(fileObjects).where(and(eq(fileObjects.organizationId, scope.organizationId), inArray(fileObjects.id, ids)));
+  const found = await getDatabase().select().from(fileObjects).where(and(eq(fileObjects.organizationId, scope.organizationId), inArray(fileObjects.id, ids)));
   if (found.length !== ids.length) return c.json({ error: "文件不存在" }, 404);
   const byId = new Map(found.map(record => [record.id, record]));
   return c.json({ files: ids.map(id => storedFile(byId.get(id)!)) });
@@ -102,7 +103,7 @@ filesRoute.get("/files/:id/download", async c => {
   const scope = await requireActorOrg(c.req.raw);
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const id = c.req.param("id"); if (invalidId(id)) return c.json({ error: "文件不存在" }, 404);
-  const [record] = await db.select().from(fileObjects).where(and(eq(fileObjects.id, id), eq(fileObjects.organizationId, scope.organizationId)));
+  const [record] = await getDatabase().select().from(fileObjects).where(and(eq(fileObjects.id, id), eq(fileObjects.organizationId, scope.organizationId)));
   if (!record) return c.json({ error: "文件不存在" }, 404);
   try {
     const body = await getStorageAdapter(record.storageDriver).open(record.storageKey);

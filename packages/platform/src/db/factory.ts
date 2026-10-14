@@ -13,6 +13,7 @@ export function createDatabase(options: {
   const client = postgres(options.connectionString, { max: options.poolMax, connect_timeout: 5, idle_timeout: 20,
     ...(options.prepare === undefined ? {} : { prepare: options.prepare }),
   });
-  return { client, db: drizzle(client, { schema }), close: () => client.end() };
+  return Object.freeze({ client, db: drizzle(client, { schema }), close: () => client.end() });
 }
 export type PlatformDatabase = ReturnType<typeof createDatabase>["db"];
+export type DatabaseResource = ReturnType<typeof createDatabase>;

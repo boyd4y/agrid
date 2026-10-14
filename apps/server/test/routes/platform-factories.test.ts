@@ -26,8 +26,8 @@ test("explicit Better Auth factories preserve real sessions and do not share sig
     assert.equal(session?.user.email, email);
     assert.equal(session?.user.kind, "human");
     assert.equal(await authB.api.getSession({ headers: new Headers({ cookie }) }), null);
-    const appA = createApp({ appUrl: "https://one.example.test" });
-    const appB = createApp({ appUrl: "https://two.example.test" });
+    const appA = createApp({ appUrl: "https://one.example.test", resources: { database, auth: authA } });
+    const appB = createApp({ appUrl: "https://two.example.test", resources: { database, auth: authB } });
     const request = { method: "OPTIONS", headers: { origin: "https://one.example.test", "access-control-request-method": "GET" } };
     assert.equal((await appA.request("/api/tables", request)).headers.get("access-control-allow-origin"), "https://one.example.test");
     assert.notEqual((await appB.request("/api/tables", request)).headers.get("access-control-allow-origin"), "https://one.example.test");

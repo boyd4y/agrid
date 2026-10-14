@@ -1,10 +1,11 @@
-import { client } from "./index.js";
+import { getDatabaseClient } from "@tabdo/platform/resources";
 
 /**
  * Detect common "forgot to migrate" failure modes that surface as opaque 500s
  * (e.g. create/list tables → toast「服务暂时不可用」).
  */
 export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; missing: string[] }> {
+  const client = getDatabaseClient();
   const missing: string[] = [];
   const [{ icon }] = await client`
     SELECT EXISTS (
@@ -32,7 +33,7 @@ export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; mi
   `;
   if (!reports) missing.push("reports (run pnpm db:migrate — migration 0013)");
 
-  for (const name of ["automations", "automation_runs", "table_views", "agent_runtime_sessions", "agent_runs", "file_objects"]) {
+  for (const name of ["automations", "automation_runs", "table_views", "agent_runtime_sessions", "agent_runs", "agent_executions", "agent_execution_chunks", "file_objects"]) {
     const [{ present }] = await client`SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS present`;
     if (!present) missing.push(`${name} (run pnpm db:migrate)`);
   }

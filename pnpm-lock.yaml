@@ -181,6 +181,46 @@ importers:
         specifier: ^6.3.3
         version: 6.4.4(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)(yaml@2.9.1)
 
+  apps/cloudflare:
+    dependencies:
+      '@tabdo/execution':
+        specifier: workspace:*
+        version: link:../../packages/execution
+      '@tabdo/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 5.20261014.1
+        version: 5.20261014.1
+      '@tabdo/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      '@types/node':
+        specifier: ^22.14.1
+        version: 22.20.5
+      ai:
+        specifier: 7.0.138
+        version: 7.0.138(zod@4.6.5)
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@cloudflare/workers-types@5.20261014.1)(@opentelemetry/api@1.9.1)(kysely@0.29.6)(postgres@3.4.9)(sql.js@1.14.2)
+      hono:
+        specifier: ^4.7.8
+        version: 4.13.13
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.9
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.15
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
+      wrangler:
+        specifier: 4.149.0
+        version: 4.149.0(@cloudflare/workers-types@5.20261014.1)(@types/node@22.20.5)
+
   apps/mcp:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -238,6 +278,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.17(hono@4.13.13)
+      '@tabdo/execution':
+        specifier: workspace:*
+        version: link:../../packages/execution
       '@tabdo/harness':
         specifier: workspace:*
         version: link:../../packages/harness

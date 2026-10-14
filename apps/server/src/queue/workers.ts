@@ -1,6 +1,7 @@
 import { Worker, DelayedError, UnrecoverableError } from "bullmq";
 import { eq } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { automationEvents } from "../db/schema.js";
 import { claimExecution, executeNext, recordFailure, PermanentError, FenceLostError } from "../automation/execution.js";
 import { acquireRowLease, createLeaseClient } from "./lease.js";
@@ -19,7 +20,7 @@ export function startWorker(hooks: { beforeAction?: (eventId: string) => Promise
     let fence: number | undefined;
     let lease: Awaited<ReturnType<typeof acquireRowLease>> = null;
     try {
-      const [event] = await db.select().from(automationEvents).where(eq(automationEvents.id, eventId));
+      const [event] = await getDatabase().select().from(automationEvents).where(eq(automationEvents.id, eventId));
       if (!event || event.finishedAt || event.generation !== generation) return;
       lease = await acquireRowLease(leases, event.organizationId, event.rowId ?? event.id);
       if (!lease) {
@@ -38,7 +39,7 @@ export function startWorker(hooks: { beforeAction?: (eventId: string) => Promise
       if (cause instanceof DelayedError || cause instanceof FenceLostError) throw cause;
       const error = cause instanceof Error ? cause : new Error(String(cause));
       const final = error instanceof PermanentError || job.attemptsMade + 1 >= (job.opts.attempts ?? 1);
-      const [event] = await db.select().from(automationEvents).where(eq(automationEvents.id, eventId));
+      const [event] = await getDatabase().select().from(automationEvents).where(eq(automationEvents.id, eventId));
       if (event?.generation === generation) await recordFailure(eventId, error, final, fence, generation);
       if (final) throw new UnrecoverableError(error.message);
       throw error;
@@ -51,7 +52,7 @@ export function startWorker(hooks: { beforeAction?: (eventId: string) => Promise
     console.error("[worker] failed", job?.id, error.message);
     if (job && (error instanceof UnrecoverableError || job.attemptsMade >= (job.opts.attempts ?? 1)
       || error.message.includes("stalled"))) void (async () => {
-        const [event] = await db.select().from(automationEvents).where(eq(automationEvents.id, job.data.eventId));
+        const [event] = await getDatabase().select().from(automationEvents).where(eq(automationEvents.id, job.data.eventId));
         if (event?.generation === job.data.generation) await recordFailure(event.id, error, true, undefined, job.data.generation);
       })().catch((e) => console.error("[worker:failure-record]", e.message));
   });

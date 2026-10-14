@@ -1,5 +1,4 @@
-import { DISABLED_TOOLS_SCHEMA, PLATFORM_TOOL_IDS, type AgentToolCatalog, type AgentToolCatalogItem } from "@tabdo/shared";
-import { HTTPException } from "hono/http-exception";
+import { type AgentToolCatalog, type AgentToolCatalogItem } from "@tabdo/shared";
 import type { ToolSet } from "ai";
 import type { HarnessId } from "../ai/model.js";
 import { createTableTools } from "../ai/tools.js";
@@ -25,16 +24,4 @@ export function getAgentToolCatalog(harness: HarnessId): AgentToolCatalog {
   return { harness, supportsFiltering, tools };
 }
 
-/** Normalize only known retired/native IDs; unknown IDs still fail at save/start. */
-export function validateDisabledTools(harness: HarnessId, disabledTools: readonly string[] = []): (typeof PLATFORM_TOOL_IDS)[number][] {
-  const parsed = DISABLED_TOOLS_SCHEMA.safeParse(disabledTools);
-  if (!parsed.success) throw new HTTPException(400, { message: "工具配置包含未知或重复的工具名称" });
-  const catalog = getAgentToolCatalog(harness);
-  const known = new Map(catalog.tools.map(item => [item.id, item]));
-  for (const id of parsed.data) {
-    const item = known.get(id);
-    if (!item) throw new HTTPException(400, { message: `工具 ${id} 不属于 ${harness} Harness` });
-    if (item.alwaysEnabled) throw new HTTPException(400, { message: `当前 Harness 不支持关闭工具 ${id}` });
-  }
-  return parsed.data;
-}
+export { validateDisabledTools } from "./tool-settings.js";

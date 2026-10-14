@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { tables, columns, rows } from "../db/schema.js";
 
 /** Tenant scope passed into commands from resolveActor (never trust client body alone). */
@@ -19,7 +20,7 @@ export async function requireTableInOrg(
   organizationId?: string | null,
   transaction?: Transaction
 ) {
-  const [table] = await (transaction ?? db).select().from(tables).where(eq(tables.id, tableId)).limit(1);
+  const [table] = await (transaction ?? getDatabase()).select().from(tables).where(eq(tables.id, tableId)).limit(1);
   if (!table) throw new Error(`表格不存在: ${tableId}`);
   if (organizationId && table.organizationId !== organizationId) {
     throw new Error(`表格不存在: ${tableId}`);
@@ -28,7 +29,7 @@ export async function requireTableInOrg(
 }
 
 export async function requireRowInOrg(rowId: string, organizationId?: string | null, transaction?: Transaction) {
-  const [hit] = await (transaction ?? db)
+  const [hit] = await (transaction ?? getDatabase())
     .select({
       row: rows,
       organizationId: tables.organizationId,
@@ -50,7 +51,7 @@ export async function requireColumnInOrg(
   organizationId?: string | null,
   transaction?: Transaction
 ) {
-  const [hit] = await (transaction ?? db)
+  const [hit] = await (transaction ?? getDatabase())
     .select({
       column: columns,
       organizationId: tables.organizationId,
@@ -68,7 +69,7 @@ export async function requireColumnInOrg(
 }
 
 export async function listTablesForOrg(organizationId: string, transaction?: Transaction) {
-  return (transaction ?? db)
+  return (transaction ?? getDatabase())
     .select()
     .from(tables)
     .where(eq(tables.organizationId, organizationId))
@@ -77,7 +78,7 @@ export async function listTablesForOrg(organizationId: string, transaction?: Tra
 
 /** Ensure a table id is in org (boolean). */
 export async function tableBelongsToOrg(tableId: string, organizationId: string) {
-  const [t] = await db
+  const [t] = await getDatabase()
     .select({ id: tables.id })
     .from(tables)
     .where(and(eq(tables.id, tableId), eq(tables.organizationId, organizationId)))

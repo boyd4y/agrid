@@ -1,3 +1,4 @@
+import { withNodeResources } from "../resources/node.js";
 import { listTables, getTable, queryRows, updateCell } from "../commands/index.js";
 import { client } from "./index.js";
 
@@ -45,7 +46,7 @@ async function main() {
   await client.end();
 }
 
-main().catch(async (e) => {
+withNodeResources(main).catch(async (e) => {
   console.error(e);
   await client.end();
   process.exit(1);

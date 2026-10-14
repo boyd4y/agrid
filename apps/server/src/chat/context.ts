@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
 import { and, eq } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { getReport } from "../reports/service.js";
 import { organization, tables, automations } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
@@ -34,7 +35,7 @@ export async function resolveChatContext(input: unknown, actor: Actor) {
   let scheduledTask;
   if (context.scheduledTaskId) {
     if (context.page !== "schedules" || context.tableId || context.reportId) throw new HTTPException(400, { message: "定时任务会话上下文无效" });
-    [scheduledTask] = await db.select({ id: automations.id, name: automations.name, source: automations.source }).from(automations)
+    [scheduledTask] = await getDatabase().select({ id: automations.id, name: automations.name, source: automations.source }).from(automations)
       .where(and(eq(automations.id, context.scheduledTaskId), eq(automations.organizationId, actor.organizationId), eq(automations.createdByUserId, actor.userId)));
     if (!scheduledTask || scheduledTask.source.kind !== "schedule") throw new HTTPException(404, { message: "定时任务不存在" });
   }
@@ -43,10 +44,10 @@ export async function resolveChatContext(input: unknown, actor: Actor) {
     try { report = await getReport(context.reportId, actor.organizationId); }
     catch (error) { if (error instanceof Error && error.message === "报告不存在") throw new HTTPException(404, { message: "报告不存在或不属于当前工作区" });throw error; }
   }
-  const [workspace] = await db.select().from(organization).where(eq(organization.id, actor.organizationId));
+  const [workspace] = await getDatabase().select().from(organization).where(eq(organization.id, actor.organizationId));
   let table: typeof tables.$inferSelect | undefined;
   if (context.tableId) {
-    [table] = await db.select().from(tables).where(and(eq(tables.id, context.tableId), eq(tables.organizationId, actor.organizationId)));
+    [table] = await getDatabase().select().from(tables).where(and(eq(tables.id, context.tableId), eq(tables.organizationId, actor.organizationId)));
     if (!table) throw new HTTPException(404, { message: "表格不存在或不属于当前工作区" });
   }
   const system = [

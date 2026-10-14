@@ -16,9 +16,9 @@
     "db:seed:tenants": "tsx src/db/seed-tenants.ts",
     "queue:status": "tsx src/queue/status.ts",
     "test:queue": "tsx --test test/queue/queue.test.ts",
-    "dev:api": "pnpm -r --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/harness --filter @tabdo/sandbox --filter @tabdo/platform --filter @tabdo/shared build && tsx src/dev.ts --api-only",
+    "dev:api": "pnpm -r --filter @tabdo/execution --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/harness --filter @tabdo/sandbox --filter @tabdo/platform --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
-    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/queue/src/**/*.ts' --include '../../packages/storage/src/**/*.ts' --include '../../packages/harness/src/**/*.ts' --include '../../packages/sandbox/src/**/*.ts' --include '../../packages/platform/src/**/*.ts' src/queue/main.ts",
+    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/queue/src/**/*.ts' --include '../../packages/storage/src/**/*.ts' --include '../../packages/harness/src/**/*.ts' --include '../../packages/sandbox/src/**/*.ts' --include '../../packages/platform/src/**/*.ts' --include '../../packages/execution/src/**/*.ts' src/queue/main.ts",
     "queue:start": "node dist/queue/main.js",
     "test:chat": "tsx --test test/ai/errors.test.ts test/routes/chat.test.ts",
     "test:relations": "tsx --test test/commands/relations.test.ts",
@@ -27,9 +27,11 @@
     "test:harness:remote": "tsx test/harness/remote-smoke.ts",
     "test:skills": "tsx --test test/skills/*.test.ts",
     "typecheck:test": "tsc --project tsconfig.test.json && tsc -p test/cloudflare/tsconfig.worker.json",
-    "test": "pnpm typecheck:test && tsx --test test/automation/*.test.ts test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/storage/*.test.ts test/routes/*.test.ts",
+    "test": "pnpm typecheck:test && tsx --test test/automation/*.test.ts test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/storage/*.test.ts test/routes/*.test.ts test/runner/*.test.ts",
     "test:automations": "tsx --test test/automation/*.test.ts",
-    "test:edge": "tsc -p test/cloudflare/tsconfig.worker.json && tsx --test test/cloudflare/*.test.ts"
+    "test:edge": "tsc -p test/cloudflare/tsconfig.worker.json && tsx --test test/cloudflare/*.test.ts",
+    "test:runner": "tsx --test test/runner/*.test.ts",
+    "runner:start": "node dist/runner/http-entry.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.78",
@@ -62,7 +64,8 @@
     "svix": "^2.8.0",
     "yaml": "^2.8.1",
     "zod": "^4.6.5",
-    "@tabdo/platform": "workspace:*"
+    "@tabdo/platform": "workspace:*",
+    "@tabdo/execution": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261014.1",

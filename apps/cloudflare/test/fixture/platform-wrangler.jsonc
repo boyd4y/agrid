@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tabdo-platform-coordination-fixture",
+  "main": "platform-worker.ts",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "durable_objects": { "bindings": [{ "name": "PLATFORM_SESSIONS", "class_name": "PlatformSessionCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PlatformSessionCoordinator"] }],
+  "hyperdrive": [{ "binding": "PLATFORM_DATABASE", "id": "00000000000000000000000000000000", "localConnectionString": "postgresql://tableapp:tableapp@127.0.0.1:5432/tabdo_agent_test" }],
+  "vars": { "PLATFORM_AUTH_SECRET": "platform-coordination-fixture-signing-secret-12345" }
+}

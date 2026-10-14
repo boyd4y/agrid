@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, before, test } from "node:test";
+import { after, before, test } from "../runtime.js";
 import { asc, eq, inArray, or } from "drizzle-orm";
 import type { Transaction } from "../../src/db/index.js";
 

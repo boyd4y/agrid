@@ -1,15 +1,16 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Actor } from "../auth/actor.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { automations, automationRuns, automationAgentActions, chatThreads } from "../db/schema.js";
 import { requireThread } from "../chat/store.js";
 import { HTTPException } from "hono/http-exception";
 
 export async function listScheduledRuns(taskId: string, actor: Actor, offset = 0, limit = 20) {
-  const [task] = await db.select({ source: automations.source }).from(automations)
+  const [task] = await getDatabase().select({ source: automations.source }).from(automations)
     .where(and(eq(automations.id, taskId), eq(automations.organizationId, actor.organizationId)));
   if (task?.source.kind !== "schedule") throw new HTTPException(404, { message: "定时任务不存在" });
-  const items = await db.select({
+  const items = await getDatabase().select({
     id: automationRuns.id, automationId: automationRuns.automationId, status: automationRuns.status,
     createdAt: automationRuns.createdAt, finishedAt: automationRuns.finishedAt, error: automationRuns.error,
     threadId: chatThreads.id, title: chatThreads.title,

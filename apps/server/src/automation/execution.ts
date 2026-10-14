@@ -2,7 +2,8 @@ import * as commands from "../commands/index.js";
 import { and, asc, eq, inArray, sql, isNull } from "drizzle-orm";
 import { validateCell, parseAutomationCommand, resolveAutomationBindings, type AutomationRule, type AutomationAction,
   type AutomationDataCommand, type RunAgentAction } from "@tabdo/shared";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { automationEvents, automationOutbox, automationRuns, automationStepReceipts, automations, rows, tables, member,
   automationAgentActions, agentRuns } from "../db/schema.js";
 import { loadTableColumns } from "../commands/formulas.js";
@@ -26,7 +27,7 @@ export async function finishEvent(tx: Transaction, event: EventRow, status: stri
     .where(and(eq(automationOutbox.eventId, event.id), eq(automationOutbox.generation, event.generation)));
 }
 export async function claimExecution(id: string, generation?: number) {
-  return db.transaction(async tx => {
+  return getDatabase().transaction(async tx => {
     const [event] = await tx.update(automationEvents).set({ fence: sql`${automationEvents.fence} + 1`, status: "running", updatedAt: new Date() })
       .where(and(eq(automationEvents.id, id), inArray(automationEvents.status, ["matched", "running", "retrying"]),
         ...(generation === undefined ? [] : [eq(automationEvents.generation, generation)]))).returning();
@@ -96,7 +97,7 @@ type NativePlan = { event: EventRow; run: RunRow; rule: AutomationRule; action: 
 /** Data + receipt commit atomically. Native SDK work happens after the short transaction. */
 export async function executeNext(id: string, fence: number): Promise<"continue" | "done"> {
   // Provider hydration contacts its fixed API outside event/row transactions.
-  const [initial] = await db.select().from(automationEvents).where(eq(automationEvents.id, id));
+  const [initial] = await getDatabase().select().from(automationEvents).where(eq(automationEvents.id, id));
   let hydrated: AnyEventSnapshot | undefined;
   if (initial && !initial.finishedAt) {
     const saved = initial.snapshot as unknown as AnyEventSnapshot;
@@ -106,7 +107,7 @@ export async function executeNext(id: string, fence: number): Promise<"continue"
       hydrated = { ...saved, event: { ...enriched, data: { ...enriched.data, message: { ...(enriched.data.message as Record<string, unknown>), bodyHydrated: true } } } };
     }
   }
-  const plan = await db.transaction(async (tx): Promise<NativePlan | "continue" | "done"> => {
+  const plan = await getDatabase().transaction(async (tx): Promise<NativePlan | "continue" | "done"> => {
     const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
     if (!event || event.finishedAt) return "done";
     if (event.fence !== fence) throw new FenceLostError("执行租约已被接管");
@@ -147,7 +148,7 @@ export async function executeNext(id: string, fence: number): Promise<"continue"
   if (typeof plan === "string") return plan;
   const result = await runAutomationAgentAction({ runId: plan.run.id, step: plan.run.nextStep, organizationId: plan.event.organizationId,
     actorUserId: plan.actorId, action: plan.action, eventContext: plan.context, steps: plan.steps, tableId: plan.event.tableId });
-  return db.transaction(async tx => {
+  return getDatabase().transaction(async tx => {
     const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
     if (!event || event.finishedAt) return "done";
     if (event.fence !== fence) throw new FenceLostError("执行租约已被接管");
@@ -163,14 +164,14 @@ export async function executeNext(id: string, fence: number): Promise<"continue"
 }
 /** Completion of a native question resumes the remaining actions using the same action mapping. */
 export async function reconcileNativeAutomations(limit = 25, organizationId?: string) {
-  const candidates = await db.select({ eventId: automationRuns.eventId, runId: automationRuns.id }).from(automationRuns)
+  const candidates = await getDatabase().select({ eventId: automationRuns.eventId, runId: automationRuns.id }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId))
     .innerJoin(automationAgentActions, and(eq(automationAgentActions.runId, automationRuns.id), eq(automationAgentActions.step, automationRuns.nextStep)))
     .innerJoin(agentRuns, eq(agentRuns.id, automationAgentActions.agentRunId))
     .where(and(inArray(automationRuns.status, ["waiting_input", "unknown"]), isNull(automationRuns.finishedAt),
       inArray(agentRuns.status, ["completed", "failed", "cancelled"]),
       ...(organizationId ? [eq(automations.organizationId, organizationId)] : []))).limit(limit);
-  for (const candidate of candidates) if (candidate.eventId) await db.transaction(async tx => {
+  for (const candidate of candidates) if (candidate.eventId) await getDatabase().transaction(async tx => {
     const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, candidate.eventId!)).for("update");
     if (!event || event.finishedAt || event.status !== "waiting_input") return;
     const changed = await tx.update(automationRuns).set({ status: "queued", error: null }).where(and(eq(automationRuns.id, candidate.runId),
@@ -185,7 +186,7 @@ export async function reconcileNativeAutomations(limit = 25, organizationId?: st
   return candidates.length;
 }
 export async function recordFailure(id: string, error: Error, final: boolean, fence?: number, generation?: number) {
-  await db.transaction(async tx => {
+  await getDatabase().transaction(async tx => {
     const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
     if (!event || event.finishedAt || (fence !== undefined && event.fence !== fence) || (generation !== undefined && event.generation !== generation)) return;
     if (final) { await finishEvent(tx, event, "failed", error.message);return; }

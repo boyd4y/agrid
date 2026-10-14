@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { before, after, test } from "node:test";
+import { before, after, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { eq, and, sql } from "drizzle-orm";
 if (!process.env.DATABASE_URL?.endsWith("_agent_test"))

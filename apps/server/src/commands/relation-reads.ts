@@ -1,6 +1,7 @@
 import { sql, eq, type SQL, getTableColumns } from "drizzle-orm";
 import { rows } from "../db/schema.js";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import type { ColumnDef, RowData } from "@tabdo/shared";
 
 export function relationPredicate(col: ColumnDef): SQL {
@@ -103,7 +104,7 @@ export function rowProjection(cols: ColumnDef[], fullRelations = false) {
 export async function readRow(
   rowId: string,
   cols: ColumnDef[],
-  conn: Transaction | typeof db = db,
+  conn: Transaction | ReturnType<typeof getDatabase> = getDatabase(),
   fullRelations = false,
 ) {
   const [row] = await conn

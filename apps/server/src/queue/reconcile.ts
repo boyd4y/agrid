@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { reconcileStaleMs, reconcileBatch, queueName } from "./config.js";
 import { acquireRowLease, createLeaseClient } from "./lease.js";
 import { closeQueue, createQueue, jobId } from "./queues.js";
@@ -15,7 +16,7 @@ export function createPublishedReconciler() {
     async tick() {
       const token = randomUUID();
       const staleMs = reconcileStaleMs;
-      const records = await db.execute(sql`
+      const records = await getDatabase().execute(sql`
         WITH candidates AS (
           SELECT o.id FROM automation_outbox o
           JOIN automation_events e ON e.id = o.event_id AND e.generation = o.generation
@@ -48,7 +49,7 @@ export function createPublishedReconciler() {
         const lease = await acquireRowLease(client, record.organization_id, record.row_id ?? record.event_id);
         if (!lease) continue;
         try {
-          recovered += await db.transaction(async (tx) => {
+          recovered += await getDatabase().transaction(async (tx) => {
             // Serialize with claimExecution, completion and manual replay before changing delivery.
             const events = await tx.execute(sql`SELECT e.id FROM automation_events e
               WHERE e.id = ${record.event_id}::uuid AND generation = ${record.generation}

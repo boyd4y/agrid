@@ -3,7 +3,8 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import type { IntegrationInbox } from "@tabdo/shared";
 import type { ExternalAutomationEvent } from "../automation/events.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { decryptSecret } from "./secrets.js";
 import { boundedBody, jsonObject } from "./http.js";
@@ -67,7 +68,7 @@ export async function hydrateAgentMailEvent(event: ExternalAutomationEvent): Pro
   if (!message?.bodyMissing) return event;
   if (message.inboxId !== event.source.inboxId || typeof message.messageId !== "string") throw new Error("Invalid verified message context");
   if ([event.source.inboxId, message.messageId].some(id => id === "." || id === "..")) throw new Error("Invalid AgentMail message identity");
-  const [connection] = await db.select().from(integrationConnections).where(and(eq(integrationConnections.id, event.source.connectionId), eq(integrationConnections.organizationId, event.organizationId), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
+  const [connection] = await getDatabase().select().from(integrationConnections).where(and(eq(integrationConnections.id, event.source.connectionId), eq(integrationConnections.organizationId, event.organizationId), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
   if (!connection) throw new Error("AgentMail connection is no longer available");
   const full = await agentMailRequest(connectionKey(connection), `/v0/inboxes/${encodeURIComponent(event.source.inboxId)}/messages/${encodeURIComponent(message.messageId)}`);
   const normalized = normalizeAgentMailMessage(full, event.occurredAt);

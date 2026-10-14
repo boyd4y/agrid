@@ -1,3 +1,4 @@
+import { withNodeResources } from "../resources/node.js";
 /**
  * Smoke: keyset pagination + filter pushdown against large table.
  * Usage: pnpm --filter @tabdo/server db:smoke:perf [tableId]
@@ -122,7 +123,7 @@ async function main() {
   await client.end();
 }
 
-main().catch(async (e) => {
+withNodeResources(main).catch(async (e) => {
   console.error(e);
   await client.end();
   process.exit(1);

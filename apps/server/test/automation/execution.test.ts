@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
-import { after, before, test } from "node:test";
+import { after, before, test } from "../runtime.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { ExternalAutomationEvent } from "../../src/automation/events.js";
 

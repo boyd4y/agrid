@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { test } from "node:test";
+import { test } from "../runtime.js";
 import { eq } from "drizzle-orm";
 import { asSchema } from "ai";
 import { createNativeAgent, openNativeSandbox } from "../../src/harness/runtime.js";

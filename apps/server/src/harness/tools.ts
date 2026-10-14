@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Actor } from "../auth/actor.js";
 import { member } from "../db/schema.js";
-import type { Transaction } from "../db/index.js";
+import type { Transaction } from "../db/context.js";
 import { withToolTransaction } from "../ai/execution-context.js";
 import { asSchema, jsonSchema, InvalidToolInputError, type ToolSet, type TextStreamPart } from "ai";
 import { chatErrorText } from "../ai/errors.js";

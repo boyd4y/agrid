@@ -1,3 +1,4 @@
+import { withNodeResources } from "../resources/node.js";
 /**
  * Seed TWO tenants (organizations) with isolated scheme-2 tables,
  * then verify list/get cannot cross orgs.
@@ -356,7 +357,7 @@ const isMain =
   import.meta.url === pathToFileURL(process.argv[1]!).href ||
   process.argv[1]?.endsWith("seed-tenants.ts");
 if (isMain) {
-  main().catch(async (err) => {
+  withNodeResources(main).catch(async (err) => {
     console.error(err);
     await client.end();
     process.exit(1);

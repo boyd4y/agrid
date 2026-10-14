@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { after, before, test } from "node:test";
+import { after, before, test } from "../runtime.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Actor } from "../../src/auth/actor.js";

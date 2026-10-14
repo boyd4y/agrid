@@ -3,9 +3,10 @@ import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { DISABLED_TOOLS_SCHEMA } from "@tabdo/shared";
 import { getAgentToolCatalog, validateDisabledTools } from "../harness/tool-catalog.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { agentProfile, member, user, organization, agentRuns, chatThreads } from "../db/schema.js";
-import { auth } from "../auth/index.js";
+import { getAuth } from "@tabdo/platform/resources";
 import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
 import { validateSelectedSkills } from "../skills/service.js";
 import { avatarImageSchema, botAvatarSchema, memberAvatarUrl } from "../auth/avatar.js";
@@ -57,7 +58,7 @@ membersRoute.post("/invite", async (c) => {
     .parse(await c.req.json());
 
   try {
-    const createInvitation = () => auth.api.createInvitation({
+    const createInvitation = () => getAuth().api.createInvitation({
       body: {
         email: body.email,
         role: body.role,
@@ -129,7 +130,7 @@ membersRoute.post("/agents", async (c) => {
 
   persona.disabledTools = validateDisabledTools(persona.defaultHarness, persona.disabledTools);
 
-  await db.transaction(async (tx) => {
+  await getDatabase().transaction(async (tx) => {
     await tx.insert(user).values({
       id,
       name: body.name,
@@ -205,7 +206,7 @@ membersRoute.patch("/agents/:memberId", async (c) => {
     })
     .parse(await c.req.json());
 
-  const [mem] = await db
+  const [mem] = await getDatabase()
     .select()
     .from(member)
     .where(
@@ -217,7 +218,7 @@ membersRoute.patch("/agents/:memberId", async (c) => {
     .limit(1);
   if (!mem) return c.json({ error: "成员不存在" }, 404);
 
-  const [profile] = await db
+  const [profile] = await getDatabase()
     .select()
     .from(agentProfile)
     .where(and(eq(agentProfile.userId, mem.userId), eq(agentProfile.organizationId, actor.organizationId), eq(agentProfile.memberId, mem.id)))
@@ -261,7 +262,7 @@ membersRoute.patch("/agents/:memberId", async (c) => {
 
   nextPersona.disabledTools = validateDisabledTools(lockedHarness, nextPersona.disabledTools);
 
-  await db.transaction(async (tx) => {
+  await getDatabase().transaction(async (tx) => {
   if (body.name || body.image !== undefined) {
     await tx
       .update(user)
@@ -287,7 +288,7 @@ membersRoute.patch("/agents/:memberId", async (c) => {
 membersRoute.get("/:memberId/avatar", async (c) => {
   const actor = await resolveActor(c.req.raw);
   if (!actor?.organizationId) return c.json({ error: "未授权" }, 401);
-  const [target] = await db.select({ image: user.image }).from(member).innerJoin(user, eq(member.userId, user.id))
+  const [target] = await getDatabase().select({ image: user.image }).from(member).innerJoin(user, eq(member.userId, user.id))
     .where(and(eq(member.id, c.req.param("memberId")), eq(member.organizationId, actor.organizationId))).limit(1);
   if (!target?.image?.startsWith("data:image/")) return c.notFound();
   const match = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec(target.image);
@@ -300,14 +301,14 @@ membersRoute.get("/:memberId/avatar", async (c) => {
 membersRoute.patch("/:memberId/avatar", async (c) => {
   const actor = await resolveActor(c.req.raw);
   if (!actor?.organizationId) return c.json({ error: "未授权" }, 401);
-  const [target] = await db.select().from(member)
+  const [target] = await getDatabase().select().from(member)
     .where(and(eq(member.id, c.req.param("memberId")), eq(member.organizationId, actor.organizationId))).limit(1);
   if (!target) return c.json({ error: "成员不存在" }, 404);
   if (target.userId !== actor.userId && !["owner", "admin"].includes(String(actor.role))) return c.json({ error: "只能修改自己的头像" }, 403);
-  const [bot] = await db.select({ id: agentProfile.id }).from(agentProfile).where(eq(agentProfile.userId, target.userId)).limit(1);
+  const [bot] = await getDatabase().select({ id: agentProfile.id }).from(agentProfile).where(eq(agentProfile.userId, target.userId)).limit(1);
   if (bot) return c.json({ error: "智能体使用 bot 头像，请在智能体配置中修改" }, 400);
   const { image } = z.object({ image: avatarImageSchema }).parse(await c.req.json());
-  await db.update(user).set({ image, updatedAt: new Date() }).where(eq(user.id, target.userId));
+  await getDatabase().update(user).set({ image, updatedAt: new Date() }).where(eq(user.id, target.userId));
   return c.json({ ok: true, image: memberAvatarUrl(target.id, image) });
 });
 
@@ -319,7 +320,7 @@ membersRoute.delete("/:memberId", async (c) => {
   }
 
   const memberId = c.req.param("memberId");
-  const [mem] = await db
+  const [mem] = await getDatabase()
     .select()
     .from(member)
     .where(
@@ -337,7 +338,7 @@ membersRoute.delete("/:memberId", async (c) => {
     return c.json({ error: "不能移除 owner" }, 400);
   }
 
-  await db.transaction(async (tx) => {
+  await getDatabase().transaction(async (tx) => {
     // Delete first to serialize with host tools holding a membership SHARE lock.
     await tx.delete(member).where(and(eq(member.id, memberId), eq(member.organizationId, actor.organizationId)));
     await tx.delete(agentProfile).where(and(
@@ -359,7 +360,7 @@ membersRoute.get("/me", async (c) => {
   if (!actor) return c.json({ error: "未登录" }, 401);
   let org = null;
   if (actor.organizationId) {
-    const [o] = await db
+    const [o] = await getDatabase()
       .select()
       .from(organization)
       .where(eq(organization.id, actor.organizationId))

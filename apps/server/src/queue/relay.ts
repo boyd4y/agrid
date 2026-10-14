@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { positiveInt } from "./config.js";
 import { automationDeliveryId, parseAutomationDelivery, type AutomationDelivery } from "@tabdo/shared";
 import type { QueuePublisher } from "@tabdo/queue";
@@ -12,7 +13,7 @@ export function createRelay(publisher: QueuePublisher<AutomationDelivery>) {
     /** One SQL statement atomically selects AND claims rows; concurrent relays skip locks. */
     async claim(limit = positiveInt("AUTOMATION_RELAY_BATCH", 25)): Promise<Delivery[]> {
       const token = randomUUID();
-      const result = await db.execute(sql`
+      const result = await getDatabase().execute(sql`
         WITH pending AS (
           SELECT id, available_at AS due_at FROM automation_outbox
           WHERE status = 'pending' AND available_at <= now()
@@ -35,7 +36,7 @@ export function createRelay(publisher: QueuePublisher<AutomationDelivery>) {
     },
     /** No database transaction or row lock is held while contacting the queue provider. */
     async publish(record: Delivery) {
-      const owned = await db.execute(sql`UPDATE automation_outbox
+      const owned = await getDatabase().execute(sql`UPDATE automation_outbox
         SET claim_until = now() + ${positiveInt("AUTOMATION_RELAY_LEASE_MS", 30000)} * interval '1 millisecond'
         WHERE id = ${record.id}::uuid AND status = 'publishing'
           AND claim_token = ${record.claim_token}::uuid AND generation = ${record.generation}
@@ -44,7 +45,7 @@ export function createRelay(publisher: QueuePublisher<AutomationDelivery>) {
       try {
         const body = parseAutomationDelivery(record.payload);
         await publisher.publish({ id: automationDeliveryId(body), body });
-        await db.execute(sql`UPDATE automation_outbox
+        await getDatabase().execute(sql`UPDATE automation_outbox
           SET status = 'published', published_at = now(), claim_token = NULL, claim_until = NULL, last_error = NULL
           WHERE id = ${record.id}::uuid AND status = 'publishing'
             AND claim_token = ${record.claim_token}::uuid AND generation = ${record.generation}`);
@@ -53,7 +54,7 @@ export function createRelay(publisher: QueuePublisher<AutomationDelivery>) {
         await publisher.close?.().catch(() => {});
         const error = cause instanceof Error ? cause.message : String(cause);
         const delay = Math.min(60000, 1000 * 2 ** Math.min(record.attempts - 1, 6));
-        await db.execute(sql`UPDATE automation_outbox
+        await getDatabase().execute(sql`UPDATE automation_outbox
           SET status = 'pending', claim_token = NULL, claim_until = NULL, last_error = ${error},
             available_at = now() + ${delay} * interval '1 millisecond'
           WHERE id = ${record.id}::uuid AND status = 'publishing'

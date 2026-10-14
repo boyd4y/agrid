@@ -3,7 +3,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
 import type { Actor } from "../auth/actor.js";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import {
   agentProfile,
   agentRuntimeSessions,
@@ -20,7 +21,7 @@ import {
 import {
   workspaceSnapshotSchema,
   type WorkspaceSnapshot,
-} from "./workspace.js";
+} from "@tabdo/platform/checkpoints";
 
 export type RuntimeLease = { threadId: string; token: string; fence: number };
 export type RuntimeRecord = typeof agentRuntimeSessions.$inferSelect;
@@ -40,7 +41,7 @@ export async function claimRuntimeLease(
   await requireThread(threadId, actor);
   const token = randomUUID();
   // One conditional UPSERT is the claim; two workers cannot both observe idle.
-  const result = await db.execute(sql`
+  const result = await getDatabase().execute(sql`
     INSERT INTO agent_thread_leases (thread_id,token,fence,expires_at)
     VALUES (${threadId}::uuid,${token}::uuid,1,clock_timestamp()+interval '120 seconds')
     ON CONFLICT (thread_id) DO UPDATE SET token=EXCLUDED.token,
@@ -56,7 +57,7 @@ export async function claimRuntimeLease(
 }
 
 export async function renewRuntimeLease(lease: RuntimeLease): Promise<boolean> {
-  const rows = await db
+  const rows = await getDatabase()
     .update(agentThreadLeases)
     .set({ expiresAt: sql`clock_timestamp()+interval '120 seconds'` })
     .where(
@@ -70,7 +71,7 @@ export async function renewRuntimeLease(lease: RuntimeLease): Promise<boolean> {
 }
 
 export async function releaseRuntimeLease(lease: RuntimeLease): Promise<void> {
-  await db
+  await getDatabase()
     .update(agentThreadLeases)
     .set({ token: null, expiresAt: null })
     .where(leaseScope(lease));
@@ -82,7 +83,7 @@ export async function withRuntimeLease<T>(
   lease: RuntimeLease,
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => {
+  return getDatabase().transaction(async (tx) => {
     const [row] = await tx
       .select()
       .from(agentThreadLeases)

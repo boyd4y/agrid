@@ -49,7 +49,7 @@ test("standalone native agent executes a host tool and resumes native history wi
     assert(JSON.stringify(requests.at(-1)?.messages).includes("Computed 5."));
     assert.equal(completions.at(-1), "stop");
     const workspaceFiles = await Promise.all(fs.getAllPaths().map(async (path) =>
-      (await fs.lstat(path)).isFile ? (await fs.readFileBuffer(path)).toString("utf8") : ""));
+      (await fs.lstat(path)).isFile ? Buffer.from(await fs.readFileBuffer(path)).toString("utf8") : ""));
     assert(!workspaceFiles.join("\n").includes("fixture-key"));
     await resumed.stop();
     await resumed.destroy();

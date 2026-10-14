@@ -1,3 +1,4 @@
+import { withNodeResources } from "../resources/node.js";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { and, eq, isNull, like, inArray, sql, count } from "drizzle-orm";
@@ -633,7 +634,7 @@ const isMain =
   !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isMain) {
-  main().catch(async (err) => {
+  withNodeResources(main).catch(async (err) => {
     console.error(err);
     await client.end();
     process.exit(1);

@@ -1,5 +1,6 @@
 import { eq, asc, desc, and, isNull, sql } from "drizzle-orm";
-import { db, inTransaction, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { inTransaction, type Transaction } from "../db/context.js";
 import { automations, automationRuns, automationEvents, automationOutbox, rows, tables, member,
   columns, agentProfile, integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { queueName } from "../queue/config.js";
@@ -24,7 +25,7 @@ function mapRun(row: typeof automationRuns.$inferSelect): AutomationRun {
     createdAt: row.createdAt, finishedAt: row.finishedAt,
     threadId: typeof row.detail.threadId === "string" ? row.detail.threadId : null };
 }
-async function ownedRule(id: string, organizationId?: string, tx: Transaction | typeof db = db) {
+async function ownedRule(id: string, organizationId?: string, tx: Transaction | ReturnType<typeof getDatabase> = getDatabase()) {
   if (!organizationId) throw new Error("缺少工作区上下文");
   const [rule] = await tx.select().from(automations).where(and(eq(automations.id, id), eq(automations.organizationId, organizationId), isNull(automations.deletedAt)));
   if (!rule) throw new Error("自动化不存在");
@@ -81,20 +82,20 @@ async function validateRule(tx: Transaction, rule: Pick<AutomationRule, "source"
   }
 }
 export async function listWorkspaceAutomations(organizationId: string, offset = 0, limit = 100, kind?: "event" | "schedule") {
-  const hits = await db.select({ rule: automations, sourceName: tables.name }).from(automations).leftJoin(tables, eq(tables.id, automations.tableId))
+  const hits = await getDatabase().select({ rule: automations, sourceName: tables.name }).from(automations).leftJoin(tables, eq(tables.id, automations.tableId))
     .where(and(eq(automations.organizationId, organizationId), isNull(automations.deletedAt), kind === "schedule" ? sql`${automations.source}->>'kind' = 'schedule'` : kind === "event" ? sql`${automations.source}->>'kind' <> 'schedule'` : undefined)).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
   return { rules: hits.slice(0, limit).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > limit };
 }
 export async function getWorkspaceAutomation(id: string, organizationId: string) {
   const row = await ownedRule(id, organizationId);
-  const [sourceTable] = row.tableId ? await db.select({ name: tables.name }).from(tables).where(eq(tables.id, row.tableId)) : [];
+  const [sourceTable] = row.tableId ? await getDatabase().select({ name: tables.name }).from(tables).where(eq(tables.id, row.tableId)) : [];
   return { ...mapRule(row), sourceName: sourceTable?.name ?? null };
 }
 export async function listAutomations(input: ListAutomationsInput & OrgScoped, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
   const { tableId, offset, limit } = AUTOMATION_LIST_SCHEMA.parse({ tableId: input.tableId, offset: input.offset, limit: input.limit });
   if (tableId) await requireTableInOrg(tableId, organizationId, transaction);
-  return (await (transaction ?? db).select().from(automations).where(and(eq(automations.organizationId, organizationId),
+  return (await (transaction ?? getDatabase()).select().from(automations).where(and(eq(automations.organizationId, organizationId),
     tableId ? eq(automations.tableId, tableId) : undefined, isNull(automations.deletedAt)))
     .orderBy(asc(automations.createdAt), asc(automations.id)).limit(limit ?? 100).offset(offset ?? 0)).map(mapRule);
 }
@@ -138,7 +139,7 @@ export async function deleteAutomation({ automationId, organizationId }: DeleteA
 }
 export async function listRuleRuns(automationId: string, organizationId: string, limit = 50) {
   await ownedRule(automationId, organizationId);
-  return (await db.select().from(automationRuns).where(eq(automationRuns.automationId, automationId)).orderBy(desc(automationRuns.createdAt)).limit(Math.min(Math.max(limit, 1), 200))).map(mapRun);
+  return (await getDatabase().select().from(automationRuns).where(eq(automationRuns.automationId, automationId)).orderBy(desc(automationRuns.createdAt)).limit(Math.min(Math.max(limit, 1), 200))).map(mapRun);
 }
 export async function listAutomationRuns(input: ListAutomationRunsInput & OrgScoped, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
@@ -148,7 +149,7 @@ export async function listAutomationRuns(input: ListAutomationRunsInput & OrgSco
     const rule = await ownedRule(automationId, organizationId, transaction);
     if (tableId && rule.tableId !== tableId) throw new Error("自动化不属于指定表格");
   }
-  return (await (transaction ?? db).select({ run: automationRuns }).from(automationRuns)
+  return (await (transaction ?? getDatabase()).select({ run: automationRuns }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId)).where(and(
       eq(automations.organizationId, organizationId), isNull(automations.deletedAt),
       tableId ? eq(automationRuns.tableId, tableId) : undefined,
@@ -156,11 +157,11 @@ export async function listAutomationRuns(input: ListAutomationRunsInput & OrgSco
     .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit ?? 50)).map(hit => mapRun(hit.run));
 }
 export async function getEnabledAutomations(tableId: string) {
-  return (await db.select().from(automations).where(and(eq(automations.tableId, tableId), eq(automations.enabled, true), isNull(automations.deletedAt)))).map(mapRule);
+  return (await getDatabase().select().from(automations).where(and(eq(automations.tableId, tableId), eq(automations.enabled, true), isNull(automations.deletedAt)))).map(mapRule);
 }
 /** Replay only the same saved plan; committed action receipts are never reset. */
 export async function replayAutomationRun(runId: string, organizationId: string) {
-  return db.transaction(async tx => {
+  return getDatabase().transaction(async tx => {
     const [run] = await tx.select().from(automationRuns).where(eq(automationRuns.id, runId));
     if (!run?.eventId || run.status !== "failed") throw new Error("仅支持重放有事件记录的失败运行");
     const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, run.eventId)).for("update");

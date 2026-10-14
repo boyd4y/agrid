@@ -4,7 +4,7 @@ import { logger } from "hono/logger";
 import { tablesRoute } from "./routes/tables.js";
 import { rowsRoute } from "./routes/rows.js";
 import { columnsRoute } from "./routes/columns.js";
-import { chatRoute } from "./routes/chat.js";
+import { createChatRoute } from "./routes/chat.js";
 import { threadsRoute } from "./routes/threads.js";
 import { membersRoute } from "./routes/members.js";
 import { commandsRoute } from "./routes/commands.js";
@@ -15,14 +15,19 @@ import { webhookEndpointsRoute, webhooksRoute } from "./routes/webhooks.js";
 import { apiKeysRoute } from "./routes/api-keys.js";
 import { filesRoute } from "./routes/files.js";
 import { skillsRoute } from "./routes/skills.js";
-import { auth } from "./auth/index.js";
+import { getAuth, withPlatformResources, type PlatformResources } from "@tabdo/platform/resources";
 import { checkSchemaReady } from "./db/schema-ready.js";
 import { nativeDrainStarted, registerNativeRun } from "./harness/drain.js";
 
-/** Shared route assembly. This still uses the existing business dependencies. */
-export function createApp(options: { appUrl: string }) {
+import type { NativeRunStreamFactory } from "./harness/run-response.js";
+
+/** Shared route assembly. The caller owns the supplied resources' lifetime. */
+export function createApp(options: { appUrl: string; resources: PlatformResources; streamNativeRun?: NativeRunStreamFactory }) {
   const appUrl = options.appUrl;
+  const resources = Object.freeze({ database: options.resources.database, auth: options.resources.auth });
   const app = new Hono();
+
+  app.use("*", (_c, next) => withPlatformResources(resources, next));
 
   app.use("*", logger());
   app.use("/api/chat", async (c, next) => {
@@ -53,12 +58,12 @@ export function createApp(options: { appUrl: string }) {
     }, schema.ok ? 200 : 503);
   });
 
-  app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+  app.on(["POST", "GET"], "/api/auth/*", (c) => getAuth().handler(c.req.raw));
 
   app.route("/api/tables", tablesRoute);
   app.route("/api", rowsRoute);
   app.route("/api", columnsRoute);
-  app.route("/api/chat", chatRoute);
+  app.route("/api/chat", createChatRoute(options.streamNativeRun));
   app.route("/api/threads", threadsRoute);
   app.route("/api/members", membersRoute);
   app.route("/api/commands", commandsRoute);

@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { eq, and, isNull } from "drizzle-orm";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { agentProfile, member, user, organization, userApiKeys } from "../db/schema.js";
 import type { MemberRole } from "../db/schema.js";
-import { auth } from "./index.js";
+import { getAuth } from "@tabdo/platform/resources";
 import { memberAvatarUrl } from "./avatar.js";
 
 export type Actor = {
@@ -26,7 +27,7 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
   if (authHeader?.toLowerCase().startsWith("bearer tab_")) {
     const raw = authHeader.slice("bearer ".length).trim();
     if (!/^tab_[A-Za-z0-9_-]{43}$/.test(raw)) return null;
-    const [hit] = await db.select({ account: user, membership: member })
+    const [hit] = await getDatabase().select({ account: user, membership: member })
       .from(userApiKeys)
       .innerJoin(user, eq(user.id, userApiKeys.userId))
       .innerJoin(member, and(eq(member.userId, userApiKeys.userId), eq(member.organizationId, userApiKeys.organizationId)))
@@ -39,14 +40,14 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
   if (authHeader?.toLowerCase().startsWith("bearer agt_")) {
     const raw = authHeader.slice("bearer ".length).trim();
     const hash = hashApiKey(raw);
-    const [profile] = await db
+    const [profile] = await getDatabase()
       .select()
       .from(agentProfile)
       .where(eq(agentProfile.apiKeyHash, hash))
       .limit(1);
     if (!profile) return null;
 
-    const [mem] = await db
+    const [mem] = await getDatabase()
       .select()
       .from(member)
       .where(eq(member.id, profile.memberId))
@@ -59,7 +60,7 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
       return null;
     }
 
-    const [u] = await db.select().from(user).where(eq(user.id, profile.userId)).limit(1);
+    const [u] = await getDatabase().select().from(user).where(eq(user.id, profile.userId)).limit(1);
     if (!u) return null;
     return {
       kind: "agent",
@@ -72,9 +73,9 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
     };
   }
 
-  let session = null as Awaited<ReturnType<typeof auth.api.getSession>> | null;
+  let session = null as Awaited<ReturnType<ReturnType<typeof getAuth>["api"]["getSession"]>> | null;
   try {
-    session = await auth.api.getSession({ headers: req.headers });
+    session = await getAuth().api.getSession({ headers: req.headers });
   } catch (e) {
     console.warn("getSession failed", e);
     return null;
@@ -87,7 +88,7 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
 
   if (!orgId) {
     // fall back: first membership
-    const [mem] = await db
+    const [mem] = await getDatabase()
       .select()
       .from(member)
       .where(eq(member.userId, session.user.id))
@@ -114,7 +115,7 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
     };
   }
 
-  const [mem] = await db
+  const [mem] = await getDatabase()
     .select()
     .from(member)
     .where(and(eq(member.userId, session.user.id), eq(member.organizationId, orgId)))
@@ -135,7 +136,7 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
 }
 
 export async function listOrgMembers(organizationId: string, transaction?: Transaction) {
-  const rows = await (transaction ?? db)
+  const rows = await (transaction ?? getDatabase())
     .select({
       memberId: member.id,
       role: member.role,
@@ -150,7 +151,7 @@ export async function listOrgMembers(organizationId: string, transaction?: Trans
     .innerJoin(user, eq(member.userId, user.id))
     .where(eq(member.organizationId, organizationId));
 
-  const agents = await (transaction ?? db)
+  const agents = await (transaction ?? getDatabase())
     .select()
     .from(agentProfile)
     .where(eq(agentProfile.organizationId, organizationId));

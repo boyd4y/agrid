@@ -6,11 +6,16 @@
 
 目标：业务和用户对 Node/Cloudflare 无感知，保留 Better Auth 与官方 Harness。实施依据是[修订架构](architecture/dual-deployment.md)：按 queue/storage/harness/sandbox 等能力组织包，供应商实现放包内 adapters，业务协议/权限/数据状态由平台拥有。
 
-已先独立提交架构修订，再按新边界迁移 queue/storage 包及内部 adapters。底层处理通用消息和相对对象 key；自动化协议与 UUID 文件 namespace 在 shared/server。旧 core/runtime 包已撤下。首批 app/Better Auth/PG 工厂和 Harness/Sandbox 能力包也已接入；通用 SDK 装配不导入产品协议/数据库。继续推进请求作用域平台资源、独立 runner、恢复、DO/队列/调度和完整双模式验收；登录过期仅影响远程验收。
+已先独立提交架构修订，再按新边界迁移 queue/storage 包及内部 adapters。底层处理通用消息和相对对象 key；自动化协议与 UUID 文件 namespace 在 shared/server。旧 core/runtime 包已撤下。首批 app/Better Auth/PG 工厂和 Harness/Sandbox 能力包也已接入；通用 SDK 装配不导入产品协议/数据库。请求资源隔离、独立 runner 与 DO 输出/取消已完成本地验证。继续推进共同业务包提取、实际 CF 队列/调度接线及完整双模式验收；登录过期仅影响远程验收。
 
-嵌入式 Run 执行已与 HTTP 投影拆开：后台任务直接等待同一个执行入口完成检查点提交和租约释放，浏览器取消读流只断开投影。44 项 Harness 与 31 项聊天回归通过；独立 runner、持久输出订阅及 CF 协调仍未完成。
+嵌入式 Run 执行已与 HTTP 投影拆开：后台任务直接等待同一个执行入口完成检查点提交和租约释放，浏览器取消读流只断开投影。独立 Node runner、持久接受/输出订阅、签名 HTTP 控制与真实 Pi 待答跨进程续接已接入。Node 聊天嵌入/独立进程的公共协议一致；CF 输出/取消调用真实平台服务。
 
-首批 `@tabdo/platform` 已独立：PG/Better Auth 工厂、唯一 schema 与私有 checkpoint 契约，Node 装配和实际 workerd 夹具均通过包调用。workerd 真实验证请求资源关闭、Cookie 签名并发隔离和退出；Drizzle 导出 37 张表 DDL 与迁移前完全一致，141 项服务端回归通过。继续拆业务请求依赖、Run repository、runner 和 DO；当前只证明工厂可用，完整 CF 产品入口仍未完成。
+首批 `@tabdo/platform` 已独立：PG/Better Auth 工厂、唯一 schema 与私有 checkpoint 契约，Node 装配和实际 workerd 夹具均通过包调用。workerd 真实验证请求资源关闭、Cookie 签名并发隔离和退出；Drizzle 导出 37 张表 DDL 与迁移前完全一致，141 项服务端回归通过。业务 DB/Auth 已改显式请求/任务 scope，SDK-free agent admission 也通过实际 workerd。完整 CF 产品入口仍未完成。
+
+当前并行批次的完成/待完成边界：
+
+- 已完成：严格资源作用域；通用 process/HTTP execution adapters；持久执行接受与输出；真实子进程/HTTP 冷续接；Node 公共聊天可选独立执行；DO 接通实际身份/输出/取消。
+- 待完成：业务服务继续提取成共用包；自动化/定时统一提交接受记录；CF Queue/Cron 与 Outbox 接线；完整 Worker 入口与 CF/E2B 计算部署；hibernating bridge；远程验收。
 
 ## 已完成并提交
 

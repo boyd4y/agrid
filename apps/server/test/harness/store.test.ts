@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, before, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import type { Actor } from "../../src/auth/actor.js";
@@ -18,7 +18,7 @@ const {
   agentRuntimeSessions,
 } = await import("../../src/db/schema.js");
 const { saveMessage } = await import("../../src/chat/store.js");
-const { beginNativeRun, listNativeRuns } = await import("../../src/harness/runs.js");
+const { beginNativeRun, recordRunActivity, listNativeRuns } = await import("../../src/harness/runs.js");
 const {
   claimRuntimeLease,
   releaseRuntimeLease,
@@ -295,6 +295,9 @@ test("expired runs become visible failures; an older checkpoint cannot replay an
     resumeState: { type: "resume-session", specificationVersion: "harness-v1", harnessId: "pi", data: { opaque: "fixture" } },
     workspace: [], sandboxId: record.sandboxId, userMessageId: first.userMessageId, assistantMessageId: first.assistantMessageId, status: "ready",
   }, { id: first.assistantMessageId, parentId: first.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: [{ type: "text", text: "first completed" }] } }, { id: first.id, status: "completed" });
+  assert.equal(await recordRunActivity(lease, first.id, { threadId, runId: first.id, phase: "writing", step: 1,
+    completedTools: 0, startedAt: first.startedAt.getTime(), updatedAt: Date.now() }), false);
+  assert.equal((await listNativeRuns(threadId, actor))[0].status, "completed", "a late SDK callback cannot resurrect a committed Run");
   record = await prepareRuntimeRecord(lease, actor, { profileId, harness: "pi", mode: "local" });
   const second = await beginNativeRun(lease, actor, record, { id: "run-user-2", parentId: first.assistantMessageId, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "crashed after mutation" }] } }, agentMember);
   await db.update(agentThreadLeases).set({ expiresAt: sql`clock_timestamp()-interval '1 second'` }).where(eq(agentThreadLeases.threadId, threadId));

@@ -3,7 +3,8 @@ import { HTTPException } from "hono/http-exception";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { resolveActor, type Actor } from "../auth/actor.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { chatThreads, agentThreadLeases, agentRuntimeSessions } from "../db/schema.js";
 import { resolveChatContext } from "../chat/context.js";
 import { loadMessages, requireThread, threadScope } from "../chat/store.js";
@@ -28,7 +29,7 @@ threadsRoute.get("/", async (c) => {
   const after = c.req.query("after");
   let cursor: typeof chatThreads.$inferSelect | undefined;
   if (after) { cursor = await requireThread(id(after), actor); if (cursor.kind !== "chat") throw new HTTPException(400, { message: "分页游标不属于普通对话" }); }
-  const threads = await db.select().from(chatThreads).where(and(
+  const threads = await getDatabase().select().from(chatThreads).where(and(
     eq(chatThreads.userId, actor.userId), eq(chatThreads.organizationId, actor.organizationId), eq(chatThreads.kind, "chat"),
     cursor ? or(lt(chatThreads.createdAt, cursor.createdAt), and(eq(chatThreads.createdAt, cursor.createdAt), lt(chatThreads.id, cursor.id))) : undefined,
   )).orderBy(desc(chatThreads.createdAt), desc(chatThreads.id)).limit(101);
@@ -40,7 +41,7 @@ threadsRoute.post("/", async (c) => {
   const actor = c.get("actor");
   const { resourceKey, context } = await resolveChatContext(input.context, actor);
   if (context.scheduledTaskId) throw new HTTPException(400, { message: "定时任务会话由运行创建，请打开已有运行" });
-  const [thread] = await db.insert(chatThreads).values({ userId: actor.userId, organizationId: actor.organizationId, clientId: input.clientId, custom: { resourceKey, agentId: input.agentId ?? null } })
+  const [thread] = await getDatabase().insert(chatThreads).values({ userId: actor.userId, organizationId: actor.organizationId, clientId: input.clientId, custom: { resourceKey, agentId: input.agentId ?? null } })
     .onConflictDoUpdate({ target: [chatThreads.userId, chatThreads.organizationId, chatThreads.clientId], set: { clientId: input.clientId } }).returning();
   if (thread.kind !== "chat") throw new HTTPException(409, { message: "不能将任务运行变成普通对话" });
   if (thread.custom.resourceKey !== resourceKey) throw new HTTPException(409, { message: "对话属于其他资源" });
@@ -54,13 +55,13 @@ threadsRoute.patch("/:id", async (c) => {
   const input = z.object({ title: z.string().trim().min(1).max(200).optional(), custom: z.record(z.string(), z.unknown()).optional() }).strict().parse(await c.req.json());
   if (typeof thread.custom.agentId === "string" && input.custom && Object.hasOwn(input.custom, "agentId") && input.custom.agentId !== thread.custom.agentId) throw new HTTPException(409, { message: "已有对话不能更换智能体" });
   if (input.custom?.resourceKey && input.custom.resourceKey !== thread.custom.resourceKey) throw new HTTPException(409, { message: "不能更换已有对话的资源绑定" });
-  const [updated] = await db.update(chatThreads).set({ ...input, custom: input.custom ? { ...thread.custom, ...input.custom, resourceKey: thread.custom.resourceKey } : thread.custom, updatedAt: new Date() }).where(threadScope(threadId, actor)).returning();
+  const [updated] = await getDatabase().update(chatThreads).set({ ...input, custom: input.custom ? { ...thread.custom, ...input.custom, resourceKey: thread.custom.resourceKey } : thread.custom, updatedAt: new Date() }).where(threadScope(threadId, actor)).returning();
   return c.json(dto(updated));
 });
 threadsRoute.delete("/:id", async (c) => {
   const threadId = id(c.req.param("id")), actor = c.get("actor");
   await requireThread(threadId, actor);
-  const runtimeIds = await db.transaction(async (tx) => {
+  const runtimeIds = await getDatabase().transaction(async (tx) => {
     // Serialize deletion with claims and tool commits, including a thread that
     // has not acquired its first lease yet. A running owner must stop first.
     await tx.insert(agentThreadLeases).values({ threadId, fence: 0 }).onConflictDoNothing();
@@ -77,7 +78,7 @@ threadsRoute.post("/:id/title", async (c) => {
   const actor = c.get("actor"), threadId = id(c.req.param("id"));
   const { title } = z.object({ title: z.string().trim().min(1).max(200) }).parse(await c.req.json());
   await requireThread(threadId, actor);
-  await db.update(chatThreads).set({ title, updatedAt: new Date() }).where(and(threadScope(threadId, actor), isNull(chatThreads.title)));
+  await getDatabase().update(chatThreads).set({ title, updatedAt: new Date() }).where(and(threadScope(threadId, actor), isNull(chatThreads.title)));
   return c.json({ title: (await requireThread(threadId, actor)).title });
 });
 

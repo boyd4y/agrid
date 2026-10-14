@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";

@@ -1,5 +1,5 @@
 import { BATCH_SET_RELATIONS_SCHEMA, type BatchRelationsInput, type BatchRelationsResult } from "@tabdo/shared";
-import { inTransaction, type Transaction } from "../db/index.js";
+import { inTransaction, type Transaction } from "../db/context.js";
 import { readRow } from "./relation-reads.js";
 import { requireOrgId } from "../tenant/scope.js";
 import { prepareBatchRowWrites, updateCellsInTransaction, type OrgScoped } from "./index.js";

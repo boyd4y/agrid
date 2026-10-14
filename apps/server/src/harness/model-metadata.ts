@@ -1,9 +1,9 @@
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 
-export type PiModelMetadata = { contextWindow: number; maxTokens: number; reasoning: boolean };
-export const DEFAULT_PI_OUTPUT_TOKENS = 16384;
-export type PiCompletion = { finishReason: string; outputTokens: number; reasoningTokens: number };
+import { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata } from "./model-contracts.js";
+import type { RuntimeEnvironment } from "./contracts.js";
+export { DEFAULT_PI_OUTPUT_TOKENS, type PiModelMetadata, type PiCompletion } from "./model-contracts.js";
 const catalog = z.object({ data: z.array(z.object({ id: z.string(), context_length: z.number().int().positive(),
   top_provider: z.object({ max_completion_tokens: z.number().int().positive().nullable().optional() }).nullable().optional(),
   supported_parameters: z.array(z.string()).optional(),
@@ -11,7 +11,7 @@ const catalog = z.object({ data: z.array(z.object({ id: z.string(), context_leng
 const cache = new Map<string, { expires: number; value: PiModelMetadata }>();
 const CATALOG_TIMEOUT_MS = 2_000;
 
-function configuredLimit(env: NodeJS.ProcessEnv, name: string, fallback: number) {
+function configuredLimit(env: RuntimeEnvironment, name: string, fallback: number) {
   if (!env[name]) return fallback;
   const value = Number(env[name]);
   if (!Number.isInteger(value) || value < 1 || value > 4_000_000) throw new HTTPException(503, { message: `${name} 必须是正整数 token 上限` });
@@ -19,7 +19,7 @@ function configuredLimit(env: NodeJS.ProcessEnv, name: string, fallback: number)
 }
 
 /** Pi must receive real model limits: an invented 32k window clamps long prompts to one token. */
-export async function resolvePiModelMetadata(modelId: string | undefined, env: NodeJS.ProcessEnv = process.env): Promise<PiModelMetadata> {
+export async function resolvePiModelMetadata(modelId: string | undefined, env: RuntimeEnvironment = process.env): Promise<PiModelMetadata> {
   if (!env.OPENROUTER_API_KEY?.trim()) return {
     contextWindow: configuredLimit(env, "PI_CONTEXT_WINDOW", 32768),
     maxTokens: configuredLimit(env, "PI_MAX_OUTPUT_TOKENS", DEFAULT_PI_OUTPUT_TOKENS), reasoning: false,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, before, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");

@@ -1,3 +1,4 @@
+import { withNodeResources } from "../resources/node.js";
 /**
  * Idempotent: add a demo formula column to the first table if missing.
  */
@@ -37,7 +38,7 @@ async function main() {
   await client.end();
 }
 
-main().catch(async (e) => {
+withNodeResources(main).catch(async (e) => {
   console.error(e);
   await client.end();
   process.exit(1);

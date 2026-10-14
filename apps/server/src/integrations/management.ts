@@ -3,7 +3,8 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { IntegrationConnection, WebhookEndpoint } from "@tabdo/shared";
 import { resolveActor, type Actor } from "../auth/actor.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { validUuid } from "./http.js";
 
@@ -34,10 +35,10 @@ export function publicEndpoint(record: Pick<typeof webhookEndpoints.$inferSelect
     enabled: record.enabled, state: record.state as WebhookEndpoint["state"], lastError: record.lastError, createdAt: record.createdAt.toISOString() };
 }
 export async function ownedConnection(id: string, organizationId: string) {
-  const [record] = await db.select().from(integrationConnections).where(and(eq(integrationConnections.id, validUuid(id)), eq(integrationConnections.organizationId, organizationId), isNull(integrationConnections.deletedAt)));
+  const [record] = await getDatabase().select().from(integrationConnections).where(and(eq(integrationConnections.id, validUuid(id)), eq(integrationConnections.organizationId, organizationId), isNull(integrationConnections.deletedAt)));
   if (!record) throw new HTTPException(404, { message: "集成不存在" }); return record;
 }
 export async function ownedEndpoint(id: string, organizationId: string) {
-  const [record] = await db.select().from(webhookEndpoints).where(and(eq(webhookEndpoints.id, validUuid(id)), eq(webhookEndpoints.organizationId, organizationId), isNull(webhookEndpoints.deletedAt)));
+  const [record] = await getDatabase().select().from(webhookEndpoints).where(and(eq(webhookEndpoints.id, validUuid(id)), eq(webhookEndpoints.organizationId, organizationId), isNull(webhookEndpoints.deletedAt)));
   if (!record) throw new HTTPException(404, { message: "Webhook 不存在" }); return record;
 }

@@ -2,7 +2,8 @@ import { CronExpressionParser } from "cron-parser";
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { AutomationRule } from "@tabdo/shared";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { automations, automationSchedules, automationOccurrences } from "../db/schema.js";
 import { appendExternalAutomationEvent } from "./events.js";
 
@@ -25,7 +26,7 @@ export async function syncSchedule(tx: Transaction, rule: AutomationRule, now = 
 }
 /** SQL is the scheduling authority; no process or browser clock owns a job. */
 export async function dispatchDueSchedules(now = new Date(), limit = 25, organizationId?: string) {
-  return db.transaction(async tx => {
+  return getDatabase().transaction(async tx => {
     const due = await tx.select({ schedule: automationSchedules, rule: automations }).from(automationSchedules)
       .innerJoin(automations, eq(automations.id, automationSchedules.automationId))
       .where(and(lte(automationSchedules.nextRunAt, now), eq(automations.enabled, true), isNull(automations.deletedAt), ...(organizationId ? [eq(automations.organizationId, organizationId)] : [])))

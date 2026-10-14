@@ -632,3 +632,6 @@ export const automationAgentActions = pgTable("automation_agent_actions", {
   agentRunId: uuid("agent_run_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, t => [uniqueIndex("automation_agent_actions_key").on(t.runId, t.step)]);
+
+// Durable execution attempts and replayable projection are platform-owned.
+export { agentExecutions, agentExecutionChunks } from "./execution-schema.js";

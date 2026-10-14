@@ -4,7 +4,8 @@ import { HTTPException } from "hono/http-exception";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { Webhook } from "svix";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { integrationActor, canManageIntegrations, endpointFields, ownedEndpoint, publicEndpoint } from "../integrations/management.js";
 import { boundedBody, integrationError, jsonObject, jsonValue, parseBody, validUuid, webhookBodyLimit } from "../integrations/http.js";
@@ -20,13 +21,13 @@ const name = z.string().trim().min(1).max(100);
 const tokenHash = (raw: string) => createHash("sha256").update(raw).digest("hex");
 webhookEndpointsRoute.get("/", async c => {
   const actor = await integrationActor(c);
-  const records = await db.select(endpointFields).from(webhookEndpoints).where(and(eq(webhookEndpoints.organizationId, actor.organizationId), isNull(webhookEndpoints.deletedAt))).orderBy(desc(webhookEndpoints.createdAt));
+  const records = await getDatabase().select(endpointFields).from(webhookEndpoints).where(and(eq(webhookEndpoints.organizationId, actor.organizationId), isNull(webhookEndpoints.deletedAt))).orderBy(desc(webhookEndpoints.createdAt));
   return c.json({ endpoints: records.map(publicEndpoint), canManage: canManageIntegrations(actor) });
 });
 webhookEndpointsRoute.post("/", async c => {
   const actor = await integrationActor(c, true), body = await parseBody(c, z.strictObject({ name }));
   const token = `hook_${randomBytes(32).toString("base64url")}`;
-  const [record] = await db.insert(webhookEndpoints).values({ organizationId: actor.organizationId, createdByUserId: actor.userId, name: body.name, kind: "webhook", tokenHash: tokenHash(token), state: "active" }).returning();
+  const [record] = await getDatabase().insert(webhookEndpoints).values({ organizationId: actor.organizationId, createdByUserId: actor.userId, name: body.name, kind: "webhook", tokenHash: tokenHash(token), state: "active" }).returning();
   return c.json({ endpoint: publicEndpoint(record), token }, 201);
 });
 webhookEndpointsRoute.patch("/:id", async c => {
@@ -34,39 +35,39 @@ webhookEndpointsRoute.patch("/:id", async c => {
   const body = await parseBody(c, z.strictObject({ name: name.optional(), enabled: z.boolean().optional() }).refine(value => Object.keys(value).length > 0));
   if (record.kind === "agentmail" && body.enabled !== undefined) {
     if (!record.remoteWebhookId || !record.encryptedSigningSecret) throw new HTTPException(400, { message: "此 Webhook 注册未完成，请重新注册" });
-    if (!body.enabled) await db.update(webhookEndpoints).set({ enabled: false }).where(eq(webhookEndpoints.id, record.id));
-    const [connection] = await db.select().from(integrationConnections).where(and(eq(integrationConnections.id, record.connectionId!), eq(integrationConnections.organizationId, actor.organizationId), isNull(integrationConnections.deletedAt)));
+    if (!body.enabled) await getDatabase().update(webhookEndpoints).set({ enabled: false }).where(eq(webhookEndpoints.id, record.id));
+    const [connection] = await getDatabase().select().from(integrationConnections).where(and(eq(integrationConnections.id, record.connectionId!), eq(integrationConnections.organizationId, actor.organizationId), isNull(integrationConnections.deletedAt)));
     try {
       if (!connection || (body.enabled && !connection.enabled)) throw new HTTPException(400, { message: "请先启用 AgentMail 连接" });
       await changeRemoteWebhook(connection, record, body.enabled);
     } catch (error) {
-      await db.update(webhookEndpoints).set({ state: "error", lastError: error instanceof HTTPException ? error.message : "AgentMail Webhook 更新失败" }).where(eq(webhookEndpoints.id, record.id));
+      await getDatabase().update(webhookEndpoints).set({ state: "error", lastError: error instanceof HTTPException ? error.message : "AgentMail Webhook 更新失败" }).where(eq(webhookEndpoints.id, record.id));
       throw error;
     }
   }
-  const [saved] = await db.update(webhookEndpoints).set({ ...body, ...(record.kind === "agentmail" && body.enabled !== undefined ? { state: "active", lastError: null } : {}) }).where(and(eq(webhookEndpoints.id, record.id), isNull(webhookEndpoints.deletedAt))).returning();
+  const [saved] = await getDatabase().update(webhookEndpoints).set({ ...body, ...(record.kind === "agentmail" && body.enabled !== undefined ? { state: "active", lastError: null } : {}) }).where(and(eq(webhookEndpoints.id, record.id), isNull(webhookEndpoints.deletedAt))).returning();
   if (!saved) throw new HTTPException(404, { message: "Webhook 不存在" }); return c.json({ endpoint: publicEndpoint(saved) });
 });
 webhookEndpointsRoute.delete("/:id", async c => {
   const actor = await integrationActor(c, true), record = await ownedEndpoint(c.req.param("id"), actor.organizationId);
   // Revoke locally first. If remote removal fails, retain a visible disabled
   // endpoint with its error so the user can retry instead of losing the handle.
-  await db.update(webhookEndpoints).set({ enabled: false, tokenHash: null }).where(eq(webhookEndpoints.id, record.id));
+  await getDatabase().update(webhookEndpoints).set({ enabled: false, tokenHash: null }).where(eq(webhookEndpoints.id, record.id));
   if (record.kind === "agentmail" && record.remoteWebhookId && record.connectionId) {
-    const [connection] = await db.select().from(integrationConnections).where(and(eq(integrationConnections.id, record.connectionId), eq(integrationConnections.organizationId, actor.organizationId)));
+    const [connection] = await getDatabase().select().from(integrationConnections).where(and(eq(integrationConnections.id, record.connectionId), eq(integrationConnections.organizationId, actor.organizationId)));
     try {
       if (!connection) throw new HTTPException(503, { message: "无法读取 AgentMail 连接配置" });
       await changeRemoteWebhook(connection, record, "delete");
     } catch (error) {
-      await db.update(webhookEndpoints).set({ state: "error", lastError: error instanceof HTTPException ? error.message : "AgentMail Webhook 删除失败" }).where(eq(webhookEndpoints.id, record.id));
+      await getDatabase().update(webhookEndpoints).set({ state: "error", lastError: error instanceof HTTPException ? error.message : "AgentMail Webhook 删除失败" }).where(eq(webhookEndpoints.id, record.id));
       throw error;
     }
   }
-  const [saved] = await db.update(webhookEndpoints).set({ deletedAt: new Date() }).where(and(eq(webhookEndpoints.id, record.id), isNull(webhookEndpoints.deletedAt))).returning();
+  const [saved] = await getDatabase().update(webhookEndpoints).set({ deletedAt: new Date() }).where(and(eq(webhookEndpoints.id, record.id), isNull(webhookEndpoints.deletedAt))).returning();
   if (!saved) throw new HTTPException(404, { message: "Webhook 不存在" }); return c.json({ endpoint: publicEndpoint(saved) });
 });
 async function activeEndpoint(id: string, kind: "webhook" | "agentmail") {
-  const [endpoint] = await db.select().from(webhookEndpoints).where(and(eq(webhookEndpoints.id, validUuid(id)), eq(webhookEndpoints.kind, kind), isNull(webhookEndpoints.deletedAt)));
+  const [endpoint] = await getDatabase().select().from(webhookEndpoints).where(and(eq(webhookEndpoints.id, validUuid(id)), eq(webhookEndpoints.kind, kind), isNull(webhookEndpoints.deletedAt)));
   if (!endpoint) throw new HTTPException(404, { message: "Webhook 不存在" });
   if (!endpoint.enabled) throw new HTTPException(410, { message: "此 Webhook 已停用" });
   if (endpoint.state !== "active") throw new HTTPException(503, { message: "Webhook 尚未就绪" }); return endpoint;
@@ -85,7 +86,7 @@ webhooksRoute.post("/:id", async c => {
 webhooksRoute.post("/agentmail/:id", async c => {
   const endpoint = await activeEndpoint(c.req.param("id"), "agentmail");
   if (!endpoint.connectionId || !endpoint.encryptedSigningSecret) throw new HTTPException(503, { message: "Webhook 尚未就绪" });
-  const [connection] = await db.select().from(integrationConnections).where(and(eq(integrationConnections.id, endpoint.connectionId), eq(integrationConnections.organizationId, endpoint.organizationId), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
+  const [connection] = await getDatabase().select().from(integrationConnections).where(and(eq(integrationConnections.id, endpoint.connectionId), eq(integrationConnections.organizationId, endpoint.organizationId), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
   if (!connection) throw new HTTPException(410, { message: "此连接已停用" });
   const body = await boundedBody(c.req.raw, webhookBodyLimit());
   const secret = decryptSecret(endpoint.encryptedSigningSecret, { organizationId: endpoint.organizationId, id: endpoint.id, purpose: "agentmail-signing" });

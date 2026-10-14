@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { automationPath, applyFilters, triggerMatches, type AutomationEvent, type AutomationRule, type ColumnDef, type RowData } from "@tabdo/shared";
-import type { Transaction } from "../db/index.js";
+import type { Transaction } from "../db/context.js";
 import { automations, automationEvents, automationRuns, automationOutbox } from "../db/schema.js";
 import { queueName } from "../queue/config.js";
 

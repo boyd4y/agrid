@@ -1,5 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
-import { db, inTransaction, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { inTransaction, type Transaction } from "../db/context.js";
 import { columns, tables, tableViews, type FormViewConfigJson, type FormFieldConfigJson } from "../db/schema.js";
 import { requireOrgId, requireTableInOrg } from "../tenant/scope.js";
 import type {
@@ -82,13 +83,13 @@ function toTableView(row: typeof tableViews.$inferSelect): TableView {
 
 async function requireViewInOrg(viewId: string, organizationId?: string, transaction?: Transaction) {
   const orgId = requireOrgId(organizationId);
-  const [view] = await (transaction ?? db).select().from(tableViews).where(eq(tableViews.id, viewId));
+  const [view] = await (transaction ?? getDatabase()).select().from(tableViews).where(eq(tableViews.id, viewId));
   if (!view) throw new Error(`视图不存在: ${viewId}`);
   await requireTableInOrg(view.tableId, orgId, transaction);
   return view;
 }
 
-async function loadColumns(tableId: string, query: typeof db | Transaction = db) {
+async function loadColumns(tableId: string, query: ReturnType<typeof getDatabase> | Transaction = getDatabase()) {
   return query
     .select()
     .from(columns)
@@ -128,7 +129,7 @@ async function insertView(tableId: string, values: Omit<typeof tableViews.$infer
   });
 }
 
-async function validateBoardConfig(tableId: string, config: BoardViewConfig, query: typeof db | Transaction = db) {
+async function validateBoardConfig(tableId: string, config: BoardViewConfig, query: ReturnType<typeof getDatabase> | Transaction = getDatabase()) {
   const cols = await loadColumns(tableId, query);
   const ids = new Set(cols.map((column) => column.id));
   for (const id of config.visibleColumnIds ?? []) if (!ids.has(id)) throw new Error(`显示属性不属于该表: ${id}`);
@@ -138,7 +139,7 @@ async function validateBoardConfig(tableId: string, config: BoardViewConfig, que
 export async function renameView({ organizationId, ...input }: RenameViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
   const { viewId, name } = RENAME_VIEW_SCHEMA.parse({ viewId: input.viewId, name: input.name });
   const view = await requireViewInOrg(viewId, organizationId, transaction);
-  const [row] = await (transaction ?? db).update(tableViews).set({ name, updatedAt: new Date() }).where(and(eq(tableViews.id, viewId), eq(tableViews.tableId, view.tableId))).returning();
+  const [row] = await (transaction ?? getDatabase()).update(tableViews).set({ name, updatedAt: new Date() }).where(and(eq(tableViews.id, viewId), eq(tableViews.tableId, view.tableId))).returning();
   if (!row) throw new Error("视图已被删除");
   return toTableView(row);
 }
@@ -209,7 +210,7 @@ export async function listViews({
   organizationId,
 }: ListViewsInput & OrgScoped, transaction?: Transaction): Promise<TableView[]> {
   await requireTableInOrg(tableId, organizationId, transaction);
-  const rows = await (transaction ?? db)
+  const rows = await (transaction ?? getDatabase())
     .select()
     .from(tableViews)
     .where(eq(tableViews.tableId, tableId))
@@ -327,7 +328,7 @@ export async function updateFormView({
     ...(config?.ending !== undefined ? { ending: config.ending } : {}),
     fields: (config?.fields ?? prev.fields) as FormFieldConfigJson[],
   };
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       ...(name !== undefined ? { name: VIEW_NAME_SCHEMA.parse(name) } : {}),
@@ -352,7 +353,7 @@ export async function setFormFields({
     if (!colIds.has(f.columnId)) throw new Error(`列不属于该表: ${f.columnId}`);
   }
   const prev = asFormConfig(view.config);
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -376,7 +377,7 @@ export async function addFormField({
   }
   const prev = asFormConfig(view.config);
   const fields = [...(prev.fields ?? []).filter((f) => f.columnId !== field.columnId), field];
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -396,7 +397,7 @@ export async function removeFormField({
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
   const fields = (prev.fields ?? []).filter((f) => f.columnId !== columnId);
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -424,7 +425,7 @@ export async function reorderFormFields({
   for (const f of prev.fields ?? []) {
     if (!columnIds.includes(f.columnId)) ordered.push(f);
   }
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, fields: ordered as FormFieldConfigJson[] },
@@ -443,7 +444,7 @@ export async function setFormSections({
   const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, sections },
@@ -466,7 +467,7 @@ export async function setFormTheme({
   const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: {
@@ -491,7 +492,7 @@ export async function setFormLayout({
   const view = await requireViewInOrg(viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持表单视图");
   const prev = asFormConfig(view.config);
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, layout },
@@ -517,7 +518,7 @@ export async function setFormFieldSettings({
   if (!fields.some((f) => f.columnId === columnId)) {
     throw new Error(`表单中没有该字段: ${columnId}`);
   }
-  const [row] = await (transaction ?? db)
+  const [row] = await (transaction ?? getDatabase())
     .update(tableViews)
     .set({
       config: { ...prev, fields: fields as FormFieldConfigJson[] },
@@ -550,7 +551,7 @@ export async function setFormChrome({
     ...(welcome !== undefined ? { welcome: welcome ?? undefined } : {}),
     ...(ending !== undefined ? { ending: ending ?? undefined } : {}),
   };
-  const [row] = await db
+  const [row] = await getDatabase()
     .update(tableViews)
     .set({
       config: next,
@@ -568,7 +569,7 @@ export async function ensureDemoFormView(
 ): Promise<ResolvedFormView | null> {
   await requireTableInOrg(tableId, organizationId);
 
-  const existingViews = await db
+  const existingViews = await getDatabase()
     .select()
     .from(tableViews)
     .where(eq(tableViews.tableId, tableId));
@@ -586,7 +587,7 @@ export async function ensureDemoFormView(
     const needsTheme =
       !cfg.theme || !existingForm.config || !(existingForm.config as FormViewConfigJson).theme;
     if (needsRename || needsTheme) {
-      const [row] = await db
+      const [row] = await getDatabase()
         .update(tableViews)
         .set({
           name: needsRename ? "表单" : existingForm.name,

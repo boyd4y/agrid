@@ -1,5 +1,6 @@
 import { and, eq, asc, desc, sql } from "drizzle-orm";
-import { db, inTransaction, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { inTransaction, type Transaction } from "../db/context.js";
 import { columns, reports, rows, tables } from "../db/schema.js";
 import { randomUUID } from "node:crypto";
 import { reportConfigSchema, reportPageSchema } from "./schema.js";
@@ -11,18 +12,18 @@ export class ReportError extends Error {
   constructor(message: string, public readonly status: 400 | 404 | 409 = 400) { super(message); }
 }
 export async function getReport(id: string, organizationId: string, transaction?: Transaction) {
-  const [row] = await (transaction ?? db).select().from(reports).where(and(eq(reports.id, id), eq(reports.organizationId, organizationId))).limit(1);
+  const [row] = await (transaction ?? getDatabase()).select().from(reports).where(and(eq(reports.id, id), eq(reports.organizationId, organizationId))).limit(1);
   if (!row) throw new ReportError("报告不存在", 404);
   return mapReport(row);
 }
 export async function listReports(organizationId: string, offset = 0, limit = 100, transaction?: Transaction) {
-  const found = await (transaction ?? db).select().from(reports).where(eq(reports.organizationId, organizationId)).orderBy(desc(reports.createdAt), desc(reports.id)).limit(limit + 1).offset(offset);
+  const found = await (transaction ?? getDatabase()).select().from(reports).where(eq(reports.organizationId, organizationId)).orderBy(desc(reports.createdAt), desc(reports.id)).limit(limit + 1).offset(offset);
   return { reports: found.slice(0, limit).map(mapReport), hasMore: found.length > limit };
 }
 export async function validateReport(config: ReportConfig, organizationId: string, transaction?: Transaction) {
-  const [table] = await (transaction ?? db).select().from(tables).where(and(eq(tables.id, config.tableId), eq(tables.organizationId, organizationId))).limit(1);
+  const [table] = await (transaction ?? getDatabase()).select().from(tables).where(and(eq(tables.id, config.tableId), eq(tables.organizationId, organizationId))).limit(1);
   if (!table) throw new ReportError("来源表格不存在或已删除", 404);
-  const cols = await (transaction ?? db).select().from(columns).where(eq(columns.tableId, table.id)).orderBy(asc(columns.sortOrder));
+  const cols = await (transaction ?? getDatabase()).select().from(columns).where(eq(columns.tableId, table.id)).orderBy(asc(columns.sortOrder));
   const group = cols.find((column) => column.id === config.groupColumnId);
   if (!group || !["text", "select", "date", "checkbox"].includes(group.type)) throw new ReportError("请选择来源表格的文本、单选、日期或复选框分组字段");
   const value = cols.find((column) => column.id === config.valueColumnId);
@@ -44,9 +45,9 @@ async function validatePage(input: ReportPageConfig | ReportConfig, organization
       if (query.valueColumnId || (widget.type === "chart" && widget.query.groupColumnId)) throw new ReportError("请先选择组件的来源表格");
       continue;
     }
-    const [table] = await (transaction ?? db).select().from(tables).where(and(eq(tables.id, query.tableId), eq(tables.organizationId, organizationId))).limit(1);
+    const [table] = await (transaction ?? getDatabase()).select().from(tables).where(and(eq(tables.id, query.tableId), eq(tables.organizationId, organizationId))).limit(1);
     if (!table) throw new ReportError("来源表格不存在或已删除", 404);
-    const cols = await (transaction ?? db).select().from(columns).where(eq(columns.tableId, table.id));
+    const cols = await (transaction ?? getDatabase()).select().from(columns).where(eq(columns.tableId, table.id));
     if (query.valueColumnId && !cols.some((c) => c.id === query.valueColumnId && c.type === "number")) throw new ReportError("数字字段必须属于组件的来源表格");
     if (widget.type === "chart" && widget.query.groupColumnId && !cols.some((c) => c.id === widget.query.groupColumnId && ["text", "select", "date", "checkbox"].includes(c.type))) throw new ReportError("请选择组件来源表格的有效分组字段");
   }
@@ -56,11 +57,11 @@ export async function saveReport(input: ReportPageConfig | ReportConfig, organiz
   const { name, ...config } = await validatePage(input, organizationId, transaction);
   if (id) {
     if (expectedVersion == null) throw new ReportError("更新报告需要版本号，请重新读取报告", 409);
-    const [row] = await (transaction ?? db).update(reports).set({ name, config, tableId: null, version: sql`${reports.version} + 1`, updatedAt: new Date() }).where(and(eq(reports.id, id), eq(reports.organizationId, organizationId), eq(reports.version, expectedVersion))).returning();
+    const [row] = await (transaction ?? getDatabase()).update(reports).set({ name, config, tableId: null, version: sql`${reports.version} + 1`, updatedAt: new Date() }).where(and(eq(reports.id, id), eq(reports.organizationId, organizationId), eq(reports.version, expectedVersion))).returning();
     if (!row) { await getReport(id, organizationId, transaction);throw new ReportError("报告已被其他操作更新，请重新加载后再编辑", 409); }
     return mapReport(row);
   }
-  const [row] = await (transaction ?? db).insert(reports).values({ name, config, tableId: null, organizationId }).returning();
+  const [row] = await (transaction ?? getDatabase()).insert(reports).values({ name, config, tableId: null, organizationId }).returning();
   return mapReport(row);
 }
 /** Serialize tool edits so adding/updating one widget cannot overwrite siblings. */
@@ -74,7 +75,7 @@ export async function mutateReport(id: string, organizationId: string, mutate: (
   });
 }
 export async function deleteReport(id: string, organizationId: string, transaction?: Transaction) {
-  const [row] = await (transaction ?? db).delete(reports).where(and(eq(reports.id, id), eq(reports.organizationId, organizationId))).returning({ id: reports.id });
+  const [row] = await (transaction ?? getDatabase()).delete(reports).where(and(eq(reports.id, id), eq(reports.organizationId, organizationId))).returning({ id: reports.id });
   if (!row) throw new ReportError("报告不存在", 404);
   return { ok: true };
 }
@@ -87,7 +88,7 @@ export async function queryReport(config: ReportConfig, organizationId: string, 
   const metric = config.metric === "count" ? sql<number>`count(*)` : config.metric === "sum" ? sql<number | null>`sum(${numeric})` : sql<number | null>`avg(${numeric})`;
   // Repeating a parameterized expression gives it different PostgreSQL parameter
   // identities ($1 vs $3). Group/order by the first SELECT column instead.
-  const grouped = await (transaction ?? db).select({ key: groupExpr, value: metric, records: sql<number>`count(*)`, total: sql<number>`sum(count(*)) over ()` }).from(rows).where(eq(rows.tableId, table.id)).groupBy(sql`1`).orderBy(sql`1 ASC NULLS LAST`).limit(201);
+  const grouped = await (transaction ?? getDatabase()).select({ key: groupExpr, value: metric, records: sql<number>`count(*)`, total: sql<number>`sum(count(*)) over ()` }).from(rows).where(eq(rows.tableId, table.id)).groupBy(sql`1`).orderBy(sql`1 ASC NULLS LAST`).limit(201);
   const labels = new Map(group.config.options?.map((option) => [option.id, option.label]) ?? []);
   const points = grouped.slice(0, 200).map((point) => ({ key: point.key ?? "", label: point.key == null || point.key === "" ? "未填写" : group.type === "select" ? labels.get(point.key) ?? point.key : group.type === "checkbox" ? point.key === "true" ? "已勾选" : "未勾选" : point.key,
     value: point.value == null ? null : Number(point.value), records: Number(point.records) }));
@@ -97,13 +98,13 @@ export async function queryReport(config: ReportConfig, organizationId: string, 
 
 export async function queryMetric(query: ReportMetricQuery, organizationId: string, transaction?: Transaction): Promise<ReportMetricData> {
   if (!query.tableId) throw new ReportError("请为数字组件选择来源表格");
-  const [table] = await (transaction ?? db).select().from(tables).where(and(eq(tables.id, query.tableId), eq(tables.organizationId, organizationId))).limit(1);
+  const [table] = await (transaction ?? getDatabase()).select().from(tables).where(and(eq(tables.id, query.tableId), eq(tables.organizationId, organizationId))).limit(1);
   if (!table) throw new ReportError("来源表格不存在或已删除", 404);
-  const [column] = query.valueColumnId ? await (transaction ?? db).select().from(columns).where(and(eq(columns.id, query.valueColumnId), eq(columns.tableId, table.id))).limit(1) : [];
+  const [column] = query.valueColumnId ? await (transaction ?? getDatabase()).select().from(columns).where(and(eq(columns.id, query.valueColumnId), eq(columns.tableId, table.id))).limit(1) : [];
   if (query.metric !== "count" && (!column || column.type !== "number")) throw new ReportError("请选择来源表格中的数字字段");
   const numeric = sql`CASE WHEN jsonb_typeof(${rows.cells}->${query.valueColumnId ?? ""}) = 'number' THEN (${rows.cells}->>${query.valueColumnId ?? ""})::numeric END`;
   const metric = query.metric === "count" ? sql`count(*)` : query.metric === "sum" ? sql`sum(${numeric})` : sql`avg(${numeric})`;
-  const [result] = await (transaction ?? db).select({ value: metric, totalRows: sql`count(*)` }).from(rows).where(eq(rows.tableId, table.id));
+  const [result] = await (transaction ?? getDatabase()).select({ value: metric, totalRows: sql`count(*)` }).from(rows).where(eq(rows.tableId, table.id));
   const value = result.value == null ? null : Number(result.value);
   if (value !== null && !Number.isFinite(value)) throw new ReportError("汇总值超出图表支持的数值范围");
   return { value, totalRows: Number(result.totalRows), sourceName: table.name, metricLabel: query.metric === "count" ? "记录数" : `${column!.name} · ${query.metric === "sum" ? "求和" : "平均值"}` };

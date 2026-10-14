@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { after, before, test } from "node:test";
+import { after, before, test } from "../runtime.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { tool, type UIMessage } from "ai";
 import { z } from "zod";
@@ -13,7 +13,7 @@ const { db, client } = await import("../../src/db/index.js");
 const { user, organization, member, agentProfile, chatThreads, chatMessages, agentRuns, agentRuntimeSessions, agentThreadLeases } = await import("../../src/db/schema.js");
 const { loadMessages } = await import("../../src/chat/store.js");
 const { beginNativeRun } = await import("../../src/harness/runs.js");
-const { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease } = await import("../../src/harness/store.js");
+const { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease, NOT_INVOKED } = await import("../../src/harness/store.js");
 const { executeNativeRun } = await import("../../src/harness/execution.js");
 const { createNativeChatStream } = await import("../../src/harness/chat-stream.js");
 const org = randomUUID(), owner = randomUUID(), agentUser = randomUUID(), agentMember = randomUUID(), profileId = randomUUID();
@@ -108,4 +108,20 @@ test("a closed output adapter detaches without failing or replaying the native e
   const input = await prepare(), initial = mutations;let attempts = 0;
   await executeNativeRun(input, { write() { attempts++;throw new Error("closed subscriber"); } });
   assert.equal(attempts, 1);await assertSaved(input);assert.equal(mutations, initial + 1);
+});
+
+
+test("durable output failure stops compute, preserves completed tools, and never labels the turn uninvoked", { timeout: 20000 }, async () => {
+  const input = await prepare(), initial = mutations;
+  let rejected = false;
+  await assert.rejects(executeNativeRun(input, undefined, { async write(chunk) {
+    if (chunk.type === "tool-output-available") { rejected = true;throw new Error("fixture durable append unavailable"); }
+  } }), /fixture durable append unavailable/);
+  assert(rejected);assert.equal(mutations, initial + 1);
+  const [run] = await db.select().from(agentRuns).where(eq(agentRuns.id, input.run.id));
+  assert.equal(run.status, "failed");assert.equal(run.cancelRequestedAt, null);
+  const [reply] = await db.select().from(chatMessages).where(and(eq(chatMessages.threadId, input.lease.threadId), eq(chatMessages.messageId, run.assistantMessageId)));
+  assert.notEqual((reply?.content.metadata as { nativeInvocation?: unknown } | undefined)?.nativeInvocation, NOT_INVOKED);
+  const [lease] = await db.select().from(agentThreadLeases).where(eq(agentThreadLeases.threadId, input.lease.threadId));
+  assert.equal(lease.token, null);
 });

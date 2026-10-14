@@ -6,13 +6,14 @@ import {
   type CellValue,
   type ColumnDef,
 } from "@tabdo/shared";
-import { db, type Database, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Database, type Transaction } from "../db/context.js";
 import { columns, rows } from "../db/schema.js";
 import { queryRowsWindowed } from "./queryRows.js";
 
 export async function loadTableColumns(
   tableId: string,
-  executor: Database = db,
+  executor: Database = getDatabase(),
 ): Promise<ColumnDef[]> {
   const cols = await executor
     .select()
@@ -53,7 +54,7 @@ export async function persistRowWithFormulas(
 ) {
   const columnDefs = cols ?? (await loadTableColumns(tableId));
   for (let attempt = 0; attempt < 2; attempt++) {
-    const [existing] = await db.select().from(rows).where(eq(rows.id, rowId));
+    const [existing] = await getDatabase().select().from(rows).where(eq(rows.id, rowId));
     if (!existing) return undefined;
     // Prefer caller cells on first attempt; on CAS miss recompute from latest row cells
     const base =
@@ -61,7 +62,7 @@ export async function persistRowWithFormulas(
         ? cells
         : ((existing.cells ?? {}) as Record<string, CellValue>);
     const nextCells = applyFormulasToCells(columnDefs, base);
-    const [updated] = await db
+    const [updated] = await getDatabase()
       .update(rows)
       .set({
         cells: nextCells,
@@ -94,7 +95,7 @@ export async function recomputeAllFormulasForTable(tableId: string) {
       let current = r;
       for (let attempt = 0; attempt < 2; attempt++) {
         if (attempt > 0) {
-          const [fresh] = await db.select().from(rows).where(eq(rows.id, r.id));
+          const [fresh] = await getDatabase().select().from(rows).where(eq(rows.id, r.id));
           if (!fresh) break;
           current = fresh;
         }
@@ -110,7 +111,7 @@ export async function recomputeAllFormulasForTable(tableId: string) {
         );
         const next = JSON.stringify(nextCells);
         if (prev === next) break;
-        const [u] = await db
+        const [u] = await getDatabase()
           .update(rows)
           .set({
             cells: nextCells,

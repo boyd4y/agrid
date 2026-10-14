@@ -2,7 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import type { SkillDocument, SkillFile } from "@tabdo/shared";
 import type { HarnessV1Skill } from "@ai-sdk/harness";
 import { loadBuiltinSkillDocuments } from "./builtin-loader.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { skills, skillSettings } from "../db/schema.js";
 import { parseSkillDocument, validateSkillFiles, SkillError } from "./document.js";
 
@@ -10,8 +11,8 @@ const builtins = loadBuiltinSkillDocuments();
 
 export async function listSkills(organizationId: string): Promise<SkillDocument[]> {
   const [custom, settings] = await Promise.all([
-    db.select().from(skills).where(eq(skills.organizationId, organizationId)).orderBy(skills.name),
-    db.select().from(skillSettings).where(eq(skillSettings.organizationId, organizationId)),
+    getDatabase().select().from(skills).where(eq(skills.organizationId, organizationId)).orderBy(skills.name),
+    getDatabase().select().from(skillSettings).where(eq(skillSettings.organizationId, organizationId)),
   ]);
   const overrides = new Map(settings.map((item) => [item.name, item.enabled]));
   return [...builtins.map((item) => ({ ...item, enabled: overrides.get(item.name) ?? true })), ...custom.map((item) => ({
@@ -29,7 +30,7 @@ export async function createSkill(organizationId: string, document: string, file
   const parsed = parseSkillDocument(document);
   validateSkillFiles(files);
   if (builtins.some((item) => item.name === parsed.name)) throw new SkillError("名称与内置技能重复，请更换名称", 409);
-  const [created] = await db.insert(skills).values({ organizationId, name: parsed.name, description: parsed.description, document, files })
+  const [created] = await getDatabase().insert(skills).values({ organizationId, name: parsed.name, description: parsed.description, document, files })
     .onConflictDoNothing().returning();
   if (!created) throw new SkillError("工作区中已有同名技能", 409);
   return { id: created.id, ...parsed, document, files: created.files, builtin: false, enabled: created.enabled, version: created.version };
@@ -40,11 +41,11 @@ export async function updateSkill(organizationId: string, id: string, document: 
   const parsed = parseSkillDocument(document);
   if (files) validateSkillFiles(files);
   if (builtins.some((item) => item.name === parsed.name)) throw new SkillError("名称与内置技能重复", 409);
-  const [current] = await db.select().from(skills).where(and(eq(skills.id, id), eq(skills.organizationId, organizationId)));
+  const [current] = await getDatabase().select().from(skills).where(and(eq(skills.id, id), eq(skills.organizationId, organizationId)));
   if (!current) throw new SkillError("技能不存在", 404);
   let updated: typeof current | undefined;
   try {
-    [updated] = await db.update(skills).set({ name: parsed.name, description: parsed.description, document, ...(files ? { files } : {}), version: sql`${skills.version} + 1`, updatedAt: new Date() })
+    [updated] = await getDatabase().update(skills).set({ name: parsed.name, description: parsed.description, document, ...(files ? { files } : {}), version: sql`${skills.version} + 1`, updatedAt: new Date() })
       .where(and(eq(skills.id, id), eq(skills.organizationId, organizationId), eq(skills.version, expectedVersion))).returning();
   } catch (error) {
     if ((error as { cause?: { code?: string } }).cause?.code === "23505") throw new SkillError("工作区中已有同名技能", 409);
@@ -57,12 +58,12 @@ export async function updateSkill(organizationId: string, id: string, document: 
 export async function setSkillEnabled(organizationId: string, id: string, enabled: boolean) {
   const builtin = builtins.find((item) => item.id === id);
   if (builtin) {
-    await db.insert(skillSettings).values({ organizationId, name: builtin.name, enabled })
+    await getDatabase().insert(skillSettings).values({ organizationId, name: builtin.name, enabled })
       .onConflictDoUpdate({ target: [skillSettings.organizationId, skillSettings.name], set: { enabled } });
     return { ok: true };
   }
   if (id.startsWith("builtin:")) throw new SkillError("技能不存在", 404);
-  const changed = await db.update(skills).set({ enabled, version: sql`${skills.version} + 1`, updatedAt: new Date() })
+  const changed = await getDatabase().update(skills).set({ enabled, version: sql`${skills.version} + 1`, updatedAt: new Date() })
     .where(and(eq(skills.id, id), eq(skills.organizationId, organizationId))).returning({ id: skills.id });
   if (!changed.length) throw new SkillError("技能不存在", 404);
   return { ok: true };
@@ -70,7 +71,7 @@ export async function setSkillEnabled(organizationId: string, id: string, enable
 
 export async function deleteSkill(organizationId: string, id: string) {
   if (id.startsWith("builtin:")) throw new SkillError("内置技能不能删除，可以关闭");
-  const removed = await db.delete(skills).where(and(eq(skills.id, id), eq(skills.organizationId, organizationId))).returning({ id: skills.id });
+  const removed = await getDatabase().delete(skills).where(and(eq(skills.id, id), eq(skills.organizationId, organizationId))).returning({ id: skills.id });
   if (!removed.length) throw new SkillError("技能不存在", 404);
   return { ok: true };
 }

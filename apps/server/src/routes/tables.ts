@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { inTransaction } from "../db/index.js";
+import { inTransaction } from "../db/context.js";
 import { tables } from "../db/schema.js";
 import * as cmds from "../commands/index.js";
 import { requireActorOrg } from "../tenant/http.js";

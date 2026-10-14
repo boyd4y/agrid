@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
 import type { ColumnDef, CellValue, StoredFile } from "@tabdo/shared";
-import type { Transaction } from "../db/index.js";
+import type { Transaction } from "../db/context.js";
 import { fileObjects } from "../db/schema.js";
 
 export function storedFile(record: typeof fileObjects.$inferSelect): StoredFile {

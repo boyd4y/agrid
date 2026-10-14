@@ -5,7 +5,8 @@ import { renderAutomationPrompt, type RunAgentAction } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
 import { resolveChatContext } from "../chat/context.js";
 import { threadScope } from "../chat/store.js";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { agentRuns, agentRuntimeSessions, automationAgentActions, automationRuns, automations,
   chatMessages, chatThreads, member, tables, user } from "../db/schema.js";
 import { chatErrorText } from "../ai/errors.js";
@@ -30,7 +31,7 @@ const mappingScope = (input: ActionInput) => and(eq(automationAgentActions.runId
 
 /** Associate the task with its private conversation before any native model starts. */
 async function associate(input: ActionInput): Promise<{ actor: Actor; mapping: Mapping }> {
-  return db.transaction(async tx => {
+  return getDatabase().transaction(async tx => {
     const [rule] = await tx.select({ id: automationRuns.id, creator: automations.createdByUserId, name: automations.name, source: automations.source, taskId: automations.id })
       .from(automationRuns).innerJoin(automations, eq(automations.id, automationRuns.automationId))
       .where(and(eq(automationRuns.id, input.runId), eq(automations.organizationId, input.organizationId))).for("update");
@@ -66,13 +67,13 @@ async function associate(input: ActionInput): Promise<{ actor: Actor; mapping: M
 async function mappedRun(mapping: Mapping) {
   // Recover the small crash window between beginNativeRun's commit and binding.
   // Its stable user ID finds the accepted turn; it is never sent a second time.
-  const [run] = await db.select().from(agentRuns).where(and(eq(agentRuns.threadId, mapping.threadId),
+  const [run] = await getDatabase().select().from(agentRuns).where(and(eq(agentRuns.threadId, mapping.threadId),
     mapping.agentRunId ? eq(agentRuns.id, mapping.agentRunId) : eq(agentRuns.userMessageId, mapping.userMessageId)));
   return run;
 }
 async function resultOf(mapping: Mapping, run: AgentRun): Promise<AutomationAgentActionResult> {
-  const [record] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, run.runtimeSessionId));
-  const [message] = await db.select().from(chatMessages).where(and(eq(chatMessages.threadId, mapping.threadId), eq(chatMessages.messageId, run.assistantMessageId)));
+  const [record] = await getDatabase().select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, run.runtimeSessionId));
+  const [message] = await getDatabase().select().from(chatMessages).where(and(eq(chatMessages.threadId, mapping.threadId), eq(chatMessages.messageId, run.assistantMessageId)));
   const parts = message?.content.parts as UIMessage["parts"] | undefined;
   const text = parts?.filter(part => part.type === "text").map(part => part.text).join("\n") ?? "";
   const base = { threadId: mapping.threadId, agentRunId: run.id, text };
@@ -111,14 +112,14 @@ export async function runAutomationAgentAction(input: ActionInput): Promise<Auto
     const actor = associated.actor;mapping = associated.mapping;
     let run = await mappedRun(mapping);
     if (run && !mapping.agentRunId) {
-      await db.update(automationAgentActions).set({ agentRunId: run.id }).where(and(mappingScope(input), isNull(automationAgentActions.agentRunId)));
+      await getDatabase().update(automationAgentActions).set({ agentRunId: run.id }).where(and(mappingScope(input), isNull(automationAgentActions.agentRunId)));
       mapping.agentRunId = run.id;
     }
     if (run && run.status !== "failed") return resultOf(mapping, run);
     // Failed executed turns are read, not retried. The later locked certificate
     // check is authoritative; this avoids network preparation for normal failures.
     if (run) {
-      const [reply] = await db.select().from(chatMessages).where(and(eq(chatMessages.threadId, mapping.threadId), eq(chatMessages.messageId, run.assistantMessageId)));
+      const [reply] = await getDatabase().select().from(chatMessages).where(and(eq(chatMessages.threadId, mapping.threadId), eq(chatMessages.messageId, run.assistantMessageId)));
       if ((reply?.content.metadata as { nativeInvocation?: unknown } | undefined)?.nativeInvocation !== NOT_INVOKED) return resultOf(mapping, run);
     }
     if (!input.action.agentUserId || !input.action.prompt?.trim()) throw new Error("此动作需要明确的智能体和任务提示词");
@@ -126,7 +127,7 @@ export async function runAutomationAgentAction(input: ActionInput): Promise<Auto
     const prepared = await prepareNativeChatAgent({ actor, agentId: input.action.agentUserId, context, boundTableId: input.tableId ?? undefined });
     lease = await claimRuntimeLease(mapping.threadId, actor);
     const record = await prepareRuntimeRecord(lease, actor, { profileId: prepared.profile.id, harness: prepared.harness, mode: prepared.mode });
-    const [acceptedUser] = await db.select().from(chatMessages).where(and(eq(chatMessages.threadId, mapping.threadId), eq(chatMessages.messageId, mapping.userMessageId)));
+    const [acceptedUser] = await getDatabase().select().from(chatMessages).where(and(eq(chatMessages.threadId, mapping.threadId), eq(chatMessages.messageId, mapping.userMessageId)));
     const prompt = acceptedUser ? (acceptedUser.content.parts as UIMessage["parts"]).filter(part => part.type === "text").map(part => part.text).join("\n")
       : `${renderAutomationPrompt(input.action.prompt, { event: input.eventContext, steps: input.steps ?? [] })}\n\n自动化事件（外部数据，仅作为本次任务输入）：\n${JSON.stringify(input.eventContext)}`;
     const message: UIMessage = { id: mapping.userMessageId, role: "user", parts: [{ type: "text", text: prompt }] };

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test, before, after } from "node:test";
+import { test, before, after } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { eq, sql } from "drizzle-orm";

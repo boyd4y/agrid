@@ -1,8 +1,7 @@
 import { getOpenRouterStatus, isOpenRouterAvailable, OPENROUTER_DEFAULT_MODEL, OPENROUTER_SHARED_MODELS, type OpenRouterProviderStatus } from "./providers/openrouter.js";
 
-export const HARNESSES = ["codex", "claude", "pi"] as const;
-export type HarnessId = (typeof HARNESSES)[number];
-export const NATIVE_DEFAULT_MODEL = "__harness_default__";
+import { HARNESSES, NATIVE_DEFAULT_MODEL, type HarnessId } from "../harness/contracts.js";
+export { HARNESSES, NATIVE_DEFAULT_MODEL, type HarnessId } from "../harness/contracts.js";
 export type HarnessStatus = {
   id: HarnessId; label: string; available: boolean;
   models: { id: string; label: string }[]; defaultModel: string;

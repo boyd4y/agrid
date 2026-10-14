@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { integrationConnections, integrationDeliveries, webhookEndpoints } from "../db/schema.js";
 import { appendExternalAutomationEvent, type ExternalAutomationEvent } from "../automation/events.js";
 
@@ -9,7 +10,7 @@ type Endpoint = typeof webhookEndpoints.$inferSelect;
 export async function persistDelivery(endpoint: Endpoint, input: {
   dedupeKey: string; logicalKey?: string; payload: Record<string, unknown>; event?: Omit<ExternalAutomationEvent, "id" | "organizationId" | "traceId">;
 }) {
-  return db.transaction(async tx => {
+  return getDatabase().transaction(async tx => {
     // Match the management lock order, and recheck revocation before accepting.
     if (endpoint.connectionId) {
       const [connection] = await tx.select().from(integrationConnections).where(eq(integrationConnections.id, endpoint.connectionId)).for("share");

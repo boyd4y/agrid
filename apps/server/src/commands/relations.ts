@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, inTransaction, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { inTransaction, type Transaction } from "../db/context.js";
 import {
   columns,
   rows,
@@ -53,7 +54,7 @@ export const rollupConfigSchema = z.object({
 
 export async function affectedTables(
   tableId: string,
-  conn: Transaction | typeof db = db,
+  conn: Transaction | ReturnType<typeof getDatabase> = getDatabase(),
 ) {
   const defs = await conn
     .select()
@@ -167,7 +168,7 @@ export async function createRelationColumnInTransaction(
   return { ...updated, affectedTableIds: tableIds };
 }
 export async function validateRollup(
-  tx: Transaction | typeof db,
+  tx: Transaction | ReturnType<typeof getDatabase>,
   tableId: string,
   raw: unknown,
 ) {
@@ -208,7 +209,7 @@ export async function validateRollup(
 }
 export async function assertNoRollupDependency(
   ids: string[],
-  conn: Transaction | typeof db = db,
+  conn: Transaction | ReturnType<typeof getDatabase> = getDatabase(),
 ) {
   const dependent = await conn
     .select()
@@ -492,7 +493,7 @@ export async function queryRelationRecords(raw: RelationQueryInput & Scope, tran
       sql`(${rows.sortOrder},${rows.id}) > (${cursor.sortOrder},${cursor.id}::uuid)`,
     );
   const limit = clampLimit(input.limit, 30, 100);
-  const list = await (transaction ?? db)
+  const list = await (transaction ?? getDatabase())
     .select({
       id: rows.id,
       tableId: rows.tableId,

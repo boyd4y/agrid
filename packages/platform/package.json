@@ -33,6 +33,12 @@
       "development": "./src/agent/checkpoints.ts",
       "import": "./dist/agent/checkpoints.js",
       "default": "./dist/agent/checkpoints.js"
+    },
+    "./resources": {
+      "types": "./dist/resources.d.ts",
+      "development": "./src/resources.ts",
+      "import": "./dist/resources.js",
+      "default": "./dist/resources.js"
     }
   },
   "scripts": {

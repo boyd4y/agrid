@@ -178,26 +178,40 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 - [x] 按修订迁移 queue/storage 与包内 adapters；业务消息协议移至 shared、文件 namespace 留在 server；移除旧 core/runtime 包，更新 exports、optional peers、开发构建、Docker 与回归。
 - [x] 第一批平台工厂：HTTP app 与 Node 启停分离；Better Auth 和 PG resource 接收显式配置，当前 Node 入口已接入。
 - [x] 第一批独立 platform 包：共同 DB/auth 工厂、schema 和私有 checkpoint 契约；Node/workerd 两个实际调用者及兼容导出已接入。
-- [ ] 平台业务请求作用域依赖注入、命令/Run repository 与 Hono 服务继续提取。
+- [x] 严格请求/任务 DB/Auth scope，Node HTTP、worker、CLI 和测试接入，无可变默认资源。
+- [ ] 业务命令/Run repository 与 Hono 服务继续进入共同 platform 包；完整产品 HTTP 图去除 Node 环境、文件及执行侧依赖。
 - [x] Harness/Sandbox 能力包：Pi/Codex/Claude SDK 配置与 local/Vercel 生命周期进入包内 adapters；Tabdo 环境解析、人设、业务工具、权限、工作区 schema 与限额继续留在平台装配层。
 - [x] 平台嵌入式 Run 执行与 HTTP 投影分离；后台直接等待相同执行入口和检查点清理，关闭输出订阅不取消 Run。
-- [ ] 独立 Harness runner、Sandbox/Execution 实现与平台跨实例续接。
-- [ ] CF DO/队列/调度入口接通共同业务与长任务。
+- [x] 独立可信 runner：持久接受/输出、Node 子进程和签名 HTTP；真实 Pi 跨进程问题续接及重复启动不重放。
+- [x] Node 聊天可选独立进程执行，公共请求与输出协议一致；已接受的启动失败可补偿。
+- [ ] 自动化/定时统一接入接受服务；CF Containers/E2B 计算生命周期与其他 Harness 的远程恢复验收。
+- [x] CF DO 输出/取消协调接通真实平台身份、私有输出和成员锁保护的取消。
+- [ ] CF Queue/Cron 接通实际 Outbox、due-schedule 和执行接受/启动；完整产品 Worker 与按需计算装配。
 - [ ] 完整双模式本地与远程验收。
 
 本阶段验证：queue/storage 6 项通用用例（真实 BullMQ、workerd Queues/R2）、shared 11 项业务契约、server 18 项队列故障与 3 项文件存储用例通过。全仓 build、typecheck、typecheck:test、冻结锁文件安装与两份 fixture dry-run 通过；CF bundle 不包含 Node/BullMQ/AWS/业务协议。
 
-当前落地包见 [queue](../../packages/queue/README.md) 与 [storage](../../packages/storage/README.md)。通用队列/存储、workerd fixtures 和首批 Node 平台工厂已实现；请求作用域平台资源、Harness runner、DO 协调仍按以上清单待实施，不代表整个 CF 平台已可部署。Wrangler 4.149.0 本地可运行；既有登录已过期，远程验收需恢复登录。本地 fixture 按固定二进制支持的 `2026-10-13` compatibility date，并生成 binding 类型。
+当前落地包见 [queue](../../packages/queue/README.md) 与 [storage](../../packages/storage/README.md)。通用队列/存储、平台资源作用域、独立 runner 和 DO 输出/取消服务已实现；实际 CF 触发与完整产品 Worker 仍按清单待实施，不代表整个 CF 平台已可部署。Wrangler 4.149.0 本地可运行；既有登录已过期，远程验收需恢复登录。本地 fixture 按固定二进制支持的 `2026-10-13` compatibility date，并生成 binding 类型。
 
-Harness/Sandbox 实现见 [harness](../../packages/harness/README.md)、[sandbox](../../packages/sandbox/README.md)。独立通用用例 3 项和平台 Harness 回归 41 项通过，包括真正退出生产进程后的待答冷恢复。原生 SDK Pi 1.0.151 关闭 reattachInProcess 会改变待答捕获，保留官方默认不等于依赖应用 Map；平台的 warm-question Map 仍待执行器阶段替换。现有 local/Vercel adapter 已接入，CF/E2B 和完整按需控制进程尚未实现，不以文件/命令 Sandbox 代替 Run runner。
+Harness/Sandbox 实现见 [harness](../../packages/harness/README.md)、[sandbox](../../packages/sandbox/README.md)。独立通用用例 3 项和平台 Harness 回归 41 项通过，包括真正退出生产进程后的待答冷恢复。原生 SDK Pi 1.0.151 关闭 reattachInProcess 会改变待答捕获，保留官方默认不等于依赖应用 Map；平台的 warm-question Map 仍待执行器阶段替换。现有 local/Vercel adapter 已接入，CF/E2B 供应商的完整按需控制进程尚未实现，不以文件/命令 Sandbox 代替 Run runner。
 
 平台工厂阶段：真实 Better Auth 注册/session 签名隔离、API Key 邀请与撤销、31 项聊天回归及源码/测试类型检查通过。app 仍引用现有 Node 业务图；尚未声明可进入 Workers bundle，后续先移除执行侧传递依赖与全局资源。
 
-执行入口阶段：Harness 44 项、聊天 31 项回归通过。新增真实原生工具/PG 用例确认无输出端口的执行返回时最终消息、检查点与租约释放已完成；读流取消与关闭输出端口只断开投影，执行继续且下一轮不重放工具。输出端口目前是临时 UI 投影，持久 stream cursor 与独立 runner 仍待实施。
+执行入口阶段：Harness 44 项、聊天 31 项回归通过。新增真实原生工具/PG 用例确认无输出端口的执行返回时最终消息、检查点与租约释放已完成；读流取消与关闭输出端口只断开投影，执行继续且下一轮不重放工具。该先行阶段仅有临时 UI 投影；持久 cursor 与独立 runner 已在下述并行阶段实现。
 
 Edge 工厂阶段：workerd + 本地 Hyperdrive binding + 隔离 PG 的真实 Better Auth HTTP 验收通过，包含注册、8 个并发请求的签名配置隔离、退出登录、新请求观察撤销及每请求连接释放。只使用共用工厂与 schema，不加载 Node 启动/global DB/auth。远程 Hyperdrive 事务池/缓存和完整产品入口仍待验收。
 
 platform 包阶段：上述实现进入 [platform](../../packages/platform/README.md)，Node 装配和 workerd 夹具直接调用包的公开 subpaths；server schema/factory 仅兼容导出。Drizzle 从原 schema 与兼容入口导出同样的 37 张表 DDL，无新增迁移。全仓 build/typecheck、冻结锁文件离线安装、141 项服务端回归与 workerd 工厂用例通过。全回归同时修复旧夹具缺少真实自动化创建者、空智能体动作及对字段唯一性旧错误的期待，没有放宽生产权限或唯一性校验。
+
+
+并行执行阶段：新增通用 [execution](../../packages/execution/README.md) 与 [CF 协调](../../apps/cloudflare/README.md)，产品接线见 [持久原生执行器](native-runner.md)。资源依赖不再通过默认 DB/Auth 导入；实际 workerd 同时验证 Better Auth 签名隔离、Cookie/API Key 身份和产品 agent admission。原生 SDK 只在执行装配时创建，SDK-free admission 可以独立调用。
+
+新增迁移 `0026` 保存 private execution receipt 与单调 UI chunk cursor。接受时锁当前成员和 Run；调用 SDK 前先提交 invocation CAS。过期 `accepted` 可重绑新 fence，`invoking` 的未知状态不能作为重跑依据。真实 Node 子进程退出后，答案通过签名 HTTP 在新进程继续同一 Run，已提交工具不重放；两种 Node 聊天路径使用相同公共请求与 AI SDK UI SSE。持久 append 被等待、输出投影按需分页，浏览器断开不取消计算。
+
+CF 真实服务 fixture 使用共享 `createPlatformSessionServices`：每个 callback 获得独立 DB/Auth resource，重新解析 Cookie/API Key，检查完整 execution/run/thread 引用，取消在当前 member 的 FOR SHARE 锁内提交。实际 bundle 不包含 Harness/Pi/Codex/Claude SDK、JustBash、Node startup/env 或文件执行模块。Queue/Cron generic fixture 仅证明端口和 ACK 边界；不能代替实际自动化/定时持久接受服务。当前 SSE 仍使 DO 活跃，hibernating WebSocket 内部桥接未实现。
+
+
+验证结果：145 项服务端回归、18 项队列故障回归、4 项 execution 通用用例、4 项 CF 协调测试与 workerd 平台工厂测试通过。全仓 build、source/test 类型检查、冻结锁文件安装及两份协调 fixture dry-run 通过。故障回归发现迟到的 SDK activity 可覆盖 Run 终态，已增加终态保护，防止完成/失败后变回 running。
 
 ## 12. 调研依据
 

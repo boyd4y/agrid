@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { Hono } from "hono";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
 import { userApiKeys } from "../db/schema.js";
 import { hashApiKey, resolveActor, type Actor } from "../auth/actor.js";
 
@@ -20,7 +21,7 @@ apiKeysRoute.use("*", async (c, next) => {
 });
 apiKeysRoute.get("/", async c => {
   const actor = c.get("actor");
-  const records = await db.select().from(userApiKeys).where(and(eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId), isNull(userApiKeys.revokedAt))).orderBy(desc(userApiKeys.createdAt), desc(userApiKeys.id));
+  const records = await getDatabase().select().from(userApiKeys).where(and(eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId), isNull(userApiKeys.revokedAt))).orderBy(desc(userApiKeys.createdAt), desc(userApiKeys.id));
   return c.json({ keys: records.map(summary) });
 });
 apiKeysRoute.post("/", async c => {
@@ -28,7 +29,7 @@ apiKeysRoute.post("/", async c => {
   const body = z.strictObject({ name: z.string().trim().min(1).max(100) }).safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: "请输入有效的 Key 名称（最多100字）" }, 400);
   const raw = `tab_${randomBytes(32).toString("base64url")}`;
-  const [record] = await db.insert(userApiKeys).values({ userId: actor.userId, organizationId: actor.organizationId, name: body.data.name, keyHash: hashApiKey(raw), prefix: raw.slice(0, 12) }).returning();
+  const [record] = await getDatabase().insert(userApiKeys).values({ userId: actor.userId, organizationId: actor.organizationId, name: body.data.name, keyHash: hashApiKey(raw), prefix: raw.slice(0, 12) }).returning();
   return c.json({ key: summary(record), secret: raw }, 201);
 });
 apiKeysRoute.delete("/:id", async c => {
@@ -37,7 +38,7 @@ apiKeysRoute.delete("/:id", async c => {
   if (!id.success) return c.json({ error: "API Key 不存在" }, 404);
   // Key deletion revokes future authentication. Existing runs retain user/org scope;
   // host tools re-check live membership, and member removal cancels those runs.
-  const [record] = await db.delete(userApiKeys).where(and(eq(userApiKeys.id, id.data), eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId))).returning({ id: userApiKeys.id });
+  const [record] = await getDatabase().delete(userApiKeys).where(and(eq(userApiKeys.id, id.data), eq(userApiKeys.userId, actor.userId), eq(userApiKeys.organizationId, actor.organizationId))).returning({ id: userApiKeys.id });
   if (!record) return c.json({ error: "API Key 不存在" }, 404);
   return c.json({ id: record.id });
 });

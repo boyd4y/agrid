@@ -60,16 +60,33 @@ export interface NativeRunOutput {
   write(chunk: UIMessageChunk): void;
 }
 
+/** Durable projection append participates in execution lifetime and backpressure. */
+export interface NativeRunDurableOutput {
+  write(chunk: UIMessageChunk): Promise<void>;
+}
+
 /** Await native completion, atomic checkpoint persistence and lease cleanup. */
-export async function executeNativeRun(options: NativeRunInput, output?: NativeRunOutput): Promise<void> {
-  let delivery = output;
-  const writer: NativeRunOutput = { write(chunk) {
-    try { delivery?.write(chunk); }
-    catch {
-      // A closed transport cannot cancel an already accepted native operation.
-      delivery = undefined;
-      console.warn("agent.projection.detached");
-    }
+export async function executeNativeRun(options: NativeRunInput, output?: NativeRunOutput, durableOutput?: NativeRunDurableOutput): Promise<void> {
+  let delivery = output, outputFailed = false;
+  let outputWrites: Promise<void> = Promise.resolve();
+  // SDK lifecycle callbacks and the projection reader can emit concurrently.
+  // One chain preserves publication order and bounds in-flight durable appends.
+  const writer = { write(chunk: UIMessageChunk): Promise<void> {
+    const operation = outputWrites.then(async () => {
+      try { await durableOutput?.write(chunk); }
+      catch (error) {
+        outputFailed = true;errorText = chatErrorText(error);control.abort(error);
+        throw error;
+      }
+      try { delivery?.write(chunk); }
+      catch {
+        // A closed ephemeral transport cannot cancel an accepted operation.
+        delivery = undefined;
+        console.warn("agent.projection.detached");
+      }
+    });
+    outputWrites = operation;
+    return operation;
   } };
   const releaseNativeRun = registerNativeRun();
   const control = new AbortController();
@@ -136,8 +153,8 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
     activity = { threadId: options.lease.threadId, runId: options.run.id, phase, step, startedAt: options.run.startedAt.getTime(), updatedAt: Date.now(), toolName, completedTools };
     const update = activity;
     phaseWrites = phaseWrites.then(async () => {
-      await recordRunActivity(options.lease, options.run.id, update);
-      writer.write({ type: "data-chat-activity", data: update, transient: true });
+      if (!await recordRunActivity(options.lease, options.run.id, update)) return;
+      await writer.write({ type: "data-chat-activity", data: update, transient: true });
     }).catch((error) => {
       if (error instanceof HTTPException && error.status === 409) { errorText = chatErrorText(error);lostLease = true;control.abort(error); }
       else console.warn("agent.activity.sync", chatErrorText(error));
@@ -165,7 +182,7 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
       const remaining = activeTools.values().next().value;
       await report(remaining ? "tool" : "waiting-model", remaining);
     },
-    onStepEnd: ({ toolResults }) => {
+    onStepEnd: async ({ toolResults }) => {
       modelActive = false;clearTimeout(stepDeadline);clearModelDeadlines();
       for (const result of toolResults) {
         if (failures.has(result.toolCallId) || nativeToolDenial(result.output)) continue;
@@ -173,7 +190,7 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
         const output = result.output as { affectedTableIds?: string[]; tableId?: string; id?: string } | undefined;
         const ids = output?.affectedTableIds ?? (output?.tableId ? [output.tableId] : result.toolName === "create_table" && output?.id ? [output.id] : undefined);
         if (ids?.length === 0) continue;
-        writer.write({ type: "data-table-mutated", data: { tableIds: ids }, transient: true });
+        await writer.write({ type: "data-table-mutated", data: { tableIds: ids }, transient: true });
       }
       // Pi reports the next model lifecycle only once it has output. Bound
       // the wait between native steps as well as the visible output stream.
@@ -188,6 +205,7 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
     try {
       closed = true;clearTimeout(timeout);clearInterval(heartbeat);clearTimeout(stepDeadline);clearModelDeadlines();
       await Promise.allSettled([...pendingTools]);
+      await phaseWrites;
       // Pi stop before its first native turn may return data:{}; never commit it.
       if (session && !invocationStarted) await session.stop().catch((error) => console.error("agent.session.cleanup", chatErrorText(error)));
       if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => console.error("agent.sandbox.stop", chatErrorText(error)));
@@ -250,7 +268,7 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
         }, { id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content }, { id: options.run.id, status, error: errorText });
         await report("finished");
       }
-      writer.write(status === "cancelled" ? { type: "abort" } : { type: "error", errorText });
+      await writer.write(status === "cancelled" ? { type: "abort" } : { type: "error", errorText });
       return;
     }
     const uninvoked = !invocationStarted && safeStartupState;
@@ -271,12 +289,12 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
       await failNativeRun(options.lease, options.run.id, errorText);
       await report("finished");
     }
-    writer.write({ type: "start", messageId: message.id });
-    if (!text) { writer.write({ type: "abort" }); return; }
-    writer.write({ type: "text-start", id: "run-error" });
-    writer.write({ type: "text-delta", id: "run-error", delta: text });
-    writer.write({ type: "text-end", id: "run-error" });
-    writer.write({ type: "finish" });
+    await writer.write({ type: "start", messageId: message.id });
+    if (!text) { await writer.write({ type: "abort" }); return; }
+    await writer.write({ type: "text-start", id: "run-error" });
+    await writer.write({ type: "text-delta", id: "run-error", delta: text });
+    await writer.write({ type: "text-end", id: "run-error" });
+    await writer.write({ type: "finish" });
   };
 
   try {
@@ -363,7 +381,7 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
       messageMetadata: ({ part }) => part.type === "finish-step" ? { ...options.metadata, runId: options.run.id, ...(piCompletion ? { completion: piCompletion } : {}) } : undefined,
       onFinish: async ({ responseMessage, outcome, isCancelled }) => {
         try {
-          if (isCancelled) { cancelled = true;control.abort(new DOMException("客户端停止执行", "AbortError")); }
+          if (isCancelled && !outputFailed) { cancelled = true;control.abort(new DOMException("客户端停止执行", "AbortError")); }
           const status: AgentRunStatus = cancelled || options.signal?.aborted ? "cancelled" : errorText || timedOut || lostLease || outcome.status === "failed" ? "failed" : session!.hasUnfinishedTurn() ? "suspended" : "completed";
           await persist(responseMessage, status);
         } catch (error) {
@@ -378,8 +396,13 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        writer.write(value);
+        await writer.write(value);
       }
+    } catch (error) {
+      // Durable delivery failure stops native work and asks the official SDK to
+      // save its partial projection/checkpoint. It is not a user cancellation.
+      if (outputFailed) await reader.cancel(error).catch(() => {});
+      throw error;
     } finally { reader.releaseLock(); }
   } catch (error) {
     // onFinish already persisted or failed the invoked turn and cleaned up.

@@ -4,8 +4,9 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { ChatActivity, AgentRunSummary } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
-import { db } from "../db/index.js";
-import { agentRuns, agentRunEvents, chatMessages, chatThreads, agentRuntimeSessions, agentThreadLeases } from "../db/schema.js";
+import { getDatabase } from "@tabdo/platform/resources";
+
+import { agentRuns, agentRunEvents, chatMessages, chatThreads, agentRuntimeSessions, agentThreadLeases, member } from "../db/schema.js";
 import { requireThread, saveMessageInTransaction, threadScope, type StoredMessage } from "../chat/store.js";
 import { NOT_INVOKED, withRuntimeLease, type RuntimeLease, type RuntimeRecord } from "./store.js";
 export type AgentRun = typeof agentRuns.$inferSelect;
@@ -62,10 +63,19 @@ export async function beginNativeRun(lease: RuntimeLease, actor: Actor, record: 
 }
 
 export async function recordRunActivity(lease: RuntimeLease, runId: string, activity: ChatActivity) {
-  await withRuntimeLease(lease, async (tx) => {
-    const [updated] = await tx.update(agentRuns).set({ activity, ...(activity.phase === "finished" ? {} : { status: "running" as const }) }).where(and(eq(agentRuns.id, runId), eq(agentRuns.fence, lease.fence))).returning({ id: agentRuns.id });
-    if (!updated) throw new HTTPException(409, { message: "运行已被接管" });
+  return withRuntimeLease(lease, async (tx) => {
+    const [updated] = await tx.update(agentRuns).set({ activity, ...(activity.phase === "finished" ? {} : { status: "running" as const }) })
+      .where(and(eq(agentRuns.id, runId), eq(agentRuns.fence, lease.fence),
+        ...(activity.phase === "finished" ? [] : [inArray(agentRuns.status, [...active])]))).returning({ id: agentRuns.id });
+    if (!updated) {
+      const [current] = await tx.select({ fence: agentRuns.fence, status: agentRuns.status }).from(agentRuns).where(eq(agentRuns.id, runId));
+      // Native lifecycle callbacks can finish after checkpoint/failure commits.
+      // An observation must never resurrect a terminal Run as running.
+      if (current?.fence === lease.fence && !active.includes(current.status as typeof active[number])) return false;
+      throw new HTTPException(409, { message: "运行已被接管" });
+    }
     await tx.insert(agentRunEvents).values({ runId, activity });
+    return true;
   });
 }
 
@@ -77,13 +87,13 @@ export async function failNativeRun(lease: RuntimeLease, runId: string, error: s
 }
 
 export async function runCancellationRequested(runId: string): Promise<boolean> {
-  const [run] = await db.select({ cancelled: agentRuns.cancelRequestedAt }).from(agentRuns).where(eq(agentRuns.id, runId));
+  const [run] = await getDatabase().select({ cancelled: agentRuns.cancelRequestedAt }).from(agentRuns).where(eq(agentRuns.id, runId));
   return Boolean(run?.cancelled);
 }
 
 export async function listNativeRuns(threadId: string, actor: Actor) {
   await requireThread(threadId, actor);
-  return db.transaction(async (tx) => {
+  return getDatabase().transaction(async (tx) => {
     // Synchronize with a host mutation/renewal before deciding its owner died.
     // The database clock is evaluated after the row lock, not on the caller host.
     await tx.select().from(agentThreadLeases).where(eq(agentThreadLeases.threadId, threadId)).for("update");
@@ -92,6 +102,9 @@ export async function listNativeRuns(threadId: string, actor: Actor) {
         select 1 from ${agentThreadLeases} where ${agentThreadLeases.threadId}=${agentRuns.threadId}
         and ${agentThreadLeases.fence}=${agentRuns.fence} and ${agentThreadLeases.token} is not null
         and ${agentThreadLeases.expiresAt}>clock_timestamp()
+      ) and not exists (
+        select 1 from agent_executions where run_id=${agentRuns.id}
+        and fence=${agentRuns.fence} and status='accepted'
       )`)).returning({ runtimeId: agentRuns.runtimeSessionId });
     if (failed.length) await tx.update(agentRuntimeSessions).set({ status: "failed", error: "执行进程已中断，结果未完整保存", updatedAt: new Date() }).where(inArray(agentRuntimeSessions.id, failed.map((r) => r.runtimeId)));
     const runs = await tx.select().from(agentRuns).where(eq(agentRuns.threadId, threadId)).orderBy(desc(agentRuns.startedAt), desc(agentRuns.id)).limit(30);
@@ -110,16 +123,24 @@ export async function listNativeRuns(threadId: string, actor: Actor) {
 }
 
 export async function requestRunCancellation(threadId: string, runId: string, actor: Actor) {
-  await requireThread(threadId, actor);
-  const [run] = await db.select().from(agentRuns).where(and(eq(agentRuns.id, runId), eq(agentRuns.threadId, threadId)));
-  if (!run) throw new HTTPException(404, { message: "执行记录不存在" });
-  await db.update(agentRuns).set({ cancelRequestedAt: new Date() }).where(and(eq(agentRuns.id, runId), inArray(agentRuns.status, [...active])));
-  return { ok: true };
+  return getDatabase().transaction(async tx => {
+    // Revocation and this write serialize on the same membership row.
+    const [membership] = await tx.select({ id: member.id }).from(member)
+      .where(and(eq(member.userId, actor.userId), eq(member.organizationId, actor.organizationId))).for("share");
+    const [thread] = await tx.select({ id: chatThreads.id }).from(chatThreads).where(threadScope(threadId, actor));
+    if (!membership || !thread) throw new HTTPException(404, { message: "对话不存在" });
+    const [run] = await tx.select({ id: agentRuns.id }).from(agentRuns)
+      .where(and(eq(agentRuns.id, runId), eq(agentRuns.threadId, threadId)));
+    if (!run) throw new HTTPException(404, { message: "执行记录不存在" });
+    await tx.update(agentRuns).set({ cancelRequestedAt: new Date() })
+      .where(and(eq(agentRuns.id, runId), inArray(agentRuns.status, [...active])));
+    return { ok: true };
+  });
 }
 
 export async function listNativeRunEvents(threadId: string, runId: string, actor: Actor) {
   await requireThread(threadId, actor);
-  const [run] = await db.select({ id: agentRuns.id }).from(agentRuns).where(and(eq(agentRuns.threadId, threadId), eq(agentRuns.id, runId)));
+  const [run] = await getDatabase().select({ id: agentRuns.id }).from(agentRuns).where(and(eq(agentRuns.threadId, threadId), eq(agentRuns.id, runId)));
   if (!run) throw new HTTPException(404, { message: "执行记录不存在" });
-  return db.select().from(agentRunEvents).where(eq(agentRunEvents.runId, runId)).orderBy(desc(agentRunEvents.createdAt), desc(agentRunEvents.id)).limit(200);
+  return getDatabase().select().from(agentRunEvents).where(eq(agentRunEvents.runId, runId)).orderBy(desc(agentRunEvents.createdAt), desc(agentRunEvents.id)).limit(200);
 }

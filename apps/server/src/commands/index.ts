@@ -12,7 +12,8 @@ import {
   affectedTables,
 } from "./relations.js";
 import { eq, and, asc, max, sql, inArray, or } from "drizzle-orm";
-import { db, inTransaction, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { inTransaction, type Transaction } from "../db/context.js";
 import {
   tables,
   columns,
@@ -88,7 +89,7 @@ export async function getTable({
 }: GetTableInput & OrgScoped, transaction?: Transaction) {
   const table = await requireTableInOrg(tableId, organizationId, transaction);
 
-  const cols = await (transaction ?? db)
+  const cols = await (transaction ?? getDatabase())
     .select()
     .from(columns)
     .where(eq(columns.tableId, tableId))
@@ -485,7 +486,7 @@ export async function batchDeleteRows(input: BatchDeleteRowsInput & OrgScoped, t
 }
 
 export async function deleteTable(input: { tableId: string } & OrgScoped) {
-  return db.transaction(async (tx) => {
+  return getDatabase().transaction(async (tx) => {
     const [table] = await tx
       .select()
       .from(tables)

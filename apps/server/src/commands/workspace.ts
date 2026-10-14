@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { MEMBER_LIST_SCHEMA } from "@tabdo/shared";
-import { db, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { type Transaction } from "../db/context.js";
 import { organization, member, user } from "../db/schema.js";
 import { listOrgMembers } from "../auth/actor.js";
 import { requireOrgId } from "../tenant/scope.js";
@@ -9,7 +10,7 @@ type Scope = { organizationId?: string; actorId?: string };
 async function currentActor(input: Scope, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
   if (!input.actorId) return { organizationId, actor: null };
-  const [actor] = await (transaction ?? db).select({ userId: user.id, memberId: member.id, name: user.name, email: user.email, kind: user.kind, role: member.role })
+  const [actor] = await (transaction ?? getDatabase()).select({ userId: user.id, memberId: member.id, name: user.name, email: user.email, kind: user.kind, role: member.role })
     .from(member).innerJoin(user, eq(member.userId, user.id))
     .where(and(eq(member.organizationId, organizationId), eq(member.userId, input.actorId))).limit(1);
   if (!actor) throw new Error("当前成员不属于该工作区");
@@ -19,7 +20,7 @@ async function currentActor(input: Scope, transaction?: Transaction) {
 /** Trusted caller scope only. Never accept an organization ID from a model tool schema. */
 export async function getWorkspace(input: Scope, transaction?: Transaction) {
   const { organizationId, actor } = await currentActor(input, transaction);
-  const [workspace] = await (transaction ?? db).select({ id: organization.id, name: organization.name, slug: organization.slug })
+  const [workspace] = await (transaction ?? getDatabase()).select({ id: organization.id, name: organization.name, slug: organization.slug })
     .from(organization).where(eq(organization.id, organizationId)).limit(1);
   if (!workspace) throw new Error("工作区不存在");
   return { workspace, actor };

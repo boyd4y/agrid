@@ -1,4 +1,4 @@
-import type { Transaction } from "../db/index.js";
+import type { Transaction } from "../db/context.js";
 import { getToolTransaction } from "./execution-context.js";
 import { BATCH_TOOLS, batchToolResult } from "@tabdo/shared";
 import { tool, zodSchema, type ToolSet } from "ai";

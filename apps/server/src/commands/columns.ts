@@ -1,6 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { and, asc, eq, gt, inArray, max, or, sql } from "drizzle-orm";
-import { db, inTransaction, type Transaction } from "../db/index.js";
+import { getDatabase } from "@tabdo/platform/resources";
+import { inTransaction, type Transaction } from "../db/context.js";
 import { columns, rows, tables, tableRelations, COLUMN_TYPES } from "../db/schema.js";
 import {
   BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA,
