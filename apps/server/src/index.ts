@@ -7,9 +7,11 @@ import { assertSchemaReady } from "./db/schema-ready.js";
 import { activeNativeRunCount, beginNativeDrain, waitForNativeDrain } from "./harness/drain.js";
 import { createNodeHttpResources, withNodeResources } from "./resources/node.js";
 import { createNodeExecution } from "./node-execution.js";
+import { mountClientAssets } from "./client-assets.js";
 
 const execution = createNodeExecution(process.env);
 const app = createApp({ appUrl: process.env.APP_URL || "http://localhost:5173", resources: await createNodeHttpResources(), streamNativeRun: execution.stream });
+if (process.env.CLIENT_DIST_PATH) mountClientAssets(app, process.env.CLIENT_DIST_PATH);
 const port = Number(process.env.PORT ?? 3001);
 await withNodeResources(assertSchemaReady);
 execution.start();
@@ -21,7 +23,7 @@ console.log(`API listening on http://localhost:${port}`);
     `[harness] mode=${online.length ? "live" : "unconfigured"} online=${online.join(",") || "none"}`,
   );
 }
-const server = serve({ fetch: app.fetch, port });
+const server = serve({ fetch: app.fetch, port, ...(process.env.HOST ? { hostname: process.env.HOST } : {}) });
 let shutdown: Promise<void> | undefined;
 function drainAndStop() {
   if (shutdown) return shutdown;
