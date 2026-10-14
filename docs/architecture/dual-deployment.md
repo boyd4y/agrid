@@ -94,6 +94,8 @@ Harness 管理原生模型/工具循环和 Session continuation；Sandbox 提供
 
 复用官方 SDK 的 sandbox 类型，不造另一套同义文件 API。Tabdo agent-runtime 负责把产品配置和业务工具注入官方运行器。底层适配器接受显式配置/回调，不读取 organization/member/automation 表。
 
+平台原生执行入口先与 HTTP 响应分离：`executeNativeRun` 接收已接受的 Run、lease、原生检查点和产品工具，等待 SDK 输出消费、检查点提交及资源清理完成。可选输出端口使用现有 AI SDK UI chunk；HTTP 层只投影这些 chunk，后台任务直接等待执行，不创建聊天 Response。浏览器取消订阅不取消执行；显式停止仍通过 PG Run cancel 字段控制。此入口属于 Tabdo agent-runtime，不能放进通用 execution 包。它先提供嵌入式执行边界，后续 runner 必须从持久身份重新装配，不能跨进程传递工具闭包或凭内存 Promise 确认启动。
+
 ## 5. 两种部署的组合
 
 | 能力 | A：Node | B：Cloudflare |
@@ -165,6 +167,7 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 - [x] 第一批平台工厂：HTTP app 与 Node 启停分离；Better Auth 和 PG resource 接收显式配置，当前 Node 入口已接入。
 - [ ] 平台请求作用域资源、业务执行服务与独立 platform 包提取。
 - [x] Harness/Sandbox 能力包：Pi/Codex/Claude SDK 配置与 local/Vercel 生命周期进入包内 adapters；Tabdo 环境解析、人设、业务工具、权限、工作区 schema 与限额继续留在平台装配层。
+- [x] 平台嵌入式 Run 执行与 HTTP 投影分离；后台直接等待相同执行入口和检查点清理，关闭输出订阅不取消 Run。
 - [ ] 独立 Harness runner、Sandbox/Execution 实现与平台跨实例续接。
 - [ ] CF DO/队列/调度入口接通共同业务与长任务。
 - [ ] 完整双模式本地与远程验收。
@@ -176,6 +179,8 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 Harness/Sandbox 实现见 [harness](../../packages/harness/README.md)、[sandbox](../../packages/sandbox/README.md)。独立通用用例 3 项和平台 Harness 回归 41 项通过，包括真正退出生产进程后的待答冷恢复。原生 SDK Pi 1.0.151 关闭 reattachInProcess 会改变待答捕获，保留官方默认不等于依赖应用 Map；平台的 warm-question Map 仍待执行器阶段替换。现有 local/Vercel adapter 已接入，CF/E2B 和完整按需控制进程尚未实现，不以文件/命令 Sandbox 代替 Run runner。
 
 平台工厂阶段：真实 Better Auth 注册/session 签名隔离、API Key 邀请与撤销、31 项聊天回归及源码/测试类型检查通过。app 仍引用现有 Node 业务图；尚未声明可进入 Workers bundle，后续先移除执行侧传递依赖与全局资源。
+
+执行入口阶段：Harness 44 项、聊天 31 项回归通过。新增真实原生工具/PG 用例确认无输出端口的执行返回时最终消息、检查点与租约释放已完成；读流取消与关闭输出端口只断开投影，执行继续且下一轮不重放工具。输出端口目前是临时 UI 投影，持久 stream cursor 与独立 runner 仍待实施。
 
 ## 12. 调研依据
 

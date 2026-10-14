@@ -9,7 +9,7 @@ import { db } from "../db/index.js";
 import { agentRuns, agentRuntimeSessions, automationAgentActions, automationRuns, automations,
   chatMessages, chatThreads, member, tables, user } from "../db/schema.js";
 import { chatErrorText } from "../ai/errors.js";
-import { createNativeChatStream } from "../harness/chat-stream.js";
+import { executeNativeRun } from "../harness/execution.js";
 import { prepareNativeChatAgent } from "../harness/preparation.js";
 import { beginNativeRun, type AgentRun } from "../harness/runs.js";
 import { questionContinuation } from "../harness/questions.js";
@@ -143,14 +143,11 @@ export async function runAutomationAgentAction(input: ActionInput): Promise<Auto
     await withRuntimeLease(lease, async tx => {
       await tx.update(automationAgentActions).set({ agentRunId: nativeRun.id }).where(mappingScope(input));
     });
-    const stream = createNativeChatStream({ actor, lease, record, run, harness: prepared.harness, modelId: prepared.modelId,
+    await executeNativeRun({ actor, lease, record, run, harness: prepared.harness, modelId: prepared.modelId,
       piModel: prepared.piModel, instructions: prepared.system, agentsDocument: prepared.agentsDocument,
       tools: prepared.tools, disabledTools: prepared.disabledTools, skills: prepared.skills, prompt, messages: [message],
       metadata: { agentId: prepared.profile.memberId, harness: prepared.harness, modelId: prepared.modelId, runtime: prepared.mode,
         automationRunId: input.runId, automationStep: input.step } });
-    const reader = stream.getReader();
-    try { for (;;) { const part = await reader.read();if (part.done) break; } }
-    finally { reader.releaseLock(); }
     const saved = await mappedRun(mapping);
     return saved ? resultOf(mapping, saved) : { threadId: mapping.threadId, agentRunId: run.id, text: "", status: "unknown", error: "原生运行记录未能读取" };
   } catch (error) {
