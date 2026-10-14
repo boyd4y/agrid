@@ -50,7 +50,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 聊天发送启动独立 Run，使用保存的原生 Session，只提交最新用户输入。默认没有平台步数或超时限制；仅显式配置 `.env.example` 的 `AI_CHAT_*` 才启用。未完成 turn 使用官方续接能力接收普通追问，自然结束无正文不再被平台改判失败。停止不会撤销已提交的数据修改；同一提交与并发执行仍有保护。真正丢失最新保存状态时明确报错，不重放 UI 工具历史。
 
-本地只需要配置 Pi/OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。plan/goal 已持久化并可在聊天 header 查看；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
+本地只需要配置 Pi/OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。规划使用 Harness 原生能力，平台不提供自建 plan/goal 工具；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
 
 ### 设计系统
 - Notion 色板（`#37352f` / `#2383e2` / `#e9e9e7`）
@@ -59,6 +59,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 ## 快速开始
 
+使用构建后的前端、Node API 和后台 worker 在本机同源运行，见 [本地 Node 部署](docs/local-node.md)。
 项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`，共享界面位于 `packages/ui`（`@tabdo/ui`，含独立 Storybook）。包之间通过 `workspace:*` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
 
 ```bash
@@ -160,7 +161,7 @@ TABDO_API_URL=http://localhost:3001 TABDO_API_KEY=agt_… \
 
 - 触发：`row_created` · `field_changed` · `enter_status`（进列）
 - 条件：复用表格过滤器
-- 动作：`update_field`（事务写回 + 动作凭据）；`run_agent` 后台运行时暂未接入，会明确记录未执行。
+- 动作：`update_field`（事务写回 + 动作凭据）、复用命令层的数据动作，以及 `run_agent`（共用官方原生 Harness 执行，支持提问和答案续接）。具体来源和能力见 [事件自动化](docs/event-automations.md)。
 - API：`/api/tables/:id/automations` · `/api/automations/:id` · `/api/tables/:id/automation-runs`
 - 命令层：`listAutomations` / `createAutomation` / `updateAutomation` / `deleteAutomation` / `listAutomationRuns`
 - UI：表格详情页「自动化」面板

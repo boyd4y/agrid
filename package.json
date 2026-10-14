@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "local:config": "node scripts/local-config.mjs",
+    "local:infra": "docker compose --env-file .env -p tabdo-node-local -f docker-compose.local.yml up -d --wait",
+    "local:setup": "pnpm build && pnpm db:migrate && pnpm db:seed:demo",
+    "local:start": "node --env-file=.env scripts/local-start.mjs",
+    "local:smoke": "node --env-file=.env scripts/local-smoke.mjs",
     "dev": "pnpm build:foundation && pnpm --parallel -r --filter @tabdo/server --filter @tabdo/client --filter @tabdo/mcp dev",
     "dev:client": "pnpm --filter @tabdo/client dev",
     "dev:server": "pnpm build:foundation && pnpm --filter @tabdo/server dev",

@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tableapp
+      POSTGRES_PASSWORD: ${LOCAL_DATABASE_PASSWORD:?Run pnpm local:config first}
+      POSTGRES_DB: tabdo_local
+    ports:
+      - "127.0.0.1:${LOCAL_DATABASE_PORT:-55441}:5432"
+    volumes:
+      - local_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U tableapp -d tabdo_local"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [redis-server, --appendonly, 'yes', --appendfsync, everysec, --maxmemory-policy, noeviction]
+    ports:
+      - "127.0.0.1:${LOCAL_REDIS_PORT:-6394}:6379"
+    volumes:
+      - local_redisdata:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  local_pgdata:
+  local_redisdata:

@@ -31,6 +31,7 @@
 
 ## 开发、测试与部署
 
+- [本地 Node 部署](local-node.md)：同源前端/API、独立 worker、隔离基础服务与实际流程检查。
 - [贡献指南](../AGENTS.md)：目录结构、命令与提交约定。
 - [测试指南](testing.md)：单元、集成、队列与浏览器回归，以及隔离环境。
 - [shadcn CLI](shadcn-cli.md)：多包工作区的组件命令。
