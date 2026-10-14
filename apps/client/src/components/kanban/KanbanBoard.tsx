@@ -309,7 +309,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
                         setOverCol(null);
                       }}
                       className={cn(
-                        "group/card cursor-pointer rounded-lg bg-background shadow-sm",
+                        "group/card min-w-0 max-w-full cursor-pointer rounded-lg bg-background shadow-sm",
                         dragging === row.id && "opacity-50"
                       )}
                     >
@@ -332,7 +332,7 @@ export function KanbanBoard({ table, config: rawConfig, onChange, refreshToken }
                         const property = (column: ColumnDef, inFooter = false) => <div key={column.id} className={cn("flex min-w-0 items-center text-xs", compact ? "gap-1.5" : "gap-2", inFooter && "flex-1")} data-card-property={column.id}>
                           <ColumnTypeIcon type={column.type} className="size-3.5 shrink-0 text-muted-foreground" />
                           <span className={cn("truncate text-muted-foreground", inFooter ? "sr-only" : "w-16 shrink-0")} title={column.name}>{column.name}</span>
-                          <div className="min-w-0 flex-1"><CellDisplay column={column} value={row.cells[column.id] ?? null} members={members} relation={row.relations?.[column.id]} /></div>
+                          <div className="min-w-0 flex-1 overflow-hidden" data-card-value><CellDisplay column={column} value={row.cells[column.id] ?? null} members={members} relation={row.relations?.[column.id]} /></div>
                         </div>;
                         return <><CardContent className={cn("flex flex-col", compact ? "gap-1 px-2" : "gap-2 px-3", content.length > 0 && (compact ? "pb-2" : "pb-3"))} data-testid="board-card-content">{content.map((column) => property(column))}</CardContent>
                           {footer.length > 0 && <CardFooter className={cn("flex-wrap border-t border-border", compact ? "gap-1.5 px-2 py-1.5" : "gap-2 px-3 py-2")} data-testid="board-card-footer">{footer.map((column) => property(column, true))}</CardFooter>}

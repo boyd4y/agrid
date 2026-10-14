@@ -171,13 +171,13 @@ export function CellDisplay({
           : null;
       if (err) {
         return (
-          <span className="truncate text-xs text-destructive" title={err}>
+          <span className="block min-w-0 max-w-full truncate text-xs text-destructive" title={err}>
             #ERR
           </span>
         );
       }
       return (
-        <span className="truncate font-mono text-[13px] tabular-nums text-muted-foreground">
+        <span className="block min-w-0 max-w-full truncate font-mono text-[13px] tabular-nums text-muted-foreground">
           {value === null || value === undefined || value === "" ? (
             <span className="font-sans text-muted-foreground/50">—</span>
           ) : (
@@ -188,7 +188,7 @@ export function CellDisplay({
     }
     case "number":
       return (
-        <span className="w-full text-right tabular-nums">
+        <span className="block min-w-0 w-full truncate text-right tabular-nums">
           {value === null || value === undefined || value === "" ? (
             <span className="text-muted-foreground/50">—</span>
           ) : (
@@ -202,7 +202,7 @@ export function CellDisplay({
       }
       const fmt = column.config?.dateFormat ?? "YYYY-MM-DD";
       return (
-        <span className="truncate text-[13px]">
+        <span className="block min-w-0 max-w-full truncate text-[13px]">
           {formatDateDisplay(String(value), fmt)}
         </span>
       );
@@ -210,7 +210,7 @@ export function CellDisplay({
     case "text":
     default:
       return (
-        <span className="truncate">
+        <span className="block min-w-0 max-w-full truncate">
           {value === null || value === undefined || value === "" ? (
             <span className="text-muted-foreground/50">{i18n.t("table:empty")}</span>
           ) : (
