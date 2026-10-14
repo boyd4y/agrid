@@ -445,7 +445,7 @@ export async function applyRelationWrites(
     }
   }
 }
-export async function queryRelationRecords(raw: RelationQueryInput & Scope) {
+export async function queryRelationRecords(raw: RelationQueryInput & Scope, transaction?: Transaction) {
   const input = z
     .object({
       columnId: uuid,
@@ -460,12 +460,13 @@ export async function queryRelationRecords(raw: RelationQueryInput & Scope) {
   const { column } = await requireColumnInOrg(
     input.columnId,
     raw.organizationId,
+    transaction,
   );
   const config = column.config.relation;
   if (column.type !== "relation" || !config?.relationId)
     throw new Error("字段不是关联类型");
   if (input.rowId) {
-    const hit = await requireRowInOrg(input.rowId, raw.organizationId);
+    const hit = await requireRowInOrg(input.rowId, raw.organizationId, transaction);
     if (hit.row.tableId !== column.tableId)
       throw new Error("记录不属于关联字段所在表格");
   }
@@ -491,7 +492,7 @@ export async function queryRelationRecords(raw: RelationQueryInput & Scope) {
       sql`(${rows.sortOrder},${rows.id}) > (${cursor.sortOrder},${cursor.id}::uuid)`,
     );
   const limit = clampLimit(input.limit, 30, 100);
-  const list = await db
+  const list = await (transaction ?? db)
     .select({
       id: rows.id,
       tableId: rows.tableId,
@@ -515,11 +516,12 @@ export async function queryRelationRecords(raw: RelationQueryInput & Scope) {
         : null,
   };
 }
-export async function getRow(input: { rowId: string } & Scope) {
+export async function getRow(input: { rowId: string } & Scope, transaction?: Transaction) {
   const { row } = await requireRowInOrg(
     uuid.parse(input.rowId),
     input.organizationId,
+    transaction,
   );
-  const cols = await loadTableColumns(row.tableId);
-  return { ...(await readRow(row.id, cols)), columns: cols };
+  const cols = await loadTableColumns(row.tableId, transaction);
+  return { ...(await readRow(row.id, cols, transaction)), columns: cols };
 }

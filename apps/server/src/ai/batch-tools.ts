@@ -1,3 +1,5 @@
+import type { Transaction } from "../db/index.js";
+import { getToolTransaction } from "./execution-context.js";
 import { BATCH_TOOLS, batchToolResult } from "@tabdo/shared";
 import { tool, zodSchema, type ToolSet } from "ai";
 import { z } from "zod";
@@ -14,8 +16,8 @@ export function createBatchTools(defaultTableId?: string, organizationId?: strin
       execute: async (input) => {
         const resolved = hasTable ? { ...input, tableId: (input as { tableId?: string }).tableId ?? defaultTableId } : input;
         const validated = definition.schema.parse(resolved);
-        const command = commands[definition.command] as (input: typeof validated & { organizationId?: string; actorId?: string }) => Promise<unknown>;
-        return batchToolResult(name, await command({ ...validated, organizationId, actorId }));
+        const command = commands[definition.command] as (input: typeof validated & { organizationId?: string; actorId?: string }, transaction?: Transaction) => Promise<unknown>;
+        return batchToolResult(name, await command({ ...validated, organizationId, actorId }, getToolTransaction()));
       },
     })];
   }));

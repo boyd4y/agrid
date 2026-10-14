@@ -1,5 +1,5 @@
 import { eq, asc, desc, and, isNull, sql } from "drizzle-orm";
-import { db, type Transaction } from "../db/index.js";
+import { db, inTransaction, type Transaction } from "../db/index.js";
 import { automations, automationRuns, automationEvents, automationOutbox, rows, tables, member,
   columns, agentProfile, integrationConnections, webhookEndpoints } from "../db/schema.js";
 import { queueName } from "../queue/config.js";
@@ -90,21 +90,21 @@ export async function getWorkspaceAutomation(id: string, organizationId: string)
   const [sourceTable] = row.tableId ? await db.select({ name: tables.name }).from(tables).where(eq(tables.id, row.tableId)) : [];
   return { ...mapRule(row), sourceName: sourceTable?.name ?? null };
 }
-export async function listAutomations(input: ListAutomationsInput & OrgScoped) {
+export async function listAutomations(input: ListAutomationsInput & OrgScoped, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
   const { tableId, offset, limit } = AUTOMATION_LIST_SCHEMA.parse({ tableId: input.tableId, offset: input.offset, limit: input.limit });
-  if (tableId) await requireTableInOrg(tableId, organizationId);
-  return (await db.select().from(automations).where(and(eq(automations.organizationId, organizationId),
+  if (tableId) await requireTableInOrg(tableId, organizationId, transaction);
+  return (await (transaction ?? db).select().from(automations).where(and(eq(automations.organizationId, organizationId),
     tableId ? eq(automations.tableId, tableId) : undefined, isNull(automations.deletedAt)))
     .orderBy(asc(automations.createdAt), asc(automations.id)).limit(limit ?? 100).offset(offset ?? 0)).map(mapRule);
 }
-export async function createAutomation(input: CreateAutomationInput & OrgScoped) {
+export async function createAutomation(input: CreateAutomationInput & OrgScoped, transaction?: Transaction) {
   const { organizationId, actorId, ...wire } = input;
   if (!organizationId || !actorId) throw new Error("缺少自动化创建者或工作区上下文");
   const body = AUTOMATION_CREATE_SCHEMA.parse(wire);
   const source: AutomationSource = body.source ?? { kind: "table", tableId: body.tableId! };
   if (body.tableId && (source.kind !== "table" || source.tableId !== body.tableId)) throw new Error("来源表格不一致");
-  return db.transaction(async tx => {
+  return inTransaction(transaction, async tx => {
     const [creator] = await tx.select().from(member).where(and(eq(member.userId, actorId), eq(member.organizationId, organizationId)));
     if (!creator) throw new Error("创建者已不在工作区");
     const data = { ...body, source, conditions: body.conditions ?? [], eventConditions: body.eventConditions ?? [], actions: body.actions };
@@ -115,10 +115,10 @@ export async function createAutomation(input: CreateAutomationInput & OrgScoped)
     const rule = mapRule(row);await syncSchedule(tx, rule);return rule;
   });
 }
-export async function updateAutomation(input: UpdateAutomationInput & OrgScoped) {
+export async function updateAutomation(input: UpdateAutomationInput & OrgScoped, transaction?: Transaction) {
   const { automationId, organizationId, actorId, ...wire } = input;
   const body = AUTOMATION_UPDATE_SCHEMA.parse(wire);
-  return db.transaction(async tx => {
+  return inTransaction(transaction, async tx => {
     const existing = await ownedRule(automationId, organizationId, tx);
     const rule = { ...mapRule(existing), ...body };
     if (rule.source.kind !== existing.source.kind || (existing.source.kind === "table" && rule.source.kind === "table" && rule.source.tableId !== existing.source.tableId)) throw new Error("已保存自动化的来源类型不可更改");
@@ -129,8 +129,8 @@ export async function updateAutomation(input: UpdateAutomationInput & OrgScoped)
     const updated = mapRule(row);await syncSchedule(tx, updated);return updated;
   });
 }
-export async function deleteAutomation({ automationId, organizationId }: DeleteAutomationInput & OrgScoped) {
-  return db.transaction(async tx => {
+export async function deleteAutomation({ automationId, organizationId }: DeleteAutomationInput & OrgScoped, transaction?: Transaction) {
+  return inTransaction(transaction, async tx => {
     await ownedRule(automationId, organizationId, tx);
     const [row] = await tx.update(automations).set({ deletedAt: new Date(), enabled: false }).where(eq(automations.id, automationId)).returning();
     await syncSchedule(tx, mapRule(row));return { ok: true as const };
@@ -140,15 +140,15 @@ export async function listRuleRuns(automationId: string, organizationId: string,
   await ownedRule(automationId, organizationId);
   return (await db.select().from(automationRuns).where(eq(automationRuns.automationId, automationId)).orderBy(desc(automationRuns.createdAt)).limit(Math.min(Math.max(limit, 1), 200))).map(mapRun);
 }
-export async function listAutomationRuns(input: ListAutomationRunsInput & OrgScoped) {
+export async function listAutomationRuns(input: ListAutomationRunsInput & OrgScoped, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
   const { tableId, automationId, limit } = AUTOMATION_RUN_LIST_SCHEMA.parse({ tableId: input.tableId, automationId: input.automationId, limit: input.limit });
-  if (tableId) await requireTableInOrg(tableId, organizationId);
+  if (tableId) await requireTableInOrg(tableId, organizationId, transaction);
   if (automationId) {
-    const rule = await ownedRule(automationId, organizationId);
+    const rule = await ownedRule(automationId, organizationId, transaction);
     if (tableId && rule.tableId !== tableId) throw new Error("自动化不属于指定表格");
   }
-  return (await db.select({ run: automationRuns }).from(automationRuns)
+  return (await (transaction ?? db).select({ run: automationRuns }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId)).where(and(
       eq(automations.organizationId, organizationId), isNull(automations.deletedAt),
       tableId ? eq(automationRuns.tableId, tableId) : undefined,

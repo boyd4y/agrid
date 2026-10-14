@@ -132,9 +132,9 @@ export function createNativeChatStream(options: {
       };
       const { tools, projectErrors, failures } = nativeHostTools(options.tools, async (execute) => {
           signal.throwIfAborted();
-          const operation = withRuntimeLease(options.lease, async () => {
+          const operation = withRuntimeLease(options.lease, async (tx) => {
             signal.throwIfAborted();
-            return execute();
+            return execute(tx);
           });
           pendingTools.add(operation);
           try { return await operation; } finally { pendingTools.delete(operation); }

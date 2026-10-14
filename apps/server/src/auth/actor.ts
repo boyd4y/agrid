@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { eq, and, isNull } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { db, type Transaction } from "../db/index.js";
 import { agentProfile, member, user, organization, userApiKeys } from "../db/schema.js";
 import type { MemberRole } from "../db/schema.js";
 import { auth } from "./index.js";
@@ -134,8 +134,8 @@ export async function resolveActor(req: Request): Promise<Actor | null> {
   };
 }
 
-export async function listOrgMembers(organizationId: string) {
-  const rows = await db
+export async function listOrgMembers(organizationId: string, transaction?: Transaction) {
+  const rows = await (transaction ?? db)
     .select({
       memberId: member.id,
       role: member.role,
@@ -150,7 +150,7 @@ export async function listOrgMembers(organizationId: string) {
     .innerJoin(user, eq(member.userId, user.id))
     .where(eq(member.organizationId, organizationId));
 
-  const agents = await db
+  const agents = await (transaction ?? db)
     .select()
     .from(agentProfile)
     .where(eq(agentProfile.organizationId, organizationId));
