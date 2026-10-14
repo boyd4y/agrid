@@ -70,7 +70,7 @@ export function LoginPage() {
         <h1 className="text-3xl font-semibold tracking-tight">{t("loginTitle")}</h1>
         <FieldDescription>{t("loginDescription")}</FieldDescription>
       </div>
-      <form onSubmit={onSubmit} aria-busy={busy} aria-describedby={error ? "login-error" : undefined}>
+      <form noValidate onSubmit={onSubmit} aria-busy={busy} aria-describedby={error ? "login-error" : undefined}>
         <FieldGroup className="gap-5">
           <Field data-disabled={busy}>
             <FieldLabel htmlFor="login-email">{t("email")}</FieldLabel>

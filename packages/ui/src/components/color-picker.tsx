@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type PointerEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
@@ -25,7 +25,7 @@ export function ColorPicker({ value, onChange, className, label, presets = defau
   const labels = { ...defaultLabels, ...suppliedLabels };
   const resolvedLabel = label ?? labels.pickColor;
   const id = useId();
-  const saturationInput = useRef<HTMLInputElement>(null);
+  const saturationInput = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
@@ -39,6 +39,13 @@ export function ColorPicker({ value, onChange, className, label, presets = defau
     setDraft(hex.toUpperCase());
     onChange(hex);
     setInvalid(false);
+  };
+  const keyboardColor = (event: KeyboardEvent<HTMLDivElement>, axis: "s" | "v") => {
+    const step = event.shiftKey ? 0.1 : 0.01;
+    const next = event.key === "Home" ? 0 : event.key === "End" ? 1
+      : ["ArrowRight", "ArrowUp", "PageUp"].includes(event.key) ? clampUnit(hsv[axis] + step)
+      : ["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? clampUnit(hsv[axis] - step) : null;
+    if (next !== null) { event.preventDefault(); event.stopPropagation(); editHsv({ ...hsv, [axis]: next }); }
   };
   const pickHex = (hex: string) => {
     const next = hexToHsv(hex);
@@ -94,12 +101,8 @@ export function ColorPicker({ value, onChange, className, label, presets = defau
               className="relative h-28 touch-none select-none rounded-md border border-input focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-popover"
               style={{ background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), ${hsvToHex({ h: hsv.h, s: 1, v: 1 })}` }}
               {...pointerHandlers(false)}>
-              <input ref={saturationInput} type="range" min={0} max={100} step={1} value={Math.round(hsv.s * 100)}
-                className="sr-only" aria-label={labels.colorSaturation}
-                onChange={(event) => editHsv({ ...hsv, s: Number(event.target.value) / 100 })} />
-              <input type="range" min={0} max={100} step={1} value={Math.round(hsv.v * 100)}
-                className="sr-only" aria-label={labels.colorBrightness}
-                onChange={(event) => editHsv({ ...hsv, v: Number(event.target.value) / 100 })} />
+              <div ref={saturationInput} role="slider" tabIndex={0} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(hsv.s * 100)} className="sr-only" aria-label={labels.colorSaturation} onKeyDown={event => keyboardColor(event, "s")} />
+              <div role="slider" tabIndex={0} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(hsv.v * 100)} className="sr-only" aria-label={labels.colorBrightness} onKeyDown={event => keyboardColor(event, "v")} />
               <span aria-hidden="true" className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-sm"
                 style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: preview.background, borderColor: preview.color }} />
             </div>

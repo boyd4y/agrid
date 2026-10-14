@@ -8,6 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { PauseIcon, PlayIcon } from "lucide-react";
+import { Slider } from "@tabdo/ui/components/slider";
 import { cn } from "@/lib/utils";
 import { field, inkButton, mono, paper } from "./surfaces";
 
@@ -173,23 +174,21 @@ export function AudioPlayer({
         <span className="truncate text-[13.5px] font-medium">
           {displayTitle}
         </span>
-        <input
-          type="range"
+        <Slider
           min={0}
           max={duration ?? 0}
           step={0.1}
-          value={Math.min(currentTime, duration ?? 0)}
+          value={[Math.min(currentTime, duration ?? 0)]}
           aria-label="Seek"
           aria-valuetext={`${formatDuration(currentTime)} of ${durationLabel}`}
           disabled={hasError}
-          onChange={(event) => {
-            const nextTime = Number(event.currentTarget.value);
+          onValueChange={([nextTime]) => {
             if (!Number.isFinite(nextTime)) return;
             const resolvedTime = Math.min(nextTime, duration ?? nextTime);
             if (audioRef.current) audioRef.current.currentTime = resolvedTime;
             update({ currentTime: resolvedTime });
           }}
-          className="accent-foreground w-full cursor-pointer disabled:cursor-default"
+          className="w-full"
         />
       </div>
       <span className={cn(mono, "text-muted-foreground tabular-nums")}>

@@ -422,7 +422,7 @@ export function TableForm({
               </div>
             ) : (
               <Form {...form}>
-                <form
+                <form noValidate
                   onSubmit={(e) => {
                     e.preventDefault();
                     void advance();
@@ -504,7 +504,7 @@ export function TableForm({
         </div>
 
         <Form {...form}>
-          <form onSubmit={onSubmit} className="space-y-5">
+          <form noValidate onSubmit={onSubmit} className="space-y-5">
             {fields.map((f) => renderField(f, { large: false }))}
 
             {error && (

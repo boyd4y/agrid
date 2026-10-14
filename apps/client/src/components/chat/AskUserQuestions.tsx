@@ -1,3 +1,4 @@
+import { RadioGroup, RadioGroupItem } from "@tabdo/ui/components/radio-group";
 import { ChatRunsContext } from "./ChatRuns";
 import { useContext, useId, useState } from "react";
 import { makeAssistantToolUI, useAuiState, type ToolCallMessagePartProps } from "@assistant-ui/react";
@@ -37,15 +38,16 @@ export function QuestionsCard({ args, result, status, addResult, toolCallId }: T
         const secret = typeof question.allowFreeForm === "object" && question.allowFreeForm.secret;
         return <fieldset key={question.id} className="space-y-2" disabled={Boolean(result) || running}>
           <legend className="mb-2 text-sm font-medium">{question.question}</legend>
+          <RadioGroup role={question.allowMultiple ? "group" : undefined} value={question.allowMultiple ? undefined : current?.optionIds[0] ?? ""} disabled={Boolean(result) || running} onValueChange={value => { if (!question.allowMultiple) patch(question.id, { optionIds: [value] }); }}>
           {question.options?.map((option, optionIndex) => {
             const selected = current?.optionIds.includes(option.id) ?? false;
             const optionId = `${id}-${index}-${optionIndex}`;
             return <label key={option.id} htmlFor={optionId} className={cn("flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 text-sm transition-colors hover:bg-accent/50", selected && "border-primary/50 bg-primary/5", (result || running) && "cursor-default")}>
               {question.allowMultiple ? <Checkbox id={optionId} className="mt-0.5" checked={selected} onCheckedChange={checked => patch(question.id, { optionIds: checked ? [...(current?.optionIds ?? []), option.id] : (current?.optionIds ?? []).filter(value => value !== option.id) })} />
-                : <input id={optionId} type="radio" name={`${id}-${question.id}`} className="mt-1 size-3.5 accent-primary" checked={selected} onChange={() => patch(question.id, { optionIds: [option.id] })} />}
+                : <RadioGroupItem id={optionId} value={option.id} className="mt-0.5" />}
               <span className="min-w-0 flex-1"><span className="block">{option.label}</span>{option.description && <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>}{option.preview && <span className="mt-1 block whitespace-pre-wrap text-xs text-muted-foreground">{option.preview}</span>}</span>
             </label>;
-          })}
+          })}</RadioGroup>
           {question.allowFreeForm !== false && <div className="space-y-1.5"><label htmlFor={`${id}-${index}-text`} className="text-xs text-muted-foreground">{t("questions.freeform")}</label>
             {secret ? <Input id={`${id}-${index}-text`} type="password" autoComplete="off" value={freeform} onChange={event => patch(question.id, { freeform: event.target.value })} /> : <Textarea id={`${id}-${index}-text`} rows={2} className="min-h-16" value={freeform} onChange={event => patch(question.id, { freeform: event.target.value })} />}
           </div>}

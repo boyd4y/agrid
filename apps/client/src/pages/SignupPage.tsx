@@ -69,7 +69,7 @@ export function SignupPage() {
         <h1 className="text-3xl font-semibold tracking-tight">{t("signupTitle")}</h1>
         <FieldDescription>{t("signupDescription")}</FieldDescription>
       </div>
-      <form onSubmit={onSubmit} aria-busy={busy} aria-describedby={error ? "signup-error" : undefined}>
+      <form noValidate onSubmit={onSubmit} aria-busy={busy} aria-describedby={error ? "signup-error" : undefined}>
         <FieldGroup className="gap-5">
           <Field data-disabled={busy}>
             <FieldLabel htmlFor="signup-name">{t("name")}</FieldLabel>

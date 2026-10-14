@@ -102,7 +102,7 @@ export function MembersPage() {
       </MemberDirectory>
       <DialogContent className="max-w-md" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader><DialogTitle>{t("members.inviteTitle")}</DialogTitle><DialogDescription>{t("members.inviteDescription")}</DialogDescription></DialogHeader>
-        <form onSubmit={inviteHuman} className="flex flex-col gap-4" data-testid="members-invite-form">
+        <form noValidate onSubmit={inviteHuman} className="flex flex-col gap-4" data-testid="members-invite-form">
           <FieldGroup><Field data-invalid={Boolean(inviteError)}><FieldLabel htmlFor="member-invite-email">{t("members.email")}</FieldLabel>
             <Input id="member-invite-email" type="email" required disabled={busy} aria-invalid={Boolean(inviteError)} value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("members.emailPlaceholder")} autoFocus />
             {inviteError && <FieldError role="alert">{inviteError}</FieldError>}

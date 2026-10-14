@@ -100,7 +100,7 @@ export function ApiKeysSettings({ bare = false }: { bare?: boolean }) {
             <FieldDescription>{text("usage")}</FieldDescription>
           </Field>
           <div className="flex justify-end"><Button onClick={() => changeOpen(false)}>{t("common:close")}</Button></div>
-        </> : <form onSubmit={create} className="flex flex-col gap-5">
+        </> : <form noValidate onSubmit={create} className="flex flex-col gap-5">
           <FieldGroup><Field data-invalid={!!error}>
             <FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel>
             <Input id={`${id}-name`} value={name} onChange={event => { setName(event.target.value); setError(""); }} placeholder={text("namePlaceholder")} maxLength={100} autoComplete="off" disabled={creating} required aria-invalid={!!error} aria-describedby={error ? `${id}-error` : undefined} />

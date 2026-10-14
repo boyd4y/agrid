@@ -3,6 +3,7 @@ import { Check, ChevronRight, Code2, Copy, FileText, Folder } from "lucide-react
 import type { SkillDocument, SkillFile } from "@tabdo/shared";
 import { Loader2, Save, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tabdo/ui/components/collapsible";
 import { Button } from "@tabdo/ui/components/button";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -47,7 +48,7 @@ export function SkillExplorer({ skill, canManage = false, onSaved }: { skill: Sk
   const selected = { ...original, content: draft[original.path] ?? original.content };
   const render = (nodes: Node[]) => nodes.map((node) => node.file ? <Button variant={selected.path === node.path ? "secondary" : "ghost"} size="sm" type="button" key={node.path} aria-pressed={selected.path === node.path} onClick={() => { setPath(node.path); setCopied(false); }} title={node.path} className="w-full justify-start">
     {/\.(py|js|ts|sh)$/.test(node.name) ? <Code2 data-icon="inline-start" /> : <FileText data-icon="inline-start" />}<span className="truncate">{node.name}</span>
-  </Button> : <details open key={node.path} className="group/folder"><summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60"><ChevronRight className="size-3 shrink-0 transition-transform group-open/folder:rotate-90" /><Folder className="size-4 shrink-0 text-muted-foreground" /><span className="truncate">{node.name}</span></summary><div className="ml-3 border-l border-border pl-2">{render(node.children)}</div></details>);
+  </Button> : <Collapsible defaultOpen key={node.path} className="group/folder"><CollapsibleTrigger asChild><Button type="button" variant="ghost" size="sm" className="w-full justify-start"><ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]/folder:rotate-90" /><Folder className="size-4 shrink-0 text-muted-foreground" /><span className="truncate">{node.name}</span></Button></CollapsibleTrigger><CollapsibleContent className="ml-3 border-l border-border pl-2">{render(node.children)}</CollapsibleContent></Collapsible>);
   return <div className="grid min-h-96 shrink-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-card md:grid-cols-[240px_minmax(0,1fr)] md:grid-rows-1" data-testid="skill-explorer">
     <aside aria-label={t("skillFiles")} className="min-h-32 max-h-48 overflow-auto border-b border-border bg-muted/20 p-3 md:min-h-0 md:max-h-none md:border-b-0 md:border-r">
       <h2 className="mb-3 px-2 text-xs font-medium text-muted-foreground">{t("explorerFiles", { count: files.length })}</h2>{render(tree(files))}

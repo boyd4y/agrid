@@ -64,7 +64,7 @@ export function ViewActions({ view, table, active, canDelete, menuOpen, onMenuOp
       </DropdownMenu>}</>
     </span></PopoverAnchor>
     <PopoverContent align="end" className="w-80" data-testid={editor === "rename" ? "view-rename" : "board-properties"} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
-      <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
         <FieldGroup>
           <p className="text-sm font-medium">{editor === "rename" ? t("renameView") : t("boardDisplaySettings")}</p>
           {editor === "rename" ? <Field data-invalid={Boolean(error)}><FieldLabel htmlFor={`view-name-${view.id}`}>{t("viewName")}</FieldLabel><Input id={`view-name-${view.id}`} autoFocus maxLength={80} value={name} aria-invalid={Boolean(error)} onChange={(event) => setName(event.target.value)} disabled={busy} /></Field> : <>
