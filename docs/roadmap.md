@@ -2,9 +2,17 @@
 
 更新：2026-10-14。按用户要求持续推进；独立功能完成、自检后单独提交并推送。
 
-## 双部署 framework（当前实施）
+## 双部署 framework（当前架构梳理）
 
-目标：业务和用户对 Node/Cloudflare 无感知，保留 Better Auth 与官方 Harness。实施依据是[修订架构](architecture/dual-deployment.md)：按 queue/storage/harness/sandbox 等能力组织包，供应商实现放包内 adapters，业务协议/权限/数据状态由平台拥有。
+Cloudflare 优先，继续支持 Node/Cloudflare 双部署；Cloudflare 使用 Workers + DO + Sandbox，在 Sandbox 内执行原生 Harness，不要求额外常驻 Node 服务。保留现有 PostgreSQL、Drizzle 与 Better Auth。当前依据为[双部署架构](architecture/dual-deployment.md)和[包边界](architecture/runtime-boundaries.md)：core 通用契约、backend 显式依赖 services、agent-runtime 产品装配、独立 platform-cloudflare 与 platform-node。Worker 与 Sandbox 制品分别构建，不要求换 Pi Durable。本轮纠正文档并核对本地 CF/PG 链路，尚未迁移包。
+
+- 已完成：明确包职责和静态依赖方向；识别隐式 DB/Auth scope 不满足最终 services 约束；恢复 DO 协调/Sandbox 承载完整 Harness 的边界，撤下纯 Workers 执行与禁止 Node 的错误限定。
+- 本轮本地验证：Wrangler/Docker/PG 可用；实际 CF/PG 协调用例通过，验证 Better Auth/API Key、私有输出、取消持久化与成员撤销，仅连接隔离 `tabdo_agent_test`，不代表完整 Sandbox 执行已完成。
+- 待完成：Wrangler + PG + Docker 下的 Sandbox 原生 Harness 生命周期、待答恢复、重复启动与输出协议验证；之后迁移平台包与显式依赖，接通实际 Queue/Cron、完整产品入口和双模式验收。远程 Hyperdrive 池/缓存和容器生命周期独立验收。
+
+### 已有双部署实施记录（新包隔离尚未实施）
+
+目标保持业务和用户对 Node/Cloudflare 无感知，保留 Better Auth 与官方 Harness。此前依据为[双部署记录](architecture/dual-deployment.md)：按能力包与内部 adapters 实施。下列记录保留实际完成证据，不代表已完成新的物理包隔离或 Cloudflare Sandbox 部署。
 
 已先独立提交架构修订，再按新边界迁移 queue/storage 包及内部 adapters。底层处理通用消息和相对对象 key；自动化协议与 UUID 文件 namespace 在 shared/server。旧 core/runtime 包已撤下。首批 app/Better Auth/PG 工厂和 Harness/Sandbox 能力包也已接入；通用 SDK 装配不导入产品协议/数据库。请求资源隔离、独立 runner 与 DO 输出/取消已完成本地验证。继续推进共同业务包提取、实际 CF 队列/调度接线及完整双模式验收；登录过期仅影响远程验收。
 

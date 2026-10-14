@@ -1,5 +1,7 @@
 # 持久原生执行器
 
+本文记录现有原生 Node 执行实现，继续服务双部署目标。Cloudflare 路线由 Workers/DO 协调，在 Sandbox 内执行完整原生 Harness；Worker 不直接加载 Node SDK，也不要求额外常驻 Node HTTP 服务。最新包边界见[运行时与包边界](runtime-boundaries.md)。Sandbox 部署/生命周期仍待验证，此次未迁移代码。
+
 本阶段把计算资源启动与产品 Run 分开。通用 `@tabdo/execution` 包提供 Node 子进程、签名 HTTP 控制适配器；产品接受、权限、租约、检查点和输出仍由 PG repository 管理。没有另造模型或工具循环。
 
 ## Node 聊天
@@ -21,7 +23,9 @@ NATIVE_EXECUTION_ADAPTER=node-process pnpm --filter @tabdo/server start
 
 迁移 `0026_native_execution_dispatch` 新增私有接受与输出表。部署前执行正常迁移；开发回归只使用隔离测试库。
 
-## 私有 HTTP runner
+## Node 模式可选私有 HTTP 控制（现有实现）
+
+下面的入口是已实现的可选 Node 控制服务，不是 Cloudflare 目标拓扑中的必需部署。Cloudflare 将使用 DO/Sandbox 生命周期控制；可复用其通用协议与持久接受语义，不要求启动本节服务。
 
 ```sh
 INTERNAL_EXECUTION_SECRET='<至少 32 字符的随机密钥>' pnpm --filter @tabdo/server runner:start
@@ -33,6 +37,6 @@ HMAC 验证身份、方法、路径、body 与时效；PG 执行记录提供业�
 
 ## Cloudflare 与验证边界
 
-DO 通过实际平台服务读取相同 PG 输出与持久取消，每次回调独立创建/关闭 DB/Auth。workerd 已验证真实 Cookie/API Key、私有会话隔离、成员撤销、输出分页与 DO 重建。完整产品 Worker、Queue/Cron 接受服务、runner 资源部署与远程验收仍待接入。
+DO 通过实际平台服务读取相同 PG 输出与持久取消，每次回调独立创建/关闭 DB/Auth。Wrangler 的真实 Workers 运行环境已验证 Cookie/API Key、私有会话隔离、成员撤销、输出分页与 DO 重建。完整产品 Worker、Queue/Cron 接受服务、Sandbox 内部执行生命周期与远程验收仍待接入。PG 保留，CF 优先本地验证见当前架构边界。
 
 独立进程回归已验证 Pi 的工具只执行一次、待答进程退出、答案通过签名 HTTP 在新进程继续原 Run，以及重复启动不重放。尚未宣称 Codex/Claude、Cloudflare Containers/E2B 的实际远程生命周期完成。

@@ -21,7 +21,8 @@
 
 ## 架构与执行
 
-- [双部署模式架构](architecture/dual-deployment.md)：共用核心、Node / Cloudflare 扩展、Run / Session 与无感知切换。
+- [运行时与包边界](architecture/runtime-boundaries.md)：双部署包隔离、显式 services 依赖，以及 Workers/DO 与 Sandbox 原生执行的边界。
+- [双部署模式架构](architecture/dual-deployment.md)：共同业务与持久 Run/Session 设计、实际验证记录；包组织以运行时与包边界为准。
 - [Pars 核心调研](architecture/pars-review.md)：源码依据、可借鉴分层与需要补齐的语义。
 
 - [多租户设计](multi-tenant.md)：工作区隔离、身份与数据模型。

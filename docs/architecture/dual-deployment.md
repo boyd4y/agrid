@@ -1,70 +1,75 @@
 # tabdo 双部署模式架构
 
-日期：2026-10-14。本文是实施依据。**按能力组织公用包，供应商实现置于包内 adapters；部署模式只存在于应用启动入口。** 实际完成情况见实施记录，不能把目标架构当作已经上线。参考 [Pars 核心层调研](pars-review.md)。
+日期：2026-10-14。本文与[运行时与包边界](runtime-boundaries.md)共同作为当前实施依据。**Cloudflare 优先，继续支持 Node 双部署；Cloudflare 使用 Workers + DO + Sandbox，在 Sandbox 内执行原生 Harness，不额外要求常驻 Node API 服务。** 平台实现按 Node/Cloudflare 分包，共用业务通过显式依赖注入。下面的目标尚未全部实现，第 11 节只记录已有验证。参考 [Pars 核心层调研](pars-review.md)。
 
 ## 1. 目标与不可变边界
 
 支持传统 Node + Redis 和 Cloudflare 两种模式，用户、客户端、MCP 和 Tabdo 业务无感知。共用产品 API、Better Auth、权限、PostgreSQL 业务数据、原生 Session/Run、Skill 和聊天协议。
 
-底层框架使用 TypeScript、Web 标准与显式依赖。**能力包不依赖产品业务**，不读取全局环境，不探测运行时，不维护跨请求 principal。保留官方 HarnessAgent 和原生模型/工具循环。
+底层框架使用 TypeScript、Web 标准与显式依赖。**基础设施包不依赖产品业务**，不读取全局环境，不探测运行时，不维护跨请求 principal。保留官方 HarnessAgent 和原生模型/工具循环。PostgreSQL、Drizzle 与 Better Auth 保留；不改成 D1。
 
 能力、供应商、部署模式是三个不同维度：queue 是能力，BullMQ/Cloudflare Queues 是实现，Node/Cloudflare 是装配方式。Sandbox 供应商与部署模式也独立。
 
-## 2. 分层与依赖方向
+## 2. 部署拓扑
 
 ```mermaid
-flowchart TD
-  UI[客户端 / MCP / API Key] --> APP[部署入口：Node 或 Cloudflare]
-  APP --> PLATFORM[共用平台：Hono / Better Auth / 业务服务]
-  PLATFORM --> Q[queue 公共契约]
-  PLATFORM --> S[storage 公共契约]
-  PLATFORM --> CO[协调与执行服务]
-  CO --> AGENT[Tabdo agent-runtime]
-  AGENT --> H[官方 Harness SDK]
-  H --> SB[sandbox 公共契约]
-  Q --> QA[adapters：BullMQ / Cloudflare]
-  S --> SA[adapters：local / S3 / R2]
-  SB --> SBA[adapters：local / Vercel / Cloudflare / E2B]
-  CO --> EXEC[execution adapters：嵌入 / 按需 Node runner]
-  PLATFORM --> PG[(PostgreSQL 权威业务状态)]
-  AGENT --> PG
+flowchart TB
+  UI[客户端 / MCP / API Key]
+  subgraph CF[Cloudflare 模式：优先实施]
+    HTTP[Workers：Hono / Better Auth / 共用 services]
+    TRIGGER[Queues / Cron]
+    DO[Durable Object：Session 协调 / 连接 / 生命周期]
+    SANDBOX[Sandbox：执行原生 Harness / 模型循环 / 工具]
+    TRIGGER --> HTTP
+    HTTP --> DO
+    DO --> SANDBOX
+    HTTP --> R2[(R2：文件 / 工作区快照)]
+  end
+  subgraph NODE[Node 模式]
+    API[Node：相同 Hono / Auth / services]
+    REDIS[Redis / BullMQ / 调度]
+    EXEC[Node 执行侧：原生 Harness]
+    REDIS --> API
+    API --> EXEC
+    API --> STORAGE[(S3 / 本地对象存储)]
+  end
+  UI --> HTTP
+  UI --> API
+  HTTP --> HD[Hyperdrive]
+  HD --> PG[(PostgreSQL：业务 / Session / Run / 检查点)]
+  API --> PG
 ```
 
-箭头表示调用与依赖方向；适配器由部署入口显式选择。底层包不反向 import platform/shared、表格命令、自动化规则、成员信息或数据库 schema。默认 index 只导出公用契约，不从 barrel 一起导出 Node 与 CF 实现。
+这是部署调用图，不是包 import 图。Cloudflare 的 Node 执行环境位于 Sandbox 内，没有额外常驻 Node 服务作为前置条件。Workers 与 Node API 分别装配同一套 services；共用业务包不是隐藏的远程 Node 后端。DO 管协调，Sandbox 内的官方 Harness 管模型与工具循环。
 
 ## 3. 包职责与目录
 
 | 包 / 入口 | 拥有的内容 | 不拥有的内容 |
 | --- | --- | --- |
-| `@tabdo/queue` | 通用消息 envelope、publisher、消费 ACK/重试；`adapters/bullmq`、`adapters/cloudflare` | automation 消息格式、generation、业务去重、Outbox 表与 Run 创建 |
-| `@tabdo/storage` | 对象 put/open/remove、流式字节、可移植 key；`adapters/local`、`adapters/s3`、`adapters/r2` | 文件字段、上传限额、UUID 分片规则、文件归属、表格与租户权限 |
-| `@tabdo/harness`（按实际复用提取） | 官方 SDK 组装、原生恢复与能力校验；供应商相关代码放 `adapters/` | Tabdo 智能体配置、工作区成员、会话分类、业务工具命令；不另造 agent loop |
-| `@tabdo/sandbox` | 复用官方 SDK 文件/命令/网络会话契约；供应商实现放 `adapters/` | Tabdo Run 状态、数据库凭证、业务动作 |
-| `@tabdo/execution` | 通用执行环境启动、查找、终止与资源引用；嵌入/按需 runner 实现放 `adapters/` | 自动化触发规则、聊天历史、Run 的权威业务终态 |
-| `@tabdo/platform` | Hono app factory、Better Auth、业务命令/权限、PG repository、事件/Outbox、Run/Session 服务 | Node serve、Wrangler binding 配置、供应商消费循环 |
+| `@tabdo/core` | 通用 Queue/Storage/Execution/Harness 端口、Web 控制协议；按能力分模块 | 产品业务、数据库 schema、Node/Cloudflare SDK、混合运行时类型 |
+| `@tabdo/platform-node` | BullMQ/Redis、local/S3、数据库连接、进程执行、原生 Node Harness/Sandbox 适配；执行子模块也供 CF Sandbox 镜像使用 | 产品权限、自动化、Run 业务状态与 CF binding |
+| `@tabdo/platform-cloudflare` | Queues、R2、Hyperdrive 连接、DO/Alarm、Sandbox 控制与生命周期 | 产品 SQL/schema、原生 Node Harness SDK、第二套模型循环 |
+| `@tabdo/backend` | Hono app factory、Better Auth、业务 services/命令/权限、PG repository、事件/Outbox、Run/Session 服务 | Node serve、Wrangler binding 配置、隐式 DB/Auth scope、供应商消费循环 |
 | `@tabdo/agent-runtime` | Tabdo 人设/Skill/工具与执行上下文装配，聊天/自动化/定时共用执行与检查点保存 | 再实现一套 SDK 原生工具、计划、目标或 read_skill |
 | `@tabdo/shared` / `@tabdo/ui` | 产品 API/Zod schema、业务消息协议、客户端类型与 UI | 部署模式选择和适配器装配 |
-| `apps/server` / 未来 CF 入口 / runner 镜像 | 环境解析、身份配置、能力组合、绑定、HTTP/后台启动与生命周期 | 另一套产品业务实现 |
+| `apps/server` / `apps/cloudflare` / Sandbox 镜像入口 | 配置解析、能力组合、绑定、HTTP/后台启动与执行生命周期；Worker 与镜像分别构建 | 另一套产品业务实现、CF 必须另外部署的常驻 Node 服务 |
 
-不为目录齐全预先造空包。当前 `core` 只有业务队列消息和文件 key，迁移后移除；未来真正公用的错误、日志、上下文或 typed service/transport 有调用者时再提取小 kernel。不要把所有能力 contract 集中塞进 core。
+不为目录齐全预先造空包。新 core 只收已复用的纯能力契约，不恢复旧 core 的业务消息/文件 namespace。表格、组织、automation 等协议仍在 shared/backend。静态依赖为：backend → core/shared，agent-runtime → backend/core，两个 platform 实现 → core；应用装配连接业务与实现，backend 不反向 import agent-runtime 或 platform 实现。
 
 ```text
-packages/queue/src/
-  index.ts                  # 通用契约，edge-safe
-  adapters/bullmq.ts         # 通用 BullMQ 实现
-  adapters/cloudflare.ts    # 通用 CF binding 实现
-packages/storage/src/
-  index.ts                  # 通用字节接口，edge-safe
-  adapters/local.ts
-  adapters/s3.ts
-  adapters/r2.ts
-apps/server/src/queue/       # Tabdo automation 的装配与消费业务
-apps/server/src/storage/     # 上传、元信息、文件 namespace 与权限
+packages/core/src/{queue,storage,execution,harness,transport}
+packages/backend/src/{services,repositories,auth,schema,http}
+packages/agent-runtime/src/{preparation,tools,skills,projection}
+packages/platform-node/src/{queue,storage,database,execution,harness,sandbox}
+packages/platform-cloudflare/src/{queue,storage,database,coordination,execution,sandbox}
+apps/cloudflare/src/{http,queue,scheduled,composition,session-object}.ts
+apps/cloudflare/sandbox/    # 镜像与内部 Harness 执行入口，不是独立公共服务
+apps/server/               # Node 模式装配
 ```
 
-供应商库为 optional peer，并在包开发时安装。使用某适配器的应用显式安装对应 SDK；CF 的默认入口和 CF 子路径不导入 BullMQ、AWS SDK、Node 文件系统或宿主 Pi。
+两个实现包独立 dependencies/exports/tsconfig/测试。Worker 只静态引用 platform-cloudflare；Sandbox 内的执行入口引用 platform-node 的 Harness/执行子模块，不加载 BullMQ/Redis。禁止运行时检测和双平台 barrel。Worker 由 Wrangler 打包 TypeScript，镜像有独立执行侧构建；镜像入口无需单独公网域名或常驻 Node API。
 
-共同平台采用渐进提取：第一批进入 `packages/platform` 的是已在 Node/workerd 验证的 PG resource factory、Better Auth factory、唯一 schema 和私有检查点数据契约；通过 `@tabdo/platform/database`、`/auth`、`/schema`、`/checkpoints` 导出。server 原路径暂作兼容 re-export，环境解析、默认池、邮件发送及实际工作区保存/恢复仍由 Node 装配提供。默认 platform index 只导出类型。业务命令、Run repository 与 Hono app 尚未整体迁移，不能因建立了包就标记整个平台为 edge-ready。
+当前 `packages/platform` 的 DB/Auth 工厂、schema/checkpoints 和显式 scope 是已实现过渡结构；service 内通过 scope 隐式取 DB/Auth 仍需改成参数注入。迁移时 schema/Auth/业务进入 backend，平台连接实现接收调用方配置与 schema，不依赖产品。当前代码尚未按上述包名迁移。
 
 ## 4. 通用契约与业务边界
 
@@ -82,7 +87,7 @@ interface QueuePublisher<T> {
 
 Tabdo 的 `{protocol, eventId, generation}` 在 `shared` 业务契约中。平台 relay 校验 payload、生成 `automation-<eventId>-<generation>`，再调用 `publisher.publish({id, body})`。BullMQ 队列名与任务名在应用入口配置，底层工厂叫 `createBullMQPublisher`，不叫 `createAutomationQueue`。
 
-供应商消费循环留在 `adapters`。ACK 表示 callback 成功；**本平台 callback 必须在持久接受执行后返回**，不把完整 agent turn 塞进 CF queue handler。实际重试边界与 DLQ 由部署配置。
+供应商消费循环留在对应 platform 实现。ACK 表示 callback 成功；**本平台 callback 必须在持久接受执行后返回**，不把完整 agent turn 塞进 CF queue handler。如果在 PG 接受后、DO 启动前 ACK，必须同时持久化待派发记录并有补偿唤醒。显式 ack/retry，重试与 DLQ 在 Wrangler 配置中声明。
 
 ### Storage
 
@@ -96,22 +101,22 @@ Harness 管理原生模型/工具循环和 Session continuation；Sandbox 提供
 
 复用官方 SDK 的 sandbox 类型，不造另一套同义文件 API。Tabdo agent-runtime 负责把产品配置和业务工具注入官方运行器。底层适配器接受显式配置/回调，不读取 organization/member/automation 表。
 
-平台原生执行入口先与 HTTP 响应分离：`executeNativeRun` 接收已接受的 Run、lease、原生检查点和产品工具，等待 SDK 输出消费、检查点提交及资源清理完成。可选输出端口使用现有 AI SDK UI chunk；HTTP 层只投影这些 chunk，后台任务直接等待执行，不创建聊天 Response。浏览器取消订阅不取消执行；显式停止仍通过 PG Run cancel 字段控制。此入口属于 Tabdo agent-runtime，不能放进通用 execution 包。它先提供嵌入式执行边界，后续 runner 必须从持久身份重新装配，不能跨进程传递工具闭包或凭内存 Promise 确认启动。
+原生执行与 HTTP 响应分离：`executeNativeRun` 接收已接受的 Run、lease、原生检查点和产品工具，等待 SDK 输出消费、检查点提交及资源清理完成。可选输出端口使用现有 AI SDK UI chunk；HTTP 层只投影这些 chunk。浏览器取消订阅不取消执行；显式停止通过 PG Run cancel 字段控制。此入口属于 agent-runtime，不放进 core。Cloudflare 在 Sandbox 内调用它，Node 模式可嵌入或独立进程调用；跨进程从持久执行引用重新装配，不传工具闭包，不凭内存 Promise 确认启动。
 
 ## 5. 两种部署的组合
 
 | 能力 | A：Node | B：Cloudflare |
 | --- | --- | --- |
 | 产品 HTTP 与身份 | 共同 Hono app + Better Auth，Node serve | 同一 app/auth factory，Worker bindings 按请求注入 |
-| Queue | `queue/adapters/bullmq` | `queue/adapters/cloudflare` |
-| Storage | `storage/adapters/local` 或 `s3` | `storage/adapters/r2` 或 `s3` |
+| Queue | `platform-node/queue`：BullMQ | `platform-cloudflare/queue`：Queues |
+| Storage | `platform-node/storage`：local/S3 | `platform-cloudflare/storage`：R2 |
 | 数据库 | Postgres.js pool | Postgres.js + Hyperdrive，请求作用域连接和关闭 |
 | 调度唤醒 | 后台 due-schedule 扫描 | Cron/必要的 Alarm 唤醒相同业务调度函数 |
 | 协调 | Node 生命周期 + PG fence | 每 Session 一个 DO + 同一 PG fence |
-| 完整智能体执行 | 嵌入、独立 Node runner 或按需环境 | 按需 Node-compatible runner，保持现有官方 Harness |
+| 完整智能体执行 | 嵌入或独立进程，执行原生 Harness | DO 管理按需 Sandbox，在其内部执行同一原生 Harness |
 | 聊天输出 | 公共 AI SDK UI SSE | 相同公共 SSE，DO 内部桥接，不更换客户端协议 |
 
-部署入口拥有供应商名和绑定配置；业务服务只获得契约。CF 无须切换到 Pi Durable，也不要求唯一 Sandbox 供应商。共享代码必须在真实入口被调用，不能靠 CF 代理整个常驻 Node 服务宣称两模式实现完毕。
+部署入口拥有供应商名和绑定配置；业务服务只获得契约。CF 优先接 Cloudflare Sandbox，不强制切换 Pi Durable；E2B/Vercel 是可选后续适配，不是首条 CF 路线前置条件。共享代码必须在真实 Worker 中运行，不能靠 CF 代理整个常驻 Node API 宣称两模式实现完毕。
 
 ## 6. Run、Session 与事件可靠性
 
@@ -141,22 +146,24 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 
 平台工厂必须先在真实 workerd 中验证：使用本地 Hyperdrive binding 连接隔离 PG，每请求创建/关闭 DB resource，复用 Better Auth factory 检查注册、签名和并发配置隔离。该 fixture 只验工厂，不把仍含全局依赖的产品 app 当作可部署 Worker。Hyperdrive 使用 Postgres.js 默认 `prepare: true`；官方已明确不推荐在其事务池中设 `prepare: false`。本地 binding 不模拟远程连接池/缓存，权限与 fence 路径仍需远程关闭查询缓存后验收。
 
-供应商核对（2026-10-14）：E2B `@e2b/ai-sdk-sandbox` 0.3.0 仍提供被当前 Harness 标记废弃的 `HarnessV1SandboxProvider`；创建用 session metadata 标识、恢复按此 metadata 查找，返回的物理 sandbox ID 与平台逻辑 ID 不相同。不能简单把 `sandboxId` 改名成 `sessionId` 就接入现有 create/resume。后续先明确并持久保存逻辑执行身份、供应商物理引用与检查点，再适配官方生命周期。Cloudflare Sandbox 1.x 则由 DO container API 管启停，SDK 提供容器内文件辅助；按完整 runner 与文件 Sandbox 各自实现，不沿用 0.x `getSandbox` 生命周期示例。
+供应商核对（2026-10-14）：E2B `@e2b/ai-sdk-sandbox` 0.3.0 仍提供被当前 Harness 标记废弃的 `HarnessV1SandboxProvider`；创建用 session metadata 标识、恢复按此 metadata 查找，物理 sandbox ID 与平台逻辑 ID 不相同，不能直接改名接入。它是后续可选适配。CF 首条路线使用当前 Sandbox/DO container API，并分别验证完整 Harness 执行与文件/命令环境；不沿用 0.x 生命周期示例。
+
+本地 CF 优先使用 Wrangler，Hyperdrive 的本地连接指向现有 PostgreSQL；业务模型与迁移继续使用 PG/Drizzle。回归只使用 `_agent_test` 隔离库。Docker 支持本地 Sandbox 容器验证；线上 Hyperdrive 池/缓存、容器冷启动及恢复仍须远程验收。详细本地边界见[运行时与包边界](runtime-boundaries.md)。
 
 部署模式、供应商 ID、容器 ID 和密钥不进入公开 API 或普通 UI。部署切换保留数据库/对象位置/Session 身份和 API schema，先停止新执行并保存/核对在途任务；不承诺任意供应商活跃内存热迁移。
 
 ## 9. 实施顺序
 
-1. **先更新文档与边界。** 删除按 runtime 归集能力实现的设计；确定 generic queue/storage API、业务协议归属和独立 exports。
-2. **能力包重组。** 建 queue/storage 与内部 adapters；迁走 core 中的业务协议/namespace；删除空 core 与旧 runtime 包。接入 Node、重做 CF fixtures、更新 dev/Docker/测试与 optional peers。
-3. **共同平台工厂。** 提取 Hono/Better Auth、请求 PG 资源、命令与 Run repository；客户端/API 保持不变。
-4. **原生执行器与环境分离。** 提取真正通用 SDK helpers 与产品 agent-runtime，建立独立 runner；迁移问题续接、workspace/continuation 保存与生命周期。
-5. **两种协调与触发入口。** Node 与 DO 调用相同持久服务，CF Queues/Cron接通 Outbox、接收执行和补偿；保持数据动作事务与成员撤销保护。
-6. **真实双模式验收。** 本地 workerd/独立进程验证后，再做有凭证的远程部署。
+1. **纠正文档与边界。** 明确五个后端包、CF 控制侧/Sandbox 执行侧、PG 权威状态与双部署目标。
+2. **CF 本地基线。** 使用 Wrangler、现有 PG 隔离库和 Docker，验证 Hono/Auth、DO、Queues/R2 与完整原生 Harness 的 Sandbox 生命周期；不替换 Harness。
+3. **物理包隔离。** core 收纯契约，Node/CF 实现分别迁移到对应 platform 包；改各自 exports、类型、依赖、Worker 与镜像构建，保留现有 Node 回归。
+4. **共用业务显式依赖。** schema/Auth/services/repositories 提取到 backend，清除隐式 DB/Auth/env；agent-runtime 装配复用原生 SDK 工具与恢复，不另建常驻 Node 服务。
+5. **统一触发与派发。** 聊天、定时、自动化调用相同接受服务；CF Queue/Cron/DO 接通 Outbox、Sandbox 启动与补偿，保持权限/receipt/fence 保护。
+6. **真实双模式验收。** 本地完成，再做远程 Hyperdrive/Sandbox 验收；客户端、MCP 与聊天协议保持一致。
 
 每阶段单独提交。移动文件不算完成解耦；底层包能处理非 Tabdo 消息和普通对象 key，业务测试行为不变，才算第一阶段完成。
 
-### 并行实施批次（2026-10-14）
+### 此前并行实施记录（2026-10-14）
 
 用户已要求 agent team 并行实施。三条线分别负责平台请求依赖、独立执行器、CF 协调/触发；公共接口、迁移和最终接线由主代理汇总。平台资源使用显式作用域，禁止跨请求修改共享 DB/Auth；runner 只接收持久 Run/执行引用，从 PG 重建权限、输入与检查点，不接收工具闭包。通用 execution 包只管理计算资源，不拥有产品 Run 状态。CF 协调与队列入口接收注入的持久服务，不能靠空成功回调或代理常驻 Node API 宣称完成。
 
@@ -164,11 +171,12 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 
 ## 10. 验收要求
 
-- 底层 queue/storage 的 source、类型和 public exports 不含 automation/table/user/org 协议，不依赖 shared/platform/schema。默认入口与 CF adapter 的 bundle 不包含 Node-only 供应商模块。
+- core 与两个 platform 实现不含 automation/table/user/org 协议，不依赖 backend/shared/schema；平台包 dependencies 与运行时类型隔离，services 通过参数取依赖。
+- Worker 制品不包含 Node Harness/BullMQ/宿主文件模块；Sandbox 镜像仅加载执行侧代码，不要求独立常驻 Node API。Wrangler 直接打包 Worker 源码，镜像单独构建。
 - 通用非业务消息、普通对象 key 在适配器中真实运行；Envelope 校验与业务 payload 校验有独立测试。
 - 相同 Cookie/API Key、工作区隔离、HTTP 状态与 AI SDK UI stream；聊天、定时、自动化 run_agent 和数据动作共用业务实现。
 - 重复投递、确认丢失、重试、消费接管、DO 重建与进程退出；已提交工具/数据不重放。
-- 原生 Session 跨 Run 恢复，问题回答跨实例续接；取消与断线分离，权限撤销和 fence 防止旧执行者写入。
+- 原生 Session 跨 Run 恢复，Sandbox 释放/恢复和问题回答跨实例续接；取消与断线分离，权限撤销和 fence 防止旧执行者写入。
 - 两模式共用文件元信息、实际对象、Skill、历史和会话来源。构建成功不等于完整平台部署验收。
 
 ## 11. 实施记录
