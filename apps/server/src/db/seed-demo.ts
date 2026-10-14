@@ -18,6 +18,7 @@ import {
   tableViews,
 } from "./schema.js";
 import { ensureDemoFormView, createBoardView, createGridView } from "../commands/views.js";
+import { NATIVE_DEFAULT_MODEL } from "../harness/contracts.js";
 
 /** Fixed local demo credentials — also documented in README */
 export const DEMO_EMAIL = "demo@tabdo.ai";
@@ -482,7 +483,7 @@ async function ensureDemoAgent(organizationId: string) {
         skillNames: [],
         disabledTools: [],
         defaultHarness: "pi",
-        defaultModel: "__harness_default__",
+        defaultModel: NATIVE_DEFAULT_MODEL,
         runtime: "local",
         avatarColor: "#337ea9",
       },
