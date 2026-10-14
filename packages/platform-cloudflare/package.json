@@ -52,13 +52,30 @@
       "development": "./src/internal-auth.ts",
       "import": "./dist/internal-auth.js",
       "default": "./dist/internal-auth.js"
+    },
+    "./execution/container": {
+      "types": "./src/execution/container.ts",
+      "workerd": "./src/execution/container.ts",
+      "development": "./src/execution/container.ts",
+      "import": "./dist/execution/container.js",
+      "default": "./dist/execution/container.js"
+    },
+    "./execution/container-object": {
+      "types": "./src/execution/container-object.ts",
+      "workerd": "./src/execution/container-object.ts",
+      "development": "./src/execution/container-object.ts",
+      "import": "./dist/execution/container-object.js",
+      "default": "./dist/execution/container-object.js"
     }
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
-    "typecheck:test": "tsc -p tsconfig.test.json"
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test:container": "tsx --test test/container-execution/local.test.ts",
+    "typecheck:container": "tsc -p test/fixture/container-execution/tsconfig.worker.json",
+    "types:container": "wrangler types test/fixture/container-execution/env.d.ts --config test/fixture/container-execution/wrangler.jsonc --env-interface ContainerFixtureEnv --include-runtime=false"
   },
   "dependencies": {
     "@tabdo/core": "workspace:*"

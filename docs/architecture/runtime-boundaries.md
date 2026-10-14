@@ -1,6 +1,6 @@
 # tabdo 运行时与包边界
 
-日期：2026-10-14。状态：平台包隔离与身份服务已实施，完整产品 CF 派发仍待接线。本文细化[双部署架构](dual-deployment.md)的包边界；Cloudflare 优先，本地使用 Wrangler、Docker 与现有 PostgreSQL 验证。Cloudflare 模式采用 Workers + Durable Object + Sandbox，不要求额外常驻 Node 服务。
+日期：2026-10-15。状态：平台包隔离、显式命令与 Run/Session 服务已实施，完整产品 CF 派发仍待接线。本文细化[双部署架构](dual-deployment.md)的包边界；Cloudflare 优先，本地使用 Wrangler、Docker 与现有 PostgreSQL 验证。Cloudflare 模式采用 Workers + Durable Object + Sandbox，不要求额外常驻 Node 服务。
 
 ## 1. 已确认的约束
 
@@ -91,7 +91,7 @@ export async function acceptRun(input: AcceptRunInput, deps: RunDependencies) {
 - Hono 路由解析和校验参数、调用 service、映射业务错误与 Response；service 不抛 Hono `HTTPException`。
 - Queue/Cron 入口解析事件、调用同一 service、决定 ack/retry；`MessageBatch`、`ScheduledController` 不进入 services。
 
-现有 resource scope 已验证请求隔离，但其中的隐式 `getDatabase/getAuth` 仍不符合此次要求；它属于待迁移依赖，不能标记为最终显式注入完成。
+backend 已移除 ALS 与隐式 `getDatabase/getAuth`，并以 `types: []` 校验无 Node/CF 全局类型。命令、租约、Run/Session、原生回答接受和 Outbox relay 已用显式依赖；Node 兼容资源 scope 仅留在应用入口。报告、集成、完整路由与智能体装配仍待迁移，不能把部分业务提取标记为整体完成。
 
 ## 5. Queue 与智能体执行是两种生命周期
 
@@ -107,6 +107,8 @@ Queue 是投递机制，消息定义明确的 TypeScript/Zod 协议并按不可�
 Cloudflare：HTTP / Queue / Cron → 共用 services → 持久接受 → DO → Sandbox → 原生 Harness
 Node：     HTTP / BullMQ      → 共用 services → 持久接受 → Node 执行器 → 原生 Harness
 ```
+
+CF 中有两种 DO 职责：Session DO 按产品会话处理订阅/游标/唤醒；Sandbox execution DO 按持久接受的 execution ID 独占一个计算资源，保存 launch token/物理状态。二者不保存第二份业务状态。一个 PG Run 的问题续答可产生新的接受记录与计算资源，继续相同原生检查点；不能重启已经 settled 或 unknown 的旧资源来冒充续答。
 
 DO 不是 Harness 的模型/工具循环，也不另建一套 Run 业务状态机。DO 对容器的控制职责与 SDK 的原生会话职责分开；Sandbox 既能承载文件/命令工具，也能承载完整 Harness 控制进程。本方案要求后者，不能只移动工具环境便宣称完整执行迁移成功。
 
@@ -164,7 +166,16 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 - [ ] 再按边界迁移包、清除隐式 service 依赖，更新 Wrangler/类型/构建。
 - [ ] 聊天、定时、自动化、MCP、文件和权限撤销完成真实双模式验收；其他 Harness 单独验证。
 
-当前已完成真实平台实现分包和局部显式依赖，不新建空 agent-runtime 包，不把 Sandbox 夹具或 PG 工厂验收标记为完整产品部署完成。
+当前已完成真实平台实现分包，以及命令、Run/Session、Outbox 的显式依赖，不新建空 agent-runtime 包，不把 Sandbox 夹具或 PG 工厂验收标记为完整产品部署完成。
+
+## 2026-10-15 共享业务接线
+
+- 表格/行/字段/关联/视图命令，以及自动化 CRUD、事件、due schedule 与 Outbox relay 下沉 backend；Server 原入口只装配依赖，不保留第二份 SQL。
+- Run/Session、持久 execution/output、租约 fence、问题回答的同一事务接受下沉 backend；官方 Harness schema 校验由执行装配注入。
+- HTTP command route 共用 Hono 工厂，当前成员身份在业务事务中重新锁定；客户端不能传内部执行选项或替换工作区。
+- 真实 Wrangler + PG/Better Auth + DO 用例直接导入 backend，验证 batch 写入/唯一冲突回滚、成员查询、输出游标、私人会话、成员撤销与取消。
+- 通用 CF Sandbox 计算控制已实现：独立 DO/resource、持久 launch fence、有限 exec 的提前返回、冷重建 unknown 拒绝重播，以及显式 probe/销毁。它不拥有产品状态或 SDK 输出；Container API pid 按 opaque reference 处理。Docker 验收与原生 Harness 验收独立。
+- 待完成：正式产品 Worker 路由、完整 agent-runtime、Sandbox 工具 gateway、聊天/定时/数据事件统一接受派发与全链路验收。当前分层和夹具不是可部署完整产品。
 
 ## 调研依据
 
@@ -176,3 +187,10 @@ PG 与 DO/Sandbox 无跨资源原子事务：通过稳定 execution ID、持久 
 - [Containers 本地开发](https://developers.cloudflare.com/containers/guides/local-dev/)：Wrangler 与 Docker 的本地容器链路。
 - [Queue ACK/retry](https://developers.cloudflare.com/queues/configuration/batching-retries/)：显式逐消息确认和重试。
 - 原生 SDK：`packages/platform-node/node_modules/@ai-sdk/harness-{pi,codex,claude-code}`；未修改第三方源码。测试使用本地模型夹具，没有调用生产模型。
+
+
+## 本轮验证记录
+
+2026-10-15：完整 workspace build、架构边界检查、backend/server/CF 源与测试类型检查通过；服务端 161/161、隔离 Redis/BullMQ 故障回归 18/18、CF 产品命令/Session 4/4、CF 框架 4/4、PG/Auth Worker 工厂 1/1，以及真实 DO/Container 控制 1/1 通过。测试仅使用 `_agent_test` / `_queue_test` 与自有 fixture namespace，Docker 资源清理已核实。
+
+PG/命令/DO fixture 的 Wrangler dry-run 产物 3727.35 KiB（gzip 640.58 KiB）；这是该验证图的大小，不是完整产品部署体积。完整网络模型、产品工具 gateway 与端到端派发仍未通过，不标记整个架构任务完成。

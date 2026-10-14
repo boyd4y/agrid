@@ -34,7 +34,8 @@
     "build:foundation": "pnpm -r --filter @tabdo/core --filter @tabdo/platform-node --filter @tabdo/platform-cloudflare --filter @tabdo/backend --filter @tabdo/shared build",
     "test:cloudflare": "pnpm --filter @tabdo/platform-cloudflare test && pnpm --filter @tabdo/cloudflare test",
     "check:architecture": "node scripts/check-architecture.mjs",
-    "test:cloudflare:sandbox": "pnpm --filter @tabdo/cloudflare test:sandbox"
+    "test:cloudflare:sandbox": "pnpm --filter @tabdo/cloudflare test:sandbox",
+    "test:cloudflare:container": "pnpm --filter @tabdo/platform-cloudflare test:container"
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {

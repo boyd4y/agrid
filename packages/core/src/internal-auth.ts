@@ -40,7 +40,7 @@ async function signatureInput(request: Request, audience: string, issuedAt: numb
   return new TextEncoder().encode(JSON.stringify([version, audience, request.method, url.pathname + url.search, issuedAt, requestId, digest]));
 }
 
-async function boundedBody(request: Request, maxBytes: number): Promise<Uint8Array> {
+async function boundedBody(request: Pick<Request, "body">, maxBytes: number): Promise<Uint8Array> {
   const reader = request.body?.getReader();
   if (!reader) return new Uint8Array();
   const parts: Uint8Array[] = [];

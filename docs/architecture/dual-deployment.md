@@ -185,12 +185,21 @@ Better Auth/用户 API Key 产生实际 principal。队列 body、URL 和内部 
 
 - [x] core 纯契约/签名 Web transport，Node 与 CF 实现独立包；原 queue/storage/execution/harness/sandbox 混合包移除，应用、测试、锁文件与 Node Docker 构建更新。
 - [x] CF DO 框架不绑定产品 Run/Thread 字段或 AI 协议，任意引用/输出由应用注入；真实通用 DO 重建、R2 archive、凭证撤销和取消验收。
-- [x] backend 名称与身份服务显式依赖；真实 PG/Better Auth 不使用 ALS 的身份、角色、撤销与事务成员列表验收。其他 services 的隐式依赖仍待迁移。
+- [x] backend 名称与身份服务显式依赖；真实 PG/Better Auth 不使用 ALS 的身份、角色、撤销与事务成员列表验收。命令、Run/Session、问题接受、due-schedule 与 Outbox 已继续迁移；报告、集成与执行装配仍待提取。
 - [x] 真实 Wrangler → DO → Docker → 原生 Harness/Pi：工具执行、待答 detach、销毁容器、新容器读取 checkpoint 回答原问题，工具不重放。镜像独立锁文件、无真实模型费用、无遗留测试容器。
 - [ ] 产品 PG 持久接受/派发 → DO/Sandbox → 工具 gateway → 检查点与输出全链路；自动化/定时接同一服务。
 - [ ] 全部共用 services/业务 repositories 与 agent-runtime 提取；完整产品 Worker 和双部署本地验收。
 
 本批证据：149 项 server 回归、2 项 core、9 项 Node 实现、2 项 CF Queue/R2、1 项通用 DO、4 项产品 PG/DO、1 项 CF PG/Auth 工厂和 1 项真实 Sandbox 冷恢复通过。全仓 build、源/测试类型检查、静态架构边界、冻结离线安装及 CF dry-run 通过。Sandbox 用例是能力验收，DO 中保存的 checkpoint 只用于夹具传输；产品 PG/R2 权威状态未被替换。详见[Sandbox 验收](../../apps/cloudflare/sandbox/README.md)。
+
+### 2026-10-15 共享业务服务
+
+- [x] 所有表格命令、tenant、文件引用、自动化 CRUD/事件/调度、Outbox relay 显式依赖；移除命令 registry 的循环依赖，调用方事务全程复用。
+- [x] Run/Session、lease/fence、原生检查点、execution 接受/输出、问题回答单一 backend 实现；保留 SDK 原生 schema 验证。
+- [x] backend 移除 Node ALS/resources 和 Node ambient types，Node app 留薄兼容装配；架构检查禁止 runtime/global/HTTP 混入业务服务。
+- [x] 真实 Workers + PG/Better Auth/DO 直接调用 backend：共享 Hono 命令、batch 写入/回滚、scope/membership、私有输出与取消。
+- [x] 通用 DO/Sandbox ExecutionAdapter：持久 launch fence、提前 spawn ACK、懒 completion、冷实例显式 probe/unknown、不盲重播与取消竞态；真实 Wrangler/Docker 框架验收。
+- [ ] 完整 Worker HTTP/Queue/Cron + agent-runtime + Sandbox gateway；自动化/定时接同一 durable acceptance。
 
 ### 此前阶段记录（保留原验证范围）
 
