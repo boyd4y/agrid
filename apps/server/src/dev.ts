@@ -7,12 +7,12 @@ import "./load-env.js";
 const cli = createRequire(import.meta.url).resolve("tsx/cli");
 const cwd = process.cwd();
 let closing = false;
-const api = superviseApi({ entry: "src/index.ts", cwd, watchPaths: [resolve(cwd, "src"), resolve(cwd, "../../packages/shared/src")],
+const api = superviseApi({ entry: "src/index.ts", cwd, watchPaths: [resolve(cwd, "src"), resolve(cwd, "../../packages/shared/src"), resolve(cwd, "../../packages/core/src"), resolve(cwd, "../../packages/runtime-node/src")],
   env: { ...process.env, DB_POOL_MAX: process.env.DB_POOL_MAX ?? "10" },
   onFailure: (code) => { process.exitCode = code; void shutdown(); },
 });
 const worker = process.argv.includes("--api-only") ? undefined : spawn(process.execPath, [cli, "watch", "--conditions=development",
-  "--include", "../../packages/shared/src/**/*.ts", "src/queue/main.ts"], { stdio: "inherit", env: { ...process.env, DB_POOL_MAX: "4" } });
+  "--include", "../../packages/shared/src/**/*.ts", "--include", "../../packages/core/src/**/*.ts", "--include", "../../packages/runtime-node/src/**/*.ts", "src/queue/main.ts"], { stdio: "inherit", env: { ...process.env, DB_POOL_MAX: "4" } });
 async function shutdown() {
   if (closing) return; closing = true;
   const workerStopped = worker && worker.exitCode === null && worker.signalCode === null

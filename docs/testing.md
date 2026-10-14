@@ -66,6 +66,8 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## 队列进程与 Redis 故障测试
 
+基础框架包测试：`pnpm -r --filter @tabdo/core --filter @tabdo/runtime-node --filter @tabdo/runtime-cloudflare test`。CF 包使用 Wrangler 官方 `createTestHarness` 在真实本地 workerd 跑 R2 和 Queues，不访问远程资源。`pnpm --filter @tabdo/runtime-cloudflare build:fixture` 验证 edge bundle；它只是测试 fixture，不能当作平台生产入口部署。
+
 专用 PostgreSQL 数据库名称必须以 `_queue_test` 结尾，并先执行迁移；Redis 使用专用实例与 `agrid-queue-test` 前缀。下面使用本地已有测试实例，绝不能改成业务数据库/Redis：
 
 ```bash

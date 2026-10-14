@@ -1,0 +1,38 @@
+{
+  "name": "@tabdo/runtime-cloudflare",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./queue": {
+      "types": "./dist/queue.d.ts",
+      "development": "./src/queue.ts",
+      "import": "./dist/queue.js",
+      "default": "./dist/queue.js"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "development": "./src/storage.ts",
+      "import": "./dist/storage.js",
+      "default": "./dist/storage.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts",
+    "types:fixture": "wrangler types test/fixture/env.d.ts --config test/fixture/wrangler.jsonc --include-runtime=false",
+    "build:fixture": "wrangler deploy --dry-run --config test/fixture/wrangler.jsonc --outdir dist/fixture"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "@cloudflare/workers-types": "5.20261014.1",
+    "wrangler": "4.149.0"
+  },
+  "dependencies": {
+    "@tabdo/core": "workspace:*"
+  }
+}

@@ -16,9 +16,9 @@
     "db:seed:tenants": "tsx src/db/seed-tenants.ts",
     "queue:status": "tsx src/queue/status.ts",
     "test:queue": "tsx --test test/queue/queue.test.ts",
-    "dev:api": "pnpm --filter @tabdo/shared build && tsx src/dev.ts --api-only",
+    "dev:api": "pnpm -r --filter @tabdo/core --filter @tabdo/runtime-node --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
-    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' src/queue/main.ts",
+    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/core/src/**/*.ts' --include '../../packages/runtime-node/src/**/*.ts' src/queue/main.ts",
     "queue:start": "node dist/queue/main.js",
     "test:chat": "tsx --test test/ai/errors.test.ts test/routes/chat.test.ts",
     "test:relations": "tsx --test test/commands/relations.test.ts",
@@ -39,7 +39,6 @@
     "@ai-sdk/openai": "^4.0.91",
     "@ai-sdk/sandbox-just-bash": "1.0.149",
     "@ai-sdk/sandbox-vercel": "1.0.149",
-    "@aws-sdk/client-s3": "^3.1150.0",
     "@better-auth/drizzle-adapter": "^1.7.7",
     "@hono/node-server": "^1.14.1",
     "@tabdo/shared": "workspace:*",
@@ -56,7 +55,9 @@
     "resend": "^6.32.1",
     "svix": "^2.8.0",
     "yaml": "^2.8.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@tabdo/core": "workspace:*",
+    "@tabdo/runtime-node": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",

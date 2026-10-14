@@ -151,10 +151,15 @@ Queue consumer 的完成含义是“执行请求已持久接受”，不是“�
 - [x] 阅读 Pars 核心、service、queue、storage、realtime 源码，形成借鉴与差异记录。
 - [x] 核对官方 Cloudflare / SDK 当前接口与执行边界，检查本地 CLI。
 - [x] 确定本架构与模式无感知的公共契约。
-- [ ] 公共核心与扩展包落地，传统模式接入与回归。
+- [x] 第一批 core / runtime-node / runtime-cloudflare 包落地：共同队列与字节存储契约；传统 Outbox 显式注入 publisher，本地/S3 使用 Node 扩展。
+- [x] Cloudflare Queues / R2 扩展在真实本地 workerd 验证；失败接受重试、二进制读写、对象路径校验通过，dry-run bundle 不含 Node-only 依赖。
+- [x] 传统队列 18 项故障测试（包含注入非 BullMQ publisher 的 SQL 领取/失败/重试用例）、文件本地/S3 3 项、官方 Pi 跨进程待答恢复测试通过；全仓源码与测试类型检查通过。
+- [ ] 共同平台 app / 请求资源与 Better Auth factory；typed service、Run repository 和执行侧包提取。
 - [ ] Cloudflare 入口、投递/协调/执行扩展与本地真实验证。
 - [ ] Sandbox 供应商扩展及跨实例恢复验证。
 - [ ] 有真实凭证后的远程部署验收。
+
+当前实际包 API 见 [core](../../packages/core/README.md)、[Node](../../packages/runtime-node/README.md)、[Cloudflare](../../packages/runtime-cloudflare/README.md)。Node 生产镜像与本地开发构建已包含新的工作区依赖。CF Worker 目前只有隔离测试 fixture；不是完整平台部署。固定 Wrangler 本地二进制最高支持 `2026-10-13`，fixture 使用这个 compatibility date，bindings 由 CLI 生成。
 
 ## 13. 官方依据
 

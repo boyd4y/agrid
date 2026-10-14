@@ -2,12 +2,11 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { positiveInt } from "./config.js";
-import { createQueue, closeQueue, jobId, type AutomationJob } from "./queues.js";
+import type { AutomationDelivery, QueuePublisher } from "@tabdo/core";
 
-type Delivery = { id: string; payload: AutomationJob; generation: number; claim_token: string; attempts: number };
+type Delivery = { id: string; payload: AutomationDelivery; generation: number; claim_token: string; attempts: number };
 
-export function createRelay() {
-  let producer: ReturnType<typeof createQueue> | undefined;
+export function createRelay(publisher: QueuePublisher<AutomationDelivery>) {
   return {
     /** One SQL statement atomically selects AND claims rows; concurrent relays skip locks. */
     async claim(limit = positiveInt("AUTOMATION_RELAY_BATCH", 25)): Promise<Delivery[]> {
@@ -33,7 +32,7 @@ export function createRelay() {
       `);
       return result as unknown as Delivery[];
     },
-    /** No database transaction or row lock is held while contacting Redis. */
+    /** No database transaction or row lock is held while contacting the queue provider. */
     async publish(record: Delivery) {
       const owned = await db.execute(sql`UPDATE automation_outbox
         SET claim_until = now() + ${positiveInt("AUTOMATION_RELAY_LEASE_MS", 30000)} * interval '1 millisecond'
@@ -41,17 +40,15 @@ export function createRelay() {
           AND claim_token = ${record.claim_token}::uuid AND generation = ${record.generation}
           AND claim_until > now() RETURNING id`);
       if (!owned.length) return false;
-      const queue = producer ??= createQueue();
       try {
-        await queue.add("execute", record.payload, { jobId: jobId(record.payload.eventId, record.generation) });
+        await publisher.publish(record.payload);
         await db.execute(sql`UPDATE automation_outbox
           SET status = 'published', published_at = now(), claim_token = NULL, claim_until = NULL, last_error = NULL
           WHERE id = ${record.id}::uuid AND status = 'publishing'
             AND claim_token = ${record.claim_token}::uuid AND generation = ${record.generation}`);
         return true;
       } catch (cause) {
-        if (producer === queue) producer = undefined;
-        await closeQueue(queue).catch(() => {});
+        await publisher.close?.().catch(() => {});
         const error = cause instanceof Error ? cause.message : String(cause);
         const delay = Math.min(60000, 1000 * 2 ** Math.min(record.attempts - 1, 6));
         await db.execute(sql`UPDATE automation_outbox
@@ -76,6 +73,6 @@ export function createRelay() {
       if (failed?.status === "rejected") throw failed.reason;
       return sent;
     },
-    async close() { if (producer) await closeQueue(producer); },
+    async close() { await publisher.close?.(); },
   };
 }

@@ -27,3 +27,8 @@ storybook-static/
 
 # Local uploaded objects (configure FILE_STORAGE_LOCAL_DIR for persistent deployment)
 data/files/
+
+# Cloudflare local development state and local secrets
+.wrangler/
+.dev.vars
+.dev.vars.*

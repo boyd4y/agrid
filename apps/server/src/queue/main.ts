@@ -1,12 +1,13 @@
 import { client } from "../db/index.js";
 import { startWorker } from "./workers.js";
 import { createRelay } from "./relay.js";
+import { createPublisher } from "./queues.js";
 import { positiveInt } from "./config.js";
 import { dispatchDueSchedules } from "../automation/schedule.js";
 import { reconcileNativeAutomations } from "../automation/execution.js";
 import { createPublishedReconciler } from "./reconcile.js";
 const reconciler = createPublishedReconciler();
-const relay = createRelay();
+const relay = createRelay(createPublisher());
 const runtime = startWorker();
 let closing = false;
 const loop = (async () => {

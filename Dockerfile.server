@@ -4,11 +4,16 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/ui/package.json packages/ui/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/runtime-node/package.json packages/runtime-node/package.json
+COPY packages/runtime-cloudflare/package.json packages/runtime-cloudflare/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/client/package.json apps/client/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
+COPY packages/core packages/core
+COPY packages/runtime-node packages/runtime-node
 COPY apps/server apps/server
 RUN pnpm --filter @tabdo/server... build
 

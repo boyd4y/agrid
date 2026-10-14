@@ -11,7 +11,7 @@ import { updateAutomation, deleteAutomation, replayAutomationRun } from "../../s
 import { claimExecution, executeNext, recordFailure, PermanentError, FenceLostError } from "../../src/automation/execution.js";
 import { startWorker } from "../../src/queue/workers.js";
 import { redisOptions, prefix } from "../../src/queue/config.js";
-import { createQueue, closeQueue, jobId, type AutomationJob } from "../../src/queue/queues.js";
+import { createPublisher, createQueue, closeQueue, jobId, type AutomationJob } from "../../src/queue/queues.js";
 import { createPublishedReconciler } from "../../src/queue/reconcile.js";
 import { createRelay } from "../../src/queue/relay.js";
 import { acquireRowLease } from "../../src/queue/lease.js";
@@ -20,7 +20,7 @@ assert.ok(new URL(process.env.DATABASE_URL ?? "").pathname.endsWith("_queue_test
 assert.ok(prefix.startsWith("agrid-queue-test"), "Use a dedicated test Redis prefix");
 const redis = new Redis({ ...redisOptions(false), connectionName: "test-raw" }); redis.on("error", () => {});
 const queue = createQueue();
-const relay = createRelay();
+const relay = createRelay(createPublisher());
 const runtimes: ReturnType<typeof startWorker>[] = [];
 async function eventually(check: () => Promise<boolean>, timeout = 15000) {
   const start = Date.now();
@@ -152,8 +152,37 @@ test("row leases and tenant concurrency are shared across clients", async () => 
   delete process.env.AUTOMATION_TENANT_CONCURRENCY;
 });
 
+test("outbox uses an injected publisher while preserving failures, claim tokens and delivery identity", async () => {
+  const f = await fixture(); assert.ok(f.delivery);
+  const publications: AutomationJob[] = [];
+  let fail = true;
+  const peer = createRelay({ async publish(delivery) {
+    publications.push(delivery);
+    if (fail) throw new Error("injected provider unavailable");
+  } });
+  try {
+    const [first] = await peer.claim(1);
+    assert.equal(first.id, f.delivery.id);
+    assert.equal(await peer.publish(first), false);
+    const [pending] = await db.select().from(automationOutbox).where(eq(automationOutbox.id, first.id));
+    assert.equal(pending.status, "pending");
+    assert.equal(pending.claimToken, null);
+    assert.match(pending.lastError!, /injected provider unavailable/);
+    await db.update(automationOutbox).set({ availableAt: new Date(0) }).where(eq(automationOutbox.id, first.id));
+    const [retry] = await peer.claim(1);
+    assert.notEqual(retry.claim_token, first.claim_token);
+    fail = false;
+    assert.equal(await peer.publish(first), false, "stale claim cannot reach a different provider");
+    assert.equal(await peer.publish(retry), true);
+    assert.equal(publications.length, 2);
+    assert.deepEqual(publications[0], publications[1], "retry keeps the persisted application identity");
+    assert.equal((await db.select().from(automationOutbox).where(eq(automationOutbox.id, first.id)))[0].status, "published");
+    await runDirect(f.job!.data);
+  } finally { await peer.close(); }
+});
+
 test("concurrent relays atomically claim different batches", async () => {
-  const peer = createRelay();
+  const peer = createRelay(createPublisher());
   try {
     const fixtures = await Promise.all(Array.from({ length: 6 }, () => fixture()));
     const [a, b] = await Promise.all([relay.claim(3), peer.claim(3)]);

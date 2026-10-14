@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "tabdo-runtime-contract-fixture",
+  "main": "worker.ts",
+  // Latest date supported by the pinned Wrangler 4.149.0 workerd binary.
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "r2_buckets": [{ "binding": "OBJECTS", "bucket_name": "tabdo-contract-test-objects" }],
+  "queues": {
+    "producers": [{ "binding": "AUTOMATION", "queue": "tabdo-contract-test-deliveries" }],
+    "consumers": [{ "queue": "tabdo-contract-test-deliveries", "max_batch_size": 1, "max_batch_timeout": 0, "max_retries": 3, "retry_delay": 1 }]
+  }
+}

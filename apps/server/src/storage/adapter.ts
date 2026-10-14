@@ -1,26 +1,9 @@
-import { mkdir, open, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Readable } from "node:stream";
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-
-export type StorageDriver = "local" | "s3";
-export type StorageAdapter = {
-  driver: StorageDriver;
-  put(key: string, bytes: Uint8Array, mimeType: string): Promise<void>;
-  open(key: string): Promise<ReadableStream<Uint8Array>>;
-  remove(key: string): Promise<void>;
-};
-export type StorageConfig = {
-  driver: StorageDriver;
-  localDir: string;
-  s3?: { endpoint?: string; region: string; bucket: string; accessKeyId?: string; secretAccessKey?: string; forcePathStyle: boolean };
-};
+import { createStorageAdapter, type StorageDriver, type StorageAdapter, type StorageConfig } from "@tabdo/runtime-node/storage";
+export { createStorageAdapter };
+export type { StorageDriver, StorageAdapter, StorageConfig };
 const defaultLocalDir = fileURLToPath(new URL("../../../../data/files", import.meta.url));
-const keyPattern = /^[a-f0-9]{2}\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-function assertKey(key: string) {
-  if (!keyPattern.test(key)) throw new Error("Invalid object storage key");
-}
 function positiveInteger(value: string | undefined, fallback: number, name: string) {
   const result = value === undefined || value === "" ? fallback : Number(value);
   if (!Number.isSafeInteger(result) || result < 1) throw new Error(`Invalid ${name}`);
@@ -48,26 +31,6 @@ export function storageConfig(env: NodeJS.ProcessEnv = process.env, driver = env
     config.s3 = { endpoint: env.FILE_STORAGE_S3_ENDPOINT || undefined, region: env.FILE_STORAGE_S3_REGION || "us-east-1", bucket: env.FILE_STORAGE_S3_BUCKET, accessKeyId: env.FILE_STORAGE_S3_ACCESS_KEY_ID, secretAccessKey: env.FILE_STORAGE_S3_SECRET_ACCESS_KEY, forcePathStyle: env.FILE_STORAGE_S3_FORCE_PATH_STYLE !== "false" };
   }
   return config;
-}
-export function createStorageAdapter(config: StorageConfig): StorageAdapter {
-  if (config.driver === "local") {
-    const objectPath = (key: string) => { assertKey(key); return path.join(config.localDir, key); };
-    return {
-      driver: "local",
-      async put(key, bytes) { const target = objectPath(key); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, bytes, { flag: "wx", mode: 0o600 }); },
-      async open(key) { const handle = await open(objectPath(key), "r"); return Readable.toWeb(handle.createReadStream()) as ReadableStream<Uint8Array>; },
-      async remove(key) { await unlink(objectPath(key)).catch((error: NodeJS.ErrnoException) => { if (error.code !== "ENOENT") throw error; }); },
-    };
-  }
-  if (!config.s3) throw new Error("Missing S3 configuration");
-  const { bucket, ...settings } = config.s3;
-  const client = new S3Client({ endpoint: settings.endpoint, region: settings.region, forcePathStyle: settings.forcePathStyle, credentials: settings.accessKeyId && settings.secretAccessKey ? { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey } : undefined, maxAttempts: 3 });
-  return {
-    driver: "s3",
-    async put(key, bytes, mimeType) { assertKey(key); await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: bytes, ContentType: mimeType })); },
-    async open(key) { assertKey(key); const object = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key })); if (!object.Body) throw new Error("S3 object has no body"); return object.Body.transformToWebStream(); },
-    async remove(key) { assertKey(key); await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })); },
-  };
 }
 // Retain old driver configuration for objects created before a driver switch.
 const adapters = new Map<string, StorageAdapter>();
