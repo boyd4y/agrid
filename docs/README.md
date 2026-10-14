@@ -21,6 +21,9 @@
 
 ## 架构与执行
 
+- [双部署模式架构](architecture/dual-deployment.md)：共用核心、Node / Cloudflare 扩展、Run / Session 与无感知切换。
+- [Pars 核心调研](architecture/pars-review.md)：源码依据、可借鉴分层与需要补齐的语义。
+
 - [多租户设计](multi-tenant.md)：工作区隔离、身份与数据模型。
 - [Agent 运行](agent-runtime.md)：Chat、Session、Run 与原生 Harness。
 - [SDK 对齐](sdk-alignment.md)：原生历史、提问与工具契约。
