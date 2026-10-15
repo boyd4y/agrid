@@ -4,9 +4,9 @@ let release, modelStarted = false;
 const fixture = await createBrowserFixture({ name: 'Live run status without polling', modelRequest: async (request,response) => {
   for await (const _ of request) { /* drain */ }
   modelStarted = true;
-  response.writeHead(200,{'content-type':'text/event-stream'});response.flushHeaders();
   await new Promise(resolve => { release=resolve;response.once('close',resolve); });
   if (response.destroyed) return;
+  response.writeHead(200,{'content-type':'text/event-stream'});response.flushHeaders();
   const event = (delta,finish_reason=null) => response.write(`data: ${JSON.stringify({id:'live-status',object:'chat.completion.chunk',created:1,model:'openrouter/free',choices:[{index:0,delta,finish_reason}]})}\n\n`);
   event({role:'assistant',content:'Live stream completed without polling.'});event({},'stop');response.end('data: [DONE]\n\n');
 } });
@@ -26,7 +26,9 @@ try {
   await input.fill('Verify a live stream');await input.press('Enter');
   await page.getByTestId('chat-run-status').waitFor();
   for(let i=0;i<100&&!modelStarted;i++) await new Promise(resolve=>setTimeout(resolve,50));
-  assert(modelStarted);await page.waitForTimeout(100);reads=0;
+  assert(modelStarted);
+  await page.getByTestId('chat-run-status').getByText('等待模型回复', { exact: true }).waitFor({ timeout: 3000 });
+  await page.waitForTimeout(100);reads=0;
   await page.waitForTimeout(2500);assert.equal(reads,0,'healthy live SSE must not poll /runs');
   release();await page.getByText('Live stream completed without polling.',{exact:true}).waitFor();
   await page.getByTestId('chat-run-status').waitFor({state:'detached'});
