@@ -15,6 +15,18 @@
       "development": "./src/bullmq.ts",
       "import": "./dist/bullmq.js",
       "default": "./dist/bullmq.js"
+    },
+    "./redis": {
+      "types": "./src/redis.ts",
+      "development": "./src/redis.ts",
+      "import": "./dist/redis.js",
+      "default": "./dist/redis.js"
+    },
+    "./lease": {
+      "types": "./src/lease.ts",
+      "development": "./src/lease.ts",
+      "import": "./dist/lease.js",
+      "default": "./dist/lease.js"
     }
   },
   "scripts": {

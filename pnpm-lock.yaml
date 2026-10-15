@@ -262,9 +262,6 @@ importers:
       better-auth:
         specifier: ^1.7.7
         version: 1.7.7(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.11)(drizzle-orm@0.45.4(@opentelemetry/api@1.9.1)(kysely@0.29.6)(postgres@3.4.9)(sql.js@1.14.2))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      bullmq:
-        specifier: '5'
-        version: 5.81.5
       cron-parser:
         specifier: ^5.6.0
         version: 5.10.2
@@ -277,9 +274,6 @@ importers:
       hono:
         specifier: ^4.7.8
         version: 4.13.13
-      ioredis:
-        specifier: '5'
-        version: 5.11.1
       postgres:
         specifier: ^3.4.5
         version: 3.4.9

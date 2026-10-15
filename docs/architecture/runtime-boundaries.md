@@ -4,10 +4,10 @@
 
 | 位置 | 职责 |
 |---|---|
-| `packages/core` | 基础服务/错误/摘要、任务时间计算与并发租约、工作区快照契约 |
+| `packages/core` | 基础服务/错误/摘要、任务时间计算、工作区快照契约 |
 | `packages/db` | PostgreSQL 连接池、schema 参数化的 Drizzle 工厂与通用事务类型 |
 | `packages/auth` | Better Auth、用户/组织/成员/凭证 schema、会话和 API Key 身份验证与 Key 管理 |
-| `packages/queue` | 通用队列消息及 BullMQ 实现 |
+| `packages/queue` | 消息、发布/消费、Redis 连接、延迟与失败重试、并发、租约、优雅关闭及 BullMQ 实现 |
 | `packages/storage` | 通用本地文件/S3 字节存储 |
 | `packages/agent-runtime` | 官方 Harness 组装、本地/Vercel Sandbox、工作目录及快照恢复 |
 | `packages/shared` | 前端、MCP、server 共用的产品协议与校验 |
@@ -27,6 +27,8 @@
 
 ## 任务边界
 
-core 提供时间/时区计算、并发租约与续租等任务基础能力；queue 提供投递。自动化触发匹配、事件快照、Agent 任务说明、业务执行收据和 outbox 原子提交属于 server。core 不认识表格、邮件、工作区或特定自动化动作。
+core 提供时间/时区计算；queue 负责真实的队列运行基础设施，包括 Redis 配置转换、发布、Worker 消费与重试、延迟投递、并发租约与续租、在途任务排空和连接关闭。server 通过处理回调接入，生产代码不直接导入 BullMQ/ioredis。环境变量读取、进程信号以及后台业务循环仍由应用入口组装。
+
+自动化触发匹配、事件快照、Agent 任务说明、业务执行收据、outbox 原子提交及补偿查询属于 server。queue 提供至少一次投递，不能代替数据库中的业务幂等性。core/queue 不认识表格、邮件、工作区或特定自动化动作。
 
 聊天与后台任务使用相同官方 Harness 生命周期。本地与 Railway 无平台选择开关，不增加独立部署服务。`pnpm check:architecture` 检查包依赖方向与无业务依赖的基础包。

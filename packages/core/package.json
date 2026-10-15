@@ -39,12 +39,6 @@
       "development": "./src/tasks/schedule.ts",
       "import": "./dist/tasks/schedule.js",
       "default": "./dist/tasks/schedule.js"
-    },
-    "./tasks/lease": {
-      "types": "./src/tasks/lease.ts",
-      "development": "./src/tasks/lease.ts",
-      "import": "./dist/tasks/lease.js",
-      "default": "./dist/tasks/lease.js"
     }
   },
   "scripts": {

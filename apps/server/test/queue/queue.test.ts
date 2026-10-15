@@ -3,7 +3,7 @@ import { test, before, after } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { eq, sql } from "drizzle-orm";
-import { Redis } from "ioredis";
+import { createRedisClient } from "@tabdo/queue/redis";
 import { db, client } from "../../src/db/index.js";
 import { organization, tables, columns, rows, automations, automationEvents, automationOutbox, automationRuns, automationStepReceipts } from "../../src/db/schema.js";
 import { addRow, updateCell } from "../../src/commands/index.js";
@@ -18,7 +18,7 @@ import { acquireRowLease } from "../../src/queue/lease.js";
 
 assert.ok(new URL(process.env.DATABASE_URL ?? "").pathname.endsWith("_queue_test"), "Use an isolated *_queue_test database");
 assert.ok(prefix.startsWith("agrid-queue-test"), "Use a dedicated test Redis prefix");
-const redis = new Redis({ ...redisOptions(false), connectionName: "test-raw" }); redis.on("error", () => {});
+const redis = createRedisClient(redisOptions(false), { name: "test-raw", onError: () => {} });
 const queue = createQueue();
 const relay = createRelay(createPublisher());
 const runtimes: ReturnType<typeof startWorker>[] = [];

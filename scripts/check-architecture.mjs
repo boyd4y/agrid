@@ -41,6 +41,10 @@ function visit(name, path = []) {
   for (const next of graph.get(name) ?? []) visit(next, [...path, name]);
 }
 for (const name of graph.keys()) visit(name);
+for (const file of await files(resolve(root, "apps/server/src"))) {
+  for (const specifier of imports(await readFile(file, "utf8")))
+    assert(!["bullmq", "ioredis"].includes(specifier), `${file}: queue infrastructure belongs in @tabdo/queue`);
+}
 for (const file of await files(resolve(root, "apps/server/src/business"))) {
   const source = await readFile(file, "utf8");
   assert(!/\bprocess\.env\b/.test(source), `${file}: business services receive configuration`);
