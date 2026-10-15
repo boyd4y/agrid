@@ -5,7 +5,7 @@ import { listHarnesses } from "./ai/model.js";
 import { client } from "./db/index.js";
 import { assertSchemaReady } from "./db/schema-ready.js";
 import { activeNativeRunCount, beginNativeDrain, waitForNativeDrain } from "./harness/drain.js";
-import { createNodeHttpResources, withNodeResources } from "./resources/node.js";
+import { createNodeHttpResources, withNodeResources, backgroundNotifications } from "./resources/node.js";
 import { mountClientAssets } from "./client-assets.js";
 
 const app = createApp({ appUrl: process.env.APP_URL || "http://localhost:5173", resources: await createNodeHttpResources() });
@@ -30,6 +30,7 @@ function drainAndStop() {
     const connectionsClosed = new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     if ("closeIdleConnections" in server) server.closeIdleConnections();
     await Promise.all([waitForNativeDrain(), connectionsClosed]);
+    await backgroundNotifications.drain();
     await client.end();
     if (process.connected) process.disconnect();
   })().catch((error) => { console.error("[api] shutdown failed", error); process.exitCode = 1; });

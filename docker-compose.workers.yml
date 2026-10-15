@@ -18,6 +18,7 @@ services:
       DB_POOL_MAX: 4
       WORKER_CONCURRENCY: 8
       QUEUE_GLOBAL_CONCURRENCY: 32
+      AUTOMATION_RECOVERY_INTERVAL_MS: ${AUTOMATION_RECOVERY_INTERVAL_MS:-900000}
 
       # Required to start: auth is loaded by the worker import graph.
       # Use the same random >=32-character secret as the API; no example values.

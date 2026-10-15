@@ -2,7 +2,8 @@ import { createDatabase as createPool } from "@tabdo/db";
 import * as schema from "./schema.js";
 
 /** Tabdo's complete schema is assembled only in the application. */
-export function createDatabase(options: { connectionString: string; poolMax: number; prepare?: boolean }) {
+export function createDatabase(options: { connectionString: string; poolMax: number; prepare?: boolean;
+  logger?: { logQuery(query: string, params: unknown[]): void } }) {
   return createPool({ ...options, schema });
 }
 export type ServerDatabase = ReturnType<typeof createDatabase>["db"];

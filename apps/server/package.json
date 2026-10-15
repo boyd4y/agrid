@@ -16,6 +16,7 @@
     "db:seed:tenants": "tsx src/db/seed-tenants.ts",
     "queue:status": "tsx src/queue/status.ts",
     "test:queue": "tsx --test test/queue/queue.test.ts",
+    "test:queue:events": "tsx --test test/queue/event-driven.test.ts",
     "dev:api": "pnpm -r --filter @tabdo/queue --filter @tabdo/worker --filter @tabdo/storage --filter @tabdo/agent-runtime --filter @tabdo/core --filter @tabdo/auth --filter @tabdo/db --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
     "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/queue/src/**/*.ts' --include '../../packages/worker/src/**/*.ts' --include '../../packages/storage/src/**/*.ts' --include '../../packages/agent-runtime/src/**/*.ts' --include '../../packages/core/src/**/*.ts' --include '../../packages/auth/src/**/*.ts' --include '../../packages/db/src/**/*.ts' src/queue/main.ts",

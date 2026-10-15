@@ -29,6 +29,20 @@ test("transport publishes stable unrelated messages and exposes inspection witho
     assert.equal(await queue.get(messages[0].id), undefined);
     await queue.close();
     assert(await queue.has(messages[1].id), "inspection reconnects after resource reset");
+    await assert.rejects(queue.publish({ id: "bad-delay", body: { keys: [] } }, { delayMs: -1 }), /delay/);
+    const began = Date.now();
+    await queue.publish({ id: "later", body: { keys: ["delayed"] } }, { delayMs: 300 });
+    assert.equal((await queue.get("later"))?.state, "delayed");
+    let receivedAt = 0;
+    const consumer = queue.consume({ concurrency: 1, globalConcurrency: 1, lockDuration: 1000, stalledInterval: 1000,
+      async process(message) { if (message.id === "later") receivedAt = Date.now(); return { type: "complete" }; },
+    });
+    try {
+      await consumer.ready;
+      while (!receivedAt && Date.now() - began < 5000) await new Promise(resolve => setTimeout(resolve, 20));
+      assert(receivedAt - began >= 290, "delayed messages cannot run immediately");
+      assert(receivedAt - began < 5000, "Redis wakes the consumer without polling a business store");
+    } finally { await consumer.close(); }
   } finally {
     await queue.close();
     await waitForRedisReady(cleanup);

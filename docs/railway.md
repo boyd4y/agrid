@@ -33,6 +33,12 @@ API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运�
 
 使用 Claude/Codex 或 Pi 远程工作区时，配置 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`（或官方支持的 OIDC），并给对应原生提供商配置模型密钥。官方 Sandbox adapter 完成创建、bootstrap 模板及 resume lookup；无需自行发布 Agent Docker 镜像。Claude/Codex 的原生 runtime 在 Sandbox 内；Pi 的 agent loop 仍在 Node host。
 
+## 后台唤醒与 Neon
+
+正常事件在 PostgreSQL 事务提交后通过 Redis 唤醒 worker；定时任务及 outbox 重试使用 Redis 延迟消息，不再每 500ms 扫描数据库。保持 worker 常驻以消费消息。
+
+`AUTOMATION_RECOVERY_INTERVAL_MS=900000` 控制启动后的兜底扫描间隔，默认 15 分钟；旧 `AUTOMATION_RELAY_POLL_MS` 不再生效。更短的兜底间隔会减少故障补偿延迟，但可能阻止 Neon 闲置休眠。事务提交后进程崩溃或 Redis 通知丢失时，启动恢复/下一次补偿扫描仍会处理已持久化事件。频繁的业务任务、多个副本及其他客户端仍会消耗数据库计算额度。
+
 ## 验收
 
 检查 `/api/health`、登录、文件上传下载、推理和工具流、连续对话、显式取消、数据自动化和定时历史。集成测试仅使用隔离 `_agent_test` / `_queue_test` 数据库及专用 Redis；不指向线上数据。当前未声称已部署 Railway 或完成真实模型/远程 Sandbox 验收。

@@ -22,6 +22,14 @@ Database and Redis default to the Compose network services; use
 must share the database, Redis, and queue prefix. Apply database migrations before
 starting workers and budget connections across replicas.
 
+Normal work is driven by Redis notifications sent after PostgreSQL commits.
+Scheduled work and outbox retries use delayed messages. Startup and the default
+15-minute safety sweep recover lost notifications/deliveries; configure
+`AUTOMATION_RECOVERY_INTERVAL_MS` to change this recovery-latency tradeoff.
+The former `AUTOMATION_RELAY_POLL_MS` setting is no longer used. An idle worker
+does not continuously query PostgreSQL, allowing Neon to suspend between work
+and recovery sweeps. Redis must remain available and the worker must remain running.
+
 Optional capability requirements (missing credentials do not prevent basic startup):
 
 - `run_agent`: configure the selected provider: `OPENAI_API_KEY` (or

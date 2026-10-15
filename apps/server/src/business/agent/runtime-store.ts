@@ -233,6 +233,7 @@ export async function completeRuntimeTurn(deps: RuntimeDependencies,
       const [saved] = await tx.update(agentRuns).set({ status: run.status, error: run.error ?? null, endedAt: deps.now() })
         .where(and(eq(agentRuns.id, run.id), eq(agentRuns.threadId, lease.threadId), eq(agentRuns.fence, lease.fence))).returning({ id: agentRuns.id });
       if (!saved) throw new ServiceError(409, { message: "运行已被接管，无法提交结果" });
+      deps.wakeAfterCommit?.(tx, { kind: "native-actions", threadId: lease.threadId });
     }
   }, transaction);
 }
@@ -264,5 +265,6 @@ export async function completeUninvokedPiRun(deps: RuntimeDependencies,
       status: run.status === "cancelled" ? "interrupted" : "failed", error: run.error, updatedAt: deps.now(),
     }).where(eq(agentRuntimeSessions.id, recordId));
     await tx.update(agentRuns).set({ status: run.status, error: run.error, endedAt: deps.now() }).where(eq(agentRuns.id, run.id));
+    deps.wakeAfterCommit?.(tx, { kind: "native-actions", threadId: lease.threadId });
   }, transaction);
 }

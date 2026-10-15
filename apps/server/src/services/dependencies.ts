@@ -1,14 +1,18 @@
 import { createSystemServices } from "@tabdo/core/services";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { getDatabase } from "../resources/scope.js";
+import { requirePlatformResources } from "../resources/scope.js";
 import { queueName } from "../automation/jobs/config.js";
 import { ServiceError } from "../business/errors.js";
 import type { CommandDependencies, RuntimeDependencies } from "../business/dependencies.js";
 
 /** Node application composition. Shared business functions never access this scope. */
 export function runtimeDependencies(): RuntimeDependencies {
-  return { database: getDatabase(), ...createSystemServices() };
+  const { database, background } = requirePlatformResources();
+  return { database: database.db, ...createSystemServices(),
+    ...(background ? { wakeAfterCommit: (tx, wakeup) => database.afterCommit(tx,
+      `${wakeup.kind}:${"threadId" in wakeup ? wakeup.threadId : ""}`, () => background.notify(wakeup)) } satisfies Pick<RuntimeDependencies, "wakeAfterCommit"> : {}),
+  };
 }
 
 export function commandDependencies(): CommandDependencies {

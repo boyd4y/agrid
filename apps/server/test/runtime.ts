@@ -7,7 +7,7 @@ async function runWithFixture<T>(work: () => T): Promise<Awaited<T>> {
     throw new Error("Scoped integration fixtures require an isolated *_agent_test or *_queue_test database");
   }
   const { createNodeHttpResources } = await import("../src/resources/node.js");
-  return await withPlatformResources(await createNodeHttpResources(), work);
+  return await withPlatformResources(await createNodeHttpResources({ background: false }), work);
 }
 
 /** Scope every test/hook explicitly; assertions still use the native test runner. */

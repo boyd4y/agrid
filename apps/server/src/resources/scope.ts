@@ -1,18 +1,20 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DatabaseResource } from "../business/db/factory.js";
 import type { Auth } from "@tabdo/auth";
+import type { BackgroundWakeup } from "../business/background.js";
 
 /** A caller-owned resource scope, never inferred from environment or runtime. */
 export type PlatformResources = Readonly<{
   database: DatabaseResource;
   auth?: Auth;
+  background?: Readonly<{ notify(wakeup: BackgroundWakeup): void; drain?(): Promise<void> }>;
 }>;
 
 const resources = new AsyncLocalStorage<PlatformResources>();
 
 /** The caller owns resource cleanup, including any detached work it starts. */
 export function withPlatformResources<T>(value: PlatformResources, work: () => T): T {
-  return resources.run(Object.freeze({ database: value.database, auth: value.auth }), work);
+  return resources.run(Object.freeze({ ...value }), work);
 }
 
 export function requirePlatformResources(): PlatformResources {

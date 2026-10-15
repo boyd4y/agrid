@@ -103,13 +103,15 @@ export function createBullMQTransport<T>(config: BullMQConfig): QueueTransport<T
   }
   return {
     consume,
-    async publish(message) {
+    async publish(message, options) {
       parseQueueMessage(message);
+      const delay = options?.delayMs ?? 0;
+      if (!Number.isSafeInteger(delay) || delay < 0) throw new TypeError("Invalid queue delivery delay");
       if (message.id.includes(":")) throw new Error("BullMQ message ID must not contain a colon");
       const { queue } = resource();
       try {
         await queue.waitUntilReady();
-        await queue.add(config.jobName, message.body, { jobId: message.id });
+        await queue.add(config.jobName, message.body, { jobId: message.id, delay });
       } catch (error) { throw publicError(error); }
     },
     has: (id) => inspect(async (queue) => Boolean(await queue.getJob(id))),

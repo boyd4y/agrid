@@ -169,3 +169,21 @@ QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm --filter @tabdo/queue -
 ```
 
 每个夹具使用随机 `agrid-queue-test` 前缀，只删除自己的键；不设置变量时真实 Redis 用例跳过，不能将其算作验收成功。worker 的 Node host 测试使用临时子进程验证 SIGTERM、启动时 SIGINT 和关闭超时。产品后台入口仍是 `src/queue/main.ts`，业务处理器与配置位于 `src/automation/jobs`。
+
+## Redis 唤醒与数据库空闲
+
+先完成 `pnpm build:foundation`，再运行测试，避免构建清空 `dist` 时并行启动测试。
+准备专门的 `tabdo_event_queue_test` 数据库及 Redis 6381，迁移时必须同时覆盖
+`DATABASE_URL` 和 `DATABASE_URL_UNPOOLED`，避免本地 Neon 配置把迁移指向另一个数据库。
+
+```bash
+DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_event_queue_test \
+DATABASE_URL_UNPOOLED=postgresql://tableapp:tableapp@localhost:5432/tabdo_event_queue_test \
+  pnpm --filter @tabdo/server db:migrate
+DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_event_queue_test \
+DATABASE_URL_UNPOOLED=postgresql://tableapp:tableapp@localhost:5432/tabdo_event_queue_test \
+REDIS_URL=redis://127.0.0.1:6381 QUEUE_PREFIX=agrid-queue-test-event-local \
+  pnpm --filter @tabdo/server test:queue:events
+```
+
+真实 PG/Redis 验证事务提交与嵌套 savepoint 回滚、通知失败不影响提交、空闲期间 SQL 计数不增长、及时投递、多批 drain、延迟重试、定时任务改期/停用、重复消息、启动恢复和丢失通知的安全扫描。原生 Pi 提问续接回归另验证 canonical checkpoint 提交后的线程级通知。测试不证明真实 Neon 已休眠或 Railway 已部署。

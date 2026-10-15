@@ -1,8 +1,8 @@
 /** Application-generated identity, stable across duplicate delivery. */
 export type QueueMessage<T> = Readonly<{ id: string; body: T }>;
 export interface QueuePublisher<T> {
-  /** Acknowledges transport acceptance, not completion of business effects. */
-  publish(message: QueueMessage<T>): Promise<void>;
+  /** Acknowledges transport acceptance, not business completion. delayMs defers eligibility. */
+  publish(message: QueueMessage<T>, options?: Readonly<{ delayMs?: number }>): Promise<void>;
   close?(): Promise<void>;
 }
 export type QueueDelivery<T> = QueueMessage<T> & Readonly<{ attempt: number; attempts: number }>;

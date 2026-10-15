@@ -6,6 +6,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Actor } from "../../src/auth/actor.js";
 import type { AskUserQuestionsInput } from "@tabdo/shared";
+import type { BackgroundWakeup } from "../../src/business/background.js";
+import { requirePlatformResources, withPlatformResources } from "../../src/resources/scope.js";
 
 if (!process.env.DATABASE_URL || !new URL(process.env.DATABASE_URL).pathname.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
 for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
@@ -117,9 +119,14 @@ test("headless native Pi commits one actual tool and reply; concurrent and recei
 });
 
 test("native questions remain in the associated private chat and resume through the official chat tool-result endpoint", { timeout: 30000 }, async () => {
+  const wakeups: BackgroundWakeup[] = [];
+  const notificationScope = { ...requirePlatformResources(), background: { notify(wakeup: BackgroundWakeup) { wakeups.push(wakeup); } } };
+  await withPlatformResources(notificationScope, async () => {
   const task = await input("ASK_DIRECTION before proceeding.");
   const initialCalls = requests.length, waiting = await runAutomationAgentAction(task);
   assert.equal(waiting.status, "waiting-input", waiting.error);assert(waiting.threadId && waiting.agentRunId);
+  assert(wakeups.some(wakeup => wakeup.kind === "native-actions" && wakeup.threadId === waiting.threadId), "a committed native question requests scoped reconciliation");
+  wakeups.length = 0;
   assert.equal(requests.length, initialCalls + 1);
   assert.deepEqual(await runAutomationAgentAction(task), waiting);assert.equal(requests.length, initialCalls + 1);
   const [run] = await db.select().from(agentRuns).where(eq(agentRuns.id, waiting.agentRunId));
@@ -127,12 +134,14 @@ test("native questions remain in the associated private chat and resume through 
   const response = await app.request("http://localhost:3001/api/chat", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ intent: "tool-result", id: waiting.threadId, agentId: agentMember,
     context: { page: "ai" }, assistantMessageId: run.assistantMessageId, toolResults: [{ toolCallId: "native-question", output: answer }] }) });
   assert.equal(response.status, 200, await response.clone().text());assert.match(await response.text(), /Native answer received/);
+  assert(wakeups.some(wakeup => wakeup.kind === "native-actions" && wakeup.threadId === waiting.threadId), "HTTP continuation wakes reconciliation after the canonical result commits");
   assert.equal(requests.length, initialCalls + 2);
   assert.equal(requests.at(-1)!.messages.filter(message => message.role === "user").length, 1, "answer continuation does not resend the triggering event/user prompt");
   assert.equal(requests.at(-1)!.messages.filter(message => message.tool_call_id === "native-question").length, 1);
   const completed = await runAutomationAgentAction(task);assert.equal(completed.status, "completed");assert.equal(completed.agentRunId, waiting.agentRunId);
   assert.match(completed.text, /Native answer received/);assert.equal(requests.length, initialCalls + 2);
   assert.deepEqual(providerErrors, []);
+  });
 });
 
 test("a real server-certified Pi pre-invocation failure retries the stable Run; an unknown accepted turn never replays", { timeout: 30000 }, async () => {

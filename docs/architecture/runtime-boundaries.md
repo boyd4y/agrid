@@ -36,6 +36,6 @@ Redis 原子租约由 queue 提供。worker 获取租约、检查所有权，并
 
 outbox 的 claim、renew、markPublished、markFailed 是 server 提供的存储操作；worker 执行并发发布、退避、清理与排空。恢复候选 SQL、generation/Run 状态判断和补偿写回留在 server；worker 管理消息检查、租约和恢复流程。至少一次投递不能替代业务幂等。
 
-worker 运行非重叠扫描，隔离不同任务及日志回调错误。关闭时停止新扫描，等待当前扫描和消费者结束，再关闭其余资源。Node host 处理 SIGTERM/SIGINT、启动失败和关闭超时；API/worker 仍是同一镜像的两个进程入口。
+正常工作通过 Redis 控制消息唤醒，定时和 outbox 重试通过延迟消息触发；数据库提交后才发送通知。worker 只在启动时和默认每 15 分钟执行补偿扫描，隔离不同任务及日志回调错误。关闭时停止新扫描，等待当前扫描和消费者结束，再关闭其余资源。Node host 处理 SIGTERM/SIGINT、启动失败和关闭超时；API/worker 仍是同一镜像的两个进程入口。详见 [事件驱动 Worker](event-driven-worker.md)。
 
 `pnpm check:architecture` 检查依赖方向、worker 对 queue 的必需依赖、驱动隔离和无环；职责与行为还需真实队列、事务和进程故障测试验证。

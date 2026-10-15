@@ -124,6 +124,7 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
       // SQL owns the waiting state; the queue is free to acknowledge this handoff.
       await tx.update(automationEvents).set({ status: "waiting_input",updatedAt: deps.now() }).where(eq(automationEvents.id,id));
       await tx.update(automationOutbox).set({ status: "done",claimToken: null,claimUntil: null }).where(eq(automationOutbox.eventId,id));
+      if (typeof run.detail.threadId === "string") deps.wakeAfterCommit?.(tx, { kind: "native-actions", threadId: run.detail.threadId });
       return "done";
     }
     if (!run) {
@@ -181,7 +182,7 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
   });
 }
 /** Completion of a native question resumes the remaining actions using the same action mapping. */
-export async function reconcileNativeAutomations(deps: AutomationExecutionDependencies, limit = 25, organizationId?: string) {
+export async function reconcileNativeAutomations(deps: AutomationExecutionDependencies, limit = 25, organizationId?: string, threadId?: string) {
   const candidates = await deps.database.select({ eventId: automationRuns.eventId, runId: automationRuns.id,step: automationRuns.nextStep }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId))
     .innerJoin(automationAgentActions, and(eq(automationAgentActions.runId, automationRuns.id), eq(automationAgentActions.step, automationRuns.nextStep)))
@@ -199,7 +200,8 @@ export async function reconcileNativeAutomations(deps: AutomationExecutionDepend
           or (${agentRuns.status}='suspended' and ${automationRuns.status}!='waiting_input'
             and ${agentRuntimeSessions.resumeState}->'continueFrom'->'pendingToolResults'
               @> '[{"toolName":"askUserQuestions"}]'::jsonb))))`,
-      ...(organizationId ? [eq(automations.organizationId, organizationId)] : []))).limit(limit);
+      ...(organizationId ? [eq(automations.organizationId, organizationId)] : []),
+      ...(threadId ? [eq(agentRuns.threadId, threadId)] : []))).limit(limit);
   for (const candidate of candidates) if (candidate.eventId) {
     const native = await readAutomationAgentActionResult(deps,candidate);
     // A failed/abandoned process without a canonical checkpoint is genuinely
@@ -216,6 +218,7 @@ export async function reconcileNativeAutomations(deps: AutomationExecutionDepend
     await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, generation, payload: { protocol: 1, eventId: event.id, generation } })
       .onConflictDoUpdate({ target: [automationOutbox.eventId, automationOutbox.queue], set: { status: "pending", generation,
         payload: { protocol: 1, eventId: event.id, generation }, availableAt: deps.now(), claimToken: null, claimUntil: null, attempts: 0, publishedAt: null } });
+    deps.wakeAfterCommit?.(tx, { kind: "outbox" });
     });
   }
   return candidates.length;

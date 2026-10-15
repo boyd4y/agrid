@@ -38,6 +38,7 @@ export async function appendAutomationEvent(deps: CommandDependencies, tx: Trans
   })));
   await tx.insert(automationOutbox).values({ eventId: id, queue: deps.automationQueueName,
     payload: { protocol: 1, eventId: id, generation: 0 } });
+  deps.wakeAfterCommit?.(tx, { kind: "outbox" });
 }
 
 export type ExternalAutomationEvent = {
@@ -96,5 +97,6 @@ export async function appendExternalAutomationEvent(deps: CommandDependencies, t
     ruleVersion: rule.version, ruleSnapshot: rule as unknown as Record<string, unknown>, status: "queued", triggerType: rule.trigger.type,
     detail: { eventType: event.type, source: event.source, traceId: event.traceId } })));
   await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, payload: { protocol: 1, eventId: event.id, generation: 0 } });
+  deps.wakeAfterCommit?.(tx, { kind: "outbox" });
   return event.id;
 }

@@ -11,6 +11,7 @@ import { schedulePreview } from "@tabdo/core/tasks/schedule";
 export { schedulePreview } from "@tabdo/core/tasks/schedule";
 
 export async function syncSchedule(deps: CommandDependencies, tx: Transaction, rule: AutomationRule, now = deps.now()) {
+  deps.wakeAfterCommit?.(tx, { kind: "schedules" });
   if (rule.source.kind !== "schedule" || !rule.enabled) {
     await tx.delete(automationSchedules).where(eq(automationSchedules.automationId, rule.id));
     return;

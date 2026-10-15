@@ -180,6 +180,7 @@ export async function replayAutomationRun(deps: CommandDependencies, runId: stri
     await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, generation, payload: { protocol: 1, eventId: event.id, generation } }).onConflictDoUpdate({
       target: [automationOutbox.eventId, automationOutbox.queue], set: { status: "pending", generation,
         payload: { protocol: 1, eventId: event.id, generation }, claimToken: null, claimUntil: null, availableAt: sql`now()`, publishedAt: null, attempts: 0, lastError: null } });
+    deps.wakeAfterCommit?.(tx, { kind: "outbox" });
     return { ok: true as const };
   });
 }
