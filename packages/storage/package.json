@@ -1,0 +1,40 @@
+{
+  "name": "@tabdo/storage",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./local": {
+      "types": "./src/local.ts",
+      "development": "./src/local.ts",
+      "import": "./dist/local.js",
+      "default": "./dist/local.js"
+    },
+    "./s3": {
+      "types": "./src/s3.ts",
+      "development": "./src/s3.ts",
+      "import": "./dist/s3.js",
+      "default": "./dist/s3.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1150.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@types/node": "^22.14.1"
+  }
+}

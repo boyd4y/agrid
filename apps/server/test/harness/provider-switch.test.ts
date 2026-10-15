@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
+import { createDiskWorkspace } from "@tabdo/agent-runtime/sandbox/workspace";
 import type { HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
-import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
-import { createPiAdapter, type PiAdapterConfig } from "@tabdo/platform-node/harness/pi";
-import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
+import { createHarnessAgent } from "@tabdo/agent-runtime/harness/agent";
+import { createPiAdapter, type PiAdapterConfig } from "@tabdo/agent-runtime/harness/pi";
+import { createLocalSandboxAdapter } from "@tabdo/agent-runtime/sandbox/local";
 import { restoreWorkspace, snapshotWorkspace, type WorkspaceSnapshot } from "../../src/harness/workspace.js";
 import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
 

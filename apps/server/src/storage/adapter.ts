@@ -1,8 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ObjectStorage } from "@tabdo/core/storage";
-import { createLocalStorage } from "@tabdo/platform-node/storage/local";
-import { createS3Storage, type S3StorageConfig } from "@tabdo/platform-node/storage/s3";
+import type { ObjectStorage } from "@tabdo/storage";
+import { createLocalStorage } from "@tabdo/storage/local";
+import { createS3Storage, type S3StorageConfig } from "@tabdo/storage/s3";
 
 export type StorageDriver = "local" | "s3";
 export type StorageAdapter = ObjectStorage & { readonly driver: StorageDriver };

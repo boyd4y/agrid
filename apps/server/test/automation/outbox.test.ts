@@ -8,7 +8,7 @@ import * as schema from "@tabdo/backend/schema";
 import { createRelay, type OutboxRelayDependencies } from "@tabdo/backend/automation/outbox";
 import type { AutomationDelivery } from "@tabdo/shared";
 import { automationDeliveryId } from "@tabdo/shared";
-import type { QueuePublisher } from "@tabdo/core/queue";
+import type { QueuePublisher } from "@tabdo/queue";
 
 const url = process.env.DATABASE_URL;
 if (!url || !new URL(url).pathname.endsWith("_agent_test")) {

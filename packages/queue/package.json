@@ -1,0 +1,35 @@
+{
+  "name": "@tabdo/queue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./bullmq": {
+      "types": "./src/bullmq.ts",
+      "development": "./src/bullmq.ts",
+      "import": "./dist/bullmq.js",
+      "default": "./dist/bullmq.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "bullmq": "5",
+    "ioredis": "5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@types/node": "^22.14.1"
+  }
+}

@@ -31,7 +31,7 @@ export type ActionInput = {
 };
 export type AutomationAgentServices = Readonly<{
   prepare(input: Parameters<typeof resolveChatAgentConfiguration>[1]): Promise<Awaited<ReturnType<typeof resolveChatAgentConfiguration>>>;
-  /** Bounded dispatch in CF; Node may await its existing dedicated runner for compatibility. */
+  /** Execute an accepted agent task under the worker-owned lifecycle. */
   dispatch(reference: NativeExecutionReference): Promise<void>;
   formatError?(error: unknown): string;
 }>;

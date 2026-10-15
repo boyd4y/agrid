@@ -30,7 +30,7 @@ Node 独有的 `CLIENT_DIST_PATH` 指向已构建前端，未设置时仍按原�
 
 在 `.env` 配置 `OPENROUTER_API_KEY`，或 `PI_API_KEY`、`PI_BASE_URL` 和 `PI_MODEL`，即可使用官方 Pi Harness；本地 agent loop 在 Node host，bash 使用真实宿主进程和目录，不需要额外 Agent Docker 镜像。Codex/Claude 和远程 Sandbox 仍要求对应提供商及 Vercel 配置。配置变更后重启 `local:start`。平台未配置模型时明确报错，不生成模拟回复。
 
-本地回归使用真实官方 Harness/Pi、临时本地模型协议服务，覆盖工具副作用、历史持久化、原生提问续接、独立进程与签名 HTTP runner；这些检查不能替代真实提供商验收。
+本地回归使用真实官方 Harness/Pi、临时本地模型协议服务，覆盖工具副作用、历史持久化、原生提问续接、Node API 与后台 worker；这些检查不能替代真实提供商验收。
 
 集成测试使用另建且名称以 `_agent_test` 结尾的数据库；队列故障测试还需要 `_queue_test` 数据库和专用 Redis。不要将测试指向 `tabdo_local`。完整命令与隔离约定见 [测试说明](testing.md)。
 

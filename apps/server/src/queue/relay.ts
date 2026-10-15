@@ -1,6 +1,6 @@
 import { createRelay as createBackendRelay } from "@tabdo/backend/automation/outbox";
 import type { OutboxDelivery } from "@tabdo/backend/automation/outbox";
-import type { QueuePublisher } from "@tabdo/core/queue";
+import type { QueuePublisher } from "@tabdo/queue";
 import type { AutomationDelivery } from "@tabdo/shared";
 import { getDatabase } from "../resources/scope.js";
 import { positiveInt } from "./config.js";

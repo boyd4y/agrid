@@ -21,7 +21,6 @@ const configuration = [
   "AUTH_REQUIRED=true",
   "FILE_STORAGE_DRIVER=local",
   `FILE_STORAGE_LOCAL_DIR=${fileURLToPath(new URL("data/files", root))}`,
-  "NATIVE_EXECUTION_ADAPTER=embedded",
   "",
 ].join("\n");
 try {

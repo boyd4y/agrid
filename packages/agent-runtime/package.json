@@ -10,12 +10,6 @@
       "import": "./dist/execution.js",
       "default": "./dist/execution.js"
     },
-    "./ports": {
-      "types": "./src/ports.ts",
-      "development": "./src/ports.ts",
-      "import": "./dist/ports.js",
-      "default": "./dist/ports.js"
-    },
     "./errors": {
       "types": "./src/errors.ts",
       "development": "./src/errors.ts",
@@ -28,33 +22,87 @@
       "import": "./dist/workspace.js",
       "default": "./dist/workspace.js"
     },
-    "./gateway": {
-      "types": "./src/gateway.ts",
-      "development": "./src/gateway.ts",
-      "import": "./dist/gateway.js",
-      "default": "./dist/gateway.js"
+    "./services": {
+      "types": "./src/services.ts",
+      "development": "./src/services.ts",
+      "import": "./dist/services.js",
+      "default": "./dist/services.js"
     },
-    "./batched-output": {
-      "types": "./src/batched-output.ts",
-      "development": "./src/batched-output.ts",
-      "import": "./dist/batched-output.js",
-      "default": "./dist/batched-output.js"
+    "./harness/agent": {
+      "types": "./src/harness/agent.ts",
+      "development": "./src/harness/agent.ts",
+      "import": "./dist/harness/agent.js",
+      "default": "./dist/harness/agent.js"
+    },
+    "./harness/pi": {
+      "types": "./src/harness/pi.ts",
+      "development": "./src/harness/pi.ts",
+      "import": "./dist/harness/pi.js",
+      "default": "./dist/harness/pi.js"
+    },
+    "./harness/codex": {
+      "types": "./src/harness/codex.ts",
+      "development": "./src/harness/codex.ts",
+      "import": "./dist/harness/codex.js",
+      "default": "./dist/harness/codex.js"
+    },
+    "./harness/claude-code": {
+      "types": "./src/harness/claude-code.ts",
+      "development": "./src/harness/claude-code.ts",
+      "import": "./dist/harness/claude-code.js",
+      "default": "./dist/harness/claude-code.js"
+    },
+    "./harness/types": {
+      "types": "./src/harness/types.ts",
+      "development": "./src/harness/types.ts",
+      "import": "./dist/harness/types.js",
+      "default": "./dist/harness/types.js"
+    },
+    "./sandbox/types": {
+      "types": "./src/sandbox/types.ts",
+      "development": "./src/sandbox/types.ts",
+      "import": "./dist/sandbox/types.js",
+      "default": "./dist/sandbox/types.js"
+    },
+    "./sandbox/local": {
+      "types": "./src/sandbox/local.ts",
+      "development": "./src/sandbox/local.ts",
+      "import": "./dist/sandbox/local.js",
+      "default": "./dist/sandbox/local.js"
+    },
+    "./sandbox/vercel": {
+      "types": "./src/sandbox/vercel.ts",
+      "development": "./src/sandbox/vercel.ts",
+      "import": "./dist/sandbox/vercel.js",
+      "default": "./dist/sandbox/vercel.js"
+    },
+    "./sandbox/workspace": {
+      "types": "./src/sandbox/workspace.ts",
+      "development": "./src/sandbox/workspace.ts",
+      "import": "./dist/sandbox/workspace.js",
+      "default": "./dist/sandbox/workspace.js"
     }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck:test": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@tabdo/core": "workspace:*",
     "@tabdo/backend": "workspace:*",
     "@tabdo/shared": "workspace:*",
-    "@tabdo/platform-node": "workspace:*",
     "@ai-sdk/harness": "1.0.152",
     "ai": "7.0.141",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@ai-sdk/harness-pi": "1.0.154",
+    "@ai-sdk/harness-codex": "1.0.154",
+    "@ai-sdk/harness-claude-code": "1.0.156",
+    "@ai-sdk/sandbox-vercel": "1.0.152"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@types/node": "^22.14.1"
   }
 }

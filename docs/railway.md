@@ -15,7 +15,7 @@ API 和 worker 都从仓库根目录构建 `Dockerfile.server`。在各 service 
 
 ## 共同环境变量
 
-两个服务配置相同的 `DATABASE_URL`、`REDIS_URL`、`QUEUE_PREFIX`、`BETTER_AUTH_SECRET`（随机 32+ 字符）、`BETTER_AUTH_URL`、`APP_URL`。URL 指向公开 API 域名，镜像同时提供 SPA。Railway 注入 `PORT`，镜像监听 `0.0.0.0`。默认 `NATIVE_EXECUTION_ADAPTER=embedded`，不额外部署 runner。
+两个服务配置相同的 `DATABASE_URL`、`REDIS_URL`、`QUEUE_PREFIX`、`BETTER_AUTH_SECRET`（随机 32+ 字符）、`BETTER_AUTH_URL`、`APP_URL`。URL 指向公开 API 域名，镜像同时提供 SPA。Railway 注入 `PORT`，镜像监听 `0.0.0.0`。API 直接执行聊天，worker 执行自动化与定时任务，两者使用同一官方 Harness 实现。
 
 上传文件使用标准 S3 兼容 bucket：设置 `FILE_STORAGE_DRIVER=s3` 和 `.env.example` 中的 endpoint、region、bucket、凭证。API/worker 共用 bucket，不能假定两个 Railway 服务共享本地磁盘。AgentMail 使用相同的 `INTEGRATION_ENCRYPTION_KEY`。
 

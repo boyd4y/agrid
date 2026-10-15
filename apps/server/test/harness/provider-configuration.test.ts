@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
-import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
-import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
-import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
+import { createDiskWorkspace } from "@tabdo/agent-runtime/sandbox/workspace";
+import { createHarnessAgent } from "@tabdo/agent-runtime/harness/agent";
+import { createPiAdapter } from "@tabdo/agent-runtime/harness/pi";
+import { createLocalSandboxAdapter } from "@tabdo/agent-runtime/sandbox/local";
 import { resolveNativeConfiguration, resolvePiModelId } from "@tabdo/backend/agent/runtime-configuration";
 
 function provider(baseUrl: string, overrides: Record<string, string | undefined> = {}) {

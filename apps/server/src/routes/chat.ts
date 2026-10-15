@@ -22,9 +22,8 @@ import { beginNativeRun } from "../harness/runs.js";
 import { HTTPException } from "hono/http-exception";
 import { questionContinuation, resumeQuestionRun } from "../harness/questions.js";
 import type { NativeQuestionResultRequest } from "@tabdo/shared";
-import type { NativeRunStreamFactory } from "../harness/run-response.js";
 
-export function createChatRoute(streamRun: NativeRunStreamFactory = async input => createNativeChatStream(input)) {
+export function createChatRoute() {
 const chatRoute = new Hono();
 
 chatRoute.get("/status", (c) => {
@@ -85,7 +84,7 @@ chatRoute.post("/", async (c) => {
     const resumed = body.intent === "tool-result" ? await resumeQuestionRun(lease, actor, record, body as NativeQuestionResultRequest) : undefined;
     const { id: userMessageId, ...userContent } = lastUser ?? { id: "", role: "user", parts: [] };
     const run = resumed?.run ?? await beginNativeRun(lease, actor, record, { id: userMessageId, parentId: null, format: "ai-sdk/v6", content: userContent }, profile.memberId);
-    return createUIMessageStreamResponse({ stream: await streamRun({
+    return createUIMessageStreamResponse({ stream: createNativeChatStream({
       actor, lease, record, run, harness, modelId, piModel, instructions: system, agentsDocument,
       // The claimed Run owns cancellation. Closing the browser detaches its
       // projection; explicit stop is persisted through the Run cancel API.
@@ -95,7 +94,7 @@ chatRoute.post("/", async (c) => {
       // Once streaming starts, HTTP disconnects no longer cancel this Run.
       signal: c.req.raw.signal.aborted ? AbortSignal.abort(new DOMException("启动已取消", "AbortError")) : undefined,
       metadata: { agentId: profile.memberId, harness, modelId, runtime: mode },
-    }, { context: context.context, request: c.req.raw }), consumeSseStream: ({ stream }) => { void consumeStream({ stream }); } });
+    }), consumeSseStream: ({ stream }) => { void consumeStream({ stream }); } });
   } catch (error) {
     await releaseRuntimeLease(lease);
     throw error;

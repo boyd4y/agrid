@@ -147,7 +147,7 @@ export async function appendNativeExecutionChunks(deps: DatabaseDependencies, lo
   return appendNativeExecutionValues(deps,loaded,chunks,1024 * 1024,transaction);
 }
 
-/** Preserve the existing gateway's 48MiB single-chunk capability for large tool results. */
+/** Allow existing large tool results within the durable output size limit. */
 export async function appendNativeExecutionChunk(deps: DatabaseDependencies, loaded: LoadedNativeExecution, chunk: UIMessageChunk, transaction?: Transaction): Promise<void> {
   return appendNativeExecutionValues(deps,loaded,[chunk],48 * 1024 * 1024,transaction);
 }

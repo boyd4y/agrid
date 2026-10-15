@@ -1,6 +1,6 @@
 # @tabdo/backend
 
-Shared Tabdo business code, separate from `core` contracts and the Node implementation package. This package owns the PostgreSQL schema, explicit database/auth factories, table commands, automation configuration/events/schedules/outbox, and private Run/Session repositories.
+Tabdo business code, separate from queue/storage implementations and the Node Harness lifecycle. This package owns the PostgreSQL schema, explicit database/auth factories, table commands, automation configuration/events/schedules/outbox, and private Run/Session repositories.
 
 - `@tabdo/backend/database`: `createDatabase({ connectionString, poolMax, prepare? })` returns Drizzle, its Postgres.js client and an owned `close()` method. No environment lookup or global pool.
 - `@tabdo/backend/auth`: `createPlatformAuth({ database, appUrl, baseURL, secret, production, hooks?, sendInviteEmail })`. Applications use the same native Better Auth/organization configuration; no replacement identity implementation.

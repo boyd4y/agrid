@@ -11,7 +11,7 @@ import { failNativeRun } from "../harness/runs.js";
 import { releaseRuntimeLease } from "../harness/store.js";
 import { appendNativeExecutionChunk, claimNativeExecution, recoverAcceptedNativeExecution, settleNativeExecution } from "./repository.js";
 
-/** Rebuild an accepted operation in a fresh process; only the persistent reference crosses transport. */
+/** Execute a durable accepted automation/task operation in the Node worker. */
 export async function executeAcceptedNativeRun(executionId: string, signal?: AbortSignal): Promise<{ claimed: boolean }> {
   const loaded = await recoverAcceptedNativeExecution(executionId);
   if (loaded.execution.status !== "accepted") return { claimed: false };

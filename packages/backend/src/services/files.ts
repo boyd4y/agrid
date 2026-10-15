@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import type { ObjectStorage } from "@tabdo/core/storage";
+import type { ObjectStorage } from "@tabdo/storage";
 import type { RuntimeDependencies } from "../dependencies.js";
 import type { Database } from "../db/types.js";
 import { columns, fileObjects, tables } from "../db/schema.js";

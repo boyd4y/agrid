@@ -636,4 +636,5 @@ export const automationAgentActions = pgTable("automation_agent_actions", {
 // Durable execution attempts and replayable projection are platform-owned.
 export { agentExecutions, agentExecutionChunks } from "./execution-schema.js";
 
+// Retired gateway tables are retained for migration compatibility; no runtime uses them.
 export { agentExecutionGateways, agentExecutionToolCalls } from "./gateway-schema.js";

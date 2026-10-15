@@ -19,10 +19,9 @@ import { getAuth, withPlatformResources, type PlatformResources } from "./resour
 import { checkSchemaReady } from "./db/schema-ready.js";
 import { nativeDrainStarted, registerNativeRun } from "./harness/drain.js";
 
-import type { NativeRunStreamFactory } from "./harness/run-response.js";
 
 /** Shared route assembly. The caller owns the supplied resources' lifetime. */
-export function createApp(options: { appUrl: string; resources: PlatformResources; streamNativeRun?: NativeRunStreamFactory }) {
+export function createApp(options: { appUrl: string; resources: PlatformResources }) {
   const appUrl = options.appUrl;
   const resources = Object.freeze({ database: options.resources.database, auth: options.resources.auth });
   const app = new Hono();
@@ -63,7 +62,7 @@ export function createApp(options: { appUrl: string; resources: PlatformResource
   app.route("/api/tables", tablesRoute);
   app.route("/api", rowsRoute);
   app.route("/api", columnsRoute);
-  app.route("/api/chat", createChatRoute(options.streamNativeRun));
+  app.route("/api/chat", createChatRoute());
   app.route("/api/threads", threadsRoute);
   app.route("/api/members", membersRoute);
   app.route("/api/commands", commandsRoute);

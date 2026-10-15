@@ -8,7 +8,9 @@
       "DOM",
       "DOM.Iterable"
     ],
-    "types": [],
+    "types": [
+      "node"
+    ],
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,

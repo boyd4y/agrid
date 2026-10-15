@@ -1,19 +1,7 @@
 import { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/backend/checkpoints";
 export { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/backend/checkpoints";
 
-/** Disk snapshot capabilities; implementations own Node filesystem access. */
-export interface SnapshotWorkspace {
-  readonly root: string;
-  getAllPaths(): string[];
-  lstat(path: string): Promise<{ mode: number; size: number; isDirectory: boolean; isSymbolicLink: boolean; isFile: boolean }>;
-  readFileBuffer(path: string): Promise<Uint8Array>;
-  readlink(path: string): Promise<string>;
-  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
-  writeFile(path: string, content: Uint8Array): Promise<void>;
-  chmod(path: string, mode: number): Promise<void>;
-  symlink(target: string, path: string): Promise<void>;
-  dispose(): Promise<void>;
-}
+import { createDiskWorkspace, type DiskWorkspace } from "./sandbox/workspace.js";
 
 const MAX_BYTES = 32 * 1024 * 1024;
 function encodeBase64(bytes: Uint8Array): string {
@@ -23,7 +11,7 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 
 /** Snapshot entry paths use a stable logical root across temporary directories. */
-function logicalPath(fs: SnapshotWorkspace, path: string): string {
+function logicalPath(fs: DiskWorkspace, path: string): string {
   if (path === fs.root) return "/";
   if (!path.startsWith(`${fs.root}/`)) throw new Error("智能体工作区快照路径无效");
   return path.slice(fs.root.length);
@@ -32,7 +20,7 @@ function validPath(path: string): boolean {
   return path.startsWith("/") && !path.includes("//") && !path.includes("\0") &&
     !path.split("/").some(part => part === "." || part === "..");
 }
-function diskPath(fs: SnapshotWorkspace, path: string): string {
+function diskPath(fs: DiskWorkspace, path: string): string {
   if (!validPath(path)) throw new Error("智能体工作区快照路径无效");
   return path === "/" ? fs.root : `${fs.root}${path}`;
 }
@@ -48,7 +36,7 @@ function validateLink(path: string, target: string): void {
 }
 
 /** Traverse only the owned disk root. Links are recorded, never traversed. */
-export async function snapshotWorkspace(fs: SnapshotWorkspace): Promise<WorkspaceSnapshot> {
+export async function snapshotWorkspace(fs: DiskWorkspace): Promise<WorkspaceSnapshot> {
   const entries: WorkspaceSnapshot = [];
   let bytes = 0;
   const paths = fs.getAllPaths();
@@ -76,10 +64,7 @@ export async function snapshotWorkspace(fs: SnapshotWorkspace): Promise<Workspac
   return workspaceSnapshotSchema.parse(entries);
 }
 
-export async function restoreWorkspace<Workspace extends SnapshotWorkspace>(
-  snapshot: WorkspaceSnapshot | null | undefined,
-  options: { createWorkspace(): Promise<Workspace> },
-): Promise<Workspace> {
+export async function restoreWorkspace(snapshot?: WorkspaceSnapshot | null): Promise<DiskWorkspace> {
   const entries = workspaceSnapshotSchema.parse(snapshot ?? []);
   const seen = new Set<string>();
   const links = new Set(entries.filter(entry => entry.type === "symlink").map(entry => entry.path));
@@ -109,7 +94,7 @@ export async function restoreWorkspace<Workspace extends SnapshotWorkspace>(
       files.set(entry.path, content);
     }
   }
-  const fs = await options.createWorkspace();
+  const fs = await createDiskWorkspace();
   try {
     // Rebase the previous virtual '/' and all later disk roots to this new root.
     // Absolute link targets are rebased too; relative links retain their meaning.

@@ -1,5 +1,5 @@
 import { executeNativeRun as executeSharedNativeRun, type NativeRunInput, type NativeRunOutput, type NativeRunDurableOutput } from "@tabdo/agent-runtime/execution";
-import type { NativeExecutorPorts } from "@tabdo/agent-runtime/ports";
+import type { NativeRunServices } from "@tabdo/agent-runtime/services";
 import { HTTPException } from "hono/http-exception";
 import { createNativeAgent, openNativeSandbox } from "./runtime.js";
 import { chatRunLimits } from "./limits.js";
@@ -15,9 +15,9 @@ import { parkQuestionSandbox, takeQuestionSandbox } from "./question-sandboxes.j
 
 export type { NativeRunInput, NativeRunOutput, NativeRunDurableOutput };
 
-/** Node composition only. The same official executor also runs inside CF Sandbox. */
+/** Assemble business services for the shared Node Harness execution lifecycle. */
 export async function executeNativeRun(options: NativeRunInput, output?: NativeRunOutput, durableOutput?: NativeRunDurableOutput): Promise<void> {
-  const ports: NativeExecutorPorts = {
+  const services: NativeRunServices = {
     createNativeAgent, openNativeSandbox, nativeToolDenial, chatErrorText, normalizeChatToolErrors,
     completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease,
     recordRunActivity, failNativeRun, runCancellationRequested, snapshotWorkspace,
@@ -32,5 +32,5 @@ export async function executeNativeRun(options: NativeRunInput, output?: NativeR
     }, { userId: options.actor.userId, organizationId: options.actor.organizationId }),
     saveMessage: message => withRuntimeLease(options.lease, tx => saveMessageInTransaction(tx, options.lease.threadId, options.actor, message, true)),
   };
-  await executeSharedNativeRun(ports, options, output, durableOutput);
+  await executeSharedNativeRun(services, options, output, durableOutput);
 }

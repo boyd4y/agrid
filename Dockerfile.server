@@ -2,11 +2,11 @@ FROM node:24.14.1-bookworm-slim AS build
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/core/package.json packages/core/package.json
+COPY packages/queue/package.json packages/queue/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/backend/package.json packages/backend/package.json
-COPY packages/platform-node/package.json packages/platform-node/package.json
+COPY packages/storage/package.json packages/storage/package.json
 COPY packages/agent-runtime/package.json packages/agent-runtime/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/client/package.json apps/client/package.json

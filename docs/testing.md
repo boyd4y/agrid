@@ -66,9 +66,9 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## 队列进程与 Redis 故障测试
 
-能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/core --filter @tabdo/platform-node test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Node 服务使用既有 PG/Redis 测试契约。
+能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/agent-runtime test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Node 服务使用既有 PG/Redis 测试契约。
 
-`pnpm --filter @tabdo/platform-node test` 在独立包内验证真实 Pi 工具循环、原生历史和真实文件工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
+`pnpm --filter @tabdo/agent-runtime test` 在独立包内验证真实 Pi 工具循环、原生历史和真实文件工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
 
 专用 PostgreSQL 数据库名称必须以 `_queue_test` 结尾，并先执行迁移；Redis 使用专用实例与 `agrid-queue-test` 前缀。下面使用本地已有测试实例，绝不能改成业务数据库/Redis：
 

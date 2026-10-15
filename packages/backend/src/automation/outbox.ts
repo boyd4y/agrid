@@ -1,7 +1,7 @@
 import type { PlatformDatabase } from "../db/factory.js";
 import { sql } from "drizzle-orm";
 import { automationDeliveryId, parseAutomationDelivery, type AutomationDelivery } from "@tabdo/shared";
-import type { QueuePublisher } from "@tabdo/core/queue";
+import type { QueuePublisher } from "@tabdo/queue";
 
 export type OutboxDelivery = { id: string; payload: AutomationDelivery; generation: number; claim_token: string; attempts: number };
 

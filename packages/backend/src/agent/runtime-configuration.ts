@@ -1,5 +1,5 @@
 import { ServiceError } from "../errors.js";
-import { HarnessConfigurationError } from "@tabdo/core/harness";
+import { HarnessConfigurationError } from "./contracts.js";
 import { DEFAULT_PI_OUTPUT_TOKENS, PI_THINKING_LEVELS, isDeepSeekEndpoint, isKnownDeepSeekReasoningModel, type PiThinkingLevel, type PiModelMetadata } from "./model-contracts.js";
 import { NATIVE_DEFAULT_MODEL, type HarnessId, type RuntimeMode, type RuntimeEnvironment } from "./contracts.js";
 

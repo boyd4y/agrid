@@ -4,3 +4,7 @@ export const NATIVE_DEFAULT_MODEL = "__harness_default__";
 
 export type RuntimeMode = "local" | "sandbox";
 export type RuntimeEnvironment = Readonly<Record<string, string | undefined>>;
+
+export class HarnessConfigurationError extends Error {
+  constructor(message: string) { super(message); this.name = "HarnessConfigurationError"; }
+}

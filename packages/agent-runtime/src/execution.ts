@@ -1,12 +1,12 @@
 import { toUIMessageStream, stepCountIs, type TextStreamPart, type ToolResultPart, type ToolSet, type UIMessage, type UIMessageChunk } from "ai";
 import type { HarnessAgentSession, HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
 import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
-import type { SnapshotWorkspace } from "./workspace.js";
+import type { DiskWorkspace } from "./sandbox/workspace.js";
 import type { Actor } from "@tabdo/backend/auth/actor";
 import type { RuntimeRecord, RuntimeLease } from "@tabdo/backend/agent/runtime-store";
 import type { AgentRun } from "@tabdo/backend/agent/runs";
 import type { ChatActivity, AgentRunStatus } from "@tabdo/shared";
-import type { NativeExecutorPorts, PiModelMetadata, PiCompletion, HarnessId } from "./ports.js";
+import type { NativeRunServices, PiModelMetadata, PiCompletion, HarnessId } from "./services.js";
 import { QUESTION_NOT_INVOKED } from "@tabdo/backend/checkpoints";
 
 function hasSavedPiJournal(record: RuntimeRecord): boolean {
@@ -59,7 +59,7 @@ export interface NativeRunDurableOutput {
 }
 
 /** Await native completion, atomic checkpoint persistence and lease cleanup. */
-export async function executeNativeRun(ports: NativeExecutorPorts, options: NativeRunInput, output?: NativeRunOutput, durableOutput?: NativeRunDurableOutput): Promise<void> {
+export async function executeNativeRun(services: NativeRunServices, options: NativeRunInput, output?: NativeRunOutput, durableOutput?: NativeRunDurableOutput): Promise<void> {
   let delivery = output, outputFailed = false;
   let outputWrites: Promise<void> = Promise.resolve();
   // SDK lifecycle callbacks and the projection reader can emit concurrently.
@@ -68,24 +68,24 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     const operation = outputWrites.then(async () => {
       try { await durableOutput?.write(chunk); }
       catch (error) {
-        outputFailed = true;errorText = ports.chatErrorText(error);control.abort(error);
+        outputFailed = true;errorText = services.chatErrorText(error);control.abort(error);
         throw error;
       }
       try { delivery?.write(chunk); }
       catch {
         // A closed ephemeral transport cannot cancel an accepted operation.
         delivery = undefined;
-        ports.logger.warn("agent.projection.detached");
+        services.logger.warn("agent.projection.detached");
       }
     });
     outputWrites = operation;
     return operation;
   } };
-  const releaseNativeRun = ports.registerNativeRun();
+  const releaseNativeRun = services.registerNativeRun();
   const control = new AbortController();
   const signal = AbortSignal.any([control.signal, ...(options.signal ? [options.signal] : [])]);
-  let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: SnapshotWorkspace | undefined;
-  let agent: ReturnType<NativeExecutorPorts["createNativeAgent"]> | undefined;
+  let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: DiskWorkspace | undefined;
+  let agent: ReturnType<NativeRunServices["createNativeAgent"]> | undefined;
   let step = options.toolResultContinuations ? options.run.activity?.step ?? 0 : 0, completedTools = options.toolResultContinuations ? options.run.activity?.completedTools ?? 0 : 0, activity: ChatActivity | undefined, errorText: string | undefined;
   let parkedQuestion = false;
   let piCompletion: PiCompletion | undefined;
@@ -103,7 +103,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
   let phaseWrites = Promise.resolve();
   const pendingTools = new Set<Promise<unknown>>();
   const activeTools = new Map<string, string>();
-  const limits = ports.limits;
+  const limits = services.limits;
   const abortTimeout = (reason: string) => {
     if (signal.aborted) return;
     timedOut = true;timeoutReason = reason;control.abort(new DOMException(reason, "TimeoutError"));
@@ -122,13 +122,13 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     clearTimeout(firstOutputDeadline);clearTimeout(chunkDeadline);
     chunkDeadline = deadline(limits.timeout.chunkMs, "模型输出流超时");
   };
-  const pollMs = Math.max(200, Math.min(10_000, ports.pollMs ?? 2000));
+  const pollMs = Math.max(200, Math.min(10_000, services.pollMs ?? 2000));
   const pollCancellation = async () => {
     try {
-      if (await ports.runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
+      if (await services.runCancellationRequested(options.run.id)) { cancelled = true;control.abort(new DOMException("用户停止执行", "AbortError")); }
     } catch (error) {
-      if (ports.isOwnershipConflict(error)) { lostLease = true;errorText = ports.chatErrorText(error);control.abort(error); }
-      else ports.logger.warn("agent.cancel.poll", ports.chatErrorText(error));
+      if (services.isOwnershipConflict(error)) { lostLease = true;errorText = services.chatErrorText(error);control.abort(error); }
+      else services.logger.warn("agent.cancel.poll", services.chatErrorText(error));
     }
   };
   const heartbeat = setInterval(async () => {
@@ -137,10 +137,10 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     try {
       await pollCancellation();
       if (Date.now() - lastRenewal >= 15_000) {
-        if (!await ports.renewRuntimeLease(options.lease)) { lostLease = true;control.abort(new Error("运行已被其他实例接管")); }
+        if (!await services.renewRuntimeLease(options.lease)) { lostLease = true;control.abort(new Error("运行已被其他实例接管")); }
         lastRenewal = Date.now();
       }
-    } catch (error) { errorText = ports.chatErrorText(error);control.abort(error); }
+    } catch (error) { errorText = services.chatErrorText(error);control.abort(error); }
     finally { heartbeatBusy = false; }
   }, pollMs);
 
@@ -149,16 +149,16 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     activity = { threadId: options.lease.threadId, runId: options.run.id, phase, step, startedAt: options.run.startedAt.getTime(), updatedAt: Date.now(), toolName, completedTools };
     const update = activity;
     phaseWrites = phaseWrites.then(async () => {
-      if (!await ports.recordRunActivity(options.lease, options.run.id, update)) return;
+      if (!await services.recordRunActivity(options.lease, options.run.id, update)) return;
       await writer.write({ type: "data-chat-activity", data: update, transient: true });
     }).catch((error) => {
-      if (ports.isOwnershipConflict(error)) { errorText = ports.chatErrorText(error);lostLease = true;control.abort(error); }
-      else ports.logger.warn("agent.activity.sync", ports.chatErrorText(error));
+      if (services.isOwnershipConflict(error)) { errorText = services.chatErrorText(error);lostLease = true;control.abort(error); }
+      else services.logger.warn("agent.activity.sync", services.chatErrorText(error));
     });
     return phaseWrites;
   };
-  const { tools, projectErrors, failures } = ports.hostTools(options.tools, signal, pendingTools);
-  const lifecycle: NonNullable<Parameters<NativeExecutorPorts["createNativeAgent"]>[0]["lifecycle"]> = {
+  const { tools, projectErrors, failures } = services.hostTools(options.tools, signal, pendingTools);
+  const lifecycle: NonNullable<Parameters<NativeRunServices["createNativeAgent"]>[0]["lifecycle"]> = {
     onStart: async () => { await report("waiting-model"); },
     onStepStart: async ({ stepNumber }) => { clearTimeout(stepDeadline);stepDeadline = deadline(limits.timeout.stepMs, "本轮步骤执行超时");step = stepNumber + 1;await report("waiting-model"); },
     onLanguageModelCallStart: async () => { waitForModelOutput(step);await report("waiting-model"); },
@@ -166,14 +166,14 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     onToolExecutionStart: async ({ toolCall }) => { modelActive = false;clearModelDeadlines();activeTools.set(toolCall.toolCallId, toolCall.toolName);await report("tool", toolCall.toolName); },
     onToolExecutionEnd: async ({ toolCall, toolOutput }) => {
       activeTools.delete(toolCall.toolCallId);
-      if (toolOutput.type === "tool-result" && !ports.nativeToolDenial(toolOutput.output) && !failures.has(toolCall.toolCallId)) completedTools++;
+      if (toolOutput.type === "tool-result" && !services.nativeToolDenial(toolOutput.output) && !failures.has(toolCall.toolCallId)) completedTools++;
       const remaining = activeTools.values().next().value;
       await report(remaining ? "tool" : "waiting-model", remaining);
     },
     onStepEnd: async ({ toolResults }) => {
       modelActive = false;clearTimeout(stepDeadline);clearModelDeadlines();
       for (const result of toolResults) {
-        if (failures.has(result.toolCallId) || ports.nativeToolDenial(result.output)) continue;
+        if (failures.has(result.toolCallId) || services.nativeToolDenial(result.output)) continue;
         if (!/^(create_|update_|rename_|add_|batch_|delete_|set_|remove_|reorder_|move_card)/.test(result.toolName)) continue;
         const output = result.output as { affectedTableIds?: string[]; tableId?: string; id?: string } | undefined;
         const ids = output?.affectedTableIds ?? (output?.tableId ? [output.tableId] : result.toolName === "create_table" && output?.id ? [output.id] : undefined);
@@ -201,10 +201,10 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
       } finally {
         // A failed output barrier must not strand the native session or lease.
         // Pi stop before its first native turn may return data:{}; never commit it.
-        if (session && !invocationStarted) await session.stop().catch((error) => ports.logger.error("agent.session.cleanup", ports.chatErrorText(error)));
-        if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => ports.logger.error("agent.sandbox.stop", ports.chatErrorText(error)));
-        if (fs && !parkedQuestion) await fs.dispose().catch((error) => ports.logger.error("agent.workspace.cleanup", ports.chatErrorText(error)));
-        await ports.releaseRuntimeLease(options.lease);
+        if (session && !invocationStarted) await session.stop().catch((error) => services.logger.error("agent.session.cleanup", services.chatErrorText(error)));
+        if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => services.logger.error("agent.sandbox.stop", services.chatErrorText(error)));
+        if (fs && !parkedQuestion) await fs.dispose().catch((error) => services.logger.error("agent.workspace.cleanup", services.chatErrorText(error)));
+        await services.releaseRuntimeLease(options.lease);
       }
     } finally { releaseNativeRun(); }
   };
@@ -216,7 +216,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     // The SDK alone decides when a client tool needs a result. Detach
     // captures its official continuation without stopping a waiting bridge.
     const resumeState = session.hasUnfinishedTurn() ? await session.detach() : await session.stop();
-    const workspace = fs ? await ports.snapshotWorkspace(fs) : null;
+    const workspace = fs ? await services.snapshotWorkspace(fs) : null;
     if (options.harness === "pi" && !hasSavedPiJournal({ ...options.record, resumeState, workspace }))
       throw new Error("会话结果未完整保存，历史消息已保留；请新建对话继续。");
     // Pi's native stop saves its own journal. Missing it must not become empty history on reload.
@@ -224,14 +224,14 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     const { id, ...content } = message;
     await outputWrites;
     await durableOutput?.flush?.();
-    await ports.completeRuntimeTurn(options.lease, options.actor, options.record.id, {
+    await services.completeRuntimeTurn(options.lease, options.actor, options.record.id, {
       resumeState, workspace, sandboxId: sandbox!.id,
       userMessageId: options.run.userMessageId, assistantMessageId: id,
       status: status === "completed" ? "ready" : status === "failed" ? "failed" : "interrupted", error: errorText,
     }, { id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content }, { id: options.run.id, status, error: errorText });
-    if (status === "suspended" && ports.questionContinuation({ ...options.record, resumeState })) {
+    if (status === "suspended" && services.questionContinuation({ ...options.record, resumeState })) {
       const questionAgent = agent!, questionSandbox = sandbox!;
-      ports.parkQuestionSandbox(options.record.id, { sandbox: questionSandbox, fs, discard: async () => {
+      services.parkQuestionSandbox(options.record.id, { sandbox: questionSandbox, fs, discard: async () => {
         // A detached handle cannot be destroyed. Recreate through the SDK
         // without invoking a turn, then discard its native parked runtime.
         try {
@@ -246,7 +246,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     await report("finished");
   };
   const startupFailure = async (error: unknown) => {
-    errorText = ports.chatErrorText(error);
+    errorText = services.chatErrorText(error);
     cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
     if (options.toolResultContinuations) {
       // The original turn already executed. Answers were committed before
@@ -256,7 +256,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
       const message = options.messages.at(-1)!;
       if (session && invocationStarted) {
         try { await persist(message, status); }
-        catch (checkpointError) { errorText = ports.chatErrorText(checkpointError);await ports.failNativeRun(options.lease, options.run.id, errorText); }
+        catch (checkpointError) { errorText = services.chatErrorText(checkpointError);await services.failNativeRun(options.lease, options.run.id, errorText); }
       } else {
         const { id, ...originalContent } = message;
         const previousMetadata = originalContent.metadata && typeof originalContent.metadata === "object" && !Array.isArray(originalContent.metadata)
@@ -265,7 +265,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
           nativeQuestionInvocation: { proof: QUESTION_NOT_INVOKED, runId: options.run.id, fence: options.lease.fence,
             toolCallIds: options.toolResultContinuations.map(result => result.toolCallId).sort() },
         } } : originalContent;
-        await ports.completeRuntimeTurn(options.lease, options.actor, options.record.id, {
+        await services.completeRuntimeTurn(options.lease, options.actor, options.record.id, {
           resumeState: options.record.resumeState as HarnessAgentResumeSessionState, workspace: options.record.workspace,
           sandboxId: options.record.sandboxId!, userMessageId: options.run.userMessageId, assistantMessageId: id,
           status: status === "cancelled" ? "interrupted" : "failed", error: errorText,
@@ -281,16 +281,16 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     const message: UIMessage = { id: options.run.assistantMessageId, role: "assistant", parts: text ? [{ type: "text", text }] : [] };
     if (uninvoked) {
       await phaseWrites;
-      await ports.completeUninvokedPiRun(options.lease, options.actor, options.record.id,
+      await services.completeUninvokedPiRun(options.lease, options.actor, options.record.id,
         { id: message.id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: message.parts } },
         { id: options.run.id, status: cancelled ? "cancelled" : "failed", error: errorText });
       await report("finished");
     } else if (session && invocationStarted) {
       try { await persist(message, cancelled ? "cancelled" : "failed"); }
-      catch (checkpointError) { errorText = ports.chatErrorText(checkpointError);await ports.failNativeRun(options.lease, options.run.id, errorText); }
+      catch (checkpointError) { errorText = services.chatErrorText(checkpointError);await services.failNativeRun(options.lease, options.run.id, errorText); }
     } else {
-      await ports.saveMessage({ id: message.id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: message.parts } });
-      await ports.failNativeRun(options.lease, options.run.id, errorText);
+      await services.saveMessage({ id: message.id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: message.parts } });
+      await services.failNativeRun(options.lease, options.run.id, errorText);
       await report("finished");
     }
     await writer.write({ type: "start", messageId: message.id });
@@ -306,7 +306,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     signal.throwIfAborted();
     if (options.harness === "pi" && options.record.resumeState && !safeStartupState)
       throw new Error("此对话暂时无法继续，历史消息已保留；请新建对话继续。");
-    agent = ports.createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
+    agent = services.createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
       instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
       runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
       stopWhen: limits.steps === undefined ? undefined : stepCountIs(limits.steps),
@@ -317,9 +317,9 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
         return text;
       },
     });
-    let opened: Awaited<ReturnType<NativeExecutorPorts["openNativeSandbox"]>>;
-    try { opened = (options.toolResultContinuations ? ports.takeQuestionSandbox(options.record.id) : undefined)
-      ?? await ports.openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
+    let opened: Awaited<ReturnType<NativeRunServices["openNativeSandbox"]>>;
+    try { opened = (options.toolResultContinuations ? services.takeQuestionSandbox(options.record.id) : undefined)
+      ?? await services.openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
     catch (error) {
       // Local restore failures describe damaged history, not a retryable submission.
       if (options.record.resumeState && options.record.mode === "local" && !signal.aborted) safeStartupState = false;
@@ -355,14 +355,14 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
       controller.enqueue({ type: "text-delta", id: "run-note", text: `\n\n系统提示：${text}` });
       controller.enqueue({ type: "text-end", id: "run-note" });
     };
-    const stream = result.stream.pipeThrough(projectErrors()).pipeThrough(ports.normalizeChatToolErrors()).pipeThrough(new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
+    const stream = result.stream.pipeThrough(projectErrors()).pipeThrough(services.normalizeChatToolErrors()).pipeThrough(new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
       async transform(part, controller) {
         if (part.type === "start-step") streamedStep++;
         if (["text-delta", "reasoning-delta", "tool-input-delta"].includes(part.type)) modelOutput();
         if (part.type === "text-delta" && part.text.trim()) await report("writing");
         if (part.type === "reasoning-delta") await report("reasoning");
         if (part.type === "finish" || part.type === "abort" || part.type === "error") { modelActive = false;clearModelDeadlines();clearTimeout(stepDeadline); }
-        if (part.type === "error") errorText = ports.chatErrorText(part.error);
+        if (part.type === "error") errorText = services.chatErrorText(part.error);
         if (part.type === "abort") {
           cancelled ||= Boolean(options.signal?.aborted) && !timedOut;
           errorText ||= timedOut ? timeoutReason : lostLease ? "运行已被接管" : "已停止执行";
@@ -381,7 +381,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
     }));
     projectionStarted = true;
     const output = toUIMessageStream({ stream, tools: agent.tools, originalMessages: options.messages,
-      generateMessageId: () => options.run.assistantMessageId, onError: ports.chatErrorText,
+      generateMessageId: () => options.run.assistantMessageId, onError: services.chatErrorText,
       messageMetadata: ({ part }) => part.type === "finish-step" ? { ...options.metadata, runId: options.run.id, ...(piCompletion ? { completion: piCompletion } : {}) } : undefined,
       onFinish: async ({ responseMessage, outcome, isCancelled }) => {
         try {
@@ -389,8 +389,8 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
           const status: AgentRunStatus = cancelled || options.signal?.aborted ? "cancelled" : errorText || timedOut || lostLease || outcome.status === "failed" ? "failed" : session!.hasUnfinishedTurn() ? "suspended" : "completed";
           await persist(responseMessage, status);
         } catch (error) {
-          errorText = ports.chatErrorText(error);
-          await ports.failNativeRun(options.lease, options.run.id, errorText).catch(() => {});
+          errorText = services.chatErrorText(error);
+          await services.failNativeRun(options.lease, options.run.id, errorText).catch(() => {});
           throw error;
         }
       },
@@ -416,7 +416,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
       if (!closed) {
         // A malformed/erroring SDK stream can bypass its onFinish callback.
         // Record an executed failure, never certify it as an uninvoked retry.
-        try { await ports.failNativeRun(options.lease, options.run.id, ports.chatErrorText(error)); }
+        try { await services.failNativeRun(options.lease, options.run.id, services.chatErrorText(error)); }
         finally { await cleanup(); }
       }
       throw error;
