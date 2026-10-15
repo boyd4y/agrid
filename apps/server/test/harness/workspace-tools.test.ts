@@ -68,7 +68,7 @@ test("native harness discovers real member identities, assigns person and keeps 
     assert(!JSON.stringify(requests).includes(outsiderId));
     for (const name of ["get_workspace", "list_members"]) assert(requests[0].tools?.some(tool => tool.function.name === name));
   } finally {
-    await session?.stop(); await opened?.sandbox.stop(); provider.closeAllConnections(); await new Promise<void>(resolve => provider.close(() => resolve()));
+    await session?.stop(); await opened?.sandbox.destroy(); provider.closeAllConnections(); await new Promise<void>(resolve => provider.close(() => resolve()));
     for (const id of [orgId, foreignOrg]) await db.delete(organization).where(eq(organization.id, id));
     for (const id of [actorId, ownerId, outsiderId]) await db.delete(user).where(eq(user.id, id));
     await client.end();

@@ -105,7 +105,7 @@ test("Pi startup failures and early cancellation retain native state and allow o
     const agent = createNativeAgent({ harness: "pi", mode: "local", modelId: "local-test", tools, skills: [], instructions: "Fixture" });
     const opened = await openNativeSandbox({ agent, mode: "local", sandboxId: record.sandboxId, hasResumeState: true, workspace: record.workspace });
     const session = await agent.createSession({ sessionId: record.sessionId, sandboxSession: opened.sandbox, resumeFrom: oldState as HarnessAgentResumeSessionState });
-    assert.deepEqual((await session.stop()).data, {}, "uninvoked SDK stop must never overwrite the old opaque state");await opened.sandbox.stop();
+    assert.deepEqual((await session.stop()).data, {}, "uninvoked SDK stop must never overwrite the old opaque state");await opened.sandbox.destroy();
     assert.equal(calls.length, 2);
 
     // Cancellation is durable before execute but is checked after actual createSession.

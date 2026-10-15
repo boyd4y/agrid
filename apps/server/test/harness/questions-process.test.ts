@@ -26,7 +26,7 @@ test("official Pi clean question continuation survives producer process exit wit
   const address = provider.address();assert(address && typeof address !== "string");const baseUrl = `http://127.0.0.1:${address.port}/v1`;
   const serverRoot = resolve(import.meta.dirname, "../..");
   const run = (mode: string) => new Promise<void>((resolve, reject) => {
-    const child = spawn(process.execPath, ["--import", "tsx", join(import.meta.dirname, "questions-process-worker.ts"), mode, baseUrl, stateFile, sessionId], { cwd: serverRoot, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(process.execPath, ["--conditions=development", "--import", "tsx", join(import.meta.dirname, "questions-process-worker.ts"), mode, baseUrl, stateFile, sessionId], { cwd: serverRoot, env: { PATH: process.env.PATH, NODE_ENV: "test" }, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";child.stdout.on("data", (part) => { output += part; });child.stderr.on("data", (part) => { output += part; });
     child.on("error", reject);child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`Question ${mode} exited ${code}: ${output}`)));
   });

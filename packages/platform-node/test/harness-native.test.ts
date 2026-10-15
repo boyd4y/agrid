@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { tool, jsonSchema } from "ai";
-import { InMemoryFs } from "just-bash";
+import { createDiskWorkspace } from "../src/sandbox/workspace.js";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
 import { createHarnessAgent } from "../src/harness/agent.js";
 import { createPiAdapter } from "../src/harness/pi.js";
@@ -27,7 +27,7 @@ test("standalone native agent executes a host tool and resumes native history wi
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const fs = new InMemoryFs(); await fs.mkdir("/project", { recursive: true });
+  const fs = await createDiskWorkspace(); await fs.mkdir("project", { recursive: true });
   const sandbox = await createLocalSandboxAdapter({ cwd: "/project", env: {}, createFilesystem: async () => fs }).create({ sandboxId: "standalone-fixture" });
   const makeAgent = () => createHarnessAgent(createPiAdapter({ providerId: "fixture", apiKey: "fixture-key",
     baseUrl: `http://127.0.0.1:${address.port}/v1`, model: { id: "fixture", contextWindow: 65536, maxTokens: 512, reasoning: false },

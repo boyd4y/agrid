@@ -1,6 +1,6 @@
 import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
 import type { ToolSet } from "ai";
-import type { InMemoryFs } from "just-bash";
+import type { DiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
 import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { assertSandboxCompatibility, type HarnessAdapter, type NativeAgent, type NativeAgentSettings } from "@tabdo/platform-node/harness/types";
 import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
@@ -77,7 +77,7 @@ export async function openNativeSandbox(options: {
   workspace?: WorkspaceSnapshot | null;
   signal?: AbortSignal;
   env?: Environment;
-}): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: InMemoryFs }> {
+}): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: DiskWorkspace }> {
   if (options.mode === "local") {
     if (options.hasResumeState && !options.workspace)
       throw new HTTPException(409, {

@@ -61,10 +61,10 @@ Harness 1.0.149 会隐藏 host tool 参数校验原因，且忽略继承的 `str
 
 | 模式 | 当前 adapter | 文件和命令能力 |
 | --- | --- | --- |
-| local | Pi host runtime + 官方 just-bash sandbox | 每个会话隔离的虚拟工作区和 shell；不挂载服务器磁盘，也不是完整操作系统 |
+| local | Pi + Node 文件/进程适配器 | 每个会话独立真实临时目录，使用系统 bash、Node、Python 等已安装工具；CF 模式在专属容器内运行 |
 | sandbox | 官方 Vercel sandbox + Pi/Codex/Claude Code | 远程文件与进程；原生 session 与 sandbox 分别保存和恢复 |
 
-Codex 和 Claude Code 的 bridge 需要能暴露端口的网络 sandbox，本地 just-bash 不能替代它。未配置运行环境或模型凭证时直接报错，原生工厂没有离线规则或普通模型调用回落。
+Codex 和 Claude Code 的 bridge 仍需已接入的网络 sandbox；真实文件和进程适配器并不代表这些 bridge 已完成接入。未配置运行环境或模型凭证时直接报错，原生工厂没有离线规则或普通模型调用回落。
 
 Pi 可配置 `OPENROUTER_API_KEY`；自定义兼容提供商需要 `PI_API_KEY`、`PI_BASE_URL` 和模型 ID。Codex、Claude Code 分别使用显式 OpenAI Responses、Anthropic Messages 配置。运行层不会自动发现服务器个人 CLI 登录信息。
 
@@ -72,7 +72,7 @@ Sandbox 使用 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或部�
 
 四个内置技能来自 `apps/server/skills/{table,form,report,automation}` 的真实 `SKILL.md` 与递归引用/脚本文件。工作区启用和智能体分配的交集作为官方 `skills` bundle 传入 Harness；首次模型请求只收到名称、描述与读取位置，完整业务方法通过原生 `read` 按需读取。`skills-bundle.test.ts` 使用真实四包和官方 Pi 原生工具验证逐文件挂载、读取完整 report 文档/脚本及 `bash` 读取 reference；停止后恢复工作区并撤销 report 分配，SDK 移除旧目录，新 turn 无法再读取旧脚本。平台 API 与 Explorer 保持内置内容只读，管理员启停不修改内容。[官方 Skills 文档](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)说明这种按需加载与后续 turn 更新方式。
 
-本地 just-bash 实测 `python3` 返回不可用、退出码 127，因此加载 `report/scripts/summarize-csv.py` 不代表执行成功。report 文档仅在具备 Python 的环境运行该脚本；本地可读取 metrics reference，并使用现有产品聚合工具。远程 Python 能力仍需在真实 Sandbox 验证。
+命令直接通过系统 bash 启动真实进程，文件读写落在真实目录；容器镜像包含 bash、Node 和 Python 3。普通 Node 本地模式使用宿主已安装的程序，临时目录用于文件组织，并不提供操作系统级隔离；Cloudflare 模式由每个执行的容器提供外层边界。工作区快照仅收集自有目录，不跟随符号链接，不保存服务器文件或环境变量。旧内存工作区快照按逻辑路径恢复到真实目录，原生会话继续由 SDK 恢复。
 
 真实远程验收使用显式启用的 `test:harness:remote` 命令，覆盖原生远程 read/write/bash、AGENTS 与按需读取的真实生产 report Skill/reference/Python script。原生 write 创建独立 CSV，原生 bash 执行 `summarize-csv.py` 并校验真实 JSON 聚合；停止 Sandbox 后通过官方恢复核对原生历史、文件/输出保留和脚本计数仍为一，最终销毁测试资源。它使用当前产品 node24 模板，缺少 Python 会明确失败，不能靠安装解释器或宿主运行冒充该环境支持。Pi 模型由宿主本地 fixture 提供，不需要付费模型或业务数据库。缺凭证、未启用或任何执行/清理失败都不算 PASS；本机当前缺 Vercel 凭证，只完成类型检查、阻断 preflight 和生产脚本的宿主窄参数/JSON契约验证，真实远程仍未验收。命令和退出码见 [测试说明](testing.md)。
 

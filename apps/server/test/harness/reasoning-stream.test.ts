@@ -4,9 +4,9 @@ import { createServer } from "node:http";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
 import { toUIMessageStream, type TextStreamPart, type ToolSet, type UIMessage, type UIMessageChunk } from "ai";
-import { InMemoryFs } from "just-bash";
+import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
 import type { HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
-import { snapshotWorkspace, restoreWorkspace, type WorkspaceSnapshot } from "@tabdo/agent-runtime/workspace";
+import { snapshotWorkspace, restoreWorkspace, type WorkspaceSnapshot } from "../../src/harness/workspace.js";
 import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
@@ -64,10 +64,10 @@ test("native reasoning SSE becomes reasoning-delta and durable UI history withou
       assert.equal(configuration.harness, "pi"); if (configuration.harness !== "pi") throw new Error("Expected Pi");
       const restored = index === 2 ? cold : undefined;
       if (index === 2) assert(restored, "an actual native off journal must exist before cold resume");
-      const fs = restored ? await restoreWorkspace(JSON.parse(JSON.stringify(restored.workspace))) : new InMemoryFs();
-      await fs.mkdir("/project", { recursive: true });
+      const fs = restored ? await restoreWorkspace(JSON.parse(JSON.stringify(restored.workspace))) : await createDiskWorkspace();
+      await fs.mkdir(`${fs.root}/project`, { recursive: true });
       const sessionId = restored?.sessionId ?? randomUUID();
-      const sandbox = await createLocalSandboxAdapter({ cwd: "/project", env: {}, createFilesystem: async () => fs }).create({ sandboxId: randomUUID() });
+      const sandbox = await createLocalSandboxAdapter({ cwd: `${fs.root}/project`, env: {}, createFilesystem: async () => fs }).create({ sandboxId: randomUUID() });
       const agent = createHarnessAgent(createPiAdapter({ ...configuration.adapter, reattachInProcess: false }), {
         instructions: "Respond to the user.", sandboxConfig: { workDir: "work" }, tools: {},
       });

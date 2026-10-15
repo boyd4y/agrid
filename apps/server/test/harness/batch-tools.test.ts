@@ -65,7 +65,7 @@ test("native batch mock writes 100 records once, advertises canonical batch tool
     assert.equal((await getTable({tableId:table.id,organizationId:orgId})).rowCount,100);
   } finally {
     if (session) await session.stop();
-    if (opened) await opened.sandbox.stop();
+    if (opened) await opened.sandbox.destroy();
     provider.closeAllConnections(); await new Promise<void>(resolve => provider.close(()=>resolve()));
     await db.delete(organization).where(eq(organization.id,orgId));
     await client.end();

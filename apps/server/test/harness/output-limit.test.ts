@@ -58,7 +58,7 @@ test("native Pi observes output limits without losing partial text or misclassif
         assert.equal(completions[0].finishReason, scenario.reason, "length remains length; a normal stop is not an output limit");
         assert.equal(completions[0].outputTokens, scenario.output, "native usage retains all completion tokens, including reasoning");
         assert.equal(completions[0].reasoningTokens, scenario.providerReasoning, "actual pi-coding-agent dependency exposes provider reasoning usage");
-      } finally { await session.stop(); await opened.sandbox.stop(); }
+      } finally { await session.stop(); await opened.sandbox.destroy(); }
     }
   } finally {
     provider.closeAllConnections();

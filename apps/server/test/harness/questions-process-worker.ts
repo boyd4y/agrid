@@ -21,13 +21,13 @@ const agent = createHarnessAgent(createPiAdapter({ providerId: "fixture", apiKey
   instructions: "Use the actual tools", stopWhen: [],
   tools: {
     write_marker: tool({ inputSchema: z.object({}), execute: async () => {
-      let previous = 0;try { previous = Number(await fs.readFile("/workspace/marker.txt")); } catch { /* initial workspace */ }
-      await fs.writeFile("/workspace/marker.txt", String(previous + 1));return { count: previous + 1 };
+      let previous = 0;try { previous = Number(await fs.readFile(`${fs.root}/workspace/marker.txt`)); } catch { /* initial workspace */ }
+      await fs.writeFile(`${fs.root}/workspace/marker.txt`, String(previous + 1));return { count: previous + 1 };
     } }),
     askUserQuestions: HARNESS_V1_BUILTIN_TOOLS.askUserQuestions,
   },
 });
-const { session: sandbox } = await createLocalSandboxAdapter({ cwd: "/workspace", env: {}, createFilesystem: async () => fs }).create({ sandboxId: `question-worker-${randomUUID()}` });
+const { session: sandbox } = await createLocalSandboxAdapter({ cwd: `${fs.root}/workspace`, env: {}, createFilesystem: async () => fs }).create({ sandboxId: `question-worker-${randomUUID()}` });
 const session = await agent.createSession({ sessionId, sandboxSession: sandbox, ...(saved ? { resumeFrom: saved.resumeState } : {}) });
 if (mode === "produce") {
   const result = await agent.stream({ session, prompt: "Write marker exactly once and ask direction." });for await (const _part of result.stream) { /* native slice */ }
@@ -36,13 +36,14 @@ if (mode === "produce") {
   assert.equal(resumeState.continueFrom?.pendingToolResults?.[0].toolCallId, "question-1");
   await writeFile(stateFile, JSON.stringify({ resumeState, workspace }));
   // Actual process termination after SDK capture, not a shared in-process map.
+  await sandbox.destroy();
   process.exit(0);
 } else {
   try {
     assert(session.hasUnfinishedTurn());
     const result = await agent.continueStream({ session, toolResultContinuations: [{ type: "tool-result", toolCallId: "question-1", toolName: "askUserQuestions", output: { type: "json", value: { action: "answered", answers: { direction: { optionIds: ["b"] } } } } }] });
     let text = "";for await (const part of result.stream) if (part.type === "text-delta") text += part.text;
-    assert.equal(text, "Native answer B, no replay.");assert.equal(await fs.readFile("/workspace/marker.txt"), "1");assert(!session.hasUnfinishedTurn());
+    assert.equal(text, "Native answer B, no replay.");assert.equal(await fs.readFile(`${fs.root}/workspace/marker.txt`), "1");assert(!session.hasUnfinishedTurn());
     await session.stop();
   } finally { await session.destroy();await sandbox.destroy(); }
 }

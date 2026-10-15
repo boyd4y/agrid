@@ -4,6 +4,11 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+for (const directory of ["packages/platform-node", "packages/agent-runtime", "apps/server", "apps/cloudflare/sandbox/runtime"]) {
+  const manifest = JSON.parse(await readFile(resolve(root, directory, "package.json"), "utf8"));
+  for (const name of ["just-bash", "@ai-sdk/sandbox-just-bash"])
+    assert(!(name in (manifest.dependencies ?? {})), `${directory}: native execution must use real files and processes`);
+}
 async function files(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {

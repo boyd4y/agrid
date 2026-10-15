@@ -1,7 +1,8 @@
 import { restoreWorkspace as restorePortableWorkspace, type WorkspaceSnapshot } from "@tabdo/agent-runtime/workspace";
+import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
 export { snapshotWorkspace, workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/agent-runtime/workspace";
 
-/** Preserve the existing Node filesystem's Buffer representation at composition. */
+/** Compose a fresh owned directory for each cold native execution. */
 export function restoreWorkspace(snapshot?: WorkspaceSnapshot | null) {
-  return restorePortableWorkspace(snapshot, { createBytes: bytes => Buffer.from(bytes) });
+  return restorePortableWorkspace(snapshot, { createWorkspace: createDiskWorkspace });
 }

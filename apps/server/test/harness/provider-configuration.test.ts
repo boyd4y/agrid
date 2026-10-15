@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { InMemoryFs } from "just-bash";
+import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
 import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
@@ -71,11 +71,11 @@ test("native Pi retains its default medium reasoning effort with a local fixture
     url.protocol = "http:"; url.hostname = "127.0.0.1"; url.port = String(address.port);
     return networkFetch(new Request(url, request));
   });
-  const fs = new InMemoryFs();
-  await fs.mkdir("/project", { recursive: true });
+  const fs = await createDiskWorkspace();
+  await fs.mkdir(`${fs.root}/project`, { recursive: true });
   let sandbox: Awaited<ReturnType<ReturnType<typeof createLocalSandboxAdapter>["create"]>> | undefined;
   try {
-    sandbox = await createLocalSandboxAdapter({ cwd: "/project", env: {}, createFilesystem: async () => fs }).create({ sandboxId: "deepseek-protocol-fixture" });
+    sandbox = await createLocalSandboxAdapter({ cwd: `${fs.root}/project`, env: {}, createFilesystem: async () => fs }).create({ sandboxId: "deepseek-protocol-fixture" });
     const configuration = provider("https://api.deepseek.com/v1");
     const agent = createHarnessAgent(createPiAdapter(configuration), {
       instructions: "Respond to the user.", sandboxConfig: { workDir: "work" }, tools: {},

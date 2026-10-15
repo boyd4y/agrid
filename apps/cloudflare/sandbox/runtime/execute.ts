@@ -1,6 +1,7 @@
 import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
+import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
 import { tool, jsonSchema, type ToolSet, type TextStreamPart } from "ai";
 import { createBatchedOutput } from "@tabdo/agent-runtime/batched-output";
 import { executeNativeRun } from "@tabdo/agent-runtime/execution";
@@ -27,7 +28,7 @@ export async function executeSandboxRun(launch: GatewayCredentials & { gatewayUr
   const ports: NativeExecutorPorts = {
     createNativeAgent: settings => {
       if (settings.harness !== "pi") throw new Error("Cloudflare Sandbox native execution currently supports Pi; this harness is not configured");
-      // Pi's local virtual filesystem lives inside this physical container.
+      // Pi's native filesystem lives inside this physical container.
       // A second external Sandbox is neither started nor required here.
       const configuration = resolveNativeConfiguration({ harness: "pi", mode: "local", modelId: settings.modelId, piModel: settings.piModel, env });
       if (configuration.harness !== "pi") throw new Error("Unexpected native provider configuration");
@@ -43,7 +44,7 @@ export async function executeSandboxRun(launch: GatewayCredentials & { gatewayUr
     },
     openNativeSandbox: async settings => {
       if (settings.hasResumeState && !settings.workspace) throw new GatewayError(409, "Native workspace checkpoint is missing");
-      const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: {}, createFilesystem: () => restoreWorkspace(settings.workspace), restoreFilesystem: () => restoreWorkspace(settings.workspace) });
+      const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: {}, createFilesystem: () => restoreWorkspace(settings.workspace, { createWorkspace: createDiskWorkspace }), restoreFilesystem: () => restoreWorkspace(settings.workspace, { createWorkspace: createDiskWorkspace }) });
       const request = { sandboxId: settings.sandboxId, abortSignal: settings.signal };
       const opened = settings.hasResumeState ? await adapter.resume(request) : await adapter.create(request);
       return { sandbox: opened.session, fs: opened.workspace };

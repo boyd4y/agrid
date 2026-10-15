@@ -1,7 +1,7 @@
 import { toUIMessageStream, stepCountIs, type TextStreamPart, type ToolResultPart, type ToolSet, type UIMessage, type UIMessageChunk } from "ai";
 import type { HarnessAgentSession, HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
 import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
-import type { InMemoryFs } from "just-bash";
+import type { SnapshotWorkspace } from "./workspace.js";
 import type { Actor } from "@tabdo/backend/auth/actor";
 import type { RuntimeRecord, RuntimeLease } from "@tabdo/backend/agent/runtime-store";
 import type { AgentRun } from "@tabdo/backend/agent/runs";
@@ -84,7 +84,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
   const releaseNativeRun = ports.registerNativeRun();
   const control = new AbortController();
   const signal = AbortSignal.any([control.signal, ...(options.signal ? [options.signal] : [])]);
-  let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: InMemoryFs | undefined;
+  let session: HarnessAgentSession | undefined, sandbox: HarnessV1NetworkSandboxSession | undefined, fs: SnapshotWorkspace | undefined;
   let agent: ReturnType<NativeExecutorPorts["createNativeAgent"]> | undefined;
   let step = options.toolResultContinuations ? options.run.activity?.step ?? 0 : 0, completedTools = options.toolResultContinuations ? options.run.activity?.completedTools ?? 0 : 0, activity: ChatActivity | undefined, errorText: string | undefined;
   let parkedQuestion = false;
@@ -203,6 +203,7 @@ export async function executeNativeRun(ports: NativeExecutorPorts, options: Nati
         // Pi stop before its first native turn may return data:{}; never commit it.
         if (session && !invocationStarted) await session.stop().catch((error) => ports.logger.error("agent.session.cleanup", ports.chatErrorText(error)));
         if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => ports.logger.error("agent.sandbox.stop", ports.chatErrorText(error)));
+        if (fs && !parkedQuestion) await fs.dispose().catch((error) => ports.logger.error("agent.workspace.cleanup", ports.chatErrorText(error)));
         await ports.releaseRuntimeLease(options.lease);
       }
     } finally { releaseNativeRun(); }

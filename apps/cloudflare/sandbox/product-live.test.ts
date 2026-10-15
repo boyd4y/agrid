@@ -14,6 +14,8 @@ test("live product Worker + DO + Docker Sandbox preserves public chat and files"
   const marker = randomUUID(), tableName = `CF live ${marker}`;
   const question = { allowPartialAnswers: false, questions: [{ id: "direction", question: "Which direction?", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }], allowFreeForm: true }] };
   const answer = { action: "answered", answers: { direction: { optionIds: ["b"] } } };
+  const createDiskProof = `node -e 'const fs=require("node:fs");fs.writeFileSync("native-proof.bin",Buffer.from([0,255,128,10]));const python=require("node:child_process").execFileSync("python3",["-c","print(40+2)"],{encoding:"utf8"}).trim();if(python!=="42")throw Error("Python did not run");console.log("REAL_DISK_CREATED",process.version,fs.realpathSync("native-proof.bin"),python);'`;
+  const checkDiskProof = `node -e 'const fs=require("node:fs");const actual=fs.readFileSync("native-proof.bin");if(!actual.equals(Buffer.from([0,255,128,10])))throw Error("Binary checkpoint lost");console.log("REAL_DISK_RESTORED",fs.realpathSync("native-proof.bin"));'`;
   const requests: { messages: { role: string; tool_call_id?: string; content: unknown }[] }[] = [];
   let providerCalls = 0, cancelModelStarted = false, cookie = "", owner = "", org = "", agentUser = "";
   const threadIds: string[] = [];
@@ -30,9 +32,14 @@ test("live product Worker + DO + Docker Sandbox preserves public chat and files"
       const send = (delta: unknown, finish_reason: string | null = null) => outgoing.write(`data: ${JSON.stringify({ id: "cf-product-live", object: "chat.completion.chunk", created: 1, model: "fixture-native", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
       const hasTable = body.messages.some(message => message.tool_call_id === "table-1");
       const hasAnswer = body.messages.some(message => message.tool_call_id === "question-1");
-      if (!hasTable || !hasAnswer) {
+      const diskCreated = body.messages.find(message => message.tool_call_id === "disk-create-1");
+      const diskRestored = body.messages.find(message => message.tool_call_id === "disk-restore-1");
+      if (!diskCreated || (hasAnswer && !diskRestored)) {
+        send({ role: "assistant", tool_calls: [{ index: 0, id: diskCreated ? "disk-restore-1" : "disk-create-1", type: "function", function: { name: "bash", arguments: JSON.stringify({ command: diskCreated ? checkDiskProof : createDiskProof }) } }] });send({}, "tool_calls");
+      } else if (!hasTable || !hasAnswer) {
+        assert.match(JSON.stringify(diskCreated.content), /REAL_DISK_CREATED/);
         send({ role: "assistant", tool_calls: [{ index: 0, id: hasTable ? "question-1" : "table-1", type: "function", function: { name: hasTable ? "askUserQuestions" : "create_table", arguments: JSON.stringify(hasTable ? question : { name: tableName }) } }] });send({}, "tool_calls");
-      } else { send({ role: "assistant", content: "Native answer B, no replay." });send({}, "stop"); }
+      } else { assert.match(JSON.stringify(diskRestored?.content), /REAL_DISK_RESTORED/);send({ role: "assistant", content: "Native answer B, no replay." });send({}, "stop"); }
       outgoing.end("data: [DONE]\n\n");
     } catch { outgoing.writeHead(500);outgoing.end("Local fixture rejected the model request"); }
   });
@@ -81,17 +88,20 @@ test("live product Worker + DO + Docker Sandbox preserves public chat and files"
     assert.equal(first.status, 200, (await first.clone().text()).slice(0, 500));
     const firstStream = await first.text();assert.match(firstStream, /askUserQuestions/);
     const { runs: pending } = await json<{ runs: { id: string; assistantMessageId: string; status: string }[] }>(`/threads/${threadId}/runs`);
-    assert.equal(pending.length, 1);assert.equal(pending[0].status, "suspended");assert.equal(providerCalls, 2);
+    assert.equal(pending.length, 1);assert.equal(pending[0].status, "suspended");assert.equal(providerCalls, 3);
+    assert.match(JSON.stringify(requests[1].messages.find(message => message.tool_call_id === "disk-create-1")?.content), /REAL_DISK_CREATED/);
     console.info("CF live: native tool write and suspended question verified");
     const tables = await json<{ id: string; name: string }[]>("/tables");
     const createdTable = tables.find(table => table.name === tableName);assert(createdTable);assert.equal(tables.filter(table => table.name === tableName).length, 1);
     const resumed = await request("/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...chatBase, intent: "tool-result", assistantMessageId: pending[0].assistantMessageId, toolResults: [{ toolCallId: "question-1", output: answer }] }) });
     assert.equal(resumed.status, 200, (await resumed.clone().text()).slice(0, 500));assert.match(await resumed.text(), /Native answer B, no replay/);
     const { runs: completed } = await json<{ runs: { id: string; status: string }[] }>(`/threads/${threadId}/runs`);
-    assert.equal(completed.length, 1);assert.equal(completed[0].id, pending[0].id);assert.equal(completed[0].status, "completed");assert.equal(providerCalls, 3);
-    console.info("CF live: independent native execution resumed the same Run");
-    const nativeAnswer = requests[2].messages.filter(message => message.tool_call_id === "question-1");assert.equal(nativeAnswer.length, 1);assert.deepEqual(JSON.parse(nativeAnswer[0].content as string), answer);
-    assert.equal(requests[2].messages.filter(message => message.role === "user").length, 1);
+    assert.equal(completed.length, 1);assert.equal(completed[0].id, pending[0].id);assert.equal(completed[0].status, "completed");assert.equal(providerCalls, 5);
+    console.info("CF live: native Node/Python commands and binary filesystem survived container cold resume");
+    const finalMessages = requests[4].messages;
+    const nativeAnswer = finalMessages.filter(message => message.tool_call_id === "question-1");assert.equal(nativeAnswer.length, 1);assert.deepEqual(JSON.parse(nativeAnswer[0].content as string), answer);
+    assert.equal(finalMessages.filter(message => message.role === "user").length, 1);
+    assert.match(JSON.stringify(finalMessages.find(message => message.tool_call_id === "disk-restore-1")?.content), /REAL_DISK_RESTORED/);
     const receipts = await resource.db.select({ id: agentExecutions.id, launchToken: agentExecutionGateways.launchToken, status: agentExecutions.status }).from(agentExecutions)
       .innerJoin(agentRuns, eq(agentRuns.id, agentExecutions.runId)).innerJoin(agentExecutionGateways, eq(agentExecutionGateways.executionId, agentExecutions.id)).where(eq(agentRuns.id, pending[0].id));
     assert.equal(receipts.length, 2);assert.notEqual(receipts[0].launchToken, receipts[1].launchToken);assert(receipts.every(receipt => receipt.status === "settled"));

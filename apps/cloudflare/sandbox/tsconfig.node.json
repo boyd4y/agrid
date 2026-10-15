@@ -12,7 +12,6 @@
     "paths": {
       "@tabdo/platform-node/*": ["../../../packages/platform-node/src/*"],
       "@tabdo/core/*": ["../../../packages/core/src/*"],
-      "just-bash": ["../../../packages/platform-node/node_modules/just-bash"],
       "zod": ["../../../packages/shared/node_modules/zod"]
     }
   },

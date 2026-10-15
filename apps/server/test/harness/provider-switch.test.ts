@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { InMemoryFs } from "just-bash";
+import { createDiskWorkspace } from "@tabdo/platform-node/sandbox/workspace";
 import type { HarnessAgentResumeSessionState } from "@ai-sdk/harness/agent";
 import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { createPiAdapter, type PiAdapterConfig } from "@tabdo/platform-node/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
-import { restoreWorkspace, snapshotWorkspace, type WorkspaceSnapshot } from "@tabdo/agent-runtime/workspace";
+import { restoreWorkspace, snapshotWorkspace, type WorkspaceSnapshot } from "../../src/harness/workspace.js";
 import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
 
 test("an actual Pi journal from a rejected router model resumes on the configured direct model", { timeout: 20000 }, async t => {
@@ -43,9 +43,9 @@ test("an actual Pi journal from a rejected router model resumes on the configure
   try {
     for (const legacy of [true, false]) {
       const restored = legacy ? undefined : checkpoint; if (!legacy) assert(restored);
-      const fs = restored ? await restoreWorkspace(JSON.parse(JSON.stringify(restored.workspace))) : new InMemoryFs();
-      await fs.mkdir("/project", { recursive: true });
-      const sandbox = await createLocalSandboxAdapter({ cwd: "/project", env: {}, createFilesystem: async () => fs }).create({ sandboxId: randomUUID() });
+      const fs = restored ? await restoreWorkspace(JSON.parse(JSON.stringify(restored.workspace))) : await createDiskWorkspace();
+      await fs.mkdir(`${fs.root}/project`, { recursive: true });
+      const sandbox = await createLocalSandboxAdapter({ cwd: `${fs.root}/project`, env: {}, createFilesystem: async () => fs }).create({ sandboxId: randomUUID() });
       // Reproduce the old wire configuration only for the first attempt.
       const adapter: PiAdapterConfig = { ...native.adapter, reattachInProcess: false,
         model: { ...native.adapter.model, id: legacy ? "openrouter/free" : native.adapter.model.id } };

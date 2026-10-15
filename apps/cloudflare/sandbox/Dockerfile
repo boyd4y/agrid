@@ -1,4 +1,5 @@
 FROM node:24.14.1-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends bash python3 ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/tabdo/sandbox
 
 # Isolated fixture dependencies. The Worker never bundles these Node SDKs.

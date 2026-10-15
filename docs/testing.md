@@ -18,7 +18,7 @@ server 常规入口覆盖 AI 错误、关联、报告/独立自动化、Skill、
 
 先运行 `pnpm build:foundation`，再用 `DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm --filter @tabdo/server test:edge` 在真实 workerd 中验证 `@tabdo/backend` PG/Better Auth 工厂。Hyperdrive 使用本地 binding，连接指定隔离数据库；每请求创建/关闭 resource，检查真实注册、Cookie 签名并发隔离、退出登录及连接释放。fixture 使用生成的 Env、独立 Worker 类型检查与显式测试密钥，不依赖 Wrangler 登录，不发送邮件，不代表远程 Hyperdrive 池/缓存或完整产品 Worker 已验收。更改 binding 后重新运行 `wrangler types --config test/cloudflare/fixture/wrangler.jsonc --include-runtime=false --env-interface PlatformFactoryTestEnv test/cloudflare/fixture/env.d.ts`。
 
-`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。本地 Python 探测实际返回不支持（exit 127），没有将宿主 Python 或成功读取脚本记作原生脚本执行成功。单独运行：
+`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。该用例通过原生 bash 执行真实 Python 脚本并断言聚合输出；真实文件、引用和会话跨恢复保留。普通 Node 用例验证宿主进程，Wrangler/Docker 产品用例另外验证容器内 Node/Python 与二进制文件的冷恢复。单独运行：
 
 ```bash
 pnpm --filter @tabdo/server exec tsx --test test/harness/skills-bundle.test.ts

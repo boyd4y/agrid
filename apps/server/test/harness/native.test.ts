@@ -8,7 +8,7 @@ import {
 import { test } from "node:test";
 import { tool } from "ai";
 import { z } from "zod";
-test("native Pi tool loop and persisted virtual workspace resume", async () => {
+test("native Pi tool loop and persisted disk workspace resume", async () => {
   const calls: { messages: { role: string; content: unknown }[] }[] = [];
   let executed = 0;
   const http = createServer(async (req, res) => {
@@ -107,7 +107,7 @@ test("native Pi tool loop and persisted virtual workspace resume", async () => {
     assert.equal(result.text, "工具执行后正常回复");
     assert.equal(executed, 1);
     assert.equal(
-      await fs.readFile("/workspace/agent/AGENTS.md"),
+      await fs.readFile(`${fs.root}/workspace/agent/AGENTS.md`),
       "# Workspace policy\n\nVerify fixture results before replying.",
     );
     assert.ok(
@@ -125,7 +125,7 @@ test("native Pi tool loop and persisted virtual workspace resume", async () => {
       "native journal saved",
     );
     const snapshot = await snapshotWorkspace(fs);
-    await sandbox.stop();
+    await sandbox.destroy();
     const agent2 = makeAgent();
     const { sandbox: sandbox2 } = await openNativeSandbox({
       agent: agent2,
@@ -150,9 +150,9 @@ test("native Pi tool loop and persisted virtual workspace resume", async () => {
       "provider sees native persisted history",
     );
     await session2.stop();
-    await sandbox2.stop();
+    await sandbox2.destroy();
     console.log(
-      "PASS actual HarnessAgent/Pi: native host tool loop, final text, virtual workspace snapshot, new sandbox+agent resume retaining native journal.",
+      "PASS actual HarnessAgent/Pi: native host tool loop, final text, disk workspace snapshot, new sandbox+agent resume retaining native journal.",
     );
   } finally {
     await new Promise<void>((resolve, reject) =>

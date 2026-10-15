@@ -25,7 +25,7 @@
 
 ## 验证范围
 
-验证已通过：既有 `test:skills` 6项（仅 `_agent_test` 数据库）、`test/harness/skills-bundle.test.ts` 1项、四包 frontmatter/格式校验以及本地引用路径检查。前者验证文档解析、只读内置包、分配/启用及附件读取；后者用本机协议 fixture 与官方 Pi read/bash 验证渐进加载、完整引用文件、脚本挂载和撤销恢复。该 fixture 明确证明本地 just-bash 无 Python，不宣称 CSV 脚本已执行。
+验证已通过：既有 `test:skills` 6项（仅 `_agent_test` 数据库）、`test/harness/skills-bundle.test.ts` 1项、四包 frontmatter/格式校验以及本地引用路径检查。前者验证文档解析、只读内置包、分配/启用及附件读取；后者用本机协议 fixture 与官方 Pi read/bash 验证渐进加载、完整引用文件、脚本挂载和撤销恢复。当前执行层已替换为真实文件与进程，fixture 通过原生 bash 执行 CSV Python 脚本并验证结果；容器能力以 Wrangler/Docker 用例单独验收。
 
 这验证打包与原生读取契约，不代表真实模型已完成所有场景或真实外部收件、定时、文件解析。未调用真实模型、邮箱或用户数据库。
 

@@ -40,7 +40,7 @@ test("native provider keeps its output budget when context metadata is unavailab
         const request = requests.at(-1)!;
         assert.equal(request.max_tokens ?? request.max_completion_tokens, budget, "estimated context must not silently replace the configured output budget with one token");
         assert.equal(Object.hasOwn(request, "max_tokens") && Object.hasOwn(request, "max_completion_tokens"), false, "send one unambiguous provider budget field");
-      } finally { await session.stop(); await opened.sandbox.stop(); }
+      } finally { await session.stop(); await opened.sandbox.destroy(); }
     }
     assert.equal(requests.length, 3, "no provider retry or synthetic continuation");
   } finally { provider.closeAllConnections(); await new Promise<void>((resolve) => provider.close(() => resolve())); }

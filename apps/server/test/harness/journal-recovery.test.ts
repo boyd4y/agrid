@@ -87,7 +87,7 @@ test("old Pi resume blob plus newer complete journal starts a new turn without r
     console.log("PASS official Pi: unchanged old resume + same journal basename + latest nine tool results; fresh turn sees all results, zero replay.");
   } finally {
     http.closeAllConnections(); await new Promise<void>((resolve) => http.close(() => resolve()));
-    await Promise.allSettled(sandboxes.map((sandbox) => sandbox.stop()));
+    await Promise.allSettled(sandboxes.map((sandbox) => sandbox.destroy()));
     await rm(hostRoot, { recursive: true, force: true });
   }
 });

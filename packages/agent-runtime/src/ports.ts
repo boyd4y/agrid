@@ -2,7 +2,7 @@ import type { ToolSet, TextStreamPart } from "ai";
 import type { HarnessV1Skill, HarnessV1NetworkSandboxSession } from "@ai-sdk/harness";
 import type { HarnessAgentContinueTurnState } from "@ai-sdk/harness/agent";
 import type { NativeAgent, NativeAgentSettings } from "@tabdo/platform-node/harness/types";
-import type { InMemoryFs } from "just-bash";
+import type { SnapshotWorkspace } from "./workspace.js";
 import type { Actor } from "@tabdo/backend/auth/actor";
 import type { RuntimeLease, RuntimeRecord, RuntimeCheckpoint } from "@tabdo/backend/agent/runtime-store";
 import type { StoredMessage } from "@tabdo/backend/chat/store";
@@ -12,7 +12,7 @@ import type { HarnessId } from "@tabdo/backend/agent/contracts";
 import type { PiModelMetadata, PiCompletion } from "@tabdo/backend/agent/model-contracts";
 
 export type { HarnessId, PiModelMetadata, PiCompletion };
-type WarmSandbox = { sandbox: HarnessV1NetworkSandboxSession; fs?: InMemoryFs; discard(): Promise<void> };
+type WarmSandbox = { sandbox: HarnessV1NetworkSandboxSession; fs?: SnapshotWorkspace; discard(): Promise<void> };
 
 /** Effects belong to the host. This executor owns only the official SDK lifecycle. */
 export interface NativeExecutorPorts {
@@ -25,7 +25,7 @@ export interface NativeExecutorPorts {
     onPiMessageEnd?: (completion: PiCompletion) => void;
     consumePiContinuationInput?: () => string | undefined;
   }): NativeAgent;
-  openNativeSandbox(options: { agent: NativeAgent; mode: "local" | "sandbox"; sandboxId: string; hasResumeState: boolean; workspace?: WorkspaceSnapshot | null; signal?: AbortSignal }): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: InMemoryFs }>;
+  openNativeSandbox(options: { agent: NativeAgent; mode: "local" | "sandbox"; sandboxId: string; hasResumeState: boolean; workspace?: WorkspaceSnapshot | null; signal?: AbortSignal }): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: SnapshotWorkspace }>;
   hostTools(definitions: ToolSet, signal: AbortSignal, pending: Set<Promise<unknown>>): { tools: ToolSet; failures: Map<string, string>; projectErrors(): TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>> };
   nativeToolDenial(output: unknown): string | undefined;
   chatErrorText(error: unknown): string;
@@ -38,7 +38,7 @@ export interface NativeExecutorPorts {
   questionContinuation(record: RuntimeRecord): HarnessAgentContinueTurnState | undefined;
   parkQuestionSandbox(runtimeId: string, opened: WarmSandbox): void;
   takeQuestionSandbox(runtimeId: string): WarmSandbox | undefined;
-  snapshotWorkspace(fs: InMemoryFs): Promise<WorkspaceSnapshot>;
+  snapshotWorkspace(fs: SnapshotWorkspace): Promise<WorkspaceSnapshot>;
   renewRuntimeLease(lease: RuntimeLease): Promise<boolean>;
   releaseRuntimeLease(lease: RuntimeLease): Promise<void>;
   runCancellationRequested(runId: string): Promise<boolean>;

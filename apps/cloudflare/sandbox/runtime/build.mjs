@@ -30,7 +30,7 @@ const result = await esbuild.build({
 });
 
 // Third-party packages must retain their own module/resource paths. In
-// particular, never inline native Pi provider loading or just-bash WASM assets.
+// particular, never inline native Pi provider loading and its runtime resources.
 for (const path of Object.keys(result.metafile.inputs)) {
   const absolute = resolve(workspace, path);
   if (![resolve(workspace, "packages"), directory].some(root => absolute.startsWith(`${root}/`)))

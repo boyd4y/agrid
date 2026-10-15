@@ -61,10 +61,10 @@ if (!previous.includes('"saved"')) {
   if(!state.data.sessionFileName || !opened.fs.getAllPaths().some(path=>path.endsWith(".jsonl")))throw Error("native checkpoint missing");
   await log("saved");
  }catch(error){await log("error:"+error.message);process.exitCode=1;}
- finally {await session?.destroy();await sandbox?.stop();release();}
+ finally {await session?.destroy();await sandbox?.destroy();release();}
 }
 `);
-  const supervisor = superviseApi({ entry: script, cwd: serverRoot, watchPaths: [watched], env: process.env, onFailure: (code) => { failure = code; } });
+  const supervisor = superviseApi({ entry: script, cwd: serverRoot, watchPaths: [watched], env: { PATH: process.env.PATH, NODE_ENV: "test" }, onFailure: (code) => { failure = code; } });
   const records = async () => (await readFile(events, "utf8").catch(() => "")).split("\n").filter(Boolean).map((line) => JSON.parse(line) as { event: string; pid: number });
   const until = async (predicate: () => Promise<boolean>) => {
     const deadline = Date.now() + 16000;

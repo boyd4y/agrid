@@ -27,7 +27,7 @@ test("catalog lists only platform tools and normalizes old native/task settings"
 
 test("actual Pi keeps native tools enabled with legacy settings while disabled platform writes remain denied", async () => {
   const calls: { tools?: { function: { name: string } }[]; messages: { role: string; content: unknown }[] }[] = [];
-  let executed = 0;
+  let executed = 0, workspaceRoot = "";
   const provider = createServer(async (req, res) => {
     let raw = ""; for await (const chunk of req) raw += chunk;
     calls.push(JSON.parse(raw));
@@ -37,8 +37,8 @@ test("actual Pi keeps native tools enabled with legacy settings while disabled p
     if (calls.length === 1) {
       send({ tool_calls: [
         { index: 0, id: "disabled-write", type: "function", function: { name: "update_cell", arguments: "{}" } },
-        { index: 1, id: "native-bash", type: "function", function: { name: "bash", arguments: JSON.stringify({ command: "printf native > /workspace/native.txt" }) } },
-        { index: 2, id: "native-read", type: "function", function: { name: "read", arguments: JSON.stringify({ file_path: "/workspace/agent/secret.txt" }) } },
+        { index: 1, id: "native-bash", type: "function", function: { name: "bash", arguments: JSON.stringify({ command: `printf native > '${workspaceRoot}/workspace/native.txt'` }) } },
+        { index: 2, id: "native-read", type: "function", function: { name: "read", arguments: JSON.stringify({ file_path: `${workspaceRoot}/workspace/agent/secret.txt` }) } },
       ] });
       send({}, "tool_calls");
     } else { send({ content: "工具已关闭，未执行修改。" }); send({}, "stop"); }
@@ -55,7 +55,9 @@ test("actual Pi keeps native tools enabled with legacy settings while disabled p
     const opened = await openNativeSandbox({ agent, mode: "local", sandboxId: "tool-settings-proof", hasResumeState: false, env });
     sandbox = opened.sandbox;
     assert(opened.fs);
-    await opened.fs.writeFile("/workspace/agent/secret.txt", "native-filter-secret");
+    workspaceRoot = opened.fs.root;
+    await opened.fs.mkdir(`${workspaceRoot}/workspace/agent`, { recursive: true });
+    await opened.fs.writeFile(`${workspaceRoot}/workspace/agent/secret.txt`, "native-filter-secret");
     session = await agent.createSession({ sessionId: "tool-settings-session", sandboxSession: sandbox });
     const result = await agent.stream({ session, prompt: "确认工具设置" });
     const parts: TextStreamPart<ToolSet>[] = [];
@@ -65,7 +67,7 @@ test("actual Pi keeps native tools enabled with legacy settings while disabled p
     for (const name of ["update_cell", "create_goal", "update_goal", "update_plan", "get_task_state"]) assert(!sentNames.includes(name), `${name} is absent from the actual provider catalog`);
     for (const name of ["read", "bash", "askUserQuestions"]) assert(sentNames.includes(name), `${name} stays native and enabled`);
     assert(sentNames.includes("write"), "other native tools remain enabled");
-    assert.equal(await opened.fs.readFile("/workspace/native.txt"), "native", "native bash executes despite the old disabled entry");
+    assert.equal(await opened.fs.readFile(`${workspaceRoot}/workspace/native.txt`), "native", "native bash executes despite the old disabled entry");
     const toolMessages = calls[1].messages.filter(m => m.role === "tool");
     assert.equal(toolMessages.length, 3);
     assert(JSON.stringify(toolMessages).includes("native-filter-secret"), "native read stays available independently of platform settings: " + JSON.stringify(toolMessages));
@@ -77,7 +79,7 @@ test("actual Pi keeps native tools enabled with legacy settings while disabled p
     assert(nativeToolDenial({ type: "execution-denied", reason: "disabled" }));
     assert.equal(nativeToolDenial({ ok: true }), undefined);
   } finally {
-    await session?.stop(); await sandbox?.stop();
+    await session?.stop(); await sandbox?.destroy();
     await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()));
   }
 });
