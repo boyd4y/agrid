@@ -30,7 +30,7 @@ Pi 是 host-runtime：模型循环在 Node API/worker，本地 bash 在真实目
 
 ## 包边界与部署
 
-`core` 提供计划时间、时钟/ID、错误与摘要等通用服务；`db` 提供参数化 PostgreSQL/Drizzle 资源；`auth` 提供身份、组织和 API Key；`queue` 提供发布/消费、Redis 连接、重试、租约与关闭，`storage` 提供文件存储；`agent-runtime` 只提供官方 Harness、Sandbox 和工作目录能力。
+`core` 提供计划时间、时钟/ID、错误与摘要等通用服务；`db` 提供参数化 PostgreSQL/Drizzle 资源；`auth` 提供身份、组织和 API Key；`queue` 提供消息传输、Redis/BullMQ 机制与原子租约；`worker` 依赖 queue，提供任务执行、outbox 流程、恢复调度与退出控制；`storage` 提供文件存储；`agent-runtime` 只提供官方 Harness、Sandbox 和工作目录能力。
 
 Tabdo 的工作区、表格、自动化、Run/Session、权限和数据访问集中在 `apps/server/src/business`；带业务身份的执行编排在 `apps/server/src/harness`。不再有独立 backend 业务包。包不反向依赖 server 或产品 schema。
 

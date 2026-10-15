@@ -24,6 +24,7 @@
 - [Node + Harness 架构](architecture/node-harness.md)：官方工具桥接、会话生命周期、本地与 Railway。
 - [运行时与包边界](architecture/runtime-boundaries.md)：core/db/auth、通用能力、server 业务与部署入口。
 - [包边界评审](architecture/package-review.md)：queue 职责下沉、db 薄封装问题与其余包的保留依据。
+- [Queue / Worker 拆分计划](architecture/queue-worker-plan.md)：消息传输与任务执行两包的依赖、迁移步骤和验收记录。
 - [Pars 核心调研](architecture/pars-review.md)：历史调研资料，不代表当前部署目标。
 
 - [多租户设计](multi-tenant.md)：工作区隔离、身份与数据模型。

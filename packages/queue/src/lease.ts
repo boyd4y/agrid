@@ -1,3 +1,6 @@
+import { LeaseOwnershipError, type LeaseProvider } from "./index.js";
+import { createRedisClient, waitForRedisReady, type RedisOptions } from "./redis.js";
+
 /** Minimal atomic store operations; no table IDs, actors or automation payloads. */
 export type TaskLeaseStore = {
   eval(script: string, numberOfKeys: number, ...arguments_: (string | number)[]): Promise<unknown>;
@@ -45,7 +48,7 @@ export async function acquireTaskLease(client: TaskLeaseStore, options: TaskLeas
   timer.unref?.();
   return {
     async assertOwned() {
-      if (lost || stopped || await client.get(resourceKey) !== token) throw new Error("Task lease ownership lost");
+      if (lost || stopped || await client.get(resourceKey) !== token) throw new LeaseOwnershipError("Task lease ownership lost");
     },
     async release() {
       stopped = true; clearInterval(timer); await renewal;
@@ -54,5 +57,26 @@ export async function acquireTaskLease(client: TaskLeaseStore, options: TaskLeas
         redis.call('zrem',KEYS[2],ARGV[1])
         return 1`, 2, resourceKey, groupKey, token).catch(() => {});
     },
+  };
+}
+
+/** Driver resource only; worker owns when leases are acquired/released around task execution. */
+export function createRedisLeaseProvider(options: {
+  connection: RedisOptions; durationMs: number; concurrency: number;
+  onError?: (error: Error) => void;
+}): LeaseProvider {
+  for (const value of [options.durationMs, options.concurrency])
+    if (!Number.isSafeInteger(value) || value < 1) throw new TypeError("Invalid task lease limits");
+  let client: ReturnType<typeof createRedisClient> | undefined;
+  return {
+    async acquire(keys) {
+      const store = client ??= createRedisClient(options.connection, {
+        name: `lease-${crypto.randomUUID()}`, onError: options.onError,
+      });
+      await waitForRedisReady(store);
+      return acquireTaskLease(store, { ...keys, token: crypto.randomUUID(), durationMs: options.durationMs,
+        concurrency: options.concurrency, now: Date.now });
+    },
+    async close() { client?.disconnect(); client = undefined; },
   };
 }

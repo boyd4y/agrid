@@ -157,3 +157,15 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 ```
 
 这些用例直接注入 PG/时钟/UUID/队列，验证 tenant、caller transaction 原子性、lease/fence、持久接受/输出、成员撤销和 outbox claim/补偿。Outbox 使用独立临时 schema，避免认领并行测试的事件。HTTP 工厂仍由 `test/routes/platform-factories.test.ts` 验证原生 Better Auth、PG、签名隔离和连接释放。远程 Sandbox 的验收方式见前文，不能将本地 PASS 当成线上通过。
+
+## 通用 Queue / Worker 包
+
+`packages/queue` 验证消息契约、Redis 参数与原子租约、稳定投递 ID 及不暴露提供方对象的检查/统计接口。`packages/worker` 实际依赖 queue，以报告/邮件任务验证并发、瞬时与永久失败、重试耗尽、延迟不消耗失败次数、租约续期/丢失、关闭排空和缺失投递恢复。outbox 的 claim/fence SQL 保留应用隔离 PG 测试。
+
+在专用 Redis 6381 可用时运行：
+
+```bash
+QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm --filter @tabdo/queue --filter @tabdo/worker test
+```
+
+每个夹具使用随机 `agrid-queue-test` 前缀，只删除自己的键；不设置变量时真实 Redis 用例跳过，不能将其算作验收成功。worker 的 Node host 测试使用临时子进程验证 SIGTERM、启动时 SIGINT 和关闭超时。产品后台入口仍是 `src/queue/main.ts`，业务处理器与配置位于 `src/automation/jobs`。

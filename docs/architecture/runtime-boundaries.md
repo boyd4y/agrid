@@ -1,34 +1,41 @@
 # 包与运行时边界
 
-部署使用同一套 Node 代码，支持本地与 Railway。按能力拆包，Tabdo 业务集中在 `apps/server`，不再维护 backend 业务包。
+部署使用同一套 Node 代码，支持本地与 Railway。Tabdo 业务集中在 `apps/server`，不维护 backend 包或部署平台切换。Queue / Worker 的拆分过程与验收见 [实施记录](queue-worker-plan.md)。
 
 | 位置 | 职责 |
 |---|---|
 | `packages/core` | 基础服务/错误/摘要、任务时间计算、工作区快照契约 |
-| `packages/db` | PostgreSQL 连接池、schema 参数化的 Drizzle 工厂与通用事务类型 |
-| `packages/auth` | Better Auth、用户/组织/成员/凭证 schema、会话和 API Key 身份验证与 Key 管理 |
-| `packages/queue` | 消息、发布/消费、Redis 连接、延迟与失败重试、并发、租约、优雅关闭及 BullMQ 实现 |
+| `packages/db` | PostgreSQL 连接池、schema 参数化的 Drizzle 工厂与通用事务类型；当前仍是薄连接模块，见评审 |
+| `packages/auth` | Better Auth、身份 schema、会话/成员校验和 API Key 管理 |
+| `packages/queue` | 消息契约、发布/接收/确认、延迟重投、队列检查/统计、Redis 连接和原子租约、BullMQ 锁与 stalled 机制 |
+| `packages/worker` | 依赖 queue 的任务执行、重试策略、租约作用域、outbox 流程、恢复调度、轮询、排空及进程退出控制 |
 | `packages/storage` | 通用本地文件/S3 字节存储 |
 | `packages/agent-runtime` | 官方 Harness 组装、本地/Vercel Sandbox、工作目录及快照恢复 |
 | `packages/shared` | 前端、MCP、server 共用的产品协议与校验 |
 | `packages/ui` | React 组件、主题及设计 token |
-| `apps/server/src/business` | 表格、报告、技能、业务权限、集成、自动化、业务 Run/Session 与数据访问 |
-| `apps/server/src/harness` | 带工作区身份/租约/检查点的智能体执行编排 |
-| `apps/server` 其他入口 | Hono API、后台 worker、环境配置与依赖组装 |
+| `apps/server/src/business` | 表格、报告、技能、权限、集成、自动化、业务 Run/Session 与 SQL 存储操作 |
+| `apps/server/src/automation/jobs` | 自动化处理器、业务资源键、queue/worker 配置与依赖组装 |
+| `apps/server/src/harness` | 带身份/租约/检查点的智能体执行编排 |
+| `apps/server/src/queue` | 稳定的后台启动与状态 CLI 入口 |
 
 ## 依赖规则
 
-- `core` 不引用 db、auth、Tabdo schema、shared 或应用；任务服务只接收通用资源键和配置。
-- `db` 不引用 auth 或业务 schema，由 server 传入完整 schema。
-- `auth` 可依赖 core，不引用 server 或产品智能体表。旧智能体凭证通过 server 注入的解析回调兼容。
-- queue/storage 独立于产品；agent-runtime 只依赖通用基础与官方 SDK，不导入业务 Run 或 Actor。
-- Tabdo 业务组合上述能力。API Key 权限仍与所属用户一致，工具写入仍受成员资格、事务和 fence 保护。
-- SQL 表名、字段、索引和约束保持一致；schema 的代码归属变化不要求数据迁移。
+- core 不引用 db、auth、产品 schema、shared 或应用，也不承担 worker 框架。
+- db 不引用 auth 或业务 schema，由 server 传入完整 schema。
+- auth 可依赖 core，不引用 server 或产品智能体表；旧智能体凭证由 server 注入解析回调。
+- worker 必须依赖 queue 的根契约；不导入 queue 的 Redis/BullMQ 实现或驱动依赖。queue 不依赖 worker。
+- queue/worker/storage 均不依赖产品协议或应用；agent-runtime 只依赖基础契约与官方 SDK，不导入业务 Run/Actor。
+- server 组装具体提供方和业务处理器，不直接导入或声明 BullMQ/ioredis 依赖。
+- 配置显式传入包，环境变量只在应用入口读取。SQL 表名、字段、索引和约束保持一致，本轮不需要数据迁移。
 
-## 任务边界
+## 任务执行边界
 
-core 提供时间/时区计算；queue 负责真实的队列运行基础设施，包括 Redis 配置转换、发布、Worker 消费与重试、延迟投递、并发租约与续租、在途任务排空和连接关闭。server 通过处理回调接入，生产代码不直接导入 BullMQ/ioredis。环境变量读取、进程信号以及后台业务循环仍由应用入口组装。
+worker 调用 queue 消费接口，处理任务并返回完成、暂缓或重试的投递决定；queue 将决定转换为提供方机制。BullMQ Job/Worker 对象不进入 worker/server，投递次数和终态通过公共契约传递。
 
-自动化触发匹配、事件快照、Agent 任务说明、业务执行收据、outbox 原子提交及补偿查询属于 server。queue 提供至少一次投递，不能代替数据库中的业务幂等性。core/queue 不认识表格、邮件、工作区或特定自动化动作。
+Redis 原子租约由 queue 提供。worker 获取租约、检查所有权，并在整个处理器（包括业务错误记账）结束后释放。server 仅映射工作区/记录资源键及维护数据库 fence/收据。聊天与后台任务仍调用同一官方 Harness 业务生命周期。
 
-聊天与后台任务使用相同官方 Harness 生命周期。本地与 Railway 无平台选择开关，不增加独立部署服务。`pnpm check:architecture` 检查包依赖方向与无业务依赖的基础包。
+outbox 的 claim、renew、markPublished、markFailed 是 server 提供的存储操作；worker 执行并发发布、退避、清理与排空。恢复候选 SQL、generation/Run 状态判断和补偿写回留在 server；worker 管理消息检查、租约和恢复流程。至少一次投递不能替代业务幂等。
+
+worker 运行非重叠扫描，隔离不同任务及日志回调错误。关闭时停止新扫描，等待当前扫描和消费者结束，再关闭其余资源。Node host 处理 SIGTERM/SIGINT、启动失败和关闭超时；API/worker 仍是同一镜像的两个进程入口。
+
+`pnpm check:architecture` 检查依赖方向、worker 对 queue 的必需依赖、驱动隔离和无环；职责与行为还需真实队列、事务和进程故障测试验证。

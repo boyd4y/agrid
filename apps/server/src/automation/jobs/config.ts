@@ -1,4 +1,4 @@
-import "../load-env.js";
+import "../../load-env.js";
 import { redisConnectionOptions } from "@tabdo/queue/redis";
 
 export function positiveInt(name: string, fallback: number) {

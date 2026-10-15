@@ -256,6 +256,9 @@ importers:
       '@tabdo/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@tabdo/worker':
+        specifier: workspace:*
+        version: link:../../packages/worker
       ai:
         specifier: 7.0.141
         version: 7.0.141(zod@4.6.5)
@@ -580,6 +583,22 @@ importers:
       vite:
         specifier: ^6.3.3
         version: 6.4.4(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/worker:
+    dependencies:
+      '@tabdo/queue':
+        specifier: workspace:*
+        version: link:../queue
+    devDependencies:
+      '@types/node':
+        specifier: ^22.14.1
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.15
+      typescript:
+        specifier: ^5.8.3
+        version: 5.8.3
 
 packages:
 

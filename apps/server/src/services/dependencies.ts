@@ -2,7 +2,7 @@ import { createSystemServices } from "@tabdo/core/services";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { getDatabase } from "../resources/scope.js";
-import { queueName } from "../queue/config.js";
+import { queueName } from "../automation/jobs/config.js";
 import { ServiceError } from "../business/errors.js";
 import type { CommandDependencies, RuntimeDependencies } from "../business/dependencies.js";
 

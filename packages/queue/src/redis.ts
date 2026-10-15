@@ -3,6 +3,19 @@ import { Redis, type RedisOptions } from "ioredis";
 export type { RedisOptions } from "ioredis";
 export type RedisClient = Redis;
 
+/** Offline queuing is disabled for producers; explicitly wait for connection readiness. */
+export function waitForRedisReady(client: RedisClient): Promise<void> {
+  if (client.status === "ready") return Promise.resolve();
+  if (client.status === "end") return Promise.reject(new Error("Redis connection has ended"));
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { client.off("ready", ready); client.off("error", failed); client.off("end", ended); };
+    const ready = () => { cleanup(); resolve(); };
+    const failed = (error: Error) => { cleanup(); reject(error); };
+    const ended = () => failed(new Error("Redis connection has ended"));
+    client.once("ready", ready); client.once("error", failed); client.once("end", ended);
+  });
+}
+
 /** Connection policy is infrastructure; reading environment variables belongs to the caller. */
 export function redisConnectionOptions(connectionString: string, role: "producer" | "worker"): RedisOptions {
   const url = new URL(connectionString);

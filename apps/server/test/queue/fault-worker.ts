@@ -1,7 +1,7 @@
 import { withNodeResources } from "../../src/resources/node.js";
 // Process-level fault fixture. Never invoked by production entrypoints.
 import assert from "node:assert/strict";
-import { startWorker } from "../../src/queue/workers.js";
+import { startAutomationWorker as startWorker } from "../../src/automation/jobs/workers.js";
 import { client } from "../../src/db/index.js";
 assert.ok(new URL(process.env.DATABASE_URL ?? "").pathname.endsWith("_queue_test"));
 assert.ok(process.env.QUEUE_PREFIX?.startsWith("agrid-queue-test"));

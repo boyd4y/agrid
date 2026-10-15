@@ -6,11 +6,13 @@
 
 独立包必须拥有可说明、可测试的能力边界。文件数、代码行数和“未来复用”都不能单独证明拆包有价值。检查调用方是否仍直接承担该能力的实现，而不只是检查 import 是否无环。
 
-## Queue：实现下沉不完整，已修正
+## Queue / Worker：两轮职责调整
 
 原包只有 64 行，包含消息接口和 BullMQ 发布封装；Worker、Redis URL/连接策略、延迟处理、失败分类和关闭流程仍在 server。Redis 租约则放在 core。包的名称与拥有的职责不匹配。
 
-本轮归属调整为：
+第一轮归属记录如下：
+
+以下是 `4abae41` 完成的第一轮调整，不代表边界收敛完毕。后续检查确认通用循环、outbox 发布流程、资源管理等仍散在 server；第二轮已实施 [queue + worker 两包](queue-worker-plan.md)，worker 明确依赖 queue，接管执行策略、租约作用域、outbox 流程、恢复调度和进程生命周期。server 的自动化业务集中到 `automation/jobs`，queue 目录只留 CLI 入口；core 未增加 worker 框架。
 
 | queue 包拥有 | server 拥有 |
 |---|---|
@@ -53,3 +55,7 @@ outbox 原子提交、SQL 领取和过期补偿查询保留在业务代码：它
 queue 修正已通过：完整 `pnpm test` 231 项（包括独立 Redis 合约测试）、测试类型检查、应用隔离队列回归 17 项、完整构建、Docker 构建与生产镜像健康/静态页面/私有接口鉴权检查。队列回归中会主动停止 Redis 的断网项未启用，未操作共享 Redis 生命周期。
 
 PG/Redis 使用隔离测试资源。本地测试不等于 Railway 部署或真实模型/远程 Sandbox 验收。`check:architecture` 能约束依赖方向，不能替代职责和行为评审。
+
+## 第二轮验收：Queue / Worker
+
+已形成 `server → worker → queue` 的执行路径。worker 拥有真实任务消费、租约作用域、outbox 并发发布/退避、恢复调度和进程生命周期；server 的 queue 目录只保留两个 CLI 入口。业务存储实现留在 server，queue 不暴露 BullMQ Job/Worker 对象或失败分类。完整测试 239 项和应用故障回归 17 项通过，开发源码入口及生产镜像双进程写回/排空验证通过。具体证据与未验收范围见 [实施记录](queue-worker-plan.md)。

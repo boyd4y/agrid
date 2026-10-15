@@ -4,23 +4,26 @@ import { randomUUID } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { eq, sql } from "drizzle-orm";
 import { createRedisClient } from "@tabdo/queue/redis";
+import { withNodeResources } from "../../src/resources/node.js";
 import { db, client } from "../../src/db/index.js";
 import { organization, tables, columns, rows, automations, automationEvents, automationOutbox, automationRuns, automationStepReceipts } from "../../src/db/schema.js";
 import { addRow, updateCell } from "../../src/commands/index.js";
 import { updateAutomation, deleteAutomation, replayAutomationRun } from "../../src/automation/crud.js";
 import { claimExecution, executeNext, recordFailure, PermanentError, FenceLostError } from "../../src/automation/execution.js";
-import { startWorker } from "../../src/queue/workers.js";
-import { redisOptions, prefix } from "../../src/queue/config.js";
-import { createPublisher, createQueue, closeQueue, jobId, type AutomationJob } from "../../src/queue/queues.js";
-import { createPublishedReconciler } from "../../src/queue/reconcile.js";
-import { createRelay } from "../../src/queue/relay.js";
-import { acquireRowLease } from "../../src/queue/lease.js";
+import { startAutomationWorker as startWorker } from "../../src/automation/jobs/workers.js";
+import { redisOptions, prefix } from "../../src/automation/jobs/config.js";
+import { createAutomationQueue as createQueue, jobId, type AutomationJob } from "../../src/automation/jobs/queues.js";
+import { createPublishedReconciler } from "../../src/automation/jobs/reconcile.js";
+import { createRelay } from "../../src/automation/jobs/relay.js";
+import { createRowLeaseProvider, rowLeaseKeys } from "../../src/automation/jobs/lease.js";
+const createPublisher = createQueue;
+const closeQueue = (queue: ReturnType<typeof createQueue>) => queue.close();
 
 assert.ok(new URL(process.env.DATABASE_URL ?? "").pathname.endsWith("_queue_test"), "Use an isolated *_queue_test database");
 assert.ok(prefix.startsWith("agrid-queue-test"), "Use a dedicated test Redis prefix");
 const redis = createRedisClient(redisOptions(false), { name: "test-raw", onError: () => {} });
 const queue = createQueue();
-const relay = createRelay(createPublisher());
+const relay = withNodeResources(() => createRelay(createPublisher()));
 const runtimes: ReturnType<typeof startWorker>[] = [];
 async function eventually(check: () => Promise<boolean>, timeout = 15000) {
   const start = Date.now();
@@ -146,10 +149,12 @@ test("disabled/deleted resources cancel queued plans and tenants remain isolated
 
 test("row leases and tenant concurrency are shared across clients", async () => {
   process.env.AUTOMATION_TENANT_CONCURRENCY = "1";
-  const org = randomUUID(); const row = randomUUID(); const held = await acquireRowLease(redis, org, row); assert.ok(held);
-  assert.equal(await acquireRowLease(redis, org, row), null); assert.equal(await acquireRowLease(redis, org, randomUUID()), null);
-  await held.release(); const next = await acquireRowLease(redis, org, row); assert.ok(next); await next.release();
-  delete process.env.AUTOMATION_TENANT_CONCURRENCY;
+  const a = createRowLeaseProvider(), b = createRowLeaseProvider();
+  try {
+    const org = randomUUID(); const row = randomUUID(); const held = await a.acquire(rowLeaseKeys(org, row)); assert.ok(held);
+    assert.equal(await b.acquire(rowLeaseKeys(org, row)), null); assert.equal(await b.acquire(rowLeaseKeys(org, randomUUID())), null);
+    await held.release(); const next = await b.acquire(rowLeaseKeys(org, row)); assert.ok(next); await next.release();
+  } finally { await a.close(); await b.close(); delete process.env.AUTOMATION_TENANT_CONCURRENCY; }
 });
 
 test("outbox uses an injected publisher while preserving failures, claim tokens and delivery identity", async () => {
@@ -215,10 +220,13 @@ test("locked records are skipped; expired claims recover and stale owners cannot
 
 test("crash after Redis accepts a job and before DB ack retries the same job ID", async () => {
   const f = await fixture(); const old = (await relay.claim(1))[0];
-  const first = await queue.add("execute", old.payload, { jobId: jobId(old.payload.eventId, old.generation) });
+  const first = { id: jobId(old.payload.eventId, old.generation), body: old.payload };
+  const waiting = (await queue.status()).counts.waiting;
+  await queue.publish(first);
   await db.update(automationOutbox).set({ claimUntil: new Date(0) }).where(eq(automationOutbox.id, old.id));
   const replacement = (await relay.claim(1))[0]; assert.equal(await relay.publish(replacement), true);
-  assert.equal((await queue.getJobs(["wait"], 0, -1)).filter((j) => j.id === first.id).length, 1);
+  assert.equal((await queue.status()).counts.waiting, waiting + 1);
+  assert.deepEqual((await queue.get(first.id))?.body, old.payload);
   assert.equal((await db.select().from(automationOutbox).where(eq(automationOutbox.id, f.delivery!.id)))[0].status, "published");
   await runDirect(f.job!.data);
 });
@@ -235,13 +243,14 @@ test("multiple BullMQ workers consume directly; retry after action commit does n
   await eventually(async () => Boolean((await eventState(f.job!.data.eventId))?.finishedAt));
   assert.equal((await eventState(f.job.data.eventId)).status, "completed");
   const [row] = await db.select().from(rows).where(eq(rows.id, f.row.id)); assert.equal(row.version, 2);
-  const duplicate = await queue.add("duplicate", f.job.data, { jobId: `duplicate-${randomUUID()}` });
-  await eventually(async () => await duplicate.getState() === "completed");
+  const duplicate = `duplicate-${randomUUID()}`;
+  await queue.publish({ id: duplicate, body: f.job.data });
+  await eventually(async () => (await queue.get(duplicate))?.state === "completed");
   const [same] = await db.select().from(rows).where(eq(rows.id, f.row.id)); assert.equal(same.version, 2);
 });
 
 test("published reconciler restores a missing Redis job without repeating committed steps", async () => {
-  for (const runtime of runtimes) await runtime.worker.pause();
+  for (const runtime of runtimes) await runtime.pause();
   const reconciler = createPublishedReconciler();
   const f = await fixture({ twoSteps: true }); assert.ok(f.job);
   try {
@@ -252,7 +261,7 @@ test("published reconciler restores a missing Redis job without repeating commit
     const delivery = (await relay.claim(100)).find((d) => d.id === f.delivery!.id)!;
     assert.equal(await relay.publish(delivery), true);
     const id = jobId(f.event.id, f.event.generation);
-    await (await queue.getJob(id))!.remove();
+    await queue.remove(id);
     await reconciler.tick();
     assert.equal((await db.select().from(automationOutbox).where(eq(automationOutbox.id, delivery.id)))[0].status, "published", "Grace protects recent publications");
     await db.update(automationOutbox).set({ publishedAt: new Date(0) }).where(eq(automationOutbox.id, delivery.id));
@@ -262,7 +271,7 @@ test("published reconciler restores a missing Redis job without repeating commit
     assert.equal(reset.publishedAt, null); assert.equal(reset.claimToken, null); assert.equal(reset.claimUntil, null);
     const replacement = (await relay.claim(100)).find((d) => d.id === delivery.id)!;
     assert.equal(await relay.publish(replacement), true);
-    assert.ok(await queue.getJob(id));
+    assert.ok(await queue.get(id));
     await runDirect(replacement.payload); await runDirect(replacement.payload);
     assert.equal((await eventState(f.event.id)).status, "completed");
     const [row] = await db.select().from(rows).where(eq(rows.id, f.row.id));
@@ -273,29 +282,30 @@ test("published reconciler restores a missing Redis job without repeating commit
 });
 
 test("published reconciler skips waiting input, running fences, unknown native runs, live row leases and existing jobs", async () => {
-  for (const runtime of runtimes) await runtime.worker.pause();
+  for (const runtime of runtimes) await runtime.pause();
   const reconciler = createPublishedReconciler();
   const fixtures = await Promise.all(Array.from({ length: 5 }, () => fixture()));
   const deliveries = await relay.claim(100);
-  let lease: Awaited<ReturnType<typeof acquireRowLease>> = null;
+  const leaseProvider = createRowLeaseProvider();
+  let lease: Awaited<ReturnType<typeof leaseProvider.acquire>> = null;
   try {
     for (const f of fixtures) {
       await relay.publish(deliveries.find((d) => d.id === f.delivery!.id)!);
       await db.update(automationOutbox).set({ publishedAt: new Date(0) }).where(eq(automationOutbox.id, f.delivery!.id));
     }
-    for (const f of fixtures.slice(0, 3)) await (await queue.getJob(jobId(f.event.id)))!.remove();
+    for (const f of fixtures.slice(0, 3)) await queue.remove(jobId(f.event.id));
     await db.update(automationEvents).set({ status: "waiting_input" }).where(eq(automationEvents.id, fixtures[0].event.id));
     await claimExecution(fixtures[1].event.id);
-    lease = await acquireRowLease(redis, fixtures[2].org, fixtures[2].row.id); assert.ok(lease);
+    lease = await leaseProvider.acquire(rowLeaseKeys(fixtures[2].org, fixtures[2].row.id)); assert.ok(lease);
     await db.update(automationRuns).set({ status: "unknown" }).where(eq(automationRuns.eventId, fixtures[4].event.id));
-    await (await queue.getJob(jobId(fixtures[4].event.id)))!.remove();
+    await queue.remove(jobId(fixtures[4].event.id));
     await reconciler.tick();
     for (const f of fixtures) {
       const [delivery] = await db.select().from(automationOutbox).where(eq(automationOutbox.id, f.delivery!.id));
       assert.equal(delivery.status, "published");
     }
   } finally {
-    await lease?.release(); await reconciler.close();
+    await lease?.release(); await leaseProvider.close(); await reconciler.close();
     for (const f of fixtures) {
       await db.update(automationRuns).set({ status: "queued" }).where(eq(automationRuns.eventId, f.event.id));
       await db.update(automationEvents).set({ status: "matched" }).where(eq(automationEvents.id, f.event.id));
@@ -305,32 +315,35 @@ test("published reconciler skips waiting input, running fences, unknown native r
 });
 
 test("retry exhaustion and outbox-backed manual replay resume only unfinished steps", async () => {
-  for (const runtime of runtimes) await runtime.worker.pause();
+  for (const runtime of runtimes) await runtime.pause();
   const f = await fixture({ twoSteps: true }); assert.ok(f.job);
   let blocked = false;
   const runtime = startWorker({ afterAction: async (id) => { if (id === f.job!.data.eventId) blocked = true; },
     beforeAction: async (id) => { if (id === f.job!.data.eventId && blocked) throw new Error("injected transient failure"); } });
   // Start paused until test-specific retry options are installed.
-  await runtime.worker.pause(); await runtime.ready; runtimes.push(runtime);
-  await queue.add("fault", f.job.data, { jobId: jobId(f.job.data.eventId), attempts: 2, backoff: { type: "fixed", delay: 20 } });
-  runtime.worker.resume();
+  await runtime.pause(); await runtime.ready; runtimes.push(runtime);
+  const faultQueue = createQueue({ attempts: 2, retryDelayMs: 20 });
+  try { await faultQueue.publish({ id: jobId(f.job.data.eventId), body: f.job.data }); }
+  finally { await faultQueue.close(); }
+  runtime.resume();
   await eventually(async () => (await eventState(f.job!.data.eventId))?.status === "failed");
   const [failed] = await db.select().from(automationRuns).where(eq(automationRuns.eventId, f.job.data.eventId)); assert.equal(failed.nextStep, 1);
   await assert.rejects(replayAutomationRun(failed.id, "wrong tenant"), /运行不存在或尚在执行/);
-  await runtime.worker.pause(); blocked = false;
+  await runtime.pause(); blocked = false;
   await replayAutomationRun(failed.id, f.org);
   await relay.tick();
   const replayWorker = startWorker(); runtimes.push(replayWorker); await replayWorker.ready;
   await eventually(async () => { await relay.tick(); return (await eventState(f.job!.data.eventId)).status === "completed"; });
   const [row] = await db.select().from(rows).where(eq(rows.id, f.row.id)); assert.equal(row.version, 3); assert.equal(row.cells[f.output.id], "step two");
   assert.equal((await db.select().from(automationStepReceipts).where(eq(automationStepReceipts.runId, failed.id))).length, 2);
-  const stale = await queue.add("stale", f.job.data, { jobId: `stale-${randomUUID()}` });
-  await eventually(async () => await stale.getState() === "completed");
+  const stale = `stale-${randomUUID()}`;
+  await queue.publish({ id: stale, body: f.job.data });
+  await eventually(async () => (await queue.get(stale))?.state === "completed");
   assert.equal((await eventState(f.job.data.eventId)).generation, 1);
 });
 
 test("SIGKILL after a committed write recovers through BullMQ without repeating actions", async () => {
-  for (const runtime of runtimes) await runtime.worker.pause();
+  for (const runtime of runtimes) await runtime.pause();
   const f = await fixture(); assert.ok(f.job);
   const child = spawn(process.execPath, ["--import", "tsx", "test/queue/fault-worker.ts", "kill"], {
     env: { ...process.env, FAULT_EVENT_ID: f.job.data.eventId, WORKER_LOCK_MS: "1000", WORKER_STALLED_MS: "1000", AUTOMATION_LEASE_MS: "1000" }, stdio: ["ignore", "pipe", "pipe"],
@@ -344,7 +357,7 @@ test("SIGKILL after a committed write recovers through BullMQ without repeating 
     const replacement = startWorker(); runtimes.push(replacement); await replacement.ready;
     await eventually(async () => (await eventState(f.job!.data.eventId)).status === "completed");
     const [row] = await db.select().from(rows).where(eq(rows.id, f.row.id)); assert.equal(row.version, 2);
-    await replacement.worker.pause();
+    await replacement.pause();
   } finally { child.kill("SIGKILL"); }
 });
 
@@ -365,7 +378,7 @@ test("Redis outage leaves durable pending deliveries; relay reconnects and sends
   skip: process.env.QUEUE_TEST_REDIS_CONTAINER !== "agrid-queue-test-redis",
 }, async () => {
   assert.equal(new URL(process.env.REDIS_URL!).port, "6381");
-  for (const runtime of runtimes) await runtime.worker.pause();
+  for (const runtime of runtimes) await runtime.pause();
   execFileSync("docker", ["stop", "--time", "1", "agrid-queue-test-redis"]);
   let f: Awaited<ReturnType<typeof fixture>>;
   try {

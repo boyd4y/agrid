@@ -19,6 +19,12 @@
 - Railway 实际部署、远程 Vercel Sandbox 和真实模型调用。
 - Pi 是 host-runtime；本地目录不是 OS 级沙箱，不宣称与远程 Sandbox 有同样隔离。
 
+### 已完成：Queue / Worker 边界收敛
+
+- 已按 [拆分计划](architecture/queue-worker-plan.md) 新增依赖 queue 的 worker 包；queue 负责传输与驱动，worker 负责完整的后台任务执行。
+- 执行策略、租约管理、outbox 发布、恢复调度和关闭控制已迁移；server 保留业务处理器、幂等收据及存储操作。
+- 已通过完整测试、隔离队列故障回归、构建和生产镜像 HTTP → outbox → Redis → worker 写回验证；详情以计划验收记录为准。
+
 ## 已完成并提交
 
 - 一级列表统一最大宽度和分页。

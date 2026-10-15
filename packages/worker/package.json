@@ -1,0 +1,58 @@
+{
+  "name": "@tabdo/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./outbox": {
+      "types": "./src/outbox.ts",
+      "development": "./src/outbox.ts",
+      "import": "./dist/outbox.js",
+      "default": "./dist/outbox.js"
+    },
+    "./recovery": {
+      "types": "./src/recovery.ts",
+      "development": "./src/recovery.ts",
+      "import": "./dist/recovery.js",
+      "default": "./dist/recovery.js"
+    },
+    "./leases": {
+      "types": "./src/leases.ts",
+      "development": "./src/leases.ts",
+      "import": "./dist/leases.js",
+      "default": "./dist/leases.js"
+    },
+    "./runtime": {
+      "types": "./src/runtime.ts",
+      "development": "./src/runtime.ts",
+      "import": "./dist/runtime.js",
+      "default": "./dist/runtime.js"
+    },
+    "./node": {
+      "types": "./src/node.ts",
+      "development": "./src/node.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@tabdo/queue": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@types/node": "^22.14.1"
+  }
+}
