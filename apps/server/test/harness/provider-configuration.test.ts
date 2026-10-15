@@ -5,7 +5,7 @@ import { InMemoryFs } from "just-bash";
 import { createHarnessAgent } from "@tabdo/platform-node/harness/agent";
 import { createPiAdapter } from "@tabdo/platform-node/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
-import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
+import { resolveNativeConfiguration, resolvePiModelId } from "@tabdo/backend/agent/runtime-configuration";
 
 function provider(baseUrl: string, overrides: Record<string, string | undefined> = {}) {
   const configuration = resolveNativeConfiguration({ harness: "pi", mode: "local", env: {
@@ -126,4 +126,24 @@ test("complete explicit Pi credentials win as a unit over a legacy OpenRouter ke
     assert.equal(fallback.model.id, "router/model");
   }
   assert.throws(() => provider("https://api.deepseek.com/v1", { PI_MODEL: "", OPENROUTER_API_KEY: "old-router", OPENROUTER_MODEL: "router/model" }), /需要配置模型 ID/, "complete direct credentials cannot borrow the other provider's model");
+});
+
+
+test("legacy router default aliases resolve through the selected provider without replacing explicit models", () => {
+  const direct = { PI_API_KEY: "fixture-key", PI_BASE_URL: "https://api.deepseek.com/v1", PI_MODEL: "deepseek-flash", OPENROUTER_API_KEY: "unused-old-key" };
+  for (const modelId of ["openrouter/free", "openrouter/auto", "__harness_default__", undefined]) {
+    const configured = resolveNativeConfiguration({ harness: "pi", mode: "local", modelId, env: direct });
+    assert.equal(configured.harness, "pi");if (configured.harness !== "pi") throw new Error("Expected Pi");
+    assert.equal(configured.adapter.model.id, "deepseek-flash");
+    assert.equal(configured.adapter.model.reasoning, true);
+  }
+  assert.equal(resolvePiModelId("deepseek-v4-pro", direct), "deepseek-v4-pro");
+  assert.equal(resolvePiModelId("custom/explicit-model", direct), "custom/explicit-model");
+  for (const PI_MODEL of [undefined, "openrouter/free"]) {
+    assert.throws(() => resolvePiModelId("openrouter/free", { ...direct, PI_MODEL }), /PI_MODEL/);
+  }
+  const router = { OPENROUTER_API_KEY: "fixture-key", OPENROUTER_MODEL: "vendor/default" };
+  assert.equal(resolvePiModelId("openrouter/free", router), "openrouter/free");
+  assert.equal(resolvePiModelId("openrouter/auto", router), "openrouter/auto");
+  assert.equal(resolvePiModelId("__harness_default__", router), "vendor/default");
 });

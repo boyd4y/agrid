@@ -1,7 +1,7 @@
 import { ServiceError } from "../errors.js";
 import { HarnessConfigurationError } from "@tabdo/core/harness";
 import { DEFAULT_PI_OUTPUT_TOKENS, PI_THINKING_LEVELS, isDeepSeekEndpoint, isKnownDeepSeekReasoningModel, type PiThinkingLevel, type PiModelMetadata } from "./model-contracts.js";
-import type { HarnessId, RuntimeMode, RuntimeEnvironment } from "./contracts.js";
+import { NATIVE_DEFAULT_MODEL, type HarnessId, type RuntimeMode, type RuntimeEnvironment } from "./contracts.js";
 
 /** Validated product settings only; official SDK assembly belongs to the execution environment. */
 export type PiProviderConfiguration = {
@@ -34,6 +34,19 @@ export function resolvePiProvider(env: RuntimeEnvironment): {
   return undefined;
 }
 
+/** Old product defaults are router aliases, not model IDs on a direct endpoint. */
+export function resolvePiModelId(modelId: string | undefined, env: RuntimeEnvironment): string | undefined {
+  const provider = resolvePiProvider(env);
+  const selected = modelId?.trim();
+  const requested = selected === NATIVE_DEFAULT_MODEL ? undefined : selected;
+  if (provider?.provider === "pi" && ["openrouter/free", "openrouter/auto"].includes(requested ?? "")) {
+    if (!provider.defaultModel || provider.defaultModel.startsWith("openrouter/"))
+      throw new ServiceError(400, { message: "智能体保存了旧 OpenRouter 默认模型，请配置 PI_MODEL 或选择当前提供商的模型" });
+    return provider.defaultModel;
+  }
+  return requested || provider?.defaultModel;
+}
+
 export function resolvePiThinkingLevel(env: RuntimeEnvironment): PiThinkingLevel | undefined {
   const level = value(env, "PI_THINKING_LEVEL");
   if (level === undefined) return undefined;
@@ -61,7 +74,7 @@ export function resolveNativeConfiguration(options: { harness: HarnessId; mode: 
           "Pi 未配置模型提供商：请设置 OPENROUTER_API_KEY，或 PI_API_KEY 与 PI_BASE_URL",
       });
     const openRouter = provider.provider === "openrouter";
-    const modelId = options.modelId?.trim() || provider.defaultModel;
+    const modelId = resolvePiModelId(options.modelId, env);
     if (!modelId)
       throw new ServiceError(400, {
         message: "自定义 Pi 提供商需要配置模型 ID",

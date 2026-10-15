@@ -24,7 +24,7 @@ export function AgentEditorPage() {
   const [editing, setEditing] = useState<MemberOption | null>(null), [loading, setLoading] = useState(true), [ready, setReady] = useState(false), [canManage, setCanManage] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   const [agentName, setAgentName] = useState(""), [persona, setPersona] = useState(t("defaultPersona"));
-  const [harness, setHarness] = useState<HarnessId>("pi"), [model, setModel] = useState("openrouter/free"), [harnesses, setHarnesses] = useState<HarnessStatus[]>([]);
+  const [harness, setHarness] = useState<HarnessId>("pi"), [model, setModel] = useState("__harness_default__"), [harnesses, setHarnesses] = useState<HarnessStatus[]>([]);
   const [runtime, setRuntime] = useState<"local" | "sandbox">("local");
   const [skills, setSkills] = useState<SkillSummary[]>([]), [skillNames, setSkillNames] = useState<string[]>([]);
   const [disabledTools, setDisabledTools] = useState<string[]>([]);
@@ -55,7 +55,7 @@ export function AgentEditorPage() {
       if (agentId && !agent) throw new Error(t("notFound"));
       const selected = agent?.agent?.persona?.defaultHarness ?? "pi";
       setImage(agent?.image ?? null);setEditing(agent ?? null);setAgentName(agent?.name ?? "");setPersona(agent?.agent?.persona?.systemPrompt ?? t("defaultPersona"));
-      setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "openrouter/free");
+      setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__");
       setRuntime(agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"));
       const selectedNames = library.skills.filter((s) => s.enabled && (!agent?.agent?.persona?.skillNames || agent.agent.persona.skillNames.includes(s.name))).map((s) => s.name);
       const platformIds = new Set<string>(PLATFORM_TOOL_IDS);
@@ -64,7 +64,7 @@ export function AgentEditorPage() {
       setInitialConfiguration(JSON.stringify({ name: (agent?.name ?? "").trim(), image: agent?.image ?? null, persona: {
         systemPrompt: (agent?.agent?.persona?.systemPrompt ?? t("defaultPersona")).trim(),
         defaultHarness: selected,
-        defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "openrouter/free").trim(),
+        defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__").trim(),
         runtime: agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"),
         skillNames: selectedNames, disabledTools: [...selectedDisabledTools].sort(),
       }}));setReady(true);

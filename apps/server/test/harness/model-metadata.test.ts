@@ -97,3 +97,12 @@ test("OpenRouter fallback metadata uses its own default model when direct config
   const metadata = await resolvePiModelMetadata(undefined, { ...environment("selected-router-fallback"), PI_API_KEY: "", PI_BASE_URL: "https://api.deepseek.com/v1", PI_MODEL: "deepseek-flash", OPENROUTER_MODEL: "router/model" });
   assert.deepEqual(metadata, { contextWindow: 123456, maxTokens: 16384, reasoning: true });
 });
+
+
+test("legacy router defaults use the effective direct model for native reasoning metadata", async t => {
+  t.mock.method(globalThis, "fetch", async () => { throw new Error("Direct models must not query a router catalog"); });
+  const env = { PI_API_KEY: "fixture-key", PI_BASE_URL: "https://api.deepseek.com/v1", PI_MODEL: "deepseek-flash", OPENROUTER_API_KEY: "legacy-key" };
+  for (const old of ["openrouter/free", "openrouter/auto", "__harness_default__"]) {
+    assert.deepEqual(await resolvePiModelMetadata(old, env), { contextWindow: 32768, maxTokens: 16384, reasoning: true });
+  }
+});

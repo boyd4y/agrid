@@ -88,6 +88,7 @@ test("portable member creation uses actual builtin skills and deletion carries e
   assert.equal(response.status, 201); const thread = await response.json();
   assert.equal((await request(`/threads/${thread.id}`, { custom: { agentId: randomUUID() } }, "PATCH")).status, 409);
   const [profile] = await admin.db.select().from(agentProfile).where(eq(agentProfile.userId, agent.userId));
+  assert.equal(profile.persona?.defaultModel, "__harness_default__", "API-created agents follow the configured provider instead of hardcoding OpenRouter");
   const [runtime] = await admin.db.insert(agentRuntimeSessions).values({ threadId: thread.id, agentProfileId: profile.id, harness: "pi", mode: "local", sandboxId: "fixture-no-compute" }).returning();
   const [run] = await admin.db.insert(agentRuns).values({ threadId: thread.id, runtimeSessionId: runtime.id,
     userMessageId: randomUUID(), assistantMessageId: randomUUID(), fence: 1, status: "completed" }).returning();

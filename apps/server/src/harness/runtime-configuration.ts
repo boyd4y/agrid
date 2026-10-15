@@ -3,6 +3,10 @@ import * as configuration from "@tabdo/backend/agent/runtime-configuration";
 import { mapServiceError } from "../services/backend-facade.js";
 import type { RuntimeEnvironment } from "./contracts.js";
 export type { NativeConfiguration, PiProviderConfiguration } from "@tabdo/backend/agent/runtime-configuration";
+export function resolvePiModelId(modelId: string | undefined, env: RuntimeEnvironment) {
+  try { return configuration.resolvePiModelId(modelId, env); }
+  catch (error) { return mapServiceError(error); }
+}
 const value = (env: RuntimeEnvironment, name: string) => env[name]?.trim() || undefined;
 export function sandboxCredentials(env: RuntimeEnvironment) {
   const token = value(env, "VERCEL_TOKEN"),

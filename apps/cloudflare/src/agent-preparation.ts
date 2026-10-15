@@ -5,7 +5,7 @@ import { resolveChatContext } from "@tabdo/backend/chat/context";
 import { getReport } from "@tabdo/backend/reports/service";
 import { resolveAgentSkills } from "@tabdo/backend/skills/runtime";
 import { resolvePiModelMetadata } from "@tabdo/backend/agent/model-metadata";
-import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
+import { resolveNativeConfiguration, resolvePiModelId } from "@tabdo/backend/agent/runtime-configuration";
 import type { RuntimeEnvironment } from "@tabdo/backend/agent/contracts";
 import { createTableTools } from "@tabdo/backend/agent/tools/index";
 import type { LoadedNativeExecution } from "@tabdo/backend/agent/executions";
@@ -22,9 +22,10 @@ export function resolveProductContext(scope: ProductScope, input: unknown, actor
 
 /** Native SDK construction remains in the Sandbox; this prepares only product settings and documents. */
 export async function prepareProductAgent(scope: ProductScope, env: RuntimeEnvironment, configuration: ResolvedAgentConfiguration, context: ResolvedChatContext) {
-  const { profile,harness,modelId,mode,disabledTools,tableId } = configuration;
+  const { profile,harness,mode,disabledTools,tableId } = configuration;
+  const modelId = harness === "pi" ? resolvePiModelId(configuration.modelId, env) : configuration.modelId;
   const { skills,instructions: skillInstructions } = await resolveAgentSkills({ ...scope.runtime,builtins: scope.builtins },profile.organizationId,profile.persona?.skillNames);
-  const { agentsDocument,system } = buildChatAgentInstructions(configuration,context,skillInstructions);
+  const { agentsDocument,system } = buildChatAgentInstructions({ ...configuration,modelId },context,skillInstructions);
   const piModel = harness === "pi" ? await resolvePiModelMetadata(modelId,env) : undefined;
   resolveNativeConfiguration({ harness,mode,modelId,piModel,env });
   const definitions: ToolSet = createTableTools(scope.commands,tableId,profile.organizationId,undefined);

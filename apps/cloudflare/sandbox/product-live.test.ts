@@ -68,7 +68,8 @@ test("live product Worker + DO + Docker Sandbox preserves public chat and files"
       const status = await json<{ mode: string; harnesses: { id: string; provider?: string; defaultModel: string; available: boolean }[] }>("/chat/status");
       return status.mode === "live" && status.harnesses.some(harness => harness.id === "pi" && harness.available && harness.provider === "pi" && harness.defaultModel === "fixture-native");
     }, "explicit local fixture model configuration", 120_000);
-    const agent = await json<{ member: { id: string; userId: string } }>("/members/agents", { name: `Native ${marker}`, persona: { defaultHarness: "pi", defaultModel: "fixture-native", runtime: "local", skillNames: [] } });
+    // Existing profiles can retain the old product default after changing provider.
+    const agent = await json<{ member: { id: string; userId: string } }>("/members/agents", { name: `Native ${marker}`, persona: { defaultHarness: "pi", defaultModel: "openrouter/free", runtime: "local", skillNames: [] } });
     agentUser = agent.member.userId;
     console.info("CF live: public signup, organization and agent ready");
     const createThread = async () => {

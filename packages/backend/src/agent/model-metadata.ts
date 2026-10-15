@@ -4,7 +4,7 @@ import { z } from "zod";
 import { DEFAULT_PI_OUTPUT_TOKENS, isKnownDeepSeekReasoningModel, type PiModelMetadata } from "./model-contracts.js";
 import type { RuntimeEnvironment } from "./contracts.js";
 export { DEFAULT_PI_OUTPUT_TOKENS, isKnownDeepSeekReasoningModel, type PiModelMetadata, type PiCompletion } from "./model-contracts.js";
-import { resolvePiThinkingLevel, resolvePiProvider } from "./runtime-configuration.js";
+import { resolvePiThinkingLevel, resolvePiProvider, resolvePiModelId } from "./runtime-configuration.js";
 const catalog = z.object({ data: z.array(z.object({ id: z.string(), context_length: z.number().int().positive(),
   top_provider: z.object({ max_completion_tokens: z.number().int().positive().nullable().optional() }).nullable().optional(),
   supported_parameters: z.array(z.string()).optional(),
@@ -23,12 +23,13 @@ function configuredLimit(env: RuntimeEnvironment, name: string, fallback: number
 export async function resolvePiModelMetadata(modelId: string | undefined, env: RuntimeEnvironment): Promise<PiModelMetadata> {
   const level = resolvePiThinkingLevel(env);
   const provider = resolvePiProvider(env);
+  const resolvedModel = resolvePiModelId(modelId, env);
   if (provider?.provider !== "openrouter") return {
     contextWindow: configuredLimit(env, "PI_CONTEXT_WINDOW", 32768),
     maxTokens: configuredLimit(env, "PI_MAX_OUTPUT_TOKENS", DEFAULT_PI_OUTPUT_TOKENS),
-    reasoning: isKnownDeepSeekReasoningModel(env.PI_BASE_URL?.trim(), modelId?.trim() || env.PI_MODEL?.trim()) || (level !== undefined && level !== "off"),
+    reasoning: isKnownDeepSeekReasoningModel(env.PI_BASE_URL?.trim(), resolvedModel) || (level !== undefined && level !== "off"),
   };
-  const id = modelId?.trim() || provider.defaultModel!;
+  const id = resolvedModel!;
   const base = provider.baseUrl.replace(/\/$/, "");
   const outputLimit = configuredLimit(env, "PI_MAX_OUTPUT_TOKENS", DEFAULT_PI_OUTPUT_TOKENS);
   const fallback = (): PiModelMetadata => ({

@@ -9,6 +9,7 @@ import { validateSelectedSkills } from "../skills/service.js";
 import { avatarImageSchema, botAvatarSchema } from "../auth/avatar-validation.js";
 import { memberAvatarUrl } from "../auth/avatar.js";
 import { listOrgMembers, type Actor } from "../auth/actor.js";
+import { NATIVE_DEFAULT_MODEL } from "../agent/contracts.js";
 
 export type MemberDependencies = RuntimeDependencies & Readonly<{
  builtinSkills?: readonly SkillDocument[];
@@ -107,7 +108,7 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
     skillNames: body.persona?.skillNames,
     disabledTools: body.persona?.disabledTools ?? [],
     defaultHarness: body.persona?.defaultHarness ?? ("pi" as const),
-    defaultModel: body.persona?.defaultModel ?? (body.persona?.defaultHarness && body.persona.defaultHarness !== "pi" ? "__harness_default__" : "openrouter/free"),
+    defaultModel: body.persona?.defaultModel?.trim() || NATIVE_DEFAULT_MODEL,
     runtime: body.persona?.runtime ?? (body.persona?.defaultHarness && body.persona.defaultHarness !== "pi" ? "sandbox" as const : "local" as const),
     avatarColor: body.persona?.avatarColor,
   };

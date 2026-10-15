@@ -55,7 +55,7 @@ export function AgentsPage() {
             {pagination.items.map((agent) => {
               const persona = agent.agent?.persona;
               const harness = persona?.defaultHarness ?? "pi";
-              const model = persona?.defaultModel ?? "openrouter/free";
+              const model = persona?.defaultModel ?? "__harness_default__";
               const sandbox = persona?.runtime === "sandbox" || (!persona?.runtime && harness !== "pi");
               const skills = enabledNames.filter((name) => !persona?.skillNames || persona.skillNames.includes(name));
               return <MemberDirectoryRow key={agent.id} member={agent}

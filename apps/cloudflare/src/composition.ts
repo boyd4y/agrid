@@ -110,7 +110,7 @@ export const chat = createProductChatHandlers<ProductEnvironment>({
   status(env) {
     const { configured, model, provider } = piStatusConfiguration(runtimeEnvironment(env));
     return { mode:configured?"live":"unconfigured",providers:[],harnesses:[
-      {id:"pi",label:"Pi",available:configured,provider,models:[{id:model,label:model}],defaultModel:model,runtimeModes:["local"],defaultRuntime:"local",hint:configured?undefined:"请配置 DeepSeek 或 Pi 模型提供商"},
+      {id:"pi",label:"Pi",available:configured,provider,models:[...(model === "__harness_default__" ? [] : [{id:model,label:model}]),{id:"__harness_default__",label:"Harness 默认模型"}],defaultModel:model,runtimeModes:["local"],defaultRuntime:"local",hint:configured?undefined:"请配置 DeepSeek 或 Pi 模型提供商"},
       ...[{id:"codex",label:"Codex"},{id:"claude",label:"Claude Code"}].map(value=>({...value,available:false,models:[],defaultModel:"__harness_default__",runtimeModes:["sandbox"],defaultRuntime:"sandbox",hint:"此执行环境尚未接入"})),
     ] };
   },
