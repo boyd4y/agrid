@@ -31,6 +31,25 @@ try{
   assert.equal((await api(`/threads/${thread.id}/runs`)).runs[0].status,'suspended');
   assert.equal(await page.getByTestId('agent-run-resume').count(),0,'question has no generic resume button');
   assert.equal(await page.getByRole('button',{name:'Add Attachment',exact:true}).count(),0,'unsupported attachment button stays hidden');
+  // A malformed historical tool input must not crash the chat or add a product
+  // error message. Restoring the valid history still permits the native answer.
+  const historyRoute = `**/api/threads/${thread.id}/messages`;
+  await page.route(historyRoute, async route => {
+    const response = await route.fetch({ url:base+new URL(route.request().url()).pathname });
+    const history = await response.json();
+    for (const message of history.messages) for (const part of message.content.parts ?? []) {
+      if (part.type === 'tool-askUserQuestions' || part.type === 'dynamic-tool' && part.toolName === 'askUserQuestions') {
+        part.input.questions[0].options = { a:'新增记录', b:'修改记录' };
+      }
+    }
+    await route.fulfill({ response, json:history });
+  });
+  await page.reload();await page.getByText('提问助手',{exact:true}).waitFor();
+  await page.getByRole('textbox',{name:'消息输入框'}).waitFor();
+  assert.equal(await card.count(),0,'malformed question is hidden');
+  assert.equal(await page.getByText('提问格式异常，请让智能体重新提问。',{exact:true}).count(),0);
+  assert.deepEqual(errors,[],'malformed choices do not crash rendering');
+  await page.unroute(historyRoute);
   await page.reload();await card.waitFor();
   const submit=page.getByRole('button',{name:'提交回答',exact:true});assert(await submit.isDisabled());
   await card.getByRole('radio',{name:'修改记录'}).check();

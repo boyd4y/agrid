@@ -10,6 +10,7 @@ import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
 import { cn } from "@/lib/utils";
+import { readQuestionCardInput } from "@/lib/question-card-input";
 
 /** SDK question UI; ordinary assistant prose stays ordinary prose. */
 export function QuestionsCard({ args, result, status, addResult, toolCallId }: ToolCallMessagePartProps<AskUserQuestionsInput, AskUserQuestionsOutput>) {
@@ -22,12 +23,14 @@ export function QuestionsCard({ args, result, status, addResult, toolCallId }: T
   const run = runs.find(run => run.assistantMessageId === messageId);
   const canRetry = Boolean(result && run?.pendingQuestionCallIds?.includes(toolCallId) && (failed || run.status === "failed" || run.status === "cancelled"));
   const [answers, setAnswers] = useState<Record<string, AskUserQuestionAnswer>>({});
-  const questions = args.questions ?? [];
+  const input = readQuestionCardInput(args);
+  const questions = input?.questions ?? [];
   const provided = Object.fromEntries(Object.entries(answers).filter(([, answer]) => answer.optionIds.length || answer.freeform?.trim()));
   const complete = questions.length > 0 && questions.every(question => provided[question.id]);
-  const canSubmit = complete || (args.allowPartialAnswers && Object.keys(provided).length > 0);
+  const canSubmit = complete || (input?.allowPartialAnswers && Object.keys(provided).length > 0);
   const patch = (questionId: string, update: Partial<AskUserQuestionAnswer>) => setAnswers(previous => ({ ...previous, [questionId]: { ...(previous[questionId] ?? { optionIds: [] }), ...update } }));
   if (status.type === "running" && !questions.length) return <div className="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle className="size-3.5 animate-spin" />{t("questions.preparing")}</div>;
+  if (!input) return null;
   const submitted = result && "answers" in result ? result.answers : {};
   return (
     <section className="space-y-4 rounded-lg border bg-card p-4" aria-label={t("questions.title")} data-testid="ask-user-questions">
