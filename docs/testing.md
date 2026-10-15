@@ -66,7 +66,7 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## 队列进程与 Redis 故障测试
 
-能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/core --filter @tabdo/platform-node test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Cloudflare 专用包、入口和 fixtures 已撤掉，Node 服务继续使用既有 PG/Redis 测试契约。
+能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/core --filter @tabdo/platform-node test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Node 服务使用既有 PG/Redis 测试契约。
 
 `pnpm --filter @tabdo/platform-node test` 在独立包内验证真实 Pi 工具循环、原生历史和真实文件工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
 
@@ -156,4 +156,4 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
   pnpm --filter @tabdo/server exec tsx --conditions=development --test test/commands/backend-services.test.ts test/runner/explicit-services.test.ts test/automation/outbox.test.ts
 ```
 
-这些用例直接注入 PG/时钟/UUID/队列，验证 tenant、caller transaction 原子性、lease/fence、持久接受/输出、成员撤销和 outbox claim/补偿。Outbox 使用独立临时 schema，避免认领并行测试的事件。HTTP 工厂仍由 `test/routes/platform-factories.test.ts` 验证原生 Better Auth、PG、签名隔离和连接释放。Cloudflare 专用执行与 fixtures 已撤掉；远程 Sandbox 的验收方式见前文，不能将本地 PASS 当成线上通过。
+这些用例直接注入 PG/时钟/UUID/队列，验证 tenant、caller transaction 原子性、lease/fence、持久接受/输出、成员撤销和 outbox claim/补偿。Outbox 使用独立临时 schema，避免认领并行测试的事件。HTTP 工厂仍由 `test/routes/platform-factories.test.ts` 验证原生 Better Auth、PG、签名隔离和连接释放。远程 Sandbox 的验收方式见前文，不能将本地 PASS 当成线上通过。

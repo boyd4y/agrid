@@ -1,6 +1,6 @@
 # @tabdo/platform-node
 
-Node implementations of generic capabilities. No Cloudflare bindings or Tabdo schema/permissions.
+Node implementations of generic capabilities, independent of Tabdo schema and permissions.
 
 Use explicit subpaths:
 

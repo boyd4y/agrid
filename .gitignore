@@ -30,8 +30,3 @@ storybook-static/
 
 # Local uploaded objects (configure FILE_STORAGE_LOCAL_DIR for persistent deployment)
 data/files/
-
-# Retained private local development state (not a deployment target)
-.wrangler/
-.dev.vars
-.dev.vars.*

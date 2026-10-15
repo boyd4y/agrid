@@ -9,8 +9,5 @@ node_modules
 .env.*
 **/.env
 **/.env.*
-.dev.vars*
-**/.dev.vars*
 .local
-**/.wrangler
 data

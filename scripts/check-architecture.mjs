@@ -27,7 +27,6 @@ for (const name of ["core", "platform-node"]) {
   for (const dependency of Object.keys(manifest.dependencies ?? {})) {
     assert(!["@tabdo/backend", "@tabdo/shared", "@tabdo/agent-runtime"].includes(dependency), `${name}: framework must not depend on product packages`);
     if (name === "core") assert.fail(`core must not own runtime dependencies: ${dependency}`);
-    if (name === "platform-node") assert(!dependency.startsWith("@cloudflare/") && dependency !== "@tabdo/platform-cloudflare", `Node package must not load Workers bindings: ${dependency}`);
   }
   for (const file of await files(resolve(directory, "src"))) {
     const source = await readFile(file, "utf8");
@@ -35,20 +34,19 @@ for (const name of ["core", "platform-node"]) {
     for (const specifier of imports) {
       assert(!/^@tabdo\/(?:backend|shared|agent-runtime)(?:\/|$)/.test(specifier), `${file}: product import ${specifier}`);
       if (name === "core") assert(specifier.startsWith("."), `${file}: core import must be portable and local: ${specifier}`);
-      if (name === "platform-node") assert(!specifier.startsWith("cloudflare:") && !specifier.startsWith("@cloudflare/") && !specifier.startsWith("@tabdo/platform-cloudflare"), `${file}: CF import in Node graph: ${specifier}`);
     }
     assert(!/\bprocess\.env\b/.test(source), `${file}: configuration must be passed explicitly`);
   }
 }
 const backendDirectory = resolve(root, "packages/backend");
 const backendConfig = JSON.parse(await readFile(resolve(backendDirectory, "tsconfig.json"), "utf8"));
-assert.deepEqual(backendConfig.compilerOptions.types, [], "backend must not load Node or CF ambient globals");
+assert.deepEqual(backendConfig.compilerOptions.types, [], "backend must not load host runtime ambient globals");
 for (const file of await files(resolve(backendDirectory, "src"))) {
   const source = await readFile(file, "utf8");
   const imports = [...source.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+)["']/g)].map(match => match[1]);
   for (const specifier of imports) {
-    assert(!specifier.startsWith("node:") && !specifier.startsWith("cloudflare:")
-      && !/^@tabdo\/(?:platform-node|platform-cloudflare|agent-runtime)(?:\/|$)/.test(specifier)
+    assert(!specifier.startsWith("node:")
+      && !/^@tabdo\/(?:platform-node|agent-runtime)(?:\/|$)/.test(specifier)
       && !specifier.startsWith("@ai-sdk/harness") && !specifier.includes("apps/server"), `${file}: runtime/application import in backend: ${specifier}`);
     if (!file.includes("/src/http/")) assert(!specifier.startsWith("hono"), `${file}: HTTP transport must stay in thin http entries`);
   }
@@ -62,7 +60,7 @@ for (const file of await files(resolve(executorDirectory,"src"))) {
   const source = await readFile(file,"utf8");
   for (const match of source.matchAll(/import\s+(type\s+)?[^;]*?from\s*["']([^"']+)["']/g)) {
     const [,typeOnly,specifier] = match;
-    assert(!specifier.startsWith("node:") && !specifier.startsWith("cloudflare:") && !specifier.startsWith("@tabdo/platform-cloudflare"),`${file}: platform execution effect must be injected`);
+    assert(!specifier.startsWith("node:"),`${file}: platform execution effect must be injected`);
     if (specifier.startsWith("@tabdo/platform-node")) assert(typeOnly,`${file}: executor may only refer to host types`);
   }
   assert(!/\bprocess\.|\bBuffer\s*[.(]/.test(source),`${file}: executor must use explicit ports and Web APIs`);

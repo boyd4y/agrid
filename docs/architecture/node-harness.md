@@ -1,6 +1,6 @@
 # Node + 官方 Harness 架构
 
-部署目标为本地和 Railway，使用相同的 Node/Hono 业务入口、PostgreSQL、Redis/BullMQ 和 Vercel Harness SDK。Cloudflare 与 Sandbox Agent/ACP 执行层均已撤掉。
+部署目标为本地和 Railway，使用相同的 Node/Hono 业务入口、PostgreSQL、Redis/BullMQ 和 Vercel Harness SDK。
 
 ```text
 浏览器 / API 调用
