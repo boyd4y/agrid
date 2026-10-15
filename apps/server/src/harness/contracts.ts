@@ -1,1 +1,1 @@
-export * from "@tabdo/backend/agent/contracts";
+export * from "../business/agent/contracts.js";

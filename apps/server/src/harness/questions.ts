@@ -2,12 +2,12 @@ import { HARNESS_V1_BUILTIN_TOOLS } from "@ai-sdk/harness";
 import type { HarnessAgentContinueTurnState } from "@ai-sdk/harness/agent";
 import type { AskUserQuestionsInput, AskUserQuestionsOutput, NativeQuestionResultRequest } from "@tabdo/shared";
 import { asSchema, type ToolResultPart, type UIMessage } from "ai";
-import * as service from "@tabdo/backend/agent/questions";
-import { ServiceError } from "@tabdo/backend/errors";
+import * as service from "../business/agent/questions.js";
+import { ServiceError } from "../business/errors.js";
 import type { Actor } from "../auth/actor.js";
 import type { RuntimeLease, RuntimeRecord } from "./store.js";
 import type { AgentRun } from "./runs.js";
-import { backendCall, runtimeDependencies } from "../services/backend-facade.js";
+import { businessCall, runtimeDependencies } from "../services/dependencies.js";
 
 export const QUESTION_NOT_INVOKED = service.QUESTION_NOT_INVOKED;
 
@@ -27,11 +27,11 @@ const validators: service.QuestionSchemaValidators = {
 };
 
 export async function validateQuestionAnswer(input: AskUserQuestionsInput, output: unknown) {
-  return backendCall(() => service.validateQuestionAnswer(validators, input, output));
+  return businessCall(() => service.validateQuestionAnswer(validators, input, output));
 }
 
 export async function resumeQuestionRun(lease: RuntimeLease, actor: Actor, record: RuntimeRecord, request: NativeQuestionResultRequest): Promise<{ run: AgentRun; continuation: HarnessAgentContinueTurnState; toolResultContinuations: ToolResultPart[]; messages: UIMessage[] }> {
-  return backendCall(() => service.resumeQuestionRun({ ...runtimeDependencies(), ...validators,
+  return businessCall(() => service.resumeQuestionRun({ ...runtimeDependencies(), ...validators,
     getContinuation: questionContinuation,
     getPendingCalls: continuation => continuation.pendingToolResults ?? [],
   }, lease, actor, record, request));

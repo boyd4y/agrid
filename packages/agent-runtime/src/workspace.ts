@@ -1,5 +1,5 @@
-import { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/backend/checkpoints";
-export { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/backend/checkpoints";
+import { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/core/workspace";
+export { workspaceSnapshotSchema, type WorkspaceSnapshot } from "@tabdo/core/workspace";
 
 import { createDiskWorkspace, type DiskWorkspace } from "./sandbox/workspace.js";
 

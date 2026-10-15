@@ -1,8 +1,8 @@
 import { HTTPException } from "hono/http-exception";
-import * as configuration from "@tabdo/backend/agent/runtime-configuration";
-import { mapServiceError } from "../services/backend-facade.js";
+import * as configuration from "../business/agent/runtime-configuration.js";
+import { mapServiceError } from "../services/dependencies.js";
 import type { RuntimeEnvironment } from "./contracts.js";
-export type { NativeConfiguration, PiProviderConfiguration } from "@tabdo/backend/agent/runtime-configuration";
+export type { NativeConfiguration, PiProviderConfiguration } from "../business/agent/runtime-configuration.js";
 export function resolvePiModelId(modelId: string | undefined, env: RuntimeEnvironment) {
   try { return configuration.resolvePiModelId(modelId, env); }
   catch (error) { return mapServiceError(error); }

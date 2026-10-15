@@ -1,1 +1,1 @@
-export { SkillError, parseSkillDocument, validateSkillFiles } from "@tabdo/backend/skills/document";
+export { SkillError, parseSkillDocument, validateSkillFiles } from "../business/skills/document.js";

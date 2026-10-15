@@ -1,5 +1,5 @@
-import type { IntegrationDependencies, IntegrationCapabilities } from "@tabdo/backend/integrations/dependencies";
-import { commandDependencies } from "../services/backend-facade.js";
+import type { IntegrationDependencies, IntegrationCapabilities } from "../business/integrations/dependencies.js";
+import { commandDependencies } from "../services/dependencies.js";
 export function integrationCapabilities(): IntegrationCapabilities {
   return {
     publicUrl: process.env.WEBHOOK_PUBLIC_URL || process.env.APP_URL || "http://localhost:5173",

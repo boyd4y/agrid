@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { getAuth, getDatabase } from "../resources/scope.js";
-import { resolveActor as resolveBackendActor, listOrgMembers as listBackendOrgMembers } from "@tabdo/backend/auth/actor";
+import { resolveActor as resolveBackendActor, listOrgMembers as listBackendOrgMembers } from "../business/auth/actor.js";
 import type { Transaction } from "../db/context.js";
 
-export type { Actor } from "@tabdo/backend/auth/actor";
-export { organization } from "@tabdo/backend/auth/actor";
+export type { Actor } from "../business/auth/actor.js";
+export { organization } from "../business/auth/actor.js";
 
 /** Compatibility for existing Node key creation. Identity services use Web Crypto directly. */
 export function hashApiKey(raw: string) {

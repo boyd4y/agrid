@@ -1,9 +1,9 @@
-import * as implementation from "@tabdo/backend/commands/queryRows";
-import { commandDependencies, backendCall } from "../services/backend-facade.js";
+import * as implementation from "../business/commands/queryRows.js";
+import { commandDependencies, businessCall } from "../services/dependencies.js";
 
 type Arguments<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown, ...infer Rest] ? Rest : never;
 
 export const queryRowsWindowed = (...args: Arguments<typeof implementation.queryRowsWindowed>) =>
-  backendCall(() => implementation.queryRowsWindowed(commandDependencies(), ...args));
+  businessCall(() => implementation.queryRowsWindowed(commandDependencies(), ...args));
 export const countTableRows = (...args: Arguments<typeof implementation.countTableRows>) =>
-  backendCall(() => implementation.countTableRows(commandDependencies(), ...args));
+  businessCall(() => implementation.countTableRows(commandDependencies(), ...args));

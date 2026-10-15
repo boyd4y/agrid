@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
-import { createDatabase } from "@tabdo/backend/database";
-import { createPlatformAuth } from "@tabdo/backend/auth";
-import { resolveActor, listOrgMembers, hashApiKey, type ActorDependencies } from "@tabdo/backend/auth/actor";
-import { memberAvatarUrl } from "@tabdo/backend/auth/avatar";
-import { user, organization, member, userApiKeys, session, agentProfile } from "@tabdo/backend/schema";
+import { createDatabase } from "../../src/business/db/factory.js";
+import { createAuth } from "@tabdo/auth";
+import { resolveActor, listOrgMembers, hashApiKey, type ActorDependencies } from "../../src/business/auth/actor.js";
+import { memberAvatarUrl } from "../../src/business/auth/avatar.js";
+import { user, organization, member, userApiKeys, session, agentProfile } from "../../src/business/db/schema.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
@@ -14,7 +14,7 @@ if (!databaseUrl?.endsWith("_agent_test")) throw new Error("Use a dedicated *_ag
 test("identity service uses explicit database/session ports without resource scope and retains live permissions", async () => {
   const resource = createDatabase({ connectionString: databaseUrl, poolMax: 2 });
   const db = resource.db;
-  const auth = createPlatformAuth({ database: db, appUrl: "http://localhost:5173", baseURL: "http://localhost:3001",
+  const auth = createAuth({ database: db, appUrl: "http://localhost:5173", baseURL: "http://localhost:3001",
     secret: "explicit-identity-fixture-secret-32-bytes-minimum", production: false, sendInviteEmail: async () => {} });
   const orgA = randomUUID(), orgB = randomUUID(), ownerMembership = randomUUID(), agentUser = randomUUID(), agentMembership = randomUUID();
   const createdUsers: string[] = [];

@@ -30,10 +30,11 @@ Pi 是 host-runtime：模型循环在 Node API/worker，本地 bash 在真实目
 
 ## 包边界与部署
 
-`queue` 包含队列契约与 BullMQ 实现；`storage` 包含文件存储契约与本地/S3 实现；`agent-runtime` 直接组装官方 Harness、工作目录及 Vercel Sandbox，并管理执行生命周期；`backend` 保存业务 services，`apps/server` 装配 HTTP/worker 与资源。
+`core` 提供任务租约、计划时间、时钟/ID、错误与摘要等通用服务；`db` 提供参数化 PostgreSQL/Drizzle 资源；`auth` 提供身份、组织和 API Key；`queue` 与 `storage` 分别提供投递与文件存储；`agent-runtime` 只提供官方 Harness、Sandbox 和工作目录能力。
 
-聊天在 Node API 中直接运行并通过 SSE 输出；自动化与定时任务在 Node worker 中调用同一执行逻辑。只有这一套部署路径，无执行平台选择开关、独立 HTTP runner 或容器回调 gateway。业务服务注入用于权限、事务与测试，文件/Sandbox 的不同实现用于实际产品能力。
+Tabdo 的工作区、表格、自动化、Run/Session、权限和数据访问集中在 `apps/server/src/business`；带业务身份的执行编排在 `apps/server/src/harness`。不再有独立 backend 业务包。包不反向依赖 server 或产品 schema。
 
+聊天由 API 直接执行并通过 SSE 输出；自动化与定时任务由 worker 调用同一业务执行逻辑。两者使用同一个 PostgreSQL；server 聚合 auth 与业务 schema，数据写入、outbox 和执行收据的事务边界保持一致。
 本地用 `pnpm dev`。Railway API 和 worker 共用 `Dockerfile.server`，分别启动 `dist/index.js` 与 `dist/queue/main.js`；上传文件使用共用 S3 兼容 bucket。配置见 [本地部署](../local-node.md)和 [Railway 部署](../railway.md)。
 
 官方依据：[HarnessAgent 生命周期与恢复](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)、[HTTP/UI 会话管理](https://ai-sdk.dev/docs/ai-sdk-harnesses/ui)。远程 Sandbox、真实模型和 Railway 上线分别验收，不能以本地 fixture 通过代替。

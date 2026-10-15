@@ -1,4 +1,4 @@
-import { createWebhookEndpointsRoute, createWebhooksRoute } from "@tabdo/backend/http/webhooks";
-import { acquireNodeBackendScope } from "../services/http-scope.js";
-export const webhookEndpointsRoute = createWebhookEndpointsRoute(acquireNodeBackendScope);
-export const webhooksRoute = createWebhooksRoute(acquireNodeBackendScope);
+import { createWebhookEndpointsRoute, createWebhooksRoute } from "../business/http/webhooks.js";
+import { acquireRequestScope } from "../services/http-scope.js";
+export const webhookEndpointsRoute = createWebhookEndpointsRoute(acquireRequestScope);
+export const webhooksRoute = createWebhooksRoute(acquireRequestScope);

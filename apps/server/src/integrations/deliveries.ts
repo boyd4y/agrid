@@ -1,5 +1,5 @@
-import { persistDelivery as persist } from "@tabdo/backend/integrations/deliveries";
+import { persistDelivery as persist } from "../business/integrations/deliveries.js";
 import { integrationDependencies } from "./dependencies.js";
-import { backendCall } from "../services/backend-facade.js";
+import { businessCall } from "../services/dependencies.js";
 type Arguments = Parameters<typeof persist> extends [unknown, ...infer Rest] ? Rest : never;
-export const persistDelivery = (...args: Arguments) => backendCall(() => persist(integrationDependencies(), ...args));
+export const persistDelivery = (...args: Arguments) => businessCall(() => persist(integrationDependencies(), ...args));

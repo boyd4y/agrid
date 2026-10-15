@@ -1,5 +1,5 @@
-import * as service from "@tabdo/backend/skills/service";
-import { runtimeDependencies } from "../services/backend-facade.js";
+import * as service from "../business/skills/service.js";
+import { runtimeDependencies } from "../services/dependencies.js";
 import { loadBuiltinSkillDocuments } from "./builtin-loader.js";
 const builtins = loadBuiltinSkillDocuments();
 const dependencies = () => ({ ...runtimeDependencies(), builtins });

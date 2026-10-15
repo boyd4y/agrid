@@ -1,3 +1,3 @@
-import { createApiKeysRoute } from "@tabdo/backend/http/api-keys";
-import { acquireNodeBackendScope } from "../services/http-scope.js";
-export const apiKeysRoute = createApiKeysRoute(acquireNodeBackendScope);
+import { createApiKeysRoute } from "../business/http/api-keys.js";
+import { acquireRequestScope } from "../services/http-scope.js";
+export const apiKeysRoute = createApiKeysRoute(acquireRequestScope);

@@ -1,8 +1,8 @@
 import type { HarnessV1 } from "@ai-sdk/harness";
 import type { HarnessAgent, HarnessAgentSettings } from "@ai-sdk/harness/agent";
 import type { ToolSet } from "ai";
-export { HarnessConfigurationError } from "@tabdo/backend/agent/contracts";
-import { HarnessConfigurationError } from "@tabdo/backend/agent/contracts";
+export { ConfigurationError as HarnessConfigurationError } from "@tabdo/core/errors";
+import { ConfigurationError as HarnessConfigurationError } from "@tabdo/core/errors";
 
 /** Configuration for the supported official SDK harnesses. */
 export type HarnessAdapter = Readonly<{

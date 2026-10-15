@@ -1,3 +1,3 @@
-import { createColumnsRoute } from "@tabdo/backend/http/columns";
-import { acquireNodeBackendScope } from "../services/http-scope.js";
-export const columnsRoute = createColumnsRoute(acquireNodeBackendScope);
+import { createColumnsRoute } from "../business/http/columns.js";
+import { acquireRequestScope } from "../services/http-scope.js";
+export const columnsRoute = createColumnsRoute(acquireRequestScope);

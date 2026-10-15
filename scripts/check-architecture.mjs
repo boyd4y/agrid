@@ -9,50 +9,52 @@ async function files(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) result.push(...await files(path));
-    else if (entry.name.endsWith(".ts")) result.push(path);
+    else if (/\.tsx?$/.test(entry.name)) result.push(path);
   }
   return result;
 }
 const imports = source => [...source.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+)["']/g)].map(match => match[1]);
-
-// Infrastructure packages own their contracts and implementations, without product dependencies.
-for (const name of ["queue", "storage"]) {
+const boundaries = {
+  core: [], db: [], auth: ["core"], queue: [], storage: [], "agent-runtime": ["core"], shared: [], ui: [],
+};
+const graph = new Map();
+for (const [name, allowed] of Object.entries(boundaries)) {
   const directory = resolve(root, "packages", name);
   const manifest = JSON.parse(await readFile(resolve(directory, "package.json"), "utf8"));
-  for (const dependency of Object.keys(manifest.dependencies ?? {}))
-    assert(!dependency.startsWith("@tabdo/"), `${name}: infrastructure must not depend on product packages`);
+  const dependencies = Object.keys(manifest.dependencies ?? {}).filter(value => value.startsWith("@tabdo/"));
+  graph.set(name, dependencies.map(value => value.slice("@tabdo/".length)));
+  for (const dependency of dependencies)
+    assert(allowed.includes(dependency.slice("@tabdo/".length)), `${name}: invalid package dependency ${dependency}`);
   for (const file of await files(resolve(directory, "src"))) {
     const source = await readFile(file, "utf8");
-    for (const specifier of imports(source))
-      assert(!specifier.startsWith("@tabdo/"), `${file}: infrastructure must not import product packages`);
-    assert(!/\bprocess\.env\b/.test(source), `${file}: configuration must be passed explicitly`);
+    for (const specifier of imports(source)) {
+      assert(!specifier.includes("apps/"), `${file}: a package must not import an application`);
+      if (specifier.startsWith(".")) assert(!resolve(file, "..", specifier).startsWith(resolve(root, "apps")), `${file}: application-relative import`);
+      const dependency = /^@tabdo\/([^/]+)/.exec(specifier)?.[1];
+      if (dependency && dependency !== name) assert(allowed.includes(dependency), `${file}: invalid package import ${specifier}`);
+    }
+    assert(!/\bprocess\.env\b/.test(source), `${file}: configuration must be explicit`);
   }
 }
-
-// Business services receive dependencies; concrete SDKs are assembled in Node entry points/runtime.
-const backendDirectory = resolve(root, "packages/backend");
-const backendConfig = JSON.parse(await readFile(resolve(backendDirectory, "tsconfig.json"), "utf8"));
-assert.deepEqual(backendConfig.compilerOptions.types, [], "backend must not inherit host globals");
-for (const file of await files(resolve(backendDirectory, "src"))) {
+function visit(name, path = []) {
+  assert(!path.includes(name), `Package cycle: ${[...path, name].join(" -> ")}`);
+  for (const next of graph.get(name) ?? []) visit(next, [...path, name]);
+}
+for (const name of graph.keys()) visit(name);
+for (const file of await files(resolve(root, "apps/server/src/business"))) {
   const source = await readFile(file, "utf8");
+  assert(!/\bprocess\.env\b/.test(source), `${file}: business services receive configuration`);
+  assert(!/\b(?:getDatabase|getAuth|AsyncLocalStorage)\s*\(/.test(source), `${file}: business services receive resources`);
   for (const specifier of imports(source)) {
-    assert(!specifier.startsWith("node:") && !specifier.startsWith("@tabdo/agent-runtime")
-      && !specifier.startsWith("@ai-sdk/harness") && !specifier.includes("apps/server"), `${file}: runtime/application import in backend: ${specifier}`);
-    // The root exports contracts only; concrete infrastructure subpaths stay in the app.
+    assert(!specifier.startsWith("node:"), `${file}: business services must not acquire Node resources`);
+    assert(!specifier.startsWith("@ai-sdk/harness") && !specifier.startsWith("@tabdo/agent-runtime"), `${file}: native execution belongs in server/harness`);
     assert(!/^@tabdo\/(?:queue|storage)\//.test(specifier), `${file}: concrete infrastructure must be injected`);
-    if (!file.includes("/src/http/")) assert(!specifier.startsWith("hono"), `${file}: HTTP transport must stay in thin http entries`);
+    if (!file.includes("/business/http/")) assert(!specifier.startsWith("hono"), `${file}: Hono belongs in HTTP entries`);
   }
-  assert(!/\b(?:getDatabase|getAuth|AsyncLocalStorage)\s*\(/.test(source), `${file}: services require explicit dependencies`);
-  assert(!/\bprocess\.env\b/.test(source), `${file}: environment must be injected`);
 }
 for (const directory of ["packages/agent-runtime", "apps/server"]) {
   const manifest = JSON.parse(await readFile(resolve(root, directory, "package.json"), "utf8"));
   for (const name of ["just-bash", "@ai-sdk/sandbox-just-bash"])
-    assert(!(name in (manifest.dependencies ?? {})), `${directory}: native execution must use real files and processes`);
+    assert(!(name in (manifest.dependencies ?? {})), `${directory}: use real files and processes`);
 }
-for (const file of await files(resolve(root, "packages/agent-runtime/src"))) {
-  const source = await readFile(file, "utf8");
-  assert(!/\bprocess\.env\b/.test(source), `${file}: runtime configuration must be explicit`);
-  for (const specifier of imports(source)) assert(!specifier.includes("apps/server"), `${file}: runtime must not import its application caller`);
-}
-console.log("Architecture boundaries passed: queue/storage independence, explicit business dependencies, Node Harness execution.");
+console.log("Architecture boundaries passed: independent core/db/queue/storage, auth and Harness capabilities, application-owned business; no package cycles.");

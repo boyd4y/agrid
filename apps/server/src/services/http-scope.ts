@@ -1,8 +1,8 @@
-import type { BackendRequestScope } from "@tabdo/backend/http/request";
+import type { RequestScope } from "../business/http/request.js";
 import { getStorageAdapter, uploadLimits } from "../storage/adapter.js";
 import { integrationCapabilities } from "../integrations/dependencies.js";
 import { getAuth } from "../resources/scope.js";
-import { commandDependencies } from "./backend-facade.js";
+import { commandDependencies } from "./dependencies.js";
 import { loadBuiltinSkillDocuments } from "../skills/builtin-loader.js";
 import { getAgentToolCatalog } from "../harness/tool-catalog.js";
 import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
@@ -11,7 +11,7 @@ import { discardQuestionSandbox } from "../harness/question-sandboxes.js";
 const builtinSkills = loadBuiltinSkillDocuments();
 
 /** Node-only ports. The public HTTP factories themselves remain Web portable. */
-export async function acquireNodeBackendScope(_request: Request): Promise<BackendRequestScope> {
+export async function acquireRequestScope(_request: Request): Promise<RequestScope> {
   const commands = commandDependencies();
   return {
     commands,

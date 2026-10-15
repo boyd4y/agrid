@@ -1,17 +1,17 @@
-import * as implementation from "@tabdo/backend/commands/columns";
-import { commandDependencies, backendCall } from "../services/backend-facade.js";
+import * as implementation from "../business/commands/columns.js";
+import { commandDependencies, businessCall } from "../services/dependencies.js";
 
 type Arguments<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown, ...infer Rest] ? Rest : never;
 
 export const addColumn = (...args: Arguments<typeof implementation.addColumn>) =>
-  backendCall(() => implementation.addColumn(commandDependencies(), ...args));
+  businessCall(() => implementation.addColumn(commandDependencies(), ...args));
 export const deleteColumn = (...args: Arguments<typeof implementation.deleteColumn>) =>
-  backendCall(() => implementation.deleteColumn(commandDependencies(), ...args));
+  businessCall(() => implementation.deleteColumn(commandDependencies(), ...args));
 export const updateColumn = (...args: Arguments<typeof implementation.updateColumn>) =>
-  backendCall(() => implementation.updateColumn(commandDependencies(), ...args));
+  businessCall(() => implementation.updateColumn(commandDependencies(), ...args));
 export const batchAddColumns = (...args: Arguments<typeof implementation.batchAddColumns>) =>
-  backendCall(() => implementation.batchAddColumns(commandDependencies(), ...args));
+  businessCall(() => implementation.batchAddColumns(commandDependencies(), ...args));
 export const batchUpdateColumns = (...args: Arguments<typeof implementation.batchUpdateColumns>) =>
-  backendCall(() => implementation.batchUpdateColumns(commandDependencies(), ...args));
+  businessCall(() => implementation.batchUpdateColumns(commandDependencies(), ...args));
 export const batchDeleteColumns = (...args: Arguments<typeof implementation.batchDeleteColumns>) =>
-  backendCall(() => implementation.batchDeleteColumns(commandDependencies(), ...args));
+  businessCall(() => implementation.batchDeleteColumns(commandDependencies(), ...args));

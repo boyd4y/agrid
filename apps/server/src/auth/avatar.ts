@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-export { MAX_AVATAR_BYTES, avatarImageSchema, botAvatarSchema } from "@tabdo/backend/auth/avatar-validation";
+export { MAX_AVATAR_BYTES, avatarImageSchema, botAvatarSchema } from "../business/auth/avatar-validation.js";
 
 export function memberAvatarUrl(memberId: string, image: string | null) {
   if (!image) return null;

@@ -1,6 +1,6 @@
-import { createCommandsRoute } from "@tabdo/backend/http/commands";
+import { createCommandsRoute } from "../business/http/commands.js";
 import { getAuth } from "../resources/scope.js";
-import { commandDependencies } from "../services/backend-facade.js";
+import { commandDependencies } from "../services/dependencies.js";
 
 /** Node app owns its existing request resources; the shared route receives explicit dependencies. */
 export const commandsRoute = createCommandsRoute(async () => {

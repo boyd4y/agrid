@@ -66,7 +66,7 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## 队列进程与 Redis 故障测试
 
-能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/agent-runtime test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Node 服务使用既有 PG/Redis 测试契约。
+能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/core --filter @tabdo/db --filter @tabdo/auth --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/agent-runtime test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Node 服务使用既有 PG/Redis 测试契约。
 
 `pnpm --filter @tabdo/agent-runtime test` 在独立包内验证真实 Pi 工具循环、原生历史和真实文件工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
 
@@ -149,7 +149,7 @@ pnpm --filter @tabdo/client test:browser -- name-conflicts kanban-overflow
 
 ## 显式业务依赖
 
-`packages/backend` 不加载运行时全局类型，不使用 ALS 或 HTTPException。`pnpm check:architecture` 防止平台 SDK 和隐式资源访问进入业务 services；Node facade 保留既有调用签名。
+`apps/server/src/business` 通过参数接收资源，不使用 ALS 或 HTTPException。`pnpm check:architecture` 防止平台 SDK 和隐式资源访问进入业务 services；基础包不引用应用或产品 schema；Node 入口保留既有调用签名。
 
 ```sh
 DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \

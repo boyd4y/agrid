@@ -1,6 +1,6 @@
-import * as service from "@tabdo/backend/reports/service";
-import { runtimeDependencies } from "../services/backend-facade.js";
-export { ReportError } from "@tabdo/backend/reports/service";
+import * as service from "../business/reports/service.js";
+import { runtimeDependencies } from "../services/dependencies.js";
+export { ReportError } from "../business/reports/service.js";
 type Arguments<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown, ...infer Rest] ? Rest : never;
 export const getReport = (...args: Arguments<typeof service.getReport>) => service.getReport(runtimeDependencies(), ...args);
 export const listReports = (...args: Arguments<typeof service.listReports>) => service.listReports(runtimeDependencies(), ...args);

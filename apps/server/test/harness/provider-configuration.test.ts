@@ -5,7 +5,7 @@ import { createDiskWorkspace } from "@tabdo/agent-runtime/sandbox/workspace";
 import { createHarnessAgent } from "@tabdo/agent-runtime/harness/agent";
 import { createPiAdapter } from "@tabdo/agent-runtime/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/agent-runtime/sandbox/local";
-import { resolveNativeConfiguration, resolvePiModelId } from "@tabdo/backend/agent/runtime-configuration";
+import { resolveNativeConfiguration, resolvePiModelId } from "../../src/business/agent/runtime-configuration.js";
 
 function provider(baseUrl: string, overrides: Record<string, string | undefined> = {}) {
   const configuration = resolveNativeConfiguration({ harness: "pi", mode: "local", env: {

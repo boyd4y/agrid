@@ -1,0 +1,50 @@
+{
+  "name": "@tabdo/auth",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/factory.ts",
+      "development": "./src/factory.ts",
+      "import": "./dist/factory.js",
+      "default": "./dist/factory.js"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "development": "./src/schema.ts",
+      "import": "./dist/schema.js",
+      "default": "./dist/schema.js"
+    },
+    "./actor": {
+      "types": "./src/actor.ts",
+      "development": "./src/actor.ts",
+      "import": "./dist/actor.js",
+      "default": "./dist/actor.js"
+    },
+    "./api-keys": {
+      "types": "./src/api-keys.ts",
+      "development": "./src/api-keys.ts",
+      "import": "./dist/api-keys.js",
+      "default": "./dist/api-keys.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@tabdo/core": "workspace:*",
+    "better-auth": "^1.7.7",
+    "@better-auth/drizzle-adapter": "^1.7.7",
+    "drizzle-orm": "^0.45.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@types/node": "^22.14.1"
+  }
+}

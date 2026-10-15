@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { listHarnesses } from "../../src/ai/model.js";
-import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
+import { resolveNativeConfiguration } from "../../src/business/agent/runtime-configuration.js";
 
 test("Node status follows the same complete provider selection as native Pi", () => {
   const previous = new Map(["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "OPENROUTER_API_KEY", "OPENROUTER_MODEL"].map(name => [name, process.env[name]]));

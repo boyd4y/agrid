@@ -1,3 +1,3 @@
-import { createTablesRoute } from "@tabdo/backend/http/tables";
-import { acquireNodeBackendScope } from "../services/http-scope.js";
-export const tablesRoute = createTablesRoute(acquireNodeBackendScope);
+import { createTablesRoute } from "../business/http/tables.js";
+import { acquireRequestScope } from "../services/http-scope.js";
+export const tablesRoute = createTablesRoute(acquireRequestScope);

@@ -1,0 +1,65 @@
+{
+  "name": "@tabdo/core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./errors": {
+      "types": "./src/errors.ts",
+      "development": "./src/errors.ts",
+      "import": "./dist/errors.js",
+      "default": "./dist/errors.js"
+    },
+    "./crypto": {
+      "types": "./src/crypto.ts",
+      "development": "./src/crypto.ts",
+      "import": "./dist/crypto.js",
+      "default": "./dist/crypto.js"
+    },
+    "./services": {
+      "types": "./src/services.ts",
+      "development": "./src/services.ts",
+      "import": "./dist/services.js",
+      "default": "./dist/services.js"
+    },
+    "./workspace": {
+      "types": "./src/workspace.ts",
+      "development": "./src/workspace.ts",
+      "import": "./dist/workspace.js",
+      "default": "./dist/workspace.js"
+    },
+    "./tasks/schedule": {
+      "types": "./src/tasks/schedule.ts",
+      "development": "./src/tasks/schedule.ts",
+      "import": "./dist/tasks/schedule.js",
+      "default": "./dist/tasks/schedule.js"
+    },
+    "./tasks/lease": {
+      "types": "./src/tasks/lease.ts",
+      "development": "./src/tasks/lease.ts",
+      "import": "./dist/tasks/lease.js",
+      "default": "./dist/tasks/lease.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "cron-parser": "^5.6.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@types/node": "^22.14.1"
+  }
+}

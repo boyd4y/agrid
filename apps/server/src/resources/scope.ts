@@ -1,11 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { DatabaseResource } from "@tabdo/backend/database";
-import type { PlatformAuth } from "@tabdo/backend/auth";
+import type { DatabaseResource } from "../business/db/factory.js";
+import type { Auth } from "@tabdo/auth";
 
 /** A caller-owned resource scope, never inferred from environment or runtime. */
 export type PlatformResources = Readonly<{
   database: DatabaseResource;
-  auth?: PlatformAuth;
+  auth?: Auth;
 }>;
 
 const resources = new AsyncLocalStorage<PlatformResources>();
@@ -29,7 +29,7 @@ export function getDatabaseClient() {
   return requirePlatformResources().database.client;
 }
 
-export function getAuth(): PlatformAuth {
+export function getAuth(): Auth {
   const auth = requirePlatformResources().auth;
   if (!auth) throw new Error("Authentication resources were not supplied for this operation");
   return auth;

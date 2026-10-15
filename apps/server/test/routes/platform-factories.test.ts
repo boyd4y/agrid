@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
-import { createDatabase } from "@tabdo/backend/database";
+import { createDatabase } from "../../src/business/db/factory.js";
 import { user } from "../../src/db/schema.js";
-import { createPlatformAuth, assertProductionAuthSecret } from "@tabdo/backend/auth";
+import { createAuth, assertProductionAuthSecret } from "@tabdo/auth";
 import { createApp } from "../../src/app.js";
 import { client } from "../../src/db/index.js";
 
@@ -15,8 +15,8 @@ test("explicit Better Auth factories preserve real sessions and do not share sig
   const email = `factory-${randomUUID()}@example.test`;
   const settings = { database: database.db, appUrl: "http://localhost:5173", baseURL: "http://localhost:3001",
     production: false, sendInviteEmail: async () => {} };
-  const authA = createPlatformAuth({ ...settings, secret: "factory-one-meaningful-test-secret-12345" });
-  const authB = createPlatformAuth({ ...settings, secret: "factory-two-independent-test-secret-67890" });
+  const authA = createAuth({ ...settings, secret: "factory-one-meaningful-test-secret-12345" });
+  const authB = createAuth({ ...settings, secret: "factory-two-independent-test-secret-67890" });
   try {
     const response = await authA.api.signUpEmail({ body: { name: "Factory test", email, password: "Factory-fixture-123!" }, asResponse: true });
     assert.equal(response.status, 200);

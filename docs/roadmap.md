@@ -8,10 +8,10 @@
 
 ### 已完成
 
-- 清理废弃部署入口、平台包和专用测试配置，保留 backend services 与通用能力契约。
+- 清理废弃部署入口、平台包和专用测试配置，业务合并到 server，保留通用能力契约。
 - 保留官方 HarnessAgent 执行路径、host tools、结构化问答、取消及原生 Session 恢复。
 - 本地 `pnpm dev` 运行 Vite/API/worker；Railway 使用一个镜像的 API/worker 两个入口。
-- 按能力组织 `queue`、`storage`、`agent-runtime`，移除独立通用核心与平台实现包、执行平台开关、HTTP runner 和废弃 gateway。
+- 按能力组织 core、db、auth、queue、storage、agent-runtime；Tabdo 业务集中到 server，移除 backend 包、执行平台开关、HTTP runner 和废弃 gateway。
 - Harness 与 Sandbox 生命周期分开管理；PostgreSQL 持久化恢复信息，浏览器断开不等于取消任务。
 
 ### 待验收

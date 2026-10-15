@@ -1,13 +1,13 @@
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { z } from "zod";
-import * as body from "@tabdo/backend/integrations/body";
-import { ServiceError } from "@tabdo/backend/errors";
-import { backendCall, mapServiceError } from "../services/backend-facade.js";
+import * as body from "../business/integrations/body.js";
+import { ServiceError } from "../business/errors.js";
+import { businessCall, mapServiceError } from "../services/dependencies.js";
 
 /** Node compatibility projections; byte limits and parsing have one shared implementation. */
 export async function boundedBody(request: Request, limit: number): Promise<Buffer> {
-  return Buffer.from(await backendCall(() => body.boundedBody(request, limit)));
+  return Buffer.from(await businessCall(() => body.boundedBody(request, limit)));
 }
 export function webhookBodyLimit() {
   try { return body.webhookBodyLimit(Number(process.env.WEBHOOK_MAX_BODY_BYTES ?? 2 * 1024 * 1024)); }
@@ -20,7 +20,7 @@ export function jsonObject(bytes: Uint8Array): Record<string, unknown> {
   try { return body.jsonObject(bytes); } catch (error) { return mapServiceError(error); }
 }
 export function parseBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
-  return backendCall(() => body.parseBody(c.req.raw, schema));
+  return businessCall(() => body.parseBody(c.req.raw, schema));
 }
 export function validUuid(value: string) {
   try { return body.validUuid(value); } catch (error) { return mapServiceError(error); }

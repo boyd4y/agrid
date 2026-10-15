@@ -3,18 +3,18 @@ import { before, after, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { createDatabase } from "@tabdo/backend/database";
-import type { Actor } from "@tabdo/backend/auth/actor";
-import type { BackendScopeResolver } from "@tabdo/backend/http/request";
-import { createTablesRoute } from "@tabdo/backend/http/tables";
-import { createRowsRoute } from "@tabdo/backend/http/rows";
-import { createColumnsRoute } from "@tabdo/backend/http/columns";
-import { createThreadsRoute } from "@tabdo/backend/http/threads";
-import { createMembersRoute } from "@tabdo/backend/http/members";
-import { createApiKeysRoute } from "@tabdo/backend/http/api-keys";
-import { createApiKey } from "@tabdo/backend/services/api-keys";
-import { organization, user, member, agentProfile, agentRuntimeSessions, agentRuns } from "@tabdo/backend/schema";
-import { agentExecutions } from "@tabdo/backend/schema";
+import { createDatabase } from "../../src/business/db/factory.js";
+import type { Actor } from "../../src/business/auth/actor.js";
+import type { RequestScopeResolver } from "../../src/business/http/request.js";
+import { createTablesRoute } from "../../src/business/http/tables.js";
+import { createRowsRoute } from "../../src/business/http/rows.js";
+import { createColumnsRoute } from "../../src/business/http/columns.js";
+import { createThreadsRoute } from "../../src/business/http/threads.js";
+import { createMembersRoute } from "../../src/business/http/members.js";
+import { createApiKeysRoute } from "../../src/business/http/api-keys.js";
+import { createApiKey } from "../../src/business/services/api-keys.js";
+import { organization, user, member, agentProfile, agentRuntimeSessions, agentRuns } from "../../src/business/db/schema.js";
+import { agentExecutions } from "../../src/business/db/schema.js";
 import { loadBuiltinSkillDocuments } from "../../src/skills/builtin-loader.js";
 import { getAgentToolCatalog } from "../../src/harness/tool-catalog.js";
 
@@ -27,7 +27,7 @@ let secret = "", acquired = 0, closed = 0;
 const cleaned: { runtimeId: string; executionIds: readonly string[] }[] = [];
 const createdAgents: string[] = [];
 const builtins = loadBuiltinSkillDocuments();
-const acquire: BackendScopeResolver = async () => {
+const acquire: RequestScopeResolver = async () => {
   acquired++;
   const resource = createDatabase({ connectionString, poolMax: 1 });
   return {
@@ -51,7 +51,7 @@ before(async () => {
   await admin.db.insert(organization).values({ id: org, name: "Portable REST", slug: org });
   await admin.db.insert(user).values({ id: account, name: actor.name, email: actor.email, emailVerified: true, kind: "human" });
   await admin.db.insert(member).values({ id: membership, userId: account, organizationId: org, role: "owner" });
-  secret = (await createApiKey({ database: admin.db, now: () => new Date(), uuid: randomUUID }, actor, { name: "Fixture" })).secret;
+  secret = (await createApiKey({ database: admin.db }, actor, { name: "Fixture" })).secret;
 });
 after(async () => {
   await admin.db.delete(organization).where(eq(organization.id, org));

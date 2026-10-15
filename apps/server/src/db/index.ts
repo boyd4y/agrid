@@ -1,5 +1,5 @@
 import "../load-env.js";
-import { createDatabase } from "@tabdo/backend/database";
+import { createDatabase } from "../business/db/factory.js";
 
 const DEV_DATABASE_URL =
   "postgresql://tableapp:tableapp@localhost:5432/tableapp";

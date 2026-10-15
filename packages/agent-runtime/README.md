@@ -1,21 +1,21 @@
 # @tabdo/agent-runtime
 
-Node implementation of the official Vercel Harness execution lifecycle, shared by
-API chat and worker-triggered agent tasks.
+Official Harness and execution-environment capabilities for Node.
 
 - `/harness/*`: official Pi, Claude Code and Codex SDK assembly.
 - `/sandbox/*`: real local files/processes and official Vercel Sandbox sessions.
-- `/execution`: streaming, cancellation, tool results and session checkpoints.
-- `/services`: injected business persistence, authorization and tool services.
-- `/workspace`: local workspace snapshot and cold restore.
-- `/errors`: safe tool and chat error projection.
+- `/workspace`: safe filesystem snapshot and cold restore.
 
-There is one Node deployment path for local development and Railway. Pi's loop
-runs in Node; Claude/Codex use the official remote Sandbox bridge. Local execution
-uses host permissions, not OS isolation. Each Run may construct a new HarnessAgent;
-PostgreSQL holds durable session/run state, not a permanently resident JS object.
+This package depends on generic core contracts and official SDKs. It has no
+Tabdo Actor, Run, Session repository, database, shared product or application
+imports. Workspaces, authorization, tool transactions, run activity and checkpoint
+persistence are composed by `apps/server/src/harness` and `src/business`.
 
-Run `pnpm --filter @tabdo/agent-runtime test` for native Pi tool loops, SDK retry
-behavior, history and real filesystem lifecycle. Tests use local protocol fixtures,
-not paid models or production data. Product/database tests remain in
-`apps/server/test/harness/` with an isolated `_agent_test` database.
+Pi's loop runs in Node; Claude/Codex use the official remote Sandbox bridge. Local
+execution uses host permissions, not OS isolation. Local and Railway share one
+Node deployment path.
+
+Run `pnpm --filter @tabdo/agent-runtime test` for native tool loops, SDK retries,
+history and filesystem lifecycle, using local provider fixtures. Product-level
+execution tests stay in `apps/server/test/harness/` with an isolated `_agent_test`
+database. Remote Sandbox/model acceptance is separate.

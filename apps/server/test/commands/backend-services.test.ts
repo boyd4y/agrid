@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createDatabase } from "@tabdo/backend/database";
-import type { CommandDependencies } from "@tabdo/backend/dependencies";
+import { createDatabase } from "../../src/business/db/factory.js";
+import type { CommandDependencies } from "../../src/business/dependencies.js";
 import type { FormViewConfig } from "@tabdo/shared";
-import { ServiceError } from "@tabdo/backend/errors";
+import { ServiceError } from "../../src/business/errors.js";
 import { getDatabase } from "../../src/resources/scope.js";
-import { organization, automations, automationEvents, automationOutbox } from "@tabdo/backend/schema";
-import * as commands from "@tabdo/backend/commands";
+import { organization, automations, automationEvents, automationOutbox } from "../../src/business/db/schema.js";
+import * as commands from "../../src/business/commands/index.js";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString || !new URL(connectionString).pathname.endsWith("_agent_test")) {

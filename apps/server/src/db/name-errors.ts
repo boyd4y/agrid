@@ -1,2 +1,2 @@
-import * as implementation from "@tabdo/backend/database/name-errors";
-export { nameConflictMessage } from "@tabdo/backend/database/name-errors";
+import * as implementation from "../business/db/name-errors.js";
+export { nameConflictMessage } from "../business/db/name-errors.js";

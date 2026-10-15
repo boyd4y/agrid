@@ -1,9 +1,9 @@
-import { runAutomationAgentAction as run, type ActionInput } from "@tabdo/backend/automation/agent-action";
-import { runtimeDependencies } from "../services/backend-facade.js";
+import { runAutomationAgentAction as run, type ActionInput } from "../business/automation/agent-action.js";
+import { runtimeDependencies } from "../services/dependencies.js";
 import { prepareNativeChatAgent } from "../harness/preparation.js";
 import { executeAcceptedNativeRun } from "../runner/execute.js";
 import { chatErrorText } from "../ai/errors.js";
-export type { AutomationAgentActionResult } from "@tabdo/backend/automation/agent-action";
+export type { AutomationAgentActionResult } from "../business/automation/agent-action.js";
 export function runAutomationAgentAction(input: ActionInput) {
   return run({ ...runtimeDependencies(),agent: {
     async prepare(options) {

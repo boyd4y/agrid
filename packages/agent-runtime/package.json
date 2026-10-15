@@ -4,29 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./execution": {
-      "types": "./src/execution.ts",
-      "development": "./src/execution.ts",
-      "import": "./dist/execution.js",
-      "default": "./dist/execution.js"
-    },
-    "./errors": {
-      "types": "./src/errors.ts",
-      "development": "./src/errors.ts",
-      "import": "./dist/errors.js",
-      "default": "./dist/errors.js"
-    },
     "./workspace": {
       "types": "./src/workspace.ts",
       "development": "./src/workspace.ts",
       "import": "./dist/workspace.js",
       "default": "./dist/workspace.js"
-    },
-    "./services": {
-      "types": "./src/services.ts",
-      "development": "./src/services.ts",
-      "import": "./dist/services.js",
-      "default": "./dist/services.js"
     },
     "./harness/agent": {
       "types": "./src/harness/agent.ts",
@@ -90,15 +72,13 @@
     "typecheck:test": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@tabdo/backend": "workspace:*",
-    "@tabdo/shared": "workspace:*",
     "@ai-sdk/harness": "1.0.152",
     "ai": "7.0.141",
-    "zod": "^4.6.5",
     "@ai-sdk/harness-pi": "1.0.154",
     "@ai-sdk/harness-codex": "1.0.154",
     "@ai-sdk/harness-claude-code": "1.0.156",
-    "@ai-sdk/sandbox-vercel": "1.0.152"
+    "@ai-sdk/sandbox-vercel": "1.0.152",
+    "@tabdo/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

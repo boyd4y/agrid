@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { eq, sql } from "drizzle-orm";
-import * as schema from "@tabdo/backend/schema";
-import { createRelay, type OutboxRelayDependencies } from "@tabdo/backend/automation/outbox";
+import * as schema from "../../src/business/db/schema.js";
+import { createRelay, type OutboxRelayDependencies } from "../../src/business/automation/outbox.js";
 import type { AutomationDelivery } from "@tabdo/shared";
 import { automationDeliveryId } from "@tabdo/shared";
 import type { QueuePublisher } from "@tabdo/queue";
@@ -158,13 +158,15 @@ for (const fail of [false, true]) {
   });
 }
 
-test("tick respects configured concurrency while publishing each claimed delivery once", async () => {
+test("tick respects configured concurrency while publishing each claimed delivery once", { timeout: 5000 }, async () => {
   await Promise.all(Array.from({ length: 6 }, delivery));
   let active = 0, peak = 0;
+  const overlap = signal();
   const ids = new Set<string>();
   const service = relay({ async publish(message) {
     assert(!ids.has(message.id)); ids.add(message.id); active++; peak = Math.max(peak, active);
-    await new Promise(resolve => setTimeout(resolve, 5)); active--;
+    if (active === 2) overlap.resolve();
+    await overlap.promise; active--;
   } }, { batchSize: 6, concurrency: 2 });
   assert.equal(await service.tick(), 6); assert.equal(ids.size, 6); assert.equal(peak, 2);
   assert.equal((await database.select().from(schema.automationOutbox)).filter(row => row.status === "published").length, 6);

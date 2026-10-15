@@ -1,3 +1,3 @@
-import { createMembersRoute } from "@tabdo/backend/http/members";
-import { acquireNodeBackendScope } from "../services/http-scope.js";
-export const membersRoute = createMembersRoute(acquireNodeBackendScope);
+import { createMembersRoute } from "../business/http/members.js";
+import { acquireRequestScope } from "../services/http-scope.js";
+export const membersRoute = createMembersRoute(acquireRequestScope);

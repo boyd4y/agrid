@@ -1,8 +1,8 @@
-import * as service from "@tabdo/backend/automation/execution";
-import { commandDependencies } from "../services/backend-facade.js";
+import * as service from "../business/automation/execution.js";
+import { commandDependencies } from "../services/dependencies.js";
 import { hydrateAgentMailEvent } from "../integrations/agentmail.js";
 import { runAutomationAgentAction } from "./agent-action.js";
-export { PermanentError, FenceLostError, terminal } from "@tabdo/backend/automation/execution";
+export { PermanentError, FenceLostError, terminal } from "../business/automation/execution.js";
 type Arguments<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown,...infer Rest] ? Rest : never;
 const dependencies = () => ({ ...commandDependencies(),runAgentAction: runAutomationAgentAction,hydrateAgentMailEvent });
 export const finishEvent = (...args: Arguments<typeof service.finishEvent>) => service.finishEvent(dependencies(),...args);

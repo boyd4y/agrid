@@ -1,9 +1,9 @@
-import * as service from "@tabdo/backend/chat/context";
+import * as service from "../business/chat/context.js";
 import type { Actor } from "../auth/actor.js";
 import { getReport } from "../reports/service.js";
-import { runtimeDependencies, backendCall } from "../services/backend-facade.js";
-export { chatContextSchema, contextResourceKey, type ChatContext } from "@tabdo/backend/chat/context-schema";
+import { runtimeDependencies, businessCall } from "../services/dependencies.js";
+export { chatContextSchema, contextResourceKey, type ChatContext } from "../business/chat/context-schema.js";
 
 export function resolveChatContext(input: unknown, actor: Actor) {
-  return backendCall(() => service.resolveChatContext({ ...runtimeDependencies(), loadReport: getReport }, input, actor));
+  return businessCall(() => service.resolveChatContext({ ...runtimeDependencies(), loadReport: getReport }, input, actor));
 }

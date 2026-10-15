@@ -1,5 +1,5 @@
-import { executeNativeRun as executeSharedNativeRun, type NativeRunInput, type NativeRunOutput, type NativeRunDurableOutput } from "@tabdo/agent-runtime/execution";
-import type { NativeRunServices } from "@tabdo/agent-runtime/services";
+import { executeNativeRun as executeSharedNativeRun, type NativeRunInput, type NativeRunOutput, type NativeRunDurableOutput } from "./lifecycle.js";
+import type { NativeRunServices } from "./run-services.js";
 import { HTTPException } from "hono/http-exception";
 import { createNativeAgent, openNativeSandbox } from "./runtime.js";
 import { chatRunLimits } from "./limits.js";

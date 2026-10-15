@@ -8,7 +8,7 @@ import { createHarnessAgent } from "@tabdo/agent-runtime/harness/agent";
 import { createPiAdapter, type PiAdapterConfig } from "@tabdo/agent-runtime/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/agent-runtime/sandbox/local";
 import { restoreWorkspace, snapshotWorkspace, type WorkspaceSnapshot } from "../../src/harness/workspace.js";
-import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
+import { resolveNativeConfiguration } from "../../src/business/agent/runtime-configuration.js";
 
 test("an actual Pi journal from a rejected router model resumes on the configured direct model", { timeout: 20000 }, async t => {
   const requests: { model: string; messages: { role: string; content: unknown }[] }[] = [];

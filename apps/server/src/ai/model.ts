@@ -1,4 +1,4 @@
-import { resolvePiProvider } from "@tabdo/backend/agent/runtime-configuration";
+import { resolvePiProvider } from "../business/agent/runtime-configuration.js";
 import { getOpenRouterStatus, OPENROUTER_SHARED_MODELS, type OpenRouterProviderStatus } from "./providers/openrouter.js";
 
 import { HARNESSES, NATIVE_DEFAULT_MODEL, type HarnessId } from "../harness/contracts.js";

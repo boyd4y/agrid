@@ -16,9 +16,9 @@
     "db:seed:tenants": "tsx src/db/seed-tenants.ts",
     "queue:status": "tsx src/queue/status.ts",
     "test:queue": "tsx --test test/queue/queue.test.ts",
-    "dev:api": "pnpm -r --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/agent-runtime --filter @tabdo/backend --filter @tabdo/shared build && tsx src/dev.ts --api-only",
+    "dev:api": "pnpm -r --filter @tabdo/queue --filter @tabdo/storage --filter @tabdo/agent-runtime --filter @tabdo/core --filter @tabdo/auth --filter @tabdo/db --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
-    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/queue/src/**/*.ts' --include '../../packages/storage/src/**/*.ts' --include '../../packages/agent-runtime/src/**/*.ts' --include '../../packages/backend/src/**/*.ts' src/queue/main.ts",
+    "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/queue/src/**/*.ts' --include '../../packages/storage/src/**/*.ts' --include '../../packages/agent-runtime/src/**/*.ts' --include '../../packages/core/src/**/*.ts' --include '../../packages/auth/src/**/*.ts' --include '../../packages/db/src/**/*.ts' src/queue/main.ts",
     "queue:start": "node dist/queue/main.js",
     "test:chat": "tsx --test test/ai/errors.test.ts test/routes/chat.test.ts",
     "test:relations": "tsx --test test/commands/relations.test.ts",
@@ -56,10 +56,12 @@
     "svix": "^2.8.0",
     "yaml": "^2.8.1",
     "zod": "^4.6.5",
-    "@tabdo/backend": "workspace:*",
     "@tabdo/agent-runtime": "workspace:*",
     "@tabdo/queue": "workspace:*",
-    "@tabdo/storage": "workspace:*"
+    "@tabdo/storage": "workspace:*",
+    "@tabdo/core": "workspace:*",
+    "@tabdo/auth": "workspace:*",
+    "@tabdo/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",

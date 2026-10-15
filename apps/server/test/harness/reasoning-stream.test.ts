@@ -10,11 +10,11 @@ import { snapshotWorkspace, restoreWorkspace, type WorkspaceSnapshot } from "../
 import { createHarnessAgent } from "@tabdo/agent-runtime/harness/agent";
 import { createPiAdapter } from "@tabdo/agent-runtime/harness/pi";
 import { createLocalSandboxAdapter } from "@tabdo/agent-runtime/sandbox/local";
-import { createDatabase } from "@tabdo/backend/database";
-import { resolveNativeConfiguration } from "@tabdo/backend/agent/runtime-configuration";
-import { loadMessages, saveMessage } from "@tabdo/backend/chat/store";
-import { user, organization, member, chatThreads } from "@tabdo/backend/schema";
-import type { Actor } from "@tabdo/backend/auth/actor";
+import { createDatabase } from "../../src/business/db/factory.js";
+import { resolveNativeConfiguration } from "../../src/business/agent/runtime-configuration.js";
+import { loadMessages, saveMessage } from "../../src/business/chat/store.js";
+import { user, organization, member, chatThreads } from "../../src/business/db/schema.js";
+import type { Actor } from "../../src/business/auth/actor.js";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString || !new URL(connectionString).pathname.endsWith("_agent_test")) throw new Error("Reasoning persistence fixture requires an isolated *_agent_test database");
