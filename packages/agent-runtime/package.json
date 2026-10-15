@@ -50,8 +50,8 @@
     "@tabdo/backend": "workspace:*",
     "@tabdo/shared": "workspace:*",
     "@tabdo/platform-node": "workspace:*",
-    "@ai-sdk/harness": "1.0.149",
-    "ai": "7.0.138",
+    "@ai-sdk/harness": "1.0.152",
+    "ai": "7.0.141",
     "zod": "^4.6.5"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 # Pars 核心层调研
 
+本文为历史框架调研。当前部署已统一为本地 / Railway + Node + PostgreSQL / Redis，执行沿用官方 Vercel Harness SDK；以 [现行架构](node-harness.md) 为准。
+
 日期：2026-10-14。源码审阅基线：[`parsrun/pars@08f3ebd`](https://github.com/parsrun/pars/tree/08f3ebd83706e301a14097b0443e4de032c542e7)。本次只读调研，没有安装 Pars，也没有执行其脚本。以下结论区分源码能力与对 tabdo 的设计判断。
 
 ## 值得借鉴的核心

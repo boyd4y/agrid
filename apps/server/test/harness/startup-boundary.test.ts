@@ -101,11 +101,11 @@ test("Pi startup failures and early cancellation retain native state and allow o
     record = await runtime(threadId);assert(record.resumeState);assert(record.workspace?.length);
     const oldState = structuredClone(record.resumeState), oldWorkspace = structuredClone(record.workspace), oldSandbox = record.sandboxId;
 
-    // Real pinned SDK evidence: createSession + stop before stream can lose its filename.
+    // A native attach/stop without submitting a prompt must retain the journal identity.
     const agent = createNativeAgent({ harness: "pi", mode: "local", modelId: "local-test", tools, skills: [], instructions: "Fixture" });
     const opened = await openNativeSandbox({ agent, mode: "local", sandboxId: record.sandboxId, hasResumeState: true, workspace: record.workspace });
     const session = await agent.createSession({ sessionId: record.sessionId, sandboxSession: opened.sandbox, resumeFrom: oldState as HarnessAgentResumeSessionState });
-    assert.deepEqual((await session.stop()).data, {}, "uninvoked SDK stop must never overwrite the old opaque state");await opened.sandbox.destroy();
+    assert.deepEqual((await session.stop()).data, oldState.data, "uninvoked SDK stop retains the original native journal");await opened.sandbox.destroy();
     assert.equal(calls.length, 2);
 
     // Cancellation is durable before execute but is checked after actual createSession.

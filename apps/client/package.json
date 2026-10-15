@@ -30,7 +30,7 @@
     "@tabdo/shared": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.8",
-    "ai": "^7",
+    "ai": "7.0.141",
     "assistant-stream": "0.3.49",
     "better-auth": "^1.7.7",
     "class-variance-authority": "^0.7.1",

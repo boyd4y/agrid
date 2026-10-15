@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-for (const directory of ["packages/platform-node", "packages/agent-runtime", "apps/server", "apps/cloudflare/sandbox/runtime"]) {
+for (const directory of ["packages/platform-node", "packages/agent-runtime", "apps/server"]) {
   const manifest = JSON.parse(await readFile(resolve(root, directory, "package.json"), "utf8"));
   for (const name of ["just-bash", "@ai-sdk/sandbox-just-bash"])
     assert(!(name in (manifest.dependencies ?? {})), `${directory}: native execution must use real files and processes`);
@@ -19,15 +19,14 @@ async function files(directory) {
   return result;
 }
 
-for (const name of ["core", "platform-node", "platform-cloudflare"]) {
+for (const name of ["core", "platform-node"]) {
   const directory = resolve(root, "packages", name);
   const manifest = JSON.parse(await readFile(resolve(directory, "package.json"), "utf8"));
   const config = JSON.parse(await readFile(resolve(directory, "tsconfig.json"), "utf8"));
-  assert.deepEqual(config.compilerOptions.types, name === "core" ? [] : name === "platform-node" ? ["node"] : ["@cloudflare/workers-types"], `${name}: runtime types must be isolated`);
+  assert.deepEqual(config.compilerOptions.types, name === "core" ? [] : ["node"], `${name}: runtime types must be isolated`);
   for (const dependency of Object.keys(manifest.dependencies ?? {})) {
     assert(!["@tabdo/backend", "@tabdo/shared", "@tabdo/agent-runtime"].includes(dependency), `${name}: framework must not depend on product packages`);
     if (name === "core") assert.fail(`core must not own runtime dependencies: ${dependency}`);
-    if (name === "platform-cloudflare") assert(!dependency.startsWith("@ai-sdk/harness") && dependency !== "@tabdo/platform-node", `Worker package must not load native execution dependencies: ${dependency}`);
     if (name === "platform-node") assert(!dependency.startsWith("@cloudflare/") && dependency !== "@tabdo/platform-cloudflare", `Node package must not load Workers bindings: ${dependency}`);
   }
   for (const file of await files(resolve(directory, "src"))) {
@@ -36,11 +35,9 @@ for (const name of ["core", "platform-node", "platform-cloudflare"]) {
     for (const specifier of imports) {
       assert(!/^@tabdo\/(?:backend|shared|agent-runtime)(?:\/|$)/.test(specifier), `${file}: product import ${specifier}`);
       if (name === "core") assert(specifier.startsWith("."), `${file}: core import must be portable and local: ${specifier}`);
-      if (name === "platform-cloudflare") assert(!specifier.startsWith("node:") && !specifier.startsWith("@tabdo/platform-node") && !specifier.startsWith("@ai-sdk/harness"), `${file}: Node import in Worker graph: ${specifier}`);
       if (name === "platform-node") assert(!specifier.startsWith("cloudflare:") && !specifier.startsWith("@cloudflare/") && !specifier.startsWith("@tabdo/platform-cloudflare"), `${file}: CF import in Node graph: ${specifier}`);
     }
     assert(!/\bprocess\.env\b/.test(source), `${file}: configuration must be passed explicitly`);
-    if (name === "platform-cloudflare") assert(!/\b(?:threadId|runId|executionId)\b/.test(source), `${file}: product execution identity must be injected`);
   }
 }
 const backendDirectory = resolve(root, "packages/backend");

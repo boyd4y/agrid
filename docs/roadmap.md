@@ -2,25 +2,21 @@
 
 更新：2026-10-15。按用户要求持续推进；独立功能完成、自检后单独提交并推送。
 
-## 双部署 framework（CF 本地产品链路已接通）
+## 本地 / Railway + 官方 Harness
 
-Cloudflare 优先，保留 Node/Cloudflare 双部署；用户使用相同前端、HTTP、聊天和权限协议。Cloudflare 使用 Workers + Queues/Cron + Durable Objects + 按需 Sandbox，保留 PostgreSQL、Drizzle、Better Auth；无需额外常驻 Node API 或 Redis。边界见[双部署架构](architecture/dual-deployment.md)和[包边界](architecture/runtime-boundaries.md)。
+部署目标：本地和 Railway，PostgreSQL + Redis/BullMQ。保留 Vercel Harness SDK 的工具注册、UI stream 和原生会话恢复；撤掉 Sandbox Agent/ACP 迁移，不恢复 Cloudflare。
 
 ### 已完成
 
-- `core` 定义通用能力，`platform-node` / `platform-cloudflare` 隔离实现；`backend` 保存共享业务，`agent-runtime` 通过显式端口执行官方原生 Harness。
-- 全部公共 REST 路由及表格、文件、技能、报告、成员、集成服务共用 backend；Node 原路径保留薄 facade。
-- 聊天、定时任务与数据事件共享 PG 接受记录、执行 fence、事务工具凭据与检查点。Sandbox 只拿单次受限 gateway 能力，不持 PG、Redis 或认证管理凭证。
-- `pnpm dev:cf` 一键启动 Vite 与 Wrangler；本地 Queues/R2/DO、每分钟模拟 Cron、Docker 按需运行，连接现有 PG。配置与显式迁移见[本地指南](development/cloudflare-local.md)。
-- 实际前端代理链路已验证注册/工作区/智能体、工具写表、同 Run 问答冷恢复、R2 文件、取消、数据自动化和定时智能体私有历史。使用隔离 PG 与本地模型协议服务。
+- 删除 Cloudflare 应用/平台包、Wrangler 入口和专用测试配置，保留 backend services 与通用能力契约。
+- 保留官方 HarnessAgent 执行路径、host tools、结构化问答、取消及原生 Session 恢复。
+- 本地 `pnpm dev` 运行 Vite/API/worker；Railway 使用一个镜像的 API/worker 两个入口。
+- Harness 与 Sandbox 生命周期分开管理；PostgreSQL 持久化恢复信息，浏览器断开不等于取消任务。
 
-### 待完成
+### 待验收
 
-- Cloudflare 线上绑定、Hyperdrive 连接池/缓存、远程 Container 生命周期及真实 DeepSeek 调用验收。
-- CF 产品执行目前支持 Pi + local 原生运行模式；其他 Harness 在 CF 显式拒绝，尚需分别接入与验收。Node 既有 Harness 能力保留。
-- 本地 R2 与旧 Node 本地文件是不同存储；已有 `local` 文件记录需迁移，不能直接假定文件已存在。
-
-本地链路通过不等于线上发布完成。详细验证与历史演进保留在架构和测试文档中。
+- Railway 实际部署、远程 Vercel Sandbox 和真实模型调用。
+- Pi 是 host-runtime；本地目录不是 OS 级沙箱，不宣称与远程 Sandbox 有同样隔离。
 
 ## 已完成并提交
 

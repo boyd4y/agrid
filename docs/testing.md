@@ -16,9 +16,7 @@ pnpm build
 
 server 常规入口覆盖 AI 错误、关联、报告/独立自动化、Skill、原生 Harness 和 chat API。仍保留 `test:chat`、`test:relations`、`test:reports`、`test:skills`、`test:harness` 各业务入口。`test:queue` 单独运行，因为它要求专用队列数据库和 Redis，不能与其他用例共用存储。
 
-先运行 `pnpm build:foundation`，再用 `DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm --filter @tabdo/server test:edge` 在真实 workerd 中验证 `@tabdo/backend` PG/Better Auth 工厂。Hyperdrive 使用本地 binding，连接指定隔离数据库；每请求创建/关闭 resource，检查真实注册、Cookie 签名并发隔离、退出登录及连接释放。fixture 使用生成的 Env、独立 Worker 类型检查与显式测试密钥，不依赖 Wrangler 登录，不发送邮件，不代表远程 Hyperdrive 池/缓存或完整产品 Worker 已验收。更改 binding 后重新运行 `wrangler types --config test/cloudflare/fixture/wrangler.jsonc --include-runtime=false --env-interface PlatformFactoryTestEnv test/cloudflare/fixture/env.d.ts`。
-
-`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。该用例通过原生 bash 执行真实 Python 脚本并断言聚合输出；真实文件、引用和会话跨恢复保留。普通 Node 用例验证宿主进程，Wrangler/Docker 产品用例另外验证容器内 Node/Python 与二进制文件的冷恢复。单独运行：
+`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。该用例通过原生 bash 执行真实 Python 脚本并断言聚合输出；真实文件、引用和会话跨恢复保留。普通 Node 用例验证宿主进程；远程 Sandbox 需单独显式启用验收。单独运行：
 
 ```bash
 pnpm --filter @tabdo/server exec tsx --test test/harness/skills-bundle.test.ts
@@ -43,7 +41,7 @@ Pi 是 host runtime，因此模型由宿主本地 HTTP fixture 确定性响应�
 
 ## 实际浏览器回归
 
-`apps/server/test/harness/startup-boundary.test.ts` 使用独立 `*_agent_test` 数据库和真实 HarnessAgent/Pi、本地 HTTP provider。它断言尚未调用 turn 的真实 SDK stop 可返回空状态，而应用不会覆盖旧 resume/workspace；首轮失败与取消后的新输入、已有会话的启动前失败/停止、未完成 session 的错误输入与官方继续均不重放已提交工具。客户端伪造未执行证明和旧空状态仍拒绝恢复。它只证明明确未调用 Pi invocation 的边界，不证明进程崩溃后的自动重放安全。
+`apps/server/test/harness/startup-boundary.test.ts` 使用独立 `*_agent_test` 数据库和真实 HarnessAgent/Pi、本地 HTTP provider。它断言新版 SDK 在未提交输入时 stop 保留原生日志身份，应用也不会把启动前状态覆盖为成功 turn；首轮失败与取消后的新输入、已有会话的启动前失败/停止、未完成 session 的错误输入与官方继续均不重放已提交工具。客户端伪造未执行证明和旧空状态仍拒绝恢复。它只证明明确未调用 Pi invocation 的边界，不证明进程崩溃后的自动重放安全。
 
 先启动已有前端（默认 `http://localhost:5173`），安装本地 Chrome 或执行 `pnpm --filter @tabdo/client exec playwright install chromium` 后设置 `BROWSER_CHANNEL=bundled`。浏览器脚本自行启动测试 API，默认端口 `3112`；API 与页面请求使用指定的独立数据库，并路由页面 `/api` 请求至测试 API。它不会重启正在运行的 `3001` API 或前端。测试只清理自身新建的工作区和账号。
 
@@ -68,9 +66,9 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 
 ## 队列进程与 Redis 故障测试
 
-能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/core --filter @tabdo/platform-node --filter @tabdo/platform-cloudflare test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未设置这个变量时明确跳过。CF Queues 与 R2 使用 Wrangler 官方 `createTestHarness` 在真实本地 workerd 中独立验证，不访问远程资源。`pnpm --filter @tabdo/cloudflare build:fixture` 验证各自 edge bundle；fixtures 不是平台生产入口。业务消息与 UUID 文件 namespace 回归位于 shared/server 测试中。
+能力包测试：`QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381 pnpm -r --filter @tabdo/core --filter @tabdo/platform-node test`。通用 BullMQ 用例使用专用测试 Redis 和随机前缀；未配置时明确跳过。Cloudflare 专用包、入口和 fixtures 已撤掉，Node 服务继续使用既有 PG/Redis 测试契约。
 
-`pnpm --filter @tabdo/platform-node test` 在独立包内验证真实 Pi 工具循环、原生历史和 JustBash 工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
+`pnpm --filter @tabdo/platform-node test` 在独立包内验证真实 Pi 工具循环、原生历史和真实文件工作区恢复，不连接产品数据库/远程模型。平台级 `test:harness` 使用 `_agent_test`，覆盖实际 SDK 跨进程提问续接；保留已验证的原生 reattach 配置。工厂 Session 签名隔离与 CORS/资源配置测试在 `test/routes/platform-factories.test.ts`。
 
 专用 PostgreSQL 数据库名称必须以 `_queue_test` 结尾，并先执行迁移；Redis 使用专用实例与 `agrid-queue-test` 前缀。下面使用本地已有测试实例，绝不能改成业务数据库/Redis：
 
@@ -149,31 +147,13 @@ pnpm --filter @tabdo/client test:browser -- name-conflicts kanban-overflow
 `test/harness/automation-agent-action.test.ts` 验证由实际定时动作创建的 `scheduled_task` 会话、任务归属、私人会话权限、运行分页，以及继续消息仍使用同一个原生 runtime session、不会重复已完成的工具操作。`test/routes/chat.test.ts` 中手动取消不再保存停止系统提示，超时仍保留原因与工具结果。
 
 
-## 共享业务依赖与 CF 优先迁移
+## 显式业务依赖
 
-`packages/backend` 不加载 Node/CF 全局类型，不使用 ALS 或 HTTPException。`pnpm check:architecture` 防止平台 SDK 和隐式资源访问重新进入共用业务代码。Node 旧签名 facade 留在应用入口；实际实现只有一份。
+`packages/backend` 不加载运行时全局类型，不使用 ALS 或 HTTPException。`pnpm check:architecture` 防止平台 SDK 和隐式资源访问进入业务 services；Node facade 保留既有调用签名。
 
 ```sh
 DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
   pnpm --filter @tabdo/server exec tsx --conditions=development --test test/commands/backend-services.test.ts test/runner/explicit-services.test.ts test/automation/outbox.test.ts
-DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
-  pnpm --filter @tabdo/cloudflare exec tsx --conditions=development --test test/platform-coordination.test.ts
 ```
 
-第一组直接注入 PG/时钟/UUID/队列，不开资源 scope，验证 tenant、caller transaction 原子性、lease/fence、持久接受/输出、成员撤销和 Outbox claim/补偿。Outbox 用独立临时 schema，避免认领并行测试的事件。第二组使用真实 Wrangler + PG/Better Auth + DO，直接调用共用 Hono 命令与 Session services，验证 API scope、batch 写入/唯一冲突回滚、成员查询、私有 cursor replay 和取消；不导入 server/ALS。
-
-这些测试和 [Sandbox 原生冷恢复](../apps/cloudflare/sandbox/README.md) 目前仍是分段验收。完整产品 Worker、工具 gateway、自动化/定时统一派发与原生网络模型验收仍需接线，不能将分段 PASS 当成产品全链路成功。
-
-
-通用 Sandbox 计算控制单独启用 Docker，不混入普通 Workers 单测：
-
-```sh
-pnpm test:cloudflare:container
-pnpm --filter @tabdo/platform-cloudflare typecheck:container
-```
-
-它验证真实 DO/Container 的提前 spawn ACK、exit、单次启动、身份隔离、DO 重建后 launch marker、显式只读 token probe、不明状态拒绝重播、启动失败和取消竞态。spawn ACK 不是原生执行就绪或 PG invocation receipt；API pid 也不假定是 Linux PID。测试 finally 只销毁自身 namespace/UUID 的容器。
-
-## CF 正式产品本地回归
-
-完整启动命令与隔离条件见[本地 Cloudflare 开发](development/cloudflare-local.md)。`pnpm dev:cf` 运行正式入口；`pnpm test:cloudflare:product` 的两个 opt-in 用例串行占用本地模型端口，覆盖前端代理到原生容器、提问冷恢复、R2、取消和实际数据/定时触发。不能把默认跳过计作通过，也不能改用用户数据库。`pnpm test:dev-config` 独立验证配置文件、端口、密钥隔离与 DeepSeek 快捷设置。
+这些用例直接注入 PG/时钟/UUID/队列，验证 tenant、caller transaction 原子性、lease/fence、持久接受/输出、成员撤销和 outbox claim/补偿。Outbox 使用独立临时 schema，避免认领并行测试的事件。HTTP 工厂仍由 `test/routes/platform-factories.test.ts` 验证原生 Better Auth、PG、签名隔离和连接释放。Cloudflare 专用执行与 fixtures 已撤掉；远程 Sandbox 的验收方式见前文，不能将本地 PASS 当成线上通过。

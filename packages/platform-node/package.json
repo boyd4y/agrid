@@ -106,12 +106,12 @@
     "bullmq": "5",
     "ioredis": "5",
     "@aws-sdk/client-s3": "^3.1150.0",
-    "@ai-sdk/harness": "1.0.149",
-    "@ai-sdk/harness-pi": "1.0.151",
-    "@ai-sdk/harness-codex": "1.0.151",
-    "@ai-sdk/harness-claude-code": "1.0.153",
-    "@ai-sdk/sandbox-vercel": "1.0.149",
-    "ai": "7.0.138"
+    "@ai-sdk/harness": "1.0.152",
+    "@ai-sdk/harness-pi": "1.0.154",
+    "@ai-sdk/harness-codex": "1.0.154",
+    "@ai-sdk/harness-claude-code": "1.0.156",
+    "@ai-sdk/sandbox-vercel": "1.0.152",
+    "ai": "7.0.141"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

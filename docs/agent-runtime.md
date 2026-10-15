@@ -72,7 +72,7 @@ Sandbox 使用 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或部�
 
 四个内置技能来自 `apps/server/skills/{table,form,report,automation}` 的真实 `SKILL.md` 与递归引用/脚本文件。工作区启用和智能体分配的交集作为官方 `skills` bundle 传入 Harness；首次模型请求只收到名称、描述与读取位置，完整业务方法通过原生 `read` 按需读取。`skills-bundle.test.ts` 使用真实四包和官方 Pi 原生工具验证逐文件挂载、读取完整 report 文档/脚本及 `bash` 读取 reference；停止后恢复工作区并撤销 report 分配，SDK 移除旧目录，新 turn 无法再读取旧脚本。平台 API 与 Explorer 保持内置内容只读，管理员启停不修改内容。[官方 Skills 文档](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)说明这种按需加载与后续 turn 更新方式。
 
-命令直接通过系统 bash 启动真实进程，文件读写落在真实目录；容器镜像包含 bash、Node 和 Python 3。普通 Node 本地模式使用宿主已安装的程序，临时目录用于文件组织，并不提供操作系统级隔离；Cloudflare 模式由每个执行的容器提供外层边界。工作区快照仅收集自有目录，不跟随符号链接，不保存服务器文件或环境变量。旧内存工作区快照按逻辑路径恢复到真实目录，原生会话继续由 SDK 恢复。
+命令直接通过系统 bash 启动真实进程，文件读写落在真实目录；Railway Node 镜像包含 bash、Node 和 Python 3。普通 Node 本地模式使用宿主已安装的程序，临时目录用于文件组织，并不提供操作系统级隔离；远程工作区由所选 Sandbox 提供对应执行能力。工作区快照仅收集自有目录，不跟随符号链接，不保存服务器文件或环境变量。旧内存工作区快照按逻辑路径恢复到真实目录，原生会话继续由 SDK 恢复。
 
 真实远程验收使用显式启用的 `test:harness:remote` 命令，覆盖原生远程 read/write/bash、AGENTS 与按需读取的真实生产 report Skill/reference/Python script。原生 write 创建独立 CSV，原生 bash 执行 `summarize-csv.py` 并校验真实 JSON 聚合；停止 Sandbox 后通过官方恢复核对原生历史、文件/输出保留和脚本计数仍为一，最终销毁测试资源。它使用当前产品 node24 模板，缺少 Python 会明确失败，不能靠安装解释器或宿主运行冒充该环境支持。Pi 模型由宿主本地 fixture 提供，不需要付费模型或业务数据库。缺凭证、未启用或任何执行/清理失败都不算 PASS；本机当前缺 Vercel 凭证，只完成类型检查、阻断 preflight 和生产脚本的宿主窄参数/JSON契约验证，真实远程仍未验收。命令和退出码见 [测试说明](testing.md)。
 
@@ -105,6 +105,8 @@ Harness 内置工具由对应适配器管理，不在平台工具设置中单独
 工具设置只控制平台数据操作与 Skill 读取工具，使用官方 `inactiveTools` 执行禁用。原生 `askUserQuestions` 保留标准问题与答案续接流程。内部 `/workspace/agent/AGENTS.md` 在官方 onSession 生命周期生成，下一次运行采用最新人设。历史迁移和已保存的旧任务数据保留，本轮不删除数据库列或用户数据。
 
 ## Pi 模型预算与空回复
+
+2026-10-15：固定官方 Harness 1.0.152、Pi adapter 1.0.154，并统一 AI SDK 7.0.141。原生 Pi fixture 验证首次超时后重试成功不会追加旧的 `Request timed out.`，后续真正失败仍会如实报告；工具不因重试重复执行。此修复不消除供应商网络超时本身。
 
 OpenRouter通过公开 `/models` 辅助获取实际context_length与提供商输出上限，缓存5分钟，查询最多2秒。网络/HTTP/解析故障或目录遗漏ID不拦执行：优先复用已有真实缓存，无缓存则使用显式环境配置/保守默认，实际供应商最终判断模型能力；推测值不写成目录缓存。`PI_MAX_OUTPUT_TOKENS` 默认16384，且受成功目录中的提供商上限约束。冷缓存未知模型仍可能受保守32768窗口影响，需要真实 `PI_CONTEXT_WINDOW`；错误窗口可能触发Pi SDK自身上下文裁剪。没有以目录不可用或遗漏模型为由要求用户新建会话。
 

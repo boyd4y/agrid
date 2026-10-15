@@ -6,63 +6,54 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "workerd": "./src/index.ts",
       "development": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./queue": {
       "types": "./src/queue/index.ts",
-      "workerd": "./src/queue/index.ts",
       "development": "./src/queue/index.ts",
       "import": "./dist/queue/index.js",
       "default": "./dist/queue/index.js"
     },
     "./storage": {
       "types": "./src/storage/index.ts",
-      "workerd": "./src/storage/index.ts",
       "development": "./src/storage/index.ts",
       "import": "./dist/storage/index.js",
       "default": "./dist/storage/index.js"
     },
     "./execution": {
       "types": "./src/execution/index.ts",
-      "workerd": "./src/execution/index.ts",
       "development": "./src/execution/index.ts",
       "import": "./dist/execution/index.js",
       "default": "./dist/execution/index.js"
     },
     "./execution/http": {
       "types": "./src/execution/http.ts",
-      "workerd": "./src/execution/http.ts",
       "development": "./src/execution/http.ts",
       "import": "./dist/execution/http.js",
       "default": "./dist/execution/http.js"
     },
     "./internal-auth": {
       "types": "./src/internal-auth.ts",
-      "workerd": "./src/internal-auth.ts",
       "development": "./src/internal-auth.ts",
       "import": "./dist/internal-auth.js",
       "default": "./dist/internal-auth.js"
     },
     "./transport/execution-http-host": {
       "types": "./src/transport/execution-http-host.ts",
-      "workerd": "./src/transport/execution-http-host.ts",
       "development": "./src/transport/execution-http-host.ts",
       "import": "./dist/transport/execution-http-host.js",
       "default": "./dist/transport/execution-http-host.js"
     },
     "./harness": {
       "types": "./src/harness/index.ts",
-      "workerd": "./src/harness/index.ts",
       "development": "./src/harness/index.ts",
       "import": "./dist/harness/index.js",
       "default": "./dist/harness/index.js"
     },
     "./sandbox": {
       "types": "./src/sandbox/index.ts",
-      "workerd": "./src/sandbox/index.ts",
       "development": "./src/sandbox/index.ts",
       "import": "./dist/sandbox/index.js",
       "default": "./dist/sandbox/index.js"

@@ -16,7 +16,7 @@
     "db:seed:tenants": "tsx src/db/seed-tenants.ts",
     "queue:status": "tsx src/queue/status.ts",
     "test:queue": "tsx --test test/queue/queue.test.ts",
-    "dev:api": "pnpm -r --filter @tabdo/core --filter @tabdo/platform-node --filter @tabdo/platform-cloudflare --filter @tabdo/backend --filter @tabdo/shared build && tsx src/dev.ts --api-only",
+    "dev:api": "pnpm -r --filter @tabdo/core --filter @tabdo/platform-node --filter @tabdo/backend --filter @tabdo/shared build && tsx src/dev.ts --api-only",
     "test:queue:load": "tsx test/queue/load.ts",
     "queue:dev": "tsx watch --conditions=development --include '../../packages/shared/src/**/*.ts' --include '../../packages/core/src/**/*.ts' --include '../../packages/platform-node/src/**/*.ts' --include '../../packages/backend/src/**/*.ts' src/queue/main.ts",
     "queue:start": "node dist/queue/main.js",
@@ -26,26 +26,25 @@
     "test:harness": "tsc --project tsconfig.test.json && tsx --test test/harness/*.test.ts",
     "test:harness:remote": "tsx test/harness/remote-smoke.ts",
     "test:skills": "tsx --test test/skills/*.test.ts",
-    "typecheck:test": "tsc --project tsconfig.test.json && tsc -p test/cloudflare/tsconfig.worker.json",
+    "typecheck:test": "tsc --project tsconfig.test.json",
     "test": "pnpm typecheck:test && tsx --test test/automation/*.test.ts test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/storage/*.test.ts test/routes/*.test.ts test/runner/*.test.ts",
     "test:automations": "tsx --test test/automation/*.test.ts",
-    "test:edge": "tsc -p test/cloudflare/tsconfig.worker.json && tsx --test test/cloudflare/*.test.ts",
     "test:runner": "tsx --test test/runner/*.test.ts",
     "runner:start": "node dist/runner/http-entry.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.78",
-    "@ai-sdk/harness": "1.0.149",
-    "@ai-sdk/harness-claude-code": "1.0.153",
-    "@ai-sdk/harness-codex": "1.0.151",
-    "@ai-sdk/harness-pi": "1.0.151",
+    "@ai-sdk/harness": "1.0.152",
+    "@ai-sdk/harness-claude-code": "1.0.156",
+    "@ai-sdk/harness-codex": "1.0.154",
+    "@ai-sdk/harness-pi": "1.0.154",
     "@ai-sdk/openai": "^4.0.91",
-    "@ai-sdk/sandbox-vercel": "1.0.149",
+    "@ai-sdk/sandbox-vercel": "1.0.152",
     "@aws-sdk/client-s3": "^3.1150.0",
     "@better-auth/drizzle-adapter": "^1.7.7",
     "@hono/node-server": "^1.14.1",
     "@tabdo/shared": "workspace:*",
-    "ai": "^7.0.138",
+    "ai": "7.0.141",
     "better-auth": "^1.7.7",
     "bullmq": "5",
     "cron-parser": "^5.6.0",
@@ -64,11 +63,9 @@
     "@tabdo/agent-runtime": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261014.1",
     "@types/node": "^22.14.1",
     "drizzle-kit": "^0.31.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3",
-    "wrangler": "4.149.0"
+    "typescript": "^5.8.3"
   }
 }

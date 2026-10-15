@@ -8,8 +8,8 @@ Portable infrastructure contracts, independent of Tabdo business data and runtim
 - `/execution/http`, `/transport/execution-http-host`, `/internal-auth`: Web-standard signed control transport. Provider boot acknowledgment does not replace a durable business receipt.
 - `/harness`, `/sandbox`: generic lifecycle/assembly contracts. Implementations specialize the official SDK's session types; no replacement model loop or filesystem API.
 
-Production source types use `types: []`. The `workerd` export condition selects TypeScript source for Wrangler; ordinary Node imports select compiled JavaScript. These conditions select source versus build output, never a different provider. No vendor, backend, shared business schema or Node runtime dependencies are installed here.
+Production source types use `types: []`. The `development` export condition selects TypeScript source; ordinary Node imports select compiled JavaScript. No vendor, backend, shared business schema or Node runtime dependencies are installed here.
 
-Node implementations live in `@tabdo/platform-node`; Workers bindings and DO control live in `@tabdo/platform-cloudflare`. Both accept explicit configuration. Business permissions, transactions, outbox receipts and authoritative Run state belong in `@tabdo/backend`.
+Implementations live in `@tabdo/platform-node` and receive explicit configuration. Business permissions, transactions, outbox receipts and authoritative Run state belong in `@tabdo/backend`.
 
 Run `pnpm --filter @tabdo/core test` and `pnpm check:architecture` from the repository root.

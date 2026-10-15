@@ -10,7 +10,6 @@
   ],
   "exclude": [
     "dist",
-    "node_modules",
-    "test/cloudflare/fixture"
+    "node_modules"
   ]
 }

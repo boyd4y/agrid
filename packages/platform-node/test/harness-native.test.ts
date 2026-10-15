@@ -7,6 +7,45 @@ import { createLocalSandboxAdapter } from "@tabdo/platform-node/sandbox/local";
 import { createHarnessAgent } from "../src/harness/agent.js";
 import { createPiAdapter } from "../src/harness/pi.js";
 
+for (const finalFailure of [false, true]) test(`native Pi retry ${finalFailure ? "preserves a later terminal failure" : "recovers an earlier timeout without a false terminal error"}`, { timeout: 20000 }, async () => {
+  const completions: string[] = [];
+  let calls = 0, executed = 0;
+  const provider = createServer(async (request, response) => {
+    for await (const _ of request) { /* drain only this local protocol fixture */ }
+    calls++;
+    if (calls === 1 || finalFailure && calls === 3) {
+      response.writeHead(400, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: calls === 1 ? "Request timed out." : "Permanent fixture rejection", type: "invalid_request_error" } }));
+      return;
+    }
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    const send = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "native-retry", object: "chat.completion.chunk", created: 1, model: "fixture", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    if (calls === 2) {
+      send({ role: "assistant", tool_calls: [{ index: 0, id: "receipt-1", type: "function", function: { name: "receipt", arguments: "{}" } }] });send({}, "tool_calls");
+    } else { send({ role: "assistant", content: "Recovered successfully." });send({}, "stop"); }
+    response.end("data: [DONE]\n\n");
+  });
+  await new Promise<void>(resolve => provider.listen(0, "127.0.0.1", resolve));
+  const address = provider.address();assert(address && typeof address !== "string");
+  const sandbox = await createLocalSandboxAdapter({ cwd: "/workspace", env: {} }).create();
+  const agent = createHarnessAgent(createPiAdapter({ providerId: "retry-fixture", apiKey: "fixture-key", baseUrl: `http://127.0.0.1:${address.port}/v1`, model: { id: "fixture", contextWindow: 65536, maxTokens: 512, reasoning: false }, maxTokensField: "max_tokens", onMessageEnd: completion => completions.push(completion.finishReason) }), {
+    instructions: "Use receipt once, then confirm.", tools: { receipt: tool({ inputSchema: jsonSchema<Record<string, never>>({ type: "object", properties: {}, additionalProperties: false }), execute: () => { executed++;return { committed: true }; } }) },
+  });
+  const session = await agent.createSession({ sandboxSession: sandbox.session, sessionId: crypto.randomUUID() });
+  try {
+    const result = await agent.stream({ session, prompt: "Run the receipt once." });
+    const parts = [];for await (const part of result.stream) parts.push(part);
+    assert.equal(calls, 3);assert.equal(executed, 1, "native retries never replay the successful tool");
+    assert.deepEqual(completions, ["error", "toolUse", finalFailure ? "error" : "stop"]);
+    const errors = parts.filter(part => part.type === "error");
+    if (finalFailure) { assert(errors.some(part => String(part.error).includes("Permanent fixture rejection")));assert(!parts.some(part => part.type === "finish")); }
+    else { assert.equal(errors.length, 0, "a successful final attempt must clear the earlier retryable timeout");assert(parts.some(part => part.type === "finish"));assert.equal(parts.filter(part => part.type === "text-delta").map(part => part.text).join(""), "Recovered successfully."); }
+  } finally {
+    await session.stop().catch(() => {});await sandbox.session.destroy();
+    provider.closeAllConnections();await new Promise<void>(resolve => provider.close(() => resolve()));
+  }
+});
+
 test("standalone native agent executes a host tool and resumes native history without product imports", { timeout: 15000 }, async () => {
   const requests: { max_tokens?: number; messages: unknown[] }[] = [];
   const completions: string[] = [];

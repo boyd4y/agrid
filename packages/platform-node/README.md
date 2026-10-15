@@ -11,6 +11,6 @@ Use explicit subpaths:
 - `/harness/types`, `/sandbox/types`: specialize core contracts with official SDK types.
 - `/sandbox/local`, `/sandbox/vercel`: native SDK environment lifecycle.
 
-The default entry exports types only. A Cloudflare Sandbox can load the Harness/execution modules inside its Linux image; its Worker must not import this package. Loading those subpaths does not load BullMQ. The container program is an internal execution entry, not an additional public Node service or another agent loop.
+The default entry exports types only. Local development and Railway load the same explicit Node subpaths; Harness assembly does not implicitly load BullMQ. Pi runs its native loop in the host. Claude/Codex use the official remote Sandbox bridge. See `docs/architecture/node-harness.md` for execution and lifecycle boundaries.
 
-Tests run with `pnpm --filter @tabdo/platform-node test`. Set `QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381` to include the real isolated BullMQ test. No test calls a paid model or a user database. Cloudflare Sandbox lifecycle and business dispatch require their separate integration tests.
+Tests run with `pnpm --filter @tabdo/platform-node test`. Set `QUEUE_ADAPTER_TEST_REDIS_URL=redis://127.0.0.1:6381` to include the real isolated BullMQ test. No default test calls a paid model or a user database; remote Sandbox acceptance is opt-in.

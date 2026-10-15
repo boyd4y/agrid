@@ -13,7 +13,7 @@ export function parseAutomationDelivery(input: unknown): AutomationDelivery {
   return Object.freeze({ protocol: 1, eventId: input.eventId, generation: input.generation });
 }
 
-/** Application identity, not a Cloudflare message ID or provider dedup guarantee. */
+/** Application identity, not a provider message ID or provider dedup guarantee. */
 export function automationDeliveryId(delivery: AutomationDelivery): string {
   const checked = parseAutomationDelivery(delivery);
   return `automation-${checked.eventId}-${checked.generation}`;

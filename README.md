@@ -11,7 +11,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 - [文档索引](docs/README.md)：功能说明、架构、开发与部署指南。
 - [贡献指南](AGENTS.md)：目录结构、开发命令、代码和测试约定。
-- [本地 Cloudflare 开发](docs/development/cloudflare-local.md)：`pnpm dev:cf`、DeepSeek、PostgreSQL 与按需 Sandbox。
+- [本地部署](docs/local-node.md)与[Railway 部署](docs/railway.md)：Node API、后台 worker、PostgreSQL、Redis 与官方 Harness。
 - [产品定位](PRODUCT.md)与[设计规范](DESIGN.md)：产品与界面的长期约定。
 - [历史记录](docs/archive/README.md)：迭代与审计快照，具体能力以现行说明和代码为准。
 
@@ -51,7 +51,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 聊天发送启动独立 Run，使用保存的原生 Session，只提交最新用户输入。默认没有平台步数或超时限制；仅显式配置 `.env.example` 的 `AI_CHAT_*` 才启用。未完成 turn 使用官方续接能力接收普通追问，自然结束无正文不再被平台改判失败。停止不会撤销已提交的数据修改；同一提交与并发执行仍有保护。真正丢失最新保存状态时明确报错，不重放 UI 工具历史。
 
-本地只需要配置 Pi/OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。规划使用 Harness 原生能力，平台不提供自建 plan/goal 工具；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
+本地只需要配置 Pi/DeepSeek 或 OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。规划使用 Harness 原生能力，平台不提供自建 plan/goal 工具；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
 
 ### 设计系统
 - Notion 色板（`#37352f` / `#2383e2` / `#e9e9e7`）
@@ -60,7 +60,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 ## 快速开始
 
-Cloudflare 本地开发：配置现有 PostgreSQL 与 DeepSeek 后，运行 `pnpm cf:db:migrate`，再运行 **`pnpm dev:cf`**。同一个命令启动前端与 Wrangler，Docker Sandbox 按需运行；无需额外 Node API 或 Redis。完整配置见[本地 Cloudflare 开发](docs/development/cloudflare-local.md)。原有 `pnpm dev` 继续使用 Node 模式。
+本地使用 `pnpm dev` 启动 Vite、Node API 和后台 worker；线上使用 Railway 的同一套 Node 服务，保留 PostgreSQL 与 Redis/BullMQ。智能体沿用官方 Vercel Harness SDK，不引入 Sandbox Agent/ACP 执行层。详见[架构说明](docs/architecture/node-harness.md)。
 
 使用构建后的前端、Node API 和后台 worker 在本机同源运行，见 [本地 Node 部署](docs/local-node.md)。
 项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`，共享界面位于 `packages/ui`（`@tabdo/ui`，含独立 Storybook）。包之间通过 `workspace:*` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。

@@ -1,9 +1,9 @@
 # @tabdo/backend
 
-Shared Tabdo business code, separate from `core` contracts and the Node/Cloudflare implementation packages. This package owns the PostgreSQL schema, explicit database/auth factories, table commands, automation configuration/events/schedules/outbox, and private Run/Session repositories.
+Shared Tabdo business code, separate from `core` contracts and the Node implementation package. This package owns the PostgreSQL schema, explicit database/auth factories, table commands, automation configuration/events/schedules/outbox, and private Run/Session repositories.
 
 - `@tabdo/backend/database`: `createDatabase({ connectionString, poolMax, prepare? })` returns Drizzle, its Postgres.js client and an owned `close()` method. No environment lookup or global pool.
-- `@tabdo/backend/auth`: `createPlatformAuth({ database, appUrl, baseURL, secret, production, hooks?, sendInviteEmail })`. Both runtimes use the same native Better Auth/organization configuration; no replacement identity implementation.
+- `@tabdo/backend/auth`: `createPlatformAuth({ database, appUrl, baseURL, secret, production, hooks?, sendInviteEmail })`. Applications use the same native Better Auth/organization configuration; no replacement identity implementation.
 - `@tabdo/backend/schema`: the single product schema and related types. SQL migrations stay in `apps/server/drizzle` during this incremental extraction.
 - `@tabdo/backend/checkpoints`: private persisted workspace shape and validation contract. Actual filesystem snapshot/restoration and byte/path checks stay with the runtime.
 - `@tabdo/backend/auth/actor`: `resolveActor(request, {database, resolveSession, logger})` and `listOrgMembers(organizationId, {database})`. Explicit dependencies, Web Crypto, live membership/key checks and no ALS or Hono dependency. Node compatibility façades preserve existing public call signatures.
@@ -14,7 +14,7 @@ Shared Tabdo business code, separate from `core` contracts and the Node/Cloudfla
 - `@tabdo/backend/errors`: transport-independent `ServiceError`; only HTTP entries map status to responses.
 - Default entry: type exports only, without loading a database or auth runtime.
 
-Node composition supplies its pool, environment settings, invitation hook and email transport. A Worker creates request-owned resources from its Hyperdrive binding and closes them after awaited database/auth work. Do not close a resource while an accepted detached Run still uses it. Long Harness execution belongs in the runner, not a short-lived Worker request.
+Node composition supplies its pool, environment settings, invitation hook and email transport. Do not close a resource while an accepted detached Run still uses it. Harness execution is assembled by the Node API/worker, while business services receive explicit dependencies.
 
 ```ts
 import { createDatabase } from "@tabdo/backend/database";
@@ -23,6 +23,6 @@ try { await useDatabase(resource.db); }
 finally { await resource.close(); }
 ```
 
-The actual integration checks remain with the application consumers: Node `test/routes/platform-factories.test.ts` and workerd `test/cloudflare/factories.test.ts`. They test real PostgreSQL, native Better Auth registration/sessions, independent signing settings and connection cleanup. Build dependencies with `pnpm build:foundation`, then run `pnpm --filter @tabdo/server test:edge` with an isolated `DATABASE_URL` ending in `_agent_test`; no remote credentials are required.
+Integration checks live with application consumers: `test/routes/platform-factories.test.ts`, `test/commands/backend-services.test.ts` and `test/runner/explicit-services.test.ts`. They exercise real PostgreSQL, native Better Auth, signing isolation, explicit business transactions, leases and private outputs. Build dependencies with `pnpm build:foundation` and use an isolated `DATABASE_URL` ending in `_agent_test`; no remote credentials are required.
 
-This extraction is still partial. Reports, integrations, full HTTP assembly, automation execution and agent-runtime remain to migrate. Node compatibility scopes live only in `apps/server/src/resources/scope.ts`; backend has no Node ambient types, ALS or global resource access. The real Workers/PG command and session fixture proves batch writes, rollback, member identities, private replay and cancellation. It does not prove the full product Sandbox dispatch.
+Node resource scopes live only in `apps/server/src/resources/scope.ts`; backend has no Node ambient types, ALS or global resource access. Deployment uses local Node or Railway with PostgreSQL/Redis; it does not require a second platform implementation.

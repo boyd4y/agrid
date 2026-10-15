@@ -21,9 +21,9 @@
 
 ## 架构与执行
 
-- [运行时与包边界](architecture/runtime-boundaries.md)：双部署包隔离、显式 services 依赖，以及 Workers/DO 与 Sandbox 原生执行的边界。
-- [双部署模式架构](architecture/dual-deployment.md)：共同业务与持久 Run/Session 设计、实际验证记录；包组织以运行时与包边界为准。
-- [Pars 核心调研](architecture/pars-review.md)：源码依据、可借鉴分层与需要补齐的语义。
+- [Node + Harness 架构](architecture/node-harness.md)：官方工具桥接、会话生命周期、本地与 Railway。
+- [运行时与包边界](architecture/runtime-boundaries.md)：通用能力、业务 services 和部署入口。
+- [Pars 核心调研](architecture/pars-review.md)：历史调研资料，不代表当前部署目标。
 
 - [多租户设计](multi-tenant.md)：工作区隔离、身份与数据模型。
 - [Agent 运行](agent-runtime.md)：Chat、Session、Run 与原生 Harness。
@@ -33,7 +33,7 @@
 ## 开发、测试与部署
 
 - [本地 Node 部署](local-node.md)：同源前端/API、独立 worker、隔离基础服务与实际流程检查。
-- [本地 Cloudflare 开发](development/cloudflare-local.md)：Vite/Wrangler、配置优先级、PostgreSQL、R2 与按需 Sandbox。
+- [Railway 部署](railway.md)：API、worker、PostgreSQL、Redis、S3 与远程 Agent Sandbox。
 - [贡献指南](../AGENTS.md)：目录结构、命令与提交约定。
 - [测试指南](testing.md)：单元、集成、队列与浏览器回归，以及隔离环境。
 - [shadcn CLI](shadcn-cli.md)：多包工作区的组件命令。
