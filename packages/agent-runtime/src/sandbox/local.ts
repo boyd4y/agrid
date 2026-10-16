@@ -65,40 +65,65 @@ export function createLocalSandboxAdapter(options: {
         cwd, env: { ...environment, ...settings.env, HOME: workspace.root, TMPDIR: join(workspace.root, ".tmp") },
         stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32",
       });
+      let terminate: Promise<void> | undefined, processEnded = false, groupKilled = false, processClosed = false;
+      let failed = false, cancelled = false, abortReason: unknown;
+      let rejectFailure: (error: unknown) => void = () => {};
+      const failure = new Promise<never>((_accept, reject) => { rejectFailure = reject; });
+      const fail = (error: unknown) => { failed = true;rejectFailure(error); };
       const signalGroup = (name: NodeJS.Signals) => {
-        if (!child.pid) return;
-        try { if (process.platform !== "win32") process.kill(-child.pid, name); else child.kill(name); }
-        catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; }
+        if (!child.pid || processClosed || groupKilled) return;
+        try {
+          if (process.platform !== "win32") process.kill(-child.pid, name); else child.kill(name);
+          // One successful group SIGKILL also covers descendants. Sending it
+          // again on exit can hit a zombie-only group (EPERM on macOS).
+          if (name === "SIGKILL") groupKilled = true;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ESRCH") groupKilled = true;
+          else fail(error);
+        }
       };
-      let terminate: Promise<void> | undefined, processEnded = false;
-      let rejectWait: (error: unknown) => void = () => {};
-      const aborted = new Promise<never>((_accept, reject) => { rejectWait = reject; });
-      const closed = new Promise<{ exitCode: number }>((accept, reject) => {
-        child.once("error", error => { processEnded = true;reject(error); });
-        child.once("exit", () => { signalGroup("SIGKILL");processEnded = true; });
+      const closed = new Promise<{ exitCode: number }>(accept => {
+        child.on("error", error => { if (!child.pid) processEnded = true;fail(error); });
+        child.once("exit", () => { processEnded = true;signalGroup("SIGKILL"); });
         child.once("close", (code, exitSignal) => {
+          processClosed = true;
           accept({ exitCode: code ?? (exitSignal ? 128 : 1) });
         });
       });
       // Callers may never wait on spawn. Retain rejection semantics without an
       // unhandled-rejection side effect while cleanup/cancellation owns it.
-      const complete = Promise.race([closed, aborted]);
+      const finished = Promise.race([closed, failure]);
+      const complete = finished.then(result => { if (cancelled) throw abortReason;return result; });
       void complete.catch(() => {});
       const handle = { child, async kill() {
-        if (processEnded) { await closed.catch(() => {});return; }
         if (!terminate) terminate = (async () => {
-          signalGroup("SIGTERM");
-          const timer = setTimeout(() => { if (!processEnded) signalGroup("SIGKILL"); }, 250);
-          timer.unref();
-          try { await closed.catch(() => {}); } finally { clearTimeout(timer); }
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          if (!processEnded && !processClosed) {
+            signalGroup("SIGTERM");
+            if (!failed) {
+              timer = setTimeout(() => { if (!processEnded) signalGroup("SIGKILL"); }, 250);
+              timer.unref();
+            }
+          }
+          // Signalling is not completion: successful cancellation waits for
+          // stdio close. Signal errors reject without claiming a live child died.
+          try { await finished; } finally { clearTimeout(timer); }
         })();
         await terminate;
       } };
       processes.add(handle);
-      const abort = () => { rejectWait(signal?.reason ?? new DOMException("Command aborted", "AbortError"));void handle.kill(); };
+      const abort = () => {
+        cancelled = true;
+        abortReason = signal?.reason ?? new DOMException("Command aborted", "AbortError");
+        void handle.kill().catch(fail);
+      };
       signal?.addEventListener("abort", abort, { once: true });
       if (signal?.aborted) abort();
-      void closed.finally(() => { processes.delete(handle); signal?.removeEventListener("abort", abort); }).catch(() => {});
+      void closed.then(() => {
+        // Retain failed cleanup for stop/destroy to report, even if nobody waits.
+        if (!failed) processes.delete(handle);
+        signal?.removeEventListener("abort", abort);
+      });
       return { pid: child.pid, stdout: Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>, stderr: Readable.toWeb(child.stderr!) as ReadableStream<Uint8Array>,
         wait: () => complete, kill: () => handle.kill() };
     };
