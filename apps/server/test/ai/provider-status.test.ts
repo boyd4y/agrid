@@ -3,6 +3,27 @@ import { test } from "node:test";
 import { listHarnesses, listProviders } from "../../src/ai/model.js";
 import { resolveNativeConfiguration } from "../../src/business/agent/runtime-configuration.js";
 
+test("published runtime metadata exposes the Railway gate without enabling unavailable harnesses", () => {
+  const fixture = { RAILWAY_API_TOKEN: "fixture-token", RAILWAY_SANDBOX_ENVIRONMENT_ID: "dedicated-fixture", RAILWAY_ENVIRONMENT_ID: "app-fixture",
+    HARNESS_LOCAL_ENABLED: "false", E2B_API_KEY: "", VERCEL_TOKEN: "", VERCEL_OIDC_TOKEN: "",
+    OPENAI_API_KEY: "fixture", ANTHROPIC_API_KEY: "fixture", PI_API_KEY: "fixture", PI_BASE_URL: "http://127.0.0.1/v1", PI_MODEL: "fixture" };
+  const previous = new Map(Object.keys(fixture).map(name => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, fixture);
+    for (const harness of listHarnesses()) {
+      const railway = harness.runtimeProviders.find(entry => entry.id === "railway")!;
+      assert.equal(railway.available, harness.id === "pi");
+      assert.equal(harness.available, harness.id === "pi");
+      assert.equal(railway.reason, harness.id === "pi" ? undefined : "railway_harness_unavailable");
+      assert.equal(JSON.stringify(harness).includes("fixture-token"), false);
+    }
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+});
+
 test("Node status follows the same complete provider selection as native Pi", () => {
   const previous = new Map(["PI_API_KEY", "PI_BASE_URL", "PI_MODEL", "OPENROUTER_API_KEY", "OPENROUTER_MODEL"].map(name => [name, process.env[name]]));
   try {

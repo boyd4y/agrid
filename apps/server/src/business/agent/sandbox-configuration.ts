@@ -12,13 +12,18 @@ export function resolveRuntimeProvider(mode: RuntimeMode, selected: SandboxProvi
 }
 
 export function listRuntimeProviders(env: RuntimeEnvironment, harness?: string): RuntimeProviderStatus[] {
+  const railwayConfigured = Boolean(value(env, "RAILWAY_API_TOKEN") && value(env, "RAILWAY_SANDBOX_ENVIRONMENT_ID")
+    && value(env, "RAILWAY_SANDBOX_ENVIRONMENT_ID") !== value(env, "RAILWAY_ENVIRONMENT_ID"));
+  const railwayHarnessUnavailable = harness === "codex" || harness === "claude" || harness === "claude-code";
   return [
     { id: "local", available: value(env, "HARNESS_LOCAL_ENABLED") !== "false", hint: "Local 只适用于受信任的开发或专用容器环境；目录不是操作系统隔离" },
     { id: "vercel", available: Boolean(value(env, "VERCEL_OIDC_TOKEN") || value(env, "VERCEL_TOKEN") && value(env, "VERCEL_TEAM_ID") && value(env, "VERCEL_PROJECT_ID")), hint: "需要 VERCEL_TOKEN、VERCEL_TEAM_ID、VERCEL_PROJECT_ID，或 VERCEL_OIDC_TOKEN" },
     { id: "e2b", available: Boolean(value(env, "E2B_API_KEY")) && (!harness || harness === "pi"),
       hint: harness && harness !== "pi" ? "当前版本 E2B 默认凭证代理与此 Harness 不兼容；请使用 Pi 或其他运行提供商" : "需要 E2B_API_KEY" },
-    { id: "railway", available: Boolean(value(env, "RAILWAY_API_TOKEN") && value(env, "RAILWAY_SANDBOX_ENVIRONMENT_ID")
-      && value(env, "RAILWAY_SANDBOX_ENVIRONMENT_ID") !== value(env, "RAILWAY_ENVIRONMENT_ID")), hint: "需要账户或工作区 RAILWAY_API_TOKEN 与独立的 RAILWAY_SANDBOX_ENVIRONMENT_ID；不能使用应用部署环境" },
+    { id: "railway", available: railwayConfigured && !railwayHarnessUnavailable,
+      ...(railwayConfigured && railwayHarnessUnavailable
+        ? { reason: "railway_harness_unavailable" as const, hint: "Railway 与当前智能体的运行组合暂不可用；请选择当前可用的运行环境" }
+        : { hint: "需要账户或工作区 RAILWAY_API_TOKEN 与独立的 RAILWAY_SANDBOX_ENVIRONMENT_ID；不能使用应用部署环境" }) },
   ];
 }
 

@@ -154,6 +154,7 @@
   "providerUnavailable": " (unavailable)",
   "sandboxProviderHint": "Only configured providers are available. Changing the provider requires a new conversation.",
   "railwayLifecycleHint": "Railway keeps running and billing between turns until idle expiry or destruction. An expired environment cannot resume its conversation.",
+  "railwayHarnessUnavailable": "Railway is temporarily unavailable for this agent. Choose a currently available runtime environment.",
   "e2bBridgeUnavailable": "E2B currently supports Pi. Choose another runtime provider for Codex or Claude Code.",
   "runtimeLocalTrust": "Local runs commands with server permissions. Use it only in a trusted development environment or a dedicated container."
 }

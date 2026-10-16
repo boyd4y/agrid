@@ -25,6 +25,7 @@ export function AgentBasicFields({ value, onChange, harnesses, harnessLocked, di
 }) {
   const { t } = useTranslation("agents");
   const current = harnesses.find((harness) => harness.id === value.harness);
+  const selectedProvider = current?.runtimeProviders?.find(entry => entry.id === value.sandboxProvider);
   const customModel = !current?.models.some((model) => model.id === value.model);
   return <FieldGroup className="gap-4">
     <FieldGroup className="gap-4 @lg/field-group:grid @lg/field-group:grid-cols-[auto_1fr]">
@@ -84,6 +85,7 @@ export function AgentBasicFields({ value, onChange, harnesses, harnessLocked, di
       </Select>
       <FieldDescription>{t("sandboxProviderHint")}</FieldDescription>
       {value.sandboxProvider === "railway" && <FieldDescription>{t("railwayLifecycleHint")}</FieldDescription>}
+      {value.sandboxProvider === "railway" && selectedProvider?.available === false && <FieldDescription>{selectedProvider.reason === "railway_harness_unavailable" ? t("railwayHarnessUnavailable") : selectedProvider.hint}</FieldDescription>}
       {value.sandboxProvider === "e2b" && value.harness !== "pi" && <FieldDescription>{t("e2bBridgeUnavailable")}</FieldDescription>}
     </Field>}
     {value.runtime === "local" && <FieldDescription>{t("runtimeLocalTrust")}</FieldDescription>}

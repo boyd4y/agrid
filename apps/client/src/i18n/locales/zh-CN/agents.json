@@ -154,6 +154,7 @@
   "providerUnavailable": "（不可用）",
   "sandboxProviderHint": "只能选择已配置的提供商。更换提供商后需要新建对话。",
   "railwayLifecycleHint": "Railway 在每轮结束后继续运行并计费，直至空闲超时或环境被销毁；超时后无法恢复原会话。",
+  "railwayHarnessUnavailable": "Railway 与当前智能体的运行组合暂不可用；请选择当前可用的运行环境。",
   "e2bBridgeUnavailable": "E2B 当前支持 Pi；Codex 或 Claude Code 请选择其他运行提供商。",
   "runtimeLocalTrust": "Local 使用服务器权限执行命令，仅适用于受信任的开发环境或专用容器。"
 }

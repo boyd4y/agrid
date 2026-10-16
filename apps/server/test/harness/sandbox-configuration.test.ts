@@ -1,6 +1,40 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { assertRuntimeProviderAvailable, listRuntimeProviders, resolveRuntimeProvider } from "../../src/business/agent/sandbox-configuration.js";
+import { ServiceError } from "../../src/business/errors.js";
+
+test("Railway rejects unverified harness aliases through the same metadata and assertion", () => {
+  const configured = { RAILWAY_API_TOKEN: "fixture-token", RAILWAY_SANDBOX_ENVIRONMENT_ID: "dedicated-fixture" };
+  const configurationHint = listRuntimeProviders({}).find(entry => entry.id === "railway")!.hint;
+  for (const harness of ["codex", "claude", "claude-code"]) {
+    for (const env of [configured, {}, { ...configured, RAILWAY_API_TOKEN: " " },
+      { ...configured, RAILWAY_ENVIRONMENT_ID: configured.RAILWAY_SANDBOX_ENVIRONMENT_ID }]) {
+      const status = listRuntimeProviders(env, harness).find(entry => entry.id === "railway")!;
+      assert.equal(status.available, false);
+      if (env === configured) {
+        assert.equal(status.reason, "railway_harness_unavailable");
+        assert.match(status.hint!, /运行组合暂不可用/);
+      } else {
+        assert.equal(status.reason, undefined);
+        assert.equal(status.hint, configurationHint, "missing or unsafe configuration keeps its original reason");
+      }
+      assert.throws(() => assertRuntimeProviderAvailable("railway", env, harness), error => {
+        assert(error instanceof ServiceError);
+        assert.equal(error.status, 503);
+        assert.equal(error.message, `railway 运行环境不可用：${status.hint}`);
+        return true;
+      });
+    }
+    for (const provider of ["local", "vercel", "e2b"] as const) {
+      assert.deepEqual(listRuntimeProviders(configured, harness).find(entry => entry.id === provider),
+        listRuntimeProviders({}, harness).find(entry => entry.id === provider));
+    }
+  }
+  for (const harness of ["pi", undefined]) {
+    assert.equal(listRuntimeProviders(configured, harness).find(entry => entry.id === "railway")!.available, true);
+    assertRuntimeProviderAvailable("railway", configured, harness);
+  }
+});
 
 test("Sandbox providers require their own complete credentials and a dedicated Railway environment", () => {
   assert.equal(resolveRuntimeProvider("sandbox", undefined, {}), "vercel");
