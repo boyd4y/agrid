@@ -7,7 +7,7 @@ import type { RuntimeDependencies } from "../../src/business/dependencies.js";
 import type { Actor } from "../../src/business/auth/actor.js";
 import { ServiceError } from "../../src/business/errors.js";
 import { user, organization, member, agentProfile, chatThreads, agentRuns, agentRuntimeSessions } from "../../src/business/db/schema.js";
-import { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease } from "../../src/business/agent/runtime-store.js";
+import { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease, completeUninvokedRun } from "../../src/business/agent/runtime-store.js";
 import { beginNativeRun, failNativeRun, listNativeRuns, requestRunCancellation } from "../../src/business/agent/runs.js";
 import { loadMessages } from "../../src/business/chat/store.js";
 
@@ -27,7 +27,7 @@ test("checkpoint failures preserve durable cancellation without certifying an un
     await db.insert(organization).values({ id: org, name: "Cancellation fixture", slug: org });
     await db.insert(member).values([{ id: owner, userId: owner, organizationId: org, role: "owner" }, { id: agentMember, userId: agentUser, organizationId: org }]);
     const [profile] = await db.insert(agentProfile).values({ userId: agentUser, memberId: agentMember, organizationId: org, displayName: "Cancellation agent" }).returning();
-    for (const harness of ["pi", "codex", "claude-code"]) {
+    for (const harness of ["pi", "codex", "claude"]) {
       for (const cancelled of [false, true]) await t.test(`${harness}: ${cancelled ? "cancelled" : "failed"} with no usable checkpoint`, async () => {
         const [thread] = await db.insert(chatThreads).values({ userId: owner, organizationId: org, clientId: randomUUID() }).returning();
         const lease = await claimRuntimeLease(deps, thread.id, actor);
@@ -50,6 +50,23 @@ test("checkpoint failures preserve durable cancellation without certifying an un
           const history = await loadMessages(deps, thread.id, actor);
           assert.equal(history.messages.length, 1); assert.equal(history.messages[0].content.role, "user", "failure must not invent a retry proof or native assistant result");
           await assert.rejects(beginNativeRun(deps, lease, actor, runtime, { id: randomUUID(), parentId: run.userMessageId, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Do not replay unknown work" }] } }, agentMember), conflict);
+        } finally { await releaseRuntimeLease(deps, lease); }
+      });
+      await t.test(`${harness}: a server-certified uninvoked first turn permits only a fresh input`, async () => {
+        const [thread] = await db.insert(chatThreads).values({ userId: owner, organizationId: org, clientId: randomUUID() }).returning();
+        const lease = await claimRuntimeLease(deps, thread.id, actor);
+        try {
+          const record = await prepareRuntimeRecord(deps, lease, actor, { profileId: profile.id, harness, mode: "local" });
+          const run = await beginNativeRun(deps, lease, actor, record, { id: randomUUID(), parentId: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Never invoked" }] } }, agentMember);
+          const message = { id: run.assistantMessageId, parentId: run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: [] } };
+          await assert.rejects(completeUninvokedRun(deps, { ...lease, token: randomUUID() }, actor, record.id, message, { id: run.id, status: "cancelled", error: "Stopped before invocation" }), conflict);
+          await completeUninvokedRun(deps, lease, actor, record.id, message, { id: run.id, status: "cancelled", error: "Stopped before invocation" });
+          const [saved] = await listNativeRuns(deps, thread.id, actor);assert.equal(saved.status, "cancelled");assert.equal(saved.canContinue, false);
+          const [runtime] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, record.id));
+          assert.equal(runtime.resumeState, null);assert.equal(runtime.workspace, null);
+          const fresh = await beginNativeRun(deps, lease, actor, runtime, { id: randomUUID(), parentId: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Fresh input" }] } }, agentMember);
+          assert.notEqual(fresh.id, run.id);
+          const history = await loadMessages(deps, thread.id, actor);assert.equal(history.messages.at(-1)?.parentId, run.assistantMessageId);
         } finally { await releaseRuntimeLease(deps, lease); }
       });
     }

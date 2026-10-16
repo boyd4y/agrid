@@ -26,7 +26,7 @@ export async function beginNativeRun(deps: RuntimeDependencies, lease: RuntimeLe
     if (previousRuns.some((r) => r.runtimeId !== record.id)) throw new ServiceError(409, { message: "切换智能体需要新建对话，已有原生会话属于原智能体" });
     if (record.resumeState && previousRuns.some((r) => r.userMessageId !== record.lastUserMessageId)) throw new ServiceError(409, { message: "上一轮执行因服务中断，暂时无法继续此对话。已有操作结果会保留，请新建对话继续。" });
     if (!record.resumeState) {
-      // Only server-certified Pi startup failures may precede a first native turn.
+      // Only server-certified pre-invocation failures may precede a first native turn.
       // Check the entire history: a latest harmless failure cannot hide an older crash.
       const unsafeRuns = await tx.select({ id: agentRuns.id }).from(agentRuns).where(and(eq(agentRuns.threadId, lease.threadId), sql`not (
         ${agentRuns.runtimeSessionId}=${record.id}::uuid and ${agentRuns.status} in ('failed','cancelled') and exists (
@@ -43,7 +43,7 @@ export async function beginNativeRun(deps: RuntimeDependencies, lease: RuntimeLe
           and ${agentRuns.assistantMessageId}::text=${chatMessages.messageId} and ${agentRuns.userMessageId}=${chatMessages.parentId}
           and ${agentRuns.id}::text=${chatMessages.content}->'metadata'->>'runId')
       )`)).limit(1);
-      const safeFailures = record.harness === "pi" && Boolean(previousRuns.length && record.lastAssistantMessageId
+      const safeFailures = Boolean(previousRuns.length && record.lastAssistantMessageId
         && previousRuns[0].userMessageId === record.lastUserMessageId && previousRuns[0].assistantMessageId === record.lastAssistantMessageId);
       if (unsafeRuns.length || unsafeReplies.length || (previousRuns.length && !safeFailures)) throw new ServiceError(409, { message: "此对话暂时无法继续，历史消息已保留；请新建对话继续。" });
     }

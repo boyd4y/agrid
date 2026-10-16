@@ -9,22 +9,6 @@ import type { ChatActivity, AgentRunStatus } from "@tabdo/shared";
 import type { NativeRunServices, PiModelMetadata, PiCompletion, HarnessId } from "./run-services.js";
 import { QUESTION_NOT_INVOKED } from "../business/agent/checkpoints.js";
 
-function hasSavedPiJournal(record: RuntimeRecord): boolean {
-  if (!record.resumeState) return true;
-  const name = (record.resumeState.data as { sessionFileName?: unknown })?.sessionFileName;
-  if (typeof name !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*\.jsonl?$/.test(name)) return false;
-  if (record.mode === "sandbox") return true; // Remote lookup still must succeed before invocation.
-  const file = record.workspace?.find((entry) => entry.type === "file" && entry.path.endsWith(`/${name}`));
-  if (!file?.content) return false;
-  try {
-    const decoded = atob(file.content);
-    if (btoa(decoded) !== file.content) return false;
-    const bytes = Uint8Array.from(decoded, character => character.charCodeAt(0));
-    const entries = new TextDecoder().decode(bytes).trim().split("\n").map((line) => JSON.parse(line));
-    return entries.length > 1 && entries[0]?.type === "session";
-  } catch { return false; }
-}
-
 /** Product execution input; no HTTP request or response owns this lifetime. */
 export type NativeRunInput = {
   actor: Actor;
@@ -94,7 +78,8 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
   let cancelled = false, timedOut = false, lostLease = false, closed = false;
   // Set before calling the SDK, not from callbacks or completed-tool counts.
   let invocationStarted = false, projectionStarted = false;
-  let safeStartupState = options.harness === "pi" && hasSavedPiJournal(options.record);
+  // A public restore failure cannot certify a retry against the old checkpoint.
+  let restoreFailed = false;
   let timeoutReason = "本轮执行超时";
   let stepDeadline: ReturnType<typeof setTimeout> | undefined;
   let firstOutputDeadline: ReturnType<typeof setTimeout> | undefined;
@@ -200,7 +185,7 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
         await durableOutput?.flush?.();
       } finally {
         // A failed output barrier must not strand the native session or lease.
-        // Pi stop before its first native turn may return data:{}; never commit it.
+        // Cleanup before invocation must not replace the saved checkpoint.
         if (session && !invocationStarted) await session.stop().catch((error) => services.logger.error("agent.session.cleanup", services.chatErrorText(error)));
         if (sandbox && !invocationStarted && !options.record.sandboxCreated && !options.record.resumeState) {
           await services.discardUninvokedSandbox(options.lease, options.record.id, sandbox.id, () => sandbox!.destroy())
@@ -220,10 +205,6 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
     // captures its official continuation without stopping a waiting bridge.
     const resumeState = session.hasUnfinishedTurn() ? await session.detach() : await session.stop();
     const workspace = fs ? await services.snapshotWorkspace(fs) : null;
-    if (options.harness === "pi" && !hasSavedPiJournal({ ...options.record, resumeState, workspace }))
-      throw new Error("会话结果未完整保存，历史消息已保留；请新建对话继续。");
-    // Pi's native stop saves its own journal. Missing it must not become empty history on reload.
-    if (options.harness === "pi" && fs && !fs.getAllPaths().some((path) => path.endsWith(".jsonl"))) throw new Error("原生会话日志未保存，不能继续此对话；请核对已完成的数据修改");
     const { id, ...content } = message;
     await outputWrites;
     await durableOutput?.flush?.();
@@ -278,13 +259,13 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
       await writer.write(status === "cancelled" ? { type: "abort" } : { type: "error", errorText });
       return;
     }
-    const uninvoked = !invocationStarted && safeStartupState;
+    const uninvoked = !invocationStarted && !restoreFailed;
     const text = cancelled ? "" : uninvoked ? `系统提示：本轮未能启动：${errorText}。本轮没有执行操作，可以重新发送消息。`
       : `系统提示：本轮未能完成：${errorText}。已提交的数据修改会保留。`;
     const message: UIMessage = { id: options.run.assistantMessageId, role: "assistant", parts: text ? [{ type: "text", text }] : [] };
     if (uninvoked) {
       await phaseWrites;
-      await services.completeUninvokedPiRun(options.lease, options.actor, options.record.id,
+      await services.completeUninvokedRun(options.lease, options.actor, options.record.id,
         { id: message.id, parentId: options.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: message.parts } },
         { id: options.run.id, status: cancelled ? "cancelled" : "failed", error: errorText });
       await report("finished");
@@ -307,8 +288,6 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
   try {
     await report("starting");
     signal.throwIfAborted();
-    if (options.harness === "pi" && options.record.resumeState && !safeStartupState)
-      throw new Error("此对话暂时无法继续，历史消息已保留；请新建对话继续。");
     agent = services.createNativeAgent({ harness: options.harness, mode: options.record.mode, provider: options.record.provider, modelId: options.modelId, piModel: options.piModel,
       instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
       runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
@@ -324,8 +303,8 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
     try { opened = (options.toolResultContinuations ? services.takeQuestionSandbox(options.record.id) : undefined)
       ?? await services.openNativeSandbox({ agent, mode: options.record.mode, provider: options.record.provider, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), sandboxCreated: options.record.sandboxCreated, workspace: options.record.workspace, signal }); }
     catch (error) {
-      // Local restore failures describe damaged history, not a retryable submission.
-      if (options.record.resumeState && options.record.mode === "local" && !signal.aborted) safeStartupState = false;
+      // A failed public lookup/restore cannot certify the old checkpoint.
+      if (options.record.resumeState && !signal.aborted) restoreFailed = true;
       throw error;
     }
     sandbox = opened.sandbox;fs = opened.fs;
@@ -334,7 +313,7 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
       ...(options.record.resumeState ? { resumeFrom: options.record.resumeState as HarnessAgentResumeSessionState } : {}),
     }); } catch (error) {
       // A resumed session that fails SDK validation/start is not proven intact.
-      if (options.record.resumeState && !signal.aborted) safeStartupState = false;
+      if (options.record.resumeState && !signal.aborted) restoreFailed = true;
       throw error;
     }
     const continuing = session.hasUnfinishedTurn();

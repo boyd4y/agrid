@@ -24,7 +24,8 @@ import {
 
 export type RuntimeLease = { threadId: string; token: string; fence: number };
 export type RuntimeRecord = typeof agentRuntimeSessions.$inferSelect;
-/** Only server-final messages may certify that an accepted input never entered Pi. */
+/** Only server-final messages may certify that an accepted input never entered the SDK. */
+// Keep the persisted proof value compatible with existing server-final messages.
 export const NOT_INVOKED = "pi-not-invoked-v1";
 const leaseScope = (lease: RuntimeLease) =>
   and(
@@ -262,9 +263,9 @@ export async function completeRuntimeTurn(deps: RuntimeDependencies,
   }, transaction);
 }
 
-/** Commit a transport-only failure without replacing the native journal or opaque state.
+/** Commit a pre-invocation failure without replacing the opaque checkpoint.
  * Callers must know they have not called stream/continueStream, including synchronously. */
-export async function completeUninvokedPiRun(deps: RuntimeDependencies,
+export async function completeUninvokedRun(deps: RuntimeDependencies,
   lease: RuntimeLease, actor: Actor, recordId: string,
   message: StoredMessage, run: { id: string; status: "failed" | "cancelled"; error: string },
   transaction?: Transaction,
@@ -277,7 +278,7 @@ export async function completeUninvokedPiRun(deps: RuntimeDependencies,
     const [record] = await tx.select().from(agentRuntimeSessions).where(and(
       eq(agentRuntimeSessions.id, recordId), eq(agentRuntimeSessions.threadId, lease.threadId),
     )).for("update");
-    if (!owned || !record || record.harness !== "pi" || !["starting", "running"].includes(owned.status)
+    if (!owned || !record || !["starting", "running"].includes(owned.status)
       || owned.assistantMessageId !== message.id || owned.userMessageId !== message.parentId)
       throw new ServiceError(409, { message: "无法提交尚未执行的运行结果" });
     await saveMessageInTransaction(deps, tx, lease.threadId, actor, {

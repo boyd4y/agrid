@@ -18,8 +18,8 @@ export const saveRuntimeCheckpoint = async (...args: Arguments<typeof service.sa
   businessCall(() => service.saveRuntimeCheckpoint(runtimeDependencies(), ...args));
 export const completeRuntimeTurn = async (...args: Arguments<typeof service.completeRuntimeTurn>) =>
   businessCall(() => service.completeRuntimeTurn(runtimeDependencies(), ...args));
-export const completeUninvokedPiRun = async (...args: Arguments<typeof service.completeUninvokedPiRun>) =>
-  businessCall(() => service.completeUninvokedPiRun(runtimeDependencies(), ...args));
+export const completeUninvokedRun = async (...args: Arguments<typeof service.completeUninvokedRun>) =>
+  businessCall(() => service.completeUninvokedRun(runtimeDependencies(), ...args));
 
 export async function withRuntimeLease<T>(lease: service.RuntimeLease, work: (transaction: import("../business/db/types.js").Transaction) => Promise<T>): Promise<T> {
   return businessCall(() => service.withRuntimeLease(runtimeDependencies(), lease, work));

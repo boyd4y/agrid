@@ -160,14 +160,22 @@ test("untrusted proof and unknown or damaged checkpoints cannot enable history r
   await releaseRuntimeLease(first.lease);
   await assert.rejects(prepare(threadId, "Retry unsafe history"), /历史消息已保留/);
 
-  const damagedThread = await newThread(), interrupted = await prepare(damagedThread, "Damaged old checkpoint");
+  const damagedThread = await newThread(), interrupted = await prepare(damagedThread, "SDK-incompatible old checkpoint");
   await db.update(agentRuns).set({ status: "completed", endedAt: new Date() }).where(eq(agentRuns.id, interrupted.run.id));
   await saveMessage(damagedThread, actor, { id: interrupted.run.assistantMessageId, parentId: interrupted.run.userMessageId, format: "ai-sdk/v6", content: { role: "assistant", parts: [{ type: "text", text: "Old reply" }] } }, true);
-  await db.update(agentRuntimeSessions).set({ resumeState: { type: "resume-session", harnessId: "pi", specificationVersion: "harness-v1", data: {} }, workspace: [], lastUserMessageId: interrupted.run.userMessageId, lastAssistantMessageId: interrupted.run.assistantMessageId }).where(eq(agentRuntimeSessions.id, interrupted.record.id));
+  await db.update(agentRuntimeSessions).set({ resumeState: { type: "resume-session", harnessId: "fixture-incompatible-harness", specificationVersion: "harness-v1", data: { opaque: "unchanged" } }, workspace: [], lastUserMessageId: interrupted.run.userMessageId, lastAssistantMessageId: interrupted.run.assistantMessageId }).where(eq(agentRuntimeSessions.id, interrupted.record.id));
   await releaseRuntimeLease(interrupted.lease);
-  const attempted = await prepare(damagedThread, "Never enter with empty opaque state");await consume(attempted);
+  // Use a public SDK envelope mismatch, not platform knowledge of Pi's data.
+  process.env.PI_API_KEY = "local-fixture";process.env.PI_BASE_URL = "http://127.0.0.1:9/v1";
+  try {
+    const attempted = await prepare(damagedThread, "Never replace an SDK-rejected session");
+    const output = await consume(attempted);
+    assert.match(output, /Lifecycle state was produced by harness 'fixture-incompatible-harness'/);
+    assert.doesNotMatch(output, /本轮未能启动/);
+    const [run] = await listNativeRuns(damagedThread, actor);assert.equal(run.status, "failed");assert.equal(run.canContinue, false);
+  } finally { process.env.PI_API_KEY = "";process.env.PI_BASE_URL = ""; }
   const record = await runtime(damagedThread);
-  assert.equal(record.lastUserMessageId, interrupted.run.userMessageId);assert.deepEqual(record.resumeState?.data, {});assert.deepEqual(record.workspace, []);
+  assert.equal(record.lastUserMessageId, interrupted.run.userMessageId);assert.deepEqual(record.resumeState?.data, { opaque: "unchanged" });assert.equal(record.resumeState?.harnessId, "fixture-incompatible-harness");assert.deepEqual(record.workspace, []);
   const history = await loadMessages(damagedThread, actor);assert.equal(history.messages.at(-1)?.content.metadata, undefined);
   await assert.rejects(prepare(damagedThread, "Cannot bypass unknown checkpoint"), /执行因服务中断/);
 });

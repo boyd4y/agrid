@@ -47,6 +47,6 @@ export interface NativeRunServices {
   recordRunActivity(lease: RuntimeLease, runId: string, activity: ChatActivity): Promise<boolean>;
   failNativeRun(lease: RuntimeLease, runId: string, error: string): Promise<void>;
   completeRuntimeTurn(lease: RuntimeLease, actor: Actor, recordId: string, checkpoint: RuntimeCheckpoint, message: StoredMessage, run?: { id: string; status: AgentRunStatus; error?: string }): Promise<void>;
-  completeUninvokedPiRun(lease: RuntimeLease, actor: Actor, recordId: string, message: StoredMessage, run: { id: string; status: "failed" | "cancelled"; error: string }): Promise<void>;
+  completeUninvokedRun(lease: RuntimeLease, actor: Actor, recordId: string, message: StoredMessage, run: { id: string; status: "failed" | "cancelled"; error: string }): Promise<void>;
   saveMessage(message: StoredMessage): Promise<void>;
 }
