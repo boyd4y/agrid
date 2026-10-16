@@ -63,6 +63,12 @@
       "development": "./src/sandbox/workspace.ts",
       "import": "./dist/sandbox/workspace.js",
       "default": "./dist/sandbox/workspace.js"
+    },
+    "./sandbox/e2b": {
+      "types": "./src/sandbox/e2b.ts",
+      "development": "./src/sandbox/e2b.ts",
+      "import": "./dist/sandbox/e2b.js",
+      "default": "./dist/sandbox/e2b.js"
     }
   },
   "scripts": {
@@ -78,7 +84,9 @@
     "@ai-sdk/harness-codex": "1.0.154",
     "@ai-sdk/harness-claude-code": "1.0.156",
     "@ai-sdk/sandbox-vercel": "1.0.152",
-    "@tabdo/core": "workspace:*"
+    "@tabdo/core": "workspace:*",
+    "@e2b/ai-sdk-sandbox": "0.3.0",
+    "e2b": "2.56.0"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
