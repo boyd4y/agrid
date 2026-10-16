@@ -72,6 +72,7 @@ async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
 
 export type AgentPersonaInfo = {
   runtime?: "local" | "sandbox";
+  sandboxProvider?: import("@tabdo/shared").SandboxProvider;
   systemPrompt?: string;
   defaultHarness?: "codex" | "claude" | "pi";
   defaultModel?: string;
@@ -271,6 +272,7 @@ export const api = {
     role?: "admin" | "member";
     persona?: {
       runtime?: "local" | "sandbox";
+      sandboxProvider?: import("@tabdo/shared").SandboxProvider;
       systemPrompt?: string;
       defaultHarness?: "codex" | "claude" | "pi";
       defaultModel?: string;
@@ -294,6 +296,7 @@ export const api = {
       image?: string | null;
       persona?: {
         runtime?: "local" | "sandbox";
+        sandboxProvider?: import("@tabdo/shared").SandboxProvider;
         systemPrompt?: string;
         defaultModel?: string;
         avatarColor?: string;

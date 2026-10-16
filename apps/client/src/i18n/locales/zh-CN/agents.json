@@ -110,7 +110,7 @@
   "modelIdPlaceholder": "输入提供商支持的模型 ID",
   "runtime": "运行环境",
   "runtimeLocal": "本地工作区",
-  "runtimeLocalDesc": "文件与命令在隔离的虚拟工作区中执行。",
+  "runtimeLocalDesc": "文件与命令在服务器的独立目录中执行，使用服务器权限。",
   "runtimeSandboxDesc": "在远程隔离环境中执行。",
   "runtimeChangeHint": "更改环境后需新建对话。",
   "skillsSelected": "已选择 {{count}} 个 Skill",
@@ -149,5 +149,11 @@
   },
   "partlyEnabled": "部分开启",
   "toolDetails": "工具明细",
-  "toolOff": "已关闭"
+  "toolOff": "已关闭",
+  "sandboxProvider": "Sandbox 提供商",
+  "providerUnavailable": "（不可用）",
+  "sandboxProviderHint": "只能选择已配置的提供商。更换提供商后需要新建对话。",
+  "railwayLifecycleHint": "Railway 在每轮结束后继续运行并计费，直至空闲超时或环境被销毁；超时后无法恢复原会话。",
+  "e2bBridgeUnavailable": "E2B 当前支持 Pi；Codex 或 Claude Code 请选择其他运行提供商。",
+  "runtimeLocalTrust": "Local 使用服务器权限执行命令，仅适用于受信任的开发环境或专用容器。"
 }

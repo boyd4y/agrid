@@ -110,7 +110,7 @@
   "modelIdPlaceholder": "Enter a model ID supported by the provider",
   "runtime": "Runtime",
   "runtimeLocal": "Local workspace",
-  "runtimeLocalDesc": "Files and commands run in an isolated virtual workspace.",
+  "runtimeLocalDesc": "Files and commands run on the server in a dedicated directory, using server permissions.",
   "runtimeSandboxDesc": "Runs in a remote isolated environment.",
   "runtimeChangeHint": "Start a new chat after changing the runtime.",
   "skillsSelected": "{{count}} skills selected",
@@ -149,5 +149,11 @@
   },
   "partlyEnabled": "Partly enabled",
   "toolDetails": "Tool details",
-  "toolOff": "Off"
+  "toolOff": "Off",
+  "sandboxProvider": "Sandbox provider",
+  "providerUnavailable": " (unavailable)",
+  "sandboxProviderHint": "Only configured providers are available. Changing the provider requires a new conversation.",
+  "railwayLifecycleHint": "Railway keeps running and billing between turns until idle expiry or destruction. An expired environment cannot resume its conversation.",
+  "e2bBridgeUnavailable": "E2B currently supports Pi. Choose another runtime provider for Codex or Claude Code.",
+  "runtimeLocalTrust": "Local runs commands with server permissions. Use it only in a trusted development environment or a dedicated container."
 }

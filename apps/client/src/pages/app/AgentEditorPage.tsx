@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Save, X, Settings2, BookOpen, RefreshCw, Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { PLATFORM_TOOL_IDS, type SkillSummary } from "@tabdo/shared";
+import { PLATFORM_TOOL_IDS, type SkillSummary, type SandboxProvider } from "@tabdo/shared";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Card } from "@tabdo/ui/components/card";
 import { Button } from "@tabdo/ui/components/button";
@@ -25,6 +25,7 @@ export function AgentEditorPage() {
   const [createError, setCreateError] = useState<string | null>(null), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   const [agentName, setAgentName] = useState(""), [persona, setPersona] = useState(t("defaultPersona"));
   const [harness, setHarness] = useState<HarnessId>("pi"), [model, setModel] = useState("__harness_default__"), [harnesses, setHarnesses] = useState<HarnessStatus[]>([]);
+  const [sandboxProvider, setSandboxProvider] = useState<SandboxProvider>("vercel");
   const [runtime, setRuntime] = useState<"local" | "sandbox">("local");
   const [skills, setSkills] = useState<SkillSummary[]>([]), [skillNames, setSkillNames] = useState<string[]>([]);
   const [disabledTools, setDisabledTools] = useState<string[]>([]);
@@ -34,16 +35,17 @@ export function AgentEditorPage() {
   const [initialConfiguration, setInitialConfiguration] = useState("");
   const [section, setSection] = useState("basic");
   const formRef = useRef<HTMLFormElement>(null);
-  const values: AgentBasicValues = { name: agentName, image, persona, harness, model, runtime };
+  const values: AgentBasicValues = { name: agentName, image, persona, harness, model, runtime, sandboxProvider };
   const updateValues = (patch: Partial<AgentBasicValues>) => {
     if (patch.image !== undefined) setImage(patch.image);
     if (patch.name !== undefined) setAgentName(patch.name);
     if (patch.persona !== undefined) setPersona(patch.persona);
     if (patch.harness !== undefined) setHarness(patch.harness);
     if (patch.model !== undefined) setModel(patch.model);
+    if (patch.sandboxProvider !== undefined) setSandboxProvider(patch.sandboxProvider);
     if (patch.runtime !== undefined) setRuntime(patch.runtime);
   };
-  const configuration = { name: agentName.trim(), image, persona: { systemPrompt: persona.trim(), defaultHarness: harness, defaultModel: model.trim(), runtime, skillNames: selectedSkills.map((skill) => skill.name), disabledTools: [...disabledTools].sort() } };
+  const configuration = { name: agentName.trim(), image, persona: { systemPrompt: persona.trim(), defaultHarness: harness, defaultModel: model.trim(), runtime, sandboxProvider, skillNames: selectedSkills.map((skill) => skill.name), disabledTools: [...disabledTools].sort() } };
   const dirty = JSON.stringify(configuration) !== initialConfiguration;
   const basicValid = Boolean(agentName.trim() && persona.trim() && model.trim());
   useEffect(() => {
@@ -57,6 +59,8 @@ export function AgentEditorPage() {
       setImage(agent?.image ?? null);setEditing(agent ?? null);setAgentName(agent?.name ?? "");setPersona(agent?.agent?.persona?.systemPrompt ?? t("defaultPersona"));
       setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__");
       setRuntime(agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"));
+      const selectedSandboxProvider = agent?.agent?.persona?.sandboxProvider ?? (agent ? "vercel" : status.defaultSandboxProvider ?? "vercel");
+      setSandboxProvider(selectedSandboxProvider);
       const selectedNames = library.skills.filter((s) => s.enabled && (!agent?.agent?.persona?.skillNames || agent.agent.persona.skillNames.includes(s.name))).map((s) => s.name);
       const platformIds = new Set<string>(PLATFORM_TOOL_IDS);
       const selectedDisabledTools = (agent?.agent?.persona?.disabledTools ?? []).filter(id => platformIds.has(id));
@@ -66,6 +70,7 @@ export function AgentEditorPage() {
         defaultHarness: selected,
         defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__").trim(),
         runtime: agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"),
+        sandboxProvider: selectedSandboxProvider,
         skillNames: selectedNames, disabledTools: [...selectedDisabledTools].sort(),
       }}));setReady(true);
     }).catch((e: Error) => { if (!cancelled) setCreateError(e.message); }).finally(() => { if (!cancelled) setLoading(false); });
