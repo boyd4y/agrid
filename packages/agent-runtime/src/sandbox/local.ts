@@ -1,6 +1,6 @@
 import { spawn as spawnChild, type ChildProcess } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, lstat } from "node:fs/promises";
+import { mkdir, lstat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
@@ -18,6 +18,7 @@ export type LocalSandboxAdapter = Omit<SandboxAdapter<DiskWorkspace>, "create" |
   resume(request: SandboxResumeOptions): Promise<{ session: HarnessV1NetworkSandboxSession; workspace: DiskWorkspace }>;
 };
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT";
+const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
 async function localPort(): Promise<number> {
   const server = createServer();
@@ -46,6 +47,27 @@ export function createLocalSandboxAdapter(options: {
     request.abortSignal?.throwIfAborted();
     const environment = { PATH: `${dirname(process.execPath)}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin`, LANG: "C.UTF-8", ...options.env,
       HOME: workspace.root, TMPDIR: join(workspace.root, ".tmp") };
+    // pnpm must not discover a host workspace above the owned HOME. Use its
+    // public standalone option unless an owned workspace supplies the settings.
+    // A manifest also bounds npm's project-config lookup from empty directories.
+    try { await writeFile(workspace.checked("package.json"), '{"private":true}\n', { flag: "wx", mode: 0o600 }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+    const toolsDirectory = join(workspace.root, ".local-tools");
+    await workspace.mkdir(toolsDirectory, { recursive: true, mode: 0o700 });
+    const pnpmPath = join(toolsDirectory, "pnpm");
+    await workspace.writeFile(pnpmPath, `#!/bin/bash
+export PATH=${shellQuote(environment.PATH)}
+directory="$PWD"
+projectDirectory=""
+while [[ "$directory" == ${shellQuote(workspace.root)} || "$directory" == ${shellQuote(`${workspace.root}/`)}* ]]; do
+  if [ -f "$directory/pnpm-workspace.yaml" ]; then exec pnpm "$@"; fi
+  if [ -z "$projectDirectory" ] && { [ -f "$directory/package.json" ] || [ -f "$directory/package.yaml" ] || [ -f "$directory/package.json5" ]; }; then projectDirectory="$directory"; fi
+  directory="\${directory%/*}"
+done
+exec pnpm --dir "\${projectDirectory:-$PWD}" --ignore-workspace "$@"
+`, { mode: 0o700 });
+    await workspace.chmod(pnpmPath, 0o700);
+    environment.PATH = `${toolsDirectory}:${environment.PATH}`;
     const processes = new Set<{ child: ChildProcess; kill(): Promise<void> }>();
     let stopped = false;
     // A creator signal ends when create/resume returns. Later SDK cleanup must
