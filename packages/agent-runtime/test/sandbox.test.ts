@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { readFile, stat, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
+import { execFile, spawn as spawnChild } from "node:child_process";
+import { once } from "node:events";
 import { createLocalSandboxAdapter } from "../src/sandbox/local.js";
 import { createDiskWorkspace } from "../src/sandbox/workspace.js";
 
@@ -102,7 +103,12 @@ test("filesystem APIs reject traversal and symlink escapes, while snapshots do n
 
 test("spawn streams output and abort force-kills a real process that ignores SIGTERM", { timeout: 5000 }, async () => {
   const opened = await createLocalSandboxAdapter({ cwd: "/workspace", env: {} }).create();
+  const sentinel = spawnChild(process.execPath, ["-e", "console.log('ready'); setInterval(() => {}, 1000)"], {
+    env: {}, stdio: ["ignore", "pipe", "pipe"],
+  });
+  const sentinelClosed = once(sentinel, "close");
   try {
+    await once(sentinel.stdout!, "data");
     const controller = new AbortController();
     const child = await opened.session.spawn({ command: "trap '' TERM; sleep 30 & printf '%s' \"$!\"; wait", abortSignal: controller.signal });
     const reader = child.stdout.getReader();
@@ -117,7 +123,29 @@ test("spawn streams output and abort force-kills a real process that ignores SIG
       if (error && (error as Error & { code?: string | number }).code !== 1) reject(error); else resolve(stdout.trim());
     }));
     assert(descendantState === "" || descendantState.startsWith("Z"), "owned descendant is gone or reaped, never still running");
+    await Promise.all([child.kill(), opened.session.stop(), opened.session.stop()]);
+    assert.equal(process.kill(sentinel.pid!, 0), true, "unrelated live sentinel is unaffected by repeated cleanup");
     reader.releaseLock();
+  } finally {
+    sentinel.kill("SIGKILL");
+    await sentinelClosed;
+    await opened.session.destroy();
+  }
+});
+
+test("natural shell exit kills a real descendant holding its output open", { timeout: 5000 }, async () => {
+  const opened = await createLocalSandboxAdapter({ cwd: "/workspace", env: {} }).create();
+  try {
+    const child = await opened.session.spawn({ command: "sleep 30 & printf '%s' \"$!\"; exit 0" });
+    const output = new Response(child.stdout).text();
+    assert.deepEqual(await child.wait(), { exitCode: 0 });
+    const descendant = Number(await output);
+    assert(Number.isSafeInteger(descendant) && descendant > 1);
+    const descendantState = await new Promise<string>((resolve, reject) => execFile("/bin/ps", ["-o", "stat=", "-p", String(descendant)], (error, stdout) => {
+      if (error && (error as Error & { code?: string | number }).code !== 1) reject(error); else resolve(stdout.trim());
+    }));
+    assert(descendantState === "" || descendantState.startsWith("Z"), "natural exit must not leave the owned descendant running");
+    await child.kill();
   } finally { await opened.session.destroy(); }
 });
 
