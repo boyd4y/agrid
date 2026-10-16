@@ -4,12 +4,12 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getIntrospectionQuery } from "graphql";
 import { Hono } from "hono";
 import { createLocalStorage } from "@tabdo/storage/local";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, columns, rows, automationEvents, automationOutbox } from "../../src/business/db/schema.js";
+import { organization, user, member, columns, rows, automationEvents, automationOutbox, automationRuns } from "../../src/business/db/schema.js";
 import { createSiteApiRoutes, createSiteKeysRoute } from "../../src/business/http/site-api.js";
 import { createRowsRoute } from "../../src/business/http/rows.js";
 import { createCommandsRoute } from "../../src/business/http/commands.js";
@@ -20,11 +20,13 @@ import { createSiteKey, updateSiteKey, resolveSiteKey } from "../../src/business
 import { uploadFiles } from "../../src/business/services/files.js";
 import { ServiceError } from "../../src/business/errors.js";
 import { createClient } from "@tabdo/sdk";
+import { cleanupFixture, deleteFixtureEvents } from "../helpers/fixture-cleanup.js";
 
 const connectionString = process.env.DATABASE_URL ?? "";
 assert(new URL(connectionString).pathname.endsWith("_agent_test"));
 const resource = createDatabase({ connectionString, poolMax: 4 });
 const org = randomUUID(), foreignOrg = randomUUID(), userId = randomUUID(), memberId = randomUUID();
+const ruleIds: string[] = [];
 const actor: Actor = { organizationId: org, userId, memberId, kind: "human", role: "owner", name: "Site API owner", email: `${userId}@local.test` };
 const wakeups: unknown[] = [];
 const deps = { database: resource.db, now: () => new Date(), uuid: randomUUID, automationQueueName: "fixture",
@@ -73,10 +75,15 @@ before(async () => {
   }
 });
 after(async () => {
-  await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org));
-  for (const id of [org, foreignOrg]) await resource.db.delete(organization).where(eq(organization.id, id));
-  await resource.db.delete(user).where(eq(user.id, userId));
-  await resource.close(); await rm(directory, { recursive: true, force: true });
+  await cleanupFixture([
+    ["owned events/outbox", () => deleteFixtureEvents(resource.db, [org, foreignOrg])],
+    ["owned runs", async () => { if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds)); }],
+    ["organization", () => resource.db.delete(organization).where(eq(organization.id, org))],
+    ["foreign organization", () => resource.db.delete(organization).where(eq(organization.id, foreignOrg))],
+    ["owner", () => resource.db.delete(user).where(eq(user.id, userId))],
+    ["database", () => resource.close()],
+    ["storage", () => rm(directory, { recursive: true, force: true })],
+  ]);
 });
 
 test("site key management is workspace admin-only, hashed, scoped, editable and physically deletable", async () => {
@@ -132,7 +139,8 @@ test("table capabilities stay separate across GraphQL, REST and commands", async
 });
 
 test("public creates use the ordinary atomic automation outbox and only wake after commit", async () => {
-  await createAutomation(deps, { tableId, organizationId: org, name: "Website follow-up", actorId: userId, trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: numberId, value: 42 }] });
+  const rule = await createAutomation(deps, { tableId, organizationId: org, name: "Website follow-up", actorId: userId, trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: numberId, value: 42 }] });
+  ruleIds.push(rule.id);
   const before = wakeups.length;
   const result = await gql('mutation($id:ID!,$cells:JSON!){createRow(tableId:$id,cells:$cells){id}}', { id: tableId, cells: { [titleId]: "Queue submission" } }, createKey);
   assert(!result.body.errors, JSON.stringify(result.body));

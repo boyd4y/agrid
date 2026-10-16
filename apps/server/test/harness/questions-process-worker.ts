@@ -10,6 +10,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import { restoreWorkspace, snapshotWorkspace, type WorkspaceSnapshot } from "../../src/harness/workspace.js";
 
+const phase = (fixturePhase: string) => process.send?.({ fixturePhase });
+phase("worker ready");
 const [mode, baseUrl, stateFile, sessionId] = process.argv.slice(2);
 assert(["produce", "consume"].includes(mode));assert(baseUrl.startsWith("http://127.0.0.1:"));
 const saved: { resumeState: HarnessAgentResumeSessionState; workspace: WorkspaceSnapshot } | undefined = mode === "consume" ? JSON.parse(await readFile(stateFile, "utf8")) : undefined;
@@ -29,14 +31,17 @@ const agent = createHarnessAgent(createPiAdapter({ providerId: "fixture", apiKey
 });
 const { session: sandbox } = await createLocalSandboxAdapter({ cwd: `${fs.root}/workspace`, env: {}, createFilesystem: async () => fs }).create({ sandboxId: `question-worker-${randomUUID()}` });
 const session = await agent.createSession({ sessionId, sandboxSession: sandbox, ...(saved ? { resumeFrom: saved.resumeState } : {}) });
+phase("session ready");
 if (mode === "produce") {
   const result = await agent.stream({ session, prompt: "Write marker exactly once and ask direction." });for await (const _part of result.stream) { /* native slice */ }
   assert(session.hasUnfinishedTurn());
   const resumeState = await session.detach(), workspace = await snapshotWorkspace(fs);
   assert.equal(resumeState.continueFrom?.pendingToolResults?.[0].toolCallId, "question-1");
   await writeFile(stateFile, JSON.stringify({ resumeState, workspace }));
+  phase("checkpoint saved");
   // Actual process termination after SDK capture, not a shared in-process map.
   await sandbox.destroy();
+  phase("producer exit");
   process.exit(0);
 } else {
   try {
@@ -44,6 +49,7 @@ if (mode === "produce") {
     const result = await agent.continueStream({ session, toolResultContinuations: [{ type: "tool-result", toolCallId: "question-1", toolName: "askUserQuestions", output: { type: "json", value: { action: "answered", answers: { direction: { optionIds: ["b"] } } } } }] });
     let text = "";for await (const part of result.stream) if (part.type === "text-delta") text += part.text;
     assert.equal(text, "Native answer B, no replay.");assert.equal(await fs.readFile(`${fs.root}/workspace/marker.txt`), "1");assert(!session.hasUnfinishedTurn());
+    phase("continuation verified");
     await session.stop();
-  } finally { await session.destroy();await sandbox.destroy(); }
+  } finally { await session.destroy();await sandbox.destroy();if (process.connected) process.disconnect(); }
 }

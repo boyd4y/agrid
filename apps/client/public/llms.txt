@@ -1,11 +1,11 @@
 # tabdo
 
-> An AI-native workspace for individuals and small teams, built on flexible data. Agents help organize information, arrange steps, and execute operations; people inspect and adjust results.
+> An AI-native workspace for personal plans and small team projects. Tell tabdo what you want to do; AI organizes information, arranges steps, and makes updates you can review and adjust.
 
 ## Docs
 
-- [Docs index](https://tabdo.ai/docs/llms.txt): Full documentation map for agents.
-- [Welcome](https://tabdo.ai/docs): For AI Agents / For Humans dual entry.
+- [Docs index](https://tabdo.ai/docs/llms.txt): Full public guide and reference index, including setup, product features, REST, GraphQL, and SDK docs.
+- [Welcome](https://tabdo.ai/docs): Start with a personal plan or small team project and find guides for using agents in tabdo and connecting table data through REST, GraphQL, or the JavaScript SDK.
 
 ## Blog
 

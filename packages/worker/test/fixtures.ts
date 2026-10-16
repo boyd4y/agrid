@@ -5,6 +5,12 @@ import { createRedisClient, waitForRedisReady, redisConnectionOptions } from "@t
 import { createRedisLeaseProvider } from "@tabdo/queue/lease";
 
 export const redisUrl = process.env.QUEUE_ADAPTER_TEST_REDIS_URL;
+export function assertTestRedisUrl(value: string) {
+  const endpoint = new URL(value);
+  assert(["redis:", "rediss:"].includes(endpoint.protocol) && endpoint.hostname === "127.0.0.1"
+    && ["6381", "16381"].includes(endpoint.port), "Use dedicated local test Redis at 127.0.0.1 on port 6381 or 16381");
+}
+
 export const signal = () => {
   let resolve!: () => void;
   const promise = new Promise<void>((r) => { resolve = r; });
@@ -18,7 +24,7 @@ export async function eventually(check: () => Promise<boolean>) {
   }
 }
 export function fixture<T>() {
-  assert.equal(new URL(redisUrl!).port, "6381", "Use the dedicated local test Redis");
+  assertTestRedisUrl(redisUrl!);
   const prefix = `agrid-queue-test-worker-${randomUUID()}`;
   const connection = redisConnectionOptions(redisUrl!, "producer");
   const queue = createBullMQTransport<T>({ connection, workerConnection: redisConnectionOptions(redisUrl!, "worker"),

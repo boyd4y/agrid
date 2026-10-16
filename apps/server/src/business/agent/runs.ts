@@ -87,7 +87,13 @@ export async function recordRunActivity(deps: DatabaseDependencies, lease: Runti
 
 export async function failNativeRun(deps: RuntimeDependencies, lease: RuntimeLease, runId: string, error: string, transaction?: Transaction) {
   await withRuntimeLease(deps, lease, async (tx) => {
-    const [run] = await tx.update(agentRuns).set({ status: "failed", error, endedAt: deps.now() }).where(and(eq(agentRuns.id, runId), eq(agentRuns.fence, lease.fence))).returning({ runtimeId: agentRuns.runtimeSessionId });
+    // A failed checkpoint cannot undo an accepted stop. Decide under the same
+    // row lock as cancellation, retaining the error and failed runtime state
+    // without certifying an uninvoked turn or replacing its opaque checkpoint.
+    const [run] = await tx.update(agentRuns).set({
+      status: sql`case when ${agentRuns.cancelRequestedAt} is not null then 'cancelled' else 'failed' end`,
+      error, endedAt: deps.now(),
+    }).where(and(eq(agentRuns.id, runId), eq(agentRuns.fence, lease.fence))).returning({ runtimeId: agentRuns.runtimeSessionId });
     if (run) await tx.update(agentRuntimeSessions).set({ status: "failed", error, updatedAt: deps.now() }).where(eq(agentRuntimeSessions.id, run.runtimeId));
   }, transaction);
 }

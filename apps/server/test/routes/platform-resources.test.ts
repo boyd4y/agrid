@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
 import { createAuth } from "@tabdo/auth";
 import { getAuth, getDatabase, getDatabaseClient, requirePlatformResources, withPlatformResources } from "../../src/resources/scope.js";
 import { createApp } from "../../src/app.js";
-import { member, organization, user, automationEvents } from "../../src/db/schema.js";
+import { member, organization, user, automationRuns } from "../../src/db/schema.js";
+import { cleanupFixture, deleteFixtureEvents } from "../helpers/fixture-cleanup.js";
 import { createTable, getTable } from "../../src/commands/index.js";
 import type { BackgroundWakeup } from "../../src/business/background.js";
 
@@ -25,6 +26,7 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
   const appA = createApp({ appUrl: settings.appUrl, resources: resourcesA });
   const appB = createApp({ appUrl: settings.appUrl, resources: resourcesB });
   const email = `scope-${randomUUID()}@example.test`, orgId = randomUUID();
+  const ruleIds: string[] = [];
   let releaseDetached!: () => void;
   const detachedGate = new Promise<void>(resolve => { releaseDetached = resolve; });
   let detached: Promise<void> | undefined;
@@ -85,8 +87,9 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
       assert.equal(response.status, 200, await response.clone().text());
       return (await response.json()).result;
     }
-    await command("createAutomation", { tableId: table.id, name: "HTTP wakeup regression",
+    const rule = await command("createAutomation", { tableId: table.id, name: "HTTP wakeup regression",
       trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: schema.columns[0].id, value: "complete" }] });
+    ruleIds.push(rule.id);
     hintsA.length = 0;
     await command("addRow", { tableId: table.id, cells: { [schema.columns[0].id]: "HTTP committed row" } });
     assert.deepEqual(hintsA, [{ kind: "outbox" }], "real HTTP writes retain the post-commit background notifier");
@@ -99,9 +102,13 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
   } finally {
     releaseDetached();
     await detached?.catch(() => {});
-    await databaseA.db.delete(automationEvents).where(eq(automationEvents.organizationId, orgId));
-    await databaseA.db.delete(organization).where(eq(organization.id, orgId));
-    await databaseA.db.delete(user).where(eq(user.email, email));
-    await Promise.all([databaseA.close(), databaseB.close()]);
+    await cleanupFixture([
+      ["owned events/outbox", () => deleteFixtureEvents(databaseA.db, [orgId])],
+      ["owned runs", async () => { if (ruleIds.length) await databaseA.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds)); }],
+      ["organization", () => databaseA.db.delete(organization).where(eq(organization.id, orgId))],
+      ["owner", () => databaseA.db.delete(user).where(eq(user.email, email))],
+      ["database A", () => databaseA.close()],
+      ["database B", () => databaseB.close()],
+    ]);
   }
 });

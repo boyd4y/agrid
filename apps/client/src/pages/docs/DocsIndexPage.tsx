@@ -43,7 +43,7 @@ export function DocsIndexPage() {
 
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
               <Link
-                to="/docs/mcp"
+                to="/docs/agent-auth"
                 className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:border-primary/30 hover:shadow-md"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-blue-soft)]">
@@ -92,41 +92,35 @@ export function DocsIndexPage() {
             </div>
 
             <h2 className="mt-12 text-xl font-semibold tracking-tight">
-              {t("setupAgents")}
+              {t("setupApi")}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <Link
-                to="/docs/harness"
+                to="/docs/rest"
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiZap className="h-4 w-4 text-primary" /> {t("harness")}
+                  <NiZap className="h-4 w-4 text-primary" /> {t("rest")}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("harnessBlurb")}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("restBlurb")}</p>
               </Link>
               <Link
-                to="/docs/mcp"
+                to="/docs/graphql"
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiSparkles className="h-4 w-4 text-primary" /> {t("mcp")}
+                  <NiSparkles className="h-4 w-4 text-primary" /> {t("graphql")}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("mcpBlurb")}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("graphqlBlurb")}</p>
               </Link>
               <Link
-                to="/docs/skill"
+                to="/docs/sdk"
                 className="rounded-xl border border-border bg-background p-4 hover:bg-muted/50"
               >
                 <div className="flex items-center gap-2 font-medium">
-                  <NiBot className="h-4 w-4 text-primary" /> {t("skill")}
+                  <NiBot className="h-4 w-4 text-primary" /> {t("sdk")}
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t("skillBlurb")}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t("sdkBlurb")}</p>
               </Link>
             </div>
 

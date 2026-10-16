@@ -9,6 +9,15 @@ page.setDefaultTimeout(10000);
 const source = page.getByTestId('automation-source-step');
 const next = source.getByRole('button', { name: '下一步', exact: true });
 const goto = path => page.goto(frontend + path);
+const resize = async (width, height) => {
+  await page.setViewportSize({ width, height });
+  await page.getByRole('button', { name: width < 768 ? '展开侧栏' : '收起侧栏', exact: true }).waitFor();
+  await page.getByTestId('app-sidebar').evaluate(async sidebar => {
+    // The responsive state updates before the sidebar's width transition ends.
+    await Promise.all(sidebar.getAnimations().map(animation => animation.finished));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+};
 try {
   await goto('/app/automations/new');
   await source.getByRole('heading', { name: '还没有可用表格', exact: true }).waitFor();
@@ -51,12 +60,11 @@ try {
   await source.getByRole('radio', { name: 'Notes inbox', exact: true }).click();
   assert.equal(await next.isEnabled(), true);
   assert.equal((await source.boundingBox()).height, original.height);
-  await page.setViewportSize({ width: 320, height: 700 });
-  await page.getByRole('button', { name: '收起侧栏', exact: true }).click();
+  await resize(320, 700);
   await next.scrollIntoViewIfNeeded();
   assert.equal(await source.evaluate(el => el.scrollWidth > el.clientWidth), false, 'narrow mail cards fit the source panel');
   assert.equal(await next.isVisible(), true);
-  await page.setViewportSize({ width: 1600, height: 1000 });
+  await resize(1600, 1000);
   for (const theme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme: theme });
     await page.waitForFunction(theme => document.documentElement.classList.contains(theme), theme);
@@ -76,10 +84,10 @@ try {
   await editor.getByLabel('任务描述', { exact: true }).fill('Summarize the latest reading notes.');
   await choose('小时', '10'); await choose('分钟', '30'); await choose('时区', 'Asia/Shanghai');
   await editor.getByRole('switch', { name: '启用', exact: true }).click();
-  await page.setViewportSize({ width: 320, height: 700 });
+  await resize(320, 700);
   assert.equal(await editor.evaluate(el => el.scrollWidth > el.clientWidth), false, 'scheduled task form fits narrow content');
   assert.equal(await editor.locator('input[type=time], input[type=datetime-local], datalist').count(), 0);
-  await page.setViewportSize({ width: 1600, height: 1000 });
+  await resize(1600, 1000);
 
   let failSave = true;
   await page.route('**/api/automations', route => route.request().method() === 'POST' && failSave ? route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture task save failure' }) }) : route.fallback());

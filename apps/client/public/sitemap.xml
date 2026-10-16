@@ -7,8 +7,7 @@
   <url><loc>https://tabdo.ai/signup</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/welcome</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/how-it-works</loc><changefreq>weekly</changefreq></url>
-  <url><loc>https://tabdo.ai/docs/mcp</loc><changefreq>weekly</changefreq></url>
-  <url><loc>https://tabdo.ai/docs/skill</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/harness</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/agent-auth</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/human-quickstart</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/api-quickstart</loc><changefreq>weekly</changefreq></url>
@@ -16,8 +15,14 @@
   <url><loc>https://tabdo.ai/docs/tables</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/members</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/views</loc><changefreq>weekly</changefreq></url>
-  <url><loc>https://tabdo.ai/docs/commands</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/forms</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/automations</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/integrations</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/reports</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/sites</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/rest</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/graphql</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://tabdo.ai/docs/sdk</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/docs/auth</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/blog/same-command-layer</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://tabdo.ai/blog/ai-native-tables</loc><changefreq>weekly</changefreq></url>

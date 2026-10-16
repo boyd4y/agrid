@@ -42,12 +42,25 @@ export async function createBrowserFixture({ name = 'Builder Browser', modelRequ
   let browser, ctx, page;
   const users = [], organizations = [], errors = [];
   const close = async () => {
-    if (browser) await browser.close();
-    try { process.kill(-server.pid, 'SIGTERM'); } catch {}
-    model.closeAllConnections(); await new Promise((resolve) => model.close(resolve));
+    const failures = [];
+    const cleanup = async (name, work) => {
+      try { await work(); } catch (cause) { failures.push(new Error(`Fixture cleanup failed: ${name}`, { cause })); }
+    };
+    await cleanup('browser', async () => { if (browser) await browser.close(); });
+    await cleanup('API', async () => { try { process.kill(-server.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; } });
+    await cleanup('model', async () => { model.closeAllConnections(); await new Promise((resolve) => model.close(resolve)); });
     const db = postgres(databaseUrl);
-    try { for (const id of organizations) await db`delete from organization where id=${id}`; for (const id of users) await db`delete from "user" where id=${id}`; }
-    finally { await db.end(); log.end(); }
+    await cleanup('owned events/outbox', async () => {
+      if (!organizations.length) return;
+      const events = await db`select id from automation_events where organization_id in ${db(organizations)}`;
+      // Capture actual event IDs before deleting fixture organizations/rules; the FK cleans their outbox.
+      if (events.length) await db`delete from automation_events where id in ${db(events.map(event => event.id))}`;
+    });
+    for (const id of organizations) await cleanup(`organization ${id}`, () => db`delete from organization where id=${id}`);
+    for (const id of users) await cleanup(`user ${id}`, () => db`delete from "user" where id=${id}`);
+    await cleanup('database', () => db.end());
+    log.end();
+    if (failures.length) throw new AggregateError(failures, 'Browser fixture cleanup failed');
   };
   try {
     let ready = false;
