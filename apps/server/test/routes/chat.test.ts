@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 
 // Integration tests must never connect to the application database or a live model.
 if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
-for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
+for (const key of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
 const { db, client } = await import("../../src/db/index.js");
 const { auth } = await import("../../src/auth/index.js");
 const { chatRoute } = await import("../../src/routes/chat.js");
@@ -25,6 +25,7 @@ app.onError((err, c) => {
   if ("getResponse" in err && typeof err.getResponse === "function") return err.getResponse();
   return c.json({ error: err.message }, err.name === "ZodError" ? 400 : 500);
 });
+process.env.PI_CONTEXT_WINDOW = "200000";
 const orgId = randomUUID(), otherOrg = randomUUID();
 const users: string[] = [];
 let cookie = "", otherCookie = "", ownerId = "", agentId = "", agentUserId = "", threadId = "", tableId = "", foreignTableId = "";
@@ -56,7 +57,7 @@ after(async () => {
 
 test("agent creation uses a human session, creates no key, and enforces roles", async () => {
   assert.equal((await req("/members/agents", { name: "Forbidden" }, "POST", otherCookie)).status, 403);
-  const response = await req("/members/agents", { name: "Builtin assistant", persona: { defaultHarness: "pi", defaultModel: "openrouter/free" } });
+  const response = await req("/members/agents", { name: "Builtin assistant", persona: { defaultHarness: "pi", defaultModel: "fixture/model" } });
   assert.equal(response.status, 201);
   const result = await response.json(); agentId = result.member.id; agentUserId = result.member.userId;
   assert.equal(result.apiKey, undefined); assert.equal(result.member.agent.apiKeyPrefix, undefined);
@@ -172,12 +173,11 @@ test("history preserves structured tools and branching across reloads", async ()
 test("the live streaming path injects validated system context and persists tool results", async () => {
   const calls: Array<{ messages: { role: string; content: unknown }[] }> = [];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     let raw = "";
     for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "completion-test", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "completion-test", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     if (calls.length === 1) {
       write({ role: "assistant", tool_calls: [{ index: 0, id: "get-table-test", type: "function", function: { name: "get_table", arguments: JSON.stringify({ tableId }) } }] }, null);
       write({}, "tool_calls");
@@ -189,9 +189,9 @@ test("the live streaming path injects validated system context and persists tool
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
-  process.env.OPENROUTER_API_KEY = "local-test-provider";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  process.env.PI_API_KEY = "local-test-provider";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "table", tableId }, agentId })).json();
     const response = await req("/chat", { id: thread.id, agentId, context: { page: "table", tableId }, messages: [{ id: "live-user", role: "user", parts: [{ type: "text", text: "查看指定表格" }] }] });
@@ -243,8 +243,8 @@ test("the live streaming path injects validated system context and persists tool
     const after = await (await req(`/threads/${thread.id}/runs`)).json();
     assert.equal(after.runs.length, 3); assert(after.runs.every((r: { status: string }) => r.status === "completed"));
   } finally {
-    process.env.OPENROUTER_API_KEY = "";
-    process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";
+    process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -254,13 +254,9 @@ test("rejected HTTP inputs and stale client heads do not block a fresh native tu
   const calls: { messages: { role: string; content: unknown }[] }[] = [];
   const tableName = `Canonical-head-${randomUUID()}`;
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET") {
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
-    }
     let raw = "";for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "canonical-head", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "canonical-head", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     write({ role: "assistant" });
     if (calls.length === 1) {
       write({ tool_calls: [{ index: 0, id: "canonical-create-once", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] });write({}, "tool_calls");
@@ -269,8 +265,8 @@ test("rejected HTTP inputs and stale client heads do not block a fresh native tu
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address();assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "canonical-local-fixture";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.PI_API_KEY = "canonical-local-fixture";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const initialUser = { id: "canonical-first-user", role: "user", parts: [{ type: "text", text: "CANONICAL_ACCEPTED_CREATE_ONCE" }] };
@@ -281,13 +277,13 @@ test("rejected HTTP inputs and stale client heads do not block a fresh native tu
       { id: "http-rejected-one", role: "user", parts: [{ type: "text", text: "REJECTED_HTTP_FIRST_DO_NOT_EXECUTE" }] },
       { id: "http-rejected-two", role: "user", parts: [{ type: "text", text: "REJECTED_HTTP_SECOND_DO_NOT_EXECUTE" }] },
     ];
-    process.env.OPENROUTER_API_KEY = "";
+    process.env.PI_API_KEY = "";
     for (const input of rejected) {
       const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [input] });
       assert.equal(response.status, 503);assert.match(await response.text(), /Pi 未配置模型提供商/);
     }
     assert.equal(calls.length, 2, "preflight rejection never starts a native turn");
-    process.env.OPENROUTER_API_KEY = "canonical-local-fixture";
+    process.env.PI_API_KEY = "canonical-local-fixture";
     // Seed only this test thread to reproduce rows written by the older client
     // persistence path. The current compatibility endpoint must not create them.
     const seedTime = Date.now();
@@ -318,7 +314,7 @@ test("rejected HTTP inputs and stale client heads do not block a fresh native tu
     const tables = await (await req("/tables")).json();
     assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1, "existing native tool results are not replayed");
   } finally {
-    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
 });
@@ -327,13 +323,9 @@ test("progress event insertion failures remain observational and do not abort na
   const calls: { messages: { role: string; content: unknown }[] }[] = [];
   const tableName = `Observer-fault-${randomUUID()}`;
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET") {
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
-    }
     let raw = "";for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "observer-fault", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "observer-fault", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     write({ role: "assistant" });
     if (calls.length === 1) {
       write({ tool_calls: [{ index: 0, id: "observer-create-once", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] });write({}, "tool_calls");
@@ -342,8 +334,8 @@ test("progress event insertion failures remain observational and do not abort na
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address();assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-observer-fault-provider";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.PI_API_KEY = "local-observer-fault-provider";
   const faultName = `progress_fault_${randomUUID().replaceAll("-", "")}`;
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
@@ -376,7 +368,7 @@ test("progress event insertion failures remain observational and do not abort na
     assert.deepEqual(events, []);
     await assert.rejects(client.unsafe("INSERT INTO agent_run_events (run_id, activity) VALUES ($1, '{}'::jsonb)", [runs[0].id]), /fixture_progress_observer_failure/, "the thread-specific SQL fault is genuinely active");
   } finally {
-    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
     try { await client.unsafe(`DROP TRIGGER IF EXISTS ${faultName} ON agent_run_events`); }
     finally { await client.unsafe(`DROP FUNCTION IF EXISTS ${faultName}()`); }
@@ -437,12 +429,11 @@ test("invalid relation calls expose field errors, reach the model for correction
   const customers = await createTable({ organizationId: orgId, name: "Error-recovery customers" });
   const calls: Array<{ messages: { role: string; content: unknown }[] }> = [];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     let raw = "";
     for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "error-recovery", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "error-recovery", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     if (calls.length <= 2) {
       const first = calls.length === 1;
       const args = first
@@ -458,9 +449,9 @@ test("invalid relation calls expose field errors, reach the model for correction
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
-  process.env.OPENROUTER_API_KEY = "local-test-provider";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  process.env.PI_API_KEY = "local-test-provider";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "relation-error-user", role: "user", parts: [{ type: "text", text: "建立联系人和客户双向关联" }] }] });
@@ -491,8 +482,8 @@ test("invalid relation calls expose field errors, reach the model for correction
     assert.equal(typeof parts.find((p: { toolCallId: string }) => p.toolCallId === "corrected-relation").output.createdAt, "string");
     assert.equal((stream.match(/"type":"data-table-mutated"/g) ?? []).length, 1);
   } finally {
-    process.env.OPENROUTER_API_KEY = "";
-    process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";
+    process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -510,12 +501,11 @@ test("native persona policy updates survive new turns and generate internal AGEN
     null,
   ];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     let raw = ""; for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));
     const operation = operations[calls.length - 1];
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "tasks", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "tasks", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     if (operation) {
       write({ role: "assistant", tool_calls: [{ index: 0, id: `task-call-${calls.length}`, type: "function", function: { name: operation.tool, arguments: JSON.stringify(operation.args) } }] }, null);
       write({}, "tool_calls");
@@ -524,9 +514,9 @@ test("native persona policy updates survive new turns and generate internal AGEN
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
-  process.env.OPENROUTER_API_KEY = "local-test-provider";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  process.env.PI_API_KEY = "local-test-provider";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const first = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "tasks-user-1", role: "user", parts: [{ type: "text", text: "先创建表格，下一轮再验证" }] }] });
@@ -553,7 +543,7 @@ test("native persona policy updates survive new turns and generate internal AGEN
     const policyFile = checkpoint.workspace?.find((entry) => entry.path === "/workspace/agent/AGENTS.md");
     assert(policyFile?.type === "file" && typeof policyFile.content === "string"); assert.match(Buffer.from(policyFile.content, "base64").toString("utf8"), /Policy-fixture-after/);
   } finally {
-    process.env.OPENROUTER_API_KEY = ""; process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = ""; process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections(); await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
 });
@@ -563,27 +553,26 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
   const waiting = new Promise<void>((resolve) => { reachedSecond = resolve; });
   const tableName = `Cancellation-${randomUUID()}`;
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     for await (const _chunk of request) { /* drain the request body */ }
     requests++;
     response.writeHead(200, { "Content-Type": "text/event-stream" });
     if (requests === 1) {
       const delta = { role: "assistant", tool_calls: [{ index: 0, id: "cancel-create", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] };
-      for (const [value, finish_reason] of [[delta, null], [{}, "tool_calls"]]) response.write(`data: ${JSON.stringify({ id: "cancel-test", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta: value, finish_reason }] })}\n\n`);
+      for (const [value, finish_reason] of [[delta, null], [{}, "tool_calls"]]) response.write(`data: ${JSON.stringify({ id: "cancel-test", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta: value, finish_reason }] })}\n\n`);
       response.end("data: [DONE]\n\n");
     } else {
-      if (stop === "chunk") response.write(`data: ${JSON.stringify({ id: "cancel-test", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta: { role: "assistant", content: "部分回复" }, finish_reason: null }] })}\n\n`);
+      if (stop === "chunk") response.write(`data: ${JSON.stringify({ id: "cancel-test", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta: { role: "assistant", content: "部分回复" }, finish_reason: null }] })}\n\n`);
       response.flushHeaders();
       reachedSecond(); // Model stalls after a successful host mutation.
     }
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL, previousPoll = process.env.AI_RUN_POLL_MS, previousTotal = process.env.AI_CHAT_TOTAL_MS;
+  const previousURL = process.env.PI_BASE_URL, previousPoll = process.env.AI_RUN_POLL_MS, previousTotal = process.env.AI_CHAT_TOTAL_MS;
   const limitNames = ["AI_CHAT_FIRST_CHUNK_MS", "AI_CHAT_STEP_MS", "AI_CHAT_CHUNK_MS"];
   const previousLimits = Object.fromEntries(limitNames.map((name) => [name, process.env[name]]));
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
-  process.env.OPENROUTER_API_KEY = "local-test-provider"; process.env.AI_RUN_POLL_MS = "200";
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  process.env.PI_API_KEY = "local-test-provider"; process.env.AI_RUN_POLL_MS = "200";
   if (stop === "timeout") process.env.AI_CHAT_TOTAL_MS = "1000";
   if (["first-output", "step", "chunk"].includes(stop)) process.env.AI_CHAT_TOTAL_MS = "3000";
   if (stop === "first-output") process.env.AI_CHAT_FIRST_CHUNK_MS = "350";
@@ -620,7 +609,7 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
     assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1);
     assert.equal(requests, 2);
   } finally {
-    process.env.OPENROUTER_API_KEY = ""; process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = ""; process.env.PI_BASE_URL = previousURL ?? "";
     if (previousPoll === undefined) delete process.env.AI_RUN_POLL_MS; else process.env.AI_RUN_POLL_MS = previousPoll;
     if (previousTotal === undefined) delete process.env.AI_CHAT_TOTAL_MS; else process.env.AI_CHAT_TOTAL_MS = previousTotal;
     for (const [name, value] of Object.entries(previousLimits)) { if (value === undefined) delete process.env[name];else process.env[name] = value; }
@@ -633,12 +622,11 @@ test("native step limit suspends a turn and ordinary follow-up officially resume
   const nativeRequests: { messages: { role: string; content: unknown }[] }[] = [];
   const tableName = `Continuation-${randomUUID()}`;
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     let raw = "";for await (const chunk of request) raw += chunk;
     nativeRequests.push(JSON.parse(raw));
     requests++;
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "continue-test", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "continue-test", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     if (requests <= 2) {
       write({ role: "assistant", tool_calls: [{ index: 0, id: `continue-tool-${requests}`, type: "function", function: { name: requests === 1 ? "create_table" : "list_tables", arguments: requests === 1 ? JSON.stringify({ name: tableName }) : "{}" } }] }, null);
       write({}, "tool_calls");
@@ -648,8 +636,8 @@ test("native step limit suspends a turn and ordinary follow-up officially resume
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL, previousSteps = process.env.AI_CHAT_MAX_STEPS;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`; process.env.OPENROUTER_API_KEY = "local-test-provider";process.env.AI_CHAT_MAX_STEPS = "2";
+  const previousURL = process.env.PI_BASE_URL, previousSteps = process.env.AI_CHAT_MAX_STEPS;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`; process.env.PI_API_KEY = "local-test-provider";process.env.AI_CHAT_MAX_STEPS = "2";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const initialUser = { id: "continue-user-1", role: "user", parts: [{ type: "text", text: "创建并列出表格，然后说明结果" }] };
@@ -674,7 +662,7 @@ test("native step limit suspends a turn and ordinary follow-up officially resume
     const tables = await (await req("/tables")).json();assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1);
     assert.equal((await loadMessages(thread.id, actor())).messages.length, 4);
   } finally {
-    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";process.env.PI_BASE_URL = previousURL ?? "";
     if (previousSteps === undefined) delete process.env.AI_CHAT_MAX_STEPS;else process.env.AI_CHAT_MAX_STEPS = previousSteps;
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -683,14 +671,10 @@ test("native step limit suspends a turn and ordinary follow-up officially resume
 test("default native tool loop completes seventeen tool steps without a hidden pause", { timeout: 20_000 }, async () => {
   const calls: { messages: { role: string; content: unknown }[] }[] = [];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET") {
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
-    }
     let raw = "";for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "unbounded-steps", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "unbounded-steps", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     write({ role: "assistant" });
     if (calls.length <= 17) {
       write({ tool_calls: [{ index: 0, id: `unbounded-${calls.length}`, type: "function", function: { name: "list_tables", arguments: "{}" } }] });write({}, "tool_calls");
@@ -699,8 +683,8 @@ test("default native tool loop completes seventeen tool steps without a hidden p
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address();assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL, previousSteps = process.env.AI_CHAT_MAX_STEPS;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-unbounded-provider";
+  const previousURL = process.env.PI_BASE_URL, previousSteps = process.env.AI_CHAT_MAX_STEPS;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.PI_API_KEY = "local-unbounded-provider";
   delete process.env.AI_CHAT_MAX_STEPS;
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
@@ -715,7 +699,7 @@ test("default native tool loop completes seventeen tool steps without a hidden p
     const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
     assert(checkpoint.resumeState);assert(!checkpoint.resumeState.continueFrom);
   } finally {
-    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";process.env.PI_BASE_URL = previousURL ?? "";
     if (previousSteps === undefined) delete process.env.AI_CHAT_MAX_STEPS;else process.env.AI_CHAT_MAX_STEPS = previousSteps;
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -724,11 +708,10 @@ test("default native tool loop completes seventeen tool steps without a hidden p
 test("Pi keeps a real output budget for long context and reports actual length endings as output-limit failures", async () => {
   const budgets: number[] = [];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     let raw = "";for await (const chunk of request) raw += chunk;
     const body = JSON.parse(raw);budgets.push(body.max_tokens ?? body.max_completion_tokens);
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "budget-regression", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "budget-regression", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     if (budgets.length === 1) {
       write({ role: "assistant", tool_calls: [{ index: 0, id: "budget-table", type: "function", function: { name: "get_table", arguments: JSON.stringify({ tableId }) } }] });write({}, "tool_calls");
     } else if (budgets.length === 2) { write({ role: "assistant", content: "长上下文工具执行后仍有完整回复。" });write({}, "stop"); }
@@ -737,8 +720,8 @@ test("Pi keeps a real output budget for long context and reports actual length e
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address();assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL, previousBudget = process.env.PI_MAX_OUTPUT_TOKENS;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-test-provider";process.env.PI_MAX_OUTPUT_TOKENS = "8192";
+  const previousURL = process.env.PI_BASE_URL, previousBudget = process.env.PI_MAX_OUTPUT_TOKENS;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.PI_API_KEY = "local-test-provider";process.env.PI_MAX_OUTPUT_TOKENS = "8192";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const first = { id: "budget-user-1", role: "user", parts: [{ type: "text", text: "context ".repeat(16000) + "查看表格并说明结果" }] };
@@ -753,7 +736,7 @@ test("Pi keeps a real output budget for long context and reports actual length e
     assert.equal(budgets[2], 8192);
     const persisted = await loadMessages(thread.id, actor());assert.match(JSON.stringify(persisted.messages.at(-1)?.content), /模型输出上限/);
   } finally {
-    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";process.env.PI_BASE_URL = previousURL ?? "";
     if (previousBudget === undefined) delete process.env.PI_MAX_OUTPUT_TOKENS;else process.env.PI_MAX_OUTPUT_TOKENS = previousBudget;
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -763,13 +746,9 @@ test("natural empty stop completes with real tool results and a new input does n
   const calls: { messages: { role: string; content: unknown }[] }[] = [];
   const tableName = `Empty-stop-${randomUUID()}`;
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET") {
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return;
-    }
     let raw = "";for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null = null, usage?: unknown) => response.write(`data: ${JSON.stringify({ id: "empty-stop", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }], ...(usage ? { usage } : {}) })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null = null, usage?: unknown) => response.write(`data: ${JSON.stringify({ id: "empty-stop", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }], ...(usage ? { usage } : {}) })}\n\n`);
     write({ role: "assistant" });
     if (calls.length === 1) {
       write({ tool_calls: [{ index: 0, id: "empty-stop-create", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name: tableName }) } }] });write({}, "tool_calls");
@@ -781,8 +760,8 @@ test("natural empty stop completes with real tool results and a new input does n
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address();assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.OPENROUTER_API_KEY = "local-empty-stop-provider";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;process.env.PI_API_KEY = "local-empty-stop-provider";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const initialUser = { id: "empty-stop-user-1", role: "user", parts: [{ type: "text", text: "创建表格并核对真实结果" }] };
@@ -811,7 +790,7 @@ test("natural empty stop completes with real tool results and a new input does n
     const runs = await (await req(`/threads/${thread.id}/runs`)).json();
     assert.equal(runs.runs.length, 2);assert(runs.runs.every((run: { status: string }) => run.status === "completed"));
   } finally {
-    process.env.OPENROUTER_API_KEY = "";process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
 });
@@ -819,12 +798,11 @@ test("natural empty stop completes with real tool results and a new input does n
 test("tool execution failures keep business reasons in the stream, model step and persisted history", async () => {
   const calls: Array<{ messages: { role: string; content: unknown }[] }> = [];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET" && request.url === "/v1/models") { response.writeHead(200, { "Content-Type": "application/json" });response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] }));return; }
     let raw = "";
     for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw));
     response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "execution-error", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const write = (delta: unknown, finish_reason: string | null) => response.write(`data: ${JSON.stringify({ id: "execution-error", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     if (calls.length === 1) {
       write({ role: "assistant", tool_calls: [{ index: 0, id: "missing-table", type: "function", function: { name: "get_table", arguments: JSON.stringify({ tableId: foreignTableId }) } }] }, null);
       write({}, "tool_calls");
@@ -836,9 +814,9 @@ test("tool execution failures keep business reasons in the stream, model step an
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.OPENROUTER_BASE_URL;
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
-  process.env.OPENROUTER_API_KEY = "local-test-provider";
+  const previousURL = process.env.PI_BASE_URL;
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  process.env.PI_API_KEY = "local-test-provider";
   try {
     const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
     const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "business-error-user", role: "user", parts: [{ type: "text", text: "读取表格" }] }] });
@@ -851,8 +829,8 @@ test("tool execution failures keep business reasons in the stream, model step an
     assert.match(parts.find((p: { toolCallId: string }) => p.toolCallId === "missing-table").errorText, /表格不存在/);
     assert(!stream.includes('"type":"data-table-mutated"'));
   } finally {
-    process.env.OPENROUTER_API_KEY = "";
-    process.env.OPENROUTER_BASE_URL = previousURL ?? "";
+    process.env.PI_API_KEY = "";
+    process.env.PI_BASE_URL = previousURL ?? "";
     provider.closeAllConnections();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
   }
@@ -863,11 +841,11 @@ test("chat normalizes legacy native/task settings while disabled platform calls 
   const provider = createServer(async (request, response) => {
     if (request.method === "GET" && request.url === "/v1/models") {
       response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "openrouter/free", context_length: 200000, top_provider: { max_completion_tokens: null } }] })); return;
+      response.end(JSON.stringify({ data: [{ id: "fixture/model", context_length: 200000, top_provider: { max_completion_tokens: null } }] })); return;
     }
     let raw = ""; for await (const chunk of request) raw += chunk;
     calls.push(JSON.parse(raw)); response.writeHead(200, { "Content-Type": "text/event-stream" });
-    const send = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "disabled-tools", object: "chat.completion.chunk", created: 1, model: "openrouter/free", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+    const send = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "disabled-tools", object: "chat.completion.chunk", created: 1, model: "fixture/model", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
     send({ role: "assistant" });
     if (calls.length === 1) {
       send({ tool_calls: [
@@ -879,8 +857,8 @@ test("chat normalizes legacy native/task settings while disabled platform calls 
   });
   await new Promise<void>(resolve => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  process.env.OPENROUTER_API_KEY = "tool-settings-test";
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  process.env.PI_API_KEY = "tool-settings-test";
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
   try {
     // Simulate an untouched old profile rather than the already-normalizing PATCH.
     const [profile] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentUserId));
@@ -903,7 +881,7 @@ test("chat normalizes legacy native/task settings while disabled platform calls 
     assert.match(JSON.stringify(calls[1].messages), /Tool update_plan not found/, "retired tools have no execution implementation");
   } finally {
     await req(`/members/agents/${agentId}`, { persona: { disabledTools: [] } }, "PATCH");
-    process.env.OPENROUTER_API_KEY = ""; process.env.OPENROUTER_BASE_URL = "";
+    process.env.PI_API_KEY = ""; process.env.PI_BASE_URL = "";
     await new Promise<void>((resolve, reject) => provider.close(error => error ? reject(error) : resolve()));
   }
 });

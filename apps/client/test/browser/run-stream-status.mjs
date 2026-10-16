@@ -7,14 +7,14 @@ const fixture = await createBrowserFixture({ name: 'Live run status without poll
   await new Promise(resolve => { release=resolve;response.once('close',resolve); });
   if (response.destroyed) return;
   response.writeHead(200,{'content-type':'text/event-stream'});response.flushHeaders();
-  const event = (delta,finish_reason=null) => response.write(`data: ${JSON.stringify({id:'live-status',object:'chat.completion.chunk',created:1,model:'openrouter/free',choices:[{index:0,delta,finish_reason}]})}\n\n`);
+  const event = (delta,finish_reason=null) => response.write(`data: ${JSON.stringify({id:'live-status',object:'chat.completion.chunk',created:1,model:'fixture/model',choices:[{index:0,delta,finish_reason}]})}\n\n`);
   event({role:'assistant',content:'Live stream completed without polling.'});event({},'stop');response.end('data: [DONE]\n\n');
 } });
 const {page,api,base,users,frontend,errors}=fixture;
 let reads=0;
 page.on('request',request=>{if(/\/api\/threads\/[^/]+\/runs(?:\?|$)/.test(request.url())) reads++;});
 try {
-  const agent=(await api('/members/agents',{name:'Live status',persona:{defaultHarness:'pi',defaultModel:'openrouter/free',runtime:'local'}})).member;
+  const agent=(await api('/members/agents',{name:'Live status',persona:{defaultHarness:'pi',defaultModel:'fixture/model',runtime:'local'}})).member;
   users.push(agent.userId);
   await page.addInitScript(base=>{const original=window.fetch;window.fetch=(input,init)=>typeof input==='string' && input==='/api/chat'?original(base+input,{...init,credentials:'include'}):original(input,init);},base);
   await page.route('**/api/chat',route=>route.continue());

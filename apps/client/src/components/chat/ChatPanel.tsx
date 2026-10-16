@@ -189,7 +189,7 @@ function agentHarness(a: MemberOption): HarnessId {
 }
 
 function agentModel(a: MemberOption): string {
-  return a.agent?.persona?.defaultModel || "openrouter/free";
+  return a.agent?.persona?.defaultModel || "__harness_default__";
 }
 
 export function ChatPanel(props: Props) {
@@ -453,7 +453,7 @@ function ScopedChatPanel({
         return {
           id: a.id,
           name: a.name,
-          description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m === "__harness_default__" ? t("defaultModel") : m.replace(/^openrouter\//, "")}`,
+          description: `${(HARNESS_LABELS[h] ?? h).split(" ")[0]} · ${m === "__harness_default__" ? t("defaultModel") : m}`,
           keywords: [h, m, a.email],
           icon: (
             <MemberAvatar name={a.name} image={a.image} kind="agent" className="size-5" />

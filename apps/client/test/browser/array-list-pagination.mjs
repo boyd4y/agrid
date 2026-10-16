@@ -21,7 +21,7 @@ try {
   });
   for (let index = 1; index <= 21; index++) {
     await api('/tables', { name: `分页表格 ${String(index).padStart(2, '0')}` });
-    const result = await api('/members/agents', { name: `分页智能体 ${String(index).padStart(2, '0')}`, persona: { defaultHarness: 'pi', defaultModel: 'openrouter/free', runtime: 'local' } });
+    const result = await api('/members/agents', { name: `分页智能体 ${String(index).padStart(2, '0')}`, persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local' } });
     users.push(result.member.userId);
   }
   const pager = page.getByRole('navigation', { name: '分页', exact: true });

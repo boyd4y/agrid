@@ -33,8 +33,7 @@ and recovery sweeps. Redis must remain available and the worker must remain runn
 Optional capability requirements (missing credentials do not prevent basic startup):
 
 - `run_agent`: configure the selected provider: `OPENAI_API_KEY` (or
-  `CODEX_API_KEY`), `ANTHROPIC_API_KEY`, `PI_API_KEY` plus `PI_BASE_URL`, or
-  `OPENROUTER_API_KEY`. Corresponding base URLs, model selections, and Pi limits
+  `CODEX_API_KEY`), `ANTHROPIC_API_KEY`, `PI_API_KEY` plus `PI_BASE_URL` and `PI_MODEL`. Corresponding base URLs, model selections, and Pi limits
   are passed through. Codex and Claude Code also require `VERCEL_TOKEN`,
   `VERCEL_TEAM_ID`, and `VERCEL_PROJECT_ID`, or `VERCEL_OIDC_TOKEN`.
   Pi requires Vercel credentials only for sandbox mode.

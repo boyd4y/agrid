@@ -255,7 +255,7 @@ try {
   await editor.getByRole('button', { name: '取消', exact: true }).click();
 
   // Hydrate genuine saved history through the SDK adapter; never call a model.
-  const agent = (await api('/members/agents', { name: 'Deep link local agent', persona: { defaultHarness: 'pi', defaultModel: 'openrouter/free', runtime: 'local' } })).member;
+  const agent = (await api('/members/agents', { name: 'Deep link local agent', persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local' } })).member;
   fixture.users.push(agent.userId);
   const thread = await api('/threads', { clientId: crypto.randomUUID(), agentId: agent.id, context: { page: 'ai' } });
   await api(`/threads/${thread.id}`, { title: 'Browser linked conversation' }, 'PATCH');

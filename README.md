@@ -51,7 +51,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 聊天发送启动独立 Run，使用保存的原生 Session，只提交最新用户输入。默认没有平台步数或超时限制；仅显式配置 `.env.example` 的 `AI_CHAT_*` 才启用。未完成 turn 使用官方续接能力接收普通追问，自然结束无正文不再被平台改判失败。停止不会撤销已提交的数据修改；同一提交与并发执行仍有保护。真正丢失最新保存状态时明确报错，不重放 UI 工具历史。
 
-本地只需要配置 Pi/DeepSeek 或 OpenRouter 提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。规划使用 Harness 原生能力，平台不提供自建 plan/goal 工具；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
+本地只需要配置 Pi/DeepSeek 直连提供商；Codex 和 Claude Code 需要 Vercel Sandbox 及对应原生模型凭证。详见 [Agent 运行说明](docs/agent-runtime.md)。规划使用 Harness 原生能力，平台不提供自建 plan/goal 工具；AGENTS.md 从人设内部生成。远程 Sandbox 尚待真实执行验收。
 
 ### 设计系统
 - Notion 色板（`#37352f` / `#2383e2` / `#e9e9e7`）

@@ -5,14 +5,9 @@ import { test } from "node:test";
 import { createNativeAgent, openNativeSandbox } from "../../src/harness/runtime.js";
 import { resolvePiModelMetadata } from "../../src/harness/model-metadata.js";
 
-test("native provider keeps its output budget when context metadata is unavailable, and respects actual catalog caps", { timeout: 20000 }, async () => {
+test("native provider keeps its configured output budget for long context", { timeout: 20000 }, async () => {
   const requests: { max_tokens?: number; max_completion_tokens?: number }[] = [];
   const provider = createServer(async (request, response) => {
-    if (request.method === "GET") {
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ data: [{ id: "known/model", context_length: 200000, top_provider: { max_completion_tokens: 2048 } }] }));
-      return;
-    }
     let raw = ""; for await (const chunk of request) raw += chunk;
     requests.push(JSON.parse(raw));
     response.writeHead(200, { "content-type": "text/event-stream" });
@@ -24,10 +19,9 @@ test("native provider keeps its output budget when context metadata is unavailab
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const env = { OPENROUTER_API_KEY: "local-budget-fixture", OPENROUTER_BASE_URL: `http://127.0.0.1:${address.port}/v1` };
-  const directEnv = { PI_API_KEY: "local-direct-budget-fixture", PI_BASE_URL: env.OPENROUTER_BASE_URL };
+  const env = { PI_API_KEY: "local-budget-fixture", PI_BASE_URL: `http://127.0.0.1:${address.port}/v1` };
   try {
-    for (const [modelId, budget, providerEnv] of [["private/model", 16384, env], ["known/model", 2048, env], ["direct/model", 16384, directEnv]] as const) {
+    for (const [modelId, budget, providerEnv] of [["private/model", 16384, env], ["known/model", 2048, { ...env, PI_CONTEXT_WINDOW: "200000", PI_MAX_OUTPUT_TOKENS: "2048" }]] as const) {
       const piModel = await resolvePiModelMetadata(modelId, providerEnv);
       const agent = createNativeAgent({ harness: "pi", mode: "local", modelId, piModel, env: providerEnv, skills: [], tools: {}, instructions: "Use only the local fixture." });
       const opened = await openNativeSandbox({ agent, mode: "local", sandboxId: `budget-${randomUUID()}`, hasResumeState: false, env: providerEnv });
@@ -42,6 +36,6 @@ test("native provider keeps its output budget when context metadata is unavailab
         assert.equal(Object.hasOwn(request, "max_tokens") && Object.hasOwn(request, "max_completion_tokens"), false, "send one unambiguous provider budget field");
       } finally { await session.stop(); await opened.sandbox.destroy(); }
     }
-    assert.equal(requests.length, 3, "no provider retry or synthetic continuation");
+    assert.equal(requests.length, 2, "no provider retry or synthetic continuation");
   } finally { provider.closeAllConnections(); await new Promise<void>((resolve) => provider.close(() => resolve())); }
 });

@@ -4,7 +4,7 @@ const fixture = await createBrowserFixture({ name: 'Native Browser' });
 const { page, api, ctx, browser, base, errors, frontend, artifact } = fixture;
 const userId = fixture.users[0], agentUsers = fixture.users;
 try {
- const agent = (await api('/members/agents', { name: '原生浏览器助手', persona: { defaultHarness: 'pi', defaultModel: 'openrouter/free', runtime: 'local', skillNames: ['table'] } })).member;
+ const agent = (await api('/members/agents', { name: '原生浏览器助手', persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local', skillNames: ['table'] } })).member;
  agentUsers.push(agent.userId);
  const external=[];page.on('request',r=>{const url=r.url();if(url.startsWith('http')&&!['localhost','127.0.0.1'].includes(new URL(url).hostname))external.push(url);});
  await page.goto(frontend+'/app/agents');await page.getByRole('link',{name:'原生浏览器助手',exact:true}).waitFor();

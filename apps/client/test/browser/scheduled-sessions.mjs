@@ -4,13 +4,13 @@ const calls=[];
 const fixture=await createBrowserFixture({name:'Scheduled session browser',modelRequest:async(req,res)=>{
  let raw='';for await(const chunk of req)raw+=chunk;calls.push(JSON.parse(raw));
  res.writeHead(200,{'content-type':'text/event-stream'});
- const send=(delta,finish_reason=null)=>res.write(`data: ${JSON.stringify({id:'schedule-ui',object:'chat.completion.chunk',created:1,model:'openrouter/free',choices:[{index:0,delta,finish_reason}]})}\n\n`);
+ const send=(delta,finish_reason=null)=>res.write(`data: ${JSON.stringify({id:'schedule-ui',object:'chat.completion.chunk',created:1,model:'fixture/model',choices:[{index:0,delta,finish_reason}]})}\n\n`);
  send({role:'assistant',content:calls.length===1?'定时任务的原始结果。':'已继续处理本次运行。'});send({},'stop');res.end('data: [DONE]\n\n');
 }});
 const {page,api,frontend,base,ctx}=fixture;
 const db=postgres(databaseUrl);
 try {
- const agent=(await api('/members/agents',{name:'定时助手',persona:{defaultHarness:'pi',defaultModel:'openrouter/free'}})).member;fixture.users.push(agent.userId);
+ const agent=(await api('/members/agents',{name:'定时助手',persona:{defaultHarness:'pi',defaultModel:'fixture/model'}})).member;fixture.users.push(agent.userId);
  const task=await api('/automations',{name:'每日项目摘要',source:{kind:'schedule',cron:'0 9 * * *',timeZone:'Asia/Shanghai'},trigger:{type:'schedule_due'},actions:[{type:'run_agent',agentUserId:agent.userId,prompt:'汇总项目进度'}]});
  const second=await api('/automations',{name:'每周任务复盘',source:{kind:'schedule',cron:'0 17 * * 5',timeZone:'Asia/Shanghai'},trigger:{type:'schedule_due'},actions:[{type:'run_agent',agentUserId:agent.userId,prompt:'每周复盘'}]});
  const threadId=crypto.randomUUID(),runId=crypto.randomUUID(),userMessageId=crypto.randomUUID();
@@ -49,7 +49,7 @@ try {
  await page.getByLabel('名称',{exact:true}).fill('每日项目摘要（更新）');await page.getByRole('button',{name:'保存',exact:true}).click();
  await page.waitForURL(`**/app/schedules/${task.id}`);await sidebar.getByRole('link',{name:'每日项目摘要（更新）',exact:true}).waitFor();
  await page.setViewportSize({width:390,height:844});assert.equal(await page.getByTestId('schedules-workspace').evaluate(el=>el.scrollWidth>el.clientWidth),false);
- const other=(await api('/members/agents',{name:'第二个助手',persona:{defaultHarness:'pi',defaultModel:'openrouter/free'}})).member;fixture.users.push(other.userId);
+ const other=(await api('/members/agents',{name:'第二个助手',persona:{defaultHarness:'pi',defaultModel:'fixture/model'}})).member;fixture.users.push(other.userId);
  const ordinary=await api('/threads',{clientId:crypto.randomUUID(),context:{page:'ai'},agentId:agent.id});
  await page.setViewportSize({width:1600,height:1000});
  await page.goto(frontend+`/app?thread=${ordinary.id}`);

@@ -11,8 +11,8 @@ import { createNativeAgent, openNativeSandbox } from "../../src/harness/runtime.
 type Completion = { finishReason: string; outputTokens: number; reasoningTokens: number };
 type Request = { model: string; max_tokens?: number; max_completion_tokens?: number; reasoning?: { enabled?: boolean; effort?: string } };
 
-// A local OpenRouter-compatible SSE provider drives the actual Pi adapter. This
-// does not replace native events, contact OpenRouter, or require an application DB.
+// A local OpenAI-compatible SSE provider drives the actual Pi adapter. This
+// does not replace native events, contact an external provider, or require an application DB.
 test("native Pi observes output limits without losing partial text or misclassifying stop", { timeout: 15000 }, async () => {
   const scenarios = [
     { reason: "length", text: "", thinking: "Reasoning exhausted the output budget.", output: 16384, providerReasoning: 16384 },
@@ -28,7 +28,7 @@ test("native Pi observes output limits without losing partial text or misclassif
     assert(scenario, "one real provider request per scenario");
     response.writeHead(200, { "content-type": "text/event-stream" });
     const send = (delta: unknown, finish_reason: string | null = null, usage?: unknown) => response.write(`data: ${JSON.stringify({
-      id: "output-limit-fixture", object: "chat.completion.chunk", created: 1, model: "openrouter/free",
+      id: "output-limit-fixture", object: "chat.completion.chunk", created: 1, model: "fixture/model",
       choices: [{ index: 0, delta, finish_reason }], ...(usage ? { usage } : {}),
     })}\n\n`);
     send({ role: "assistant" });
@@ -40,11 +40,11 @@ test("native Pi observes output limits without losing partial text or misclassif
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const env = { OPENROUTER_API_KEY: "local-output-limit-fixture", OPENROUTER_BASE_URL: `http://127.0.0.1:${address.port}/v1` };
+  const env = { PI_API_KEY: "local-output-limit-fixture", PI_BASE_URL: `http://127.0.0.1:${address.port}/v1` };
   try {
     for (const [index, scenario] of scenarios.entries()) {
       const completions: Completion[] = [];
-      const agent = createNativeAgent({ harness: "pi", mode: "local", env, modelId: "openrouter/free", skills: [], tools: {},
+      const agent = createNativeAgent({ harness: "pi", mode: "local", env, modelId: "fixture/model", skills: [], tools: {},
         instructions: "Reply with verified results only.", onPiMessageEnd: (completion) => { completions.push(completion); } });
       const opened = await openNativeSandbox({ agent, mode: "local", sandboxId: `output-limit-${randomUUID()}`, hasResumeState: false, env });
       const session = await agent.createSession({ sessionId: `output-limit-${randomUUID()}`, sandboxSession: opened.sandbox });
@@ -52,8 +52,8 @@ test("native Pi observes output limits without losing partial text or misclassif
         const result = await agent.generate({ session, prompt: `Output limit scenario ${index}` });
         assert.equal(result.text, scenario.text, "reasoning stays separate and partial final text survives the output limit");
         assert.equal(requests.length, index + 1, "observer never retries a truncated completion");
-        assert.equal(requests[index].max_tokens ?? requests[index].max_completion_tokens, 16384, "actual native OpenRouter request receives the configured default budget");
-        assert.equal(requests[index].reasoning, undefined, "the platform does not force-disable dynamic router reasoning");
+        assert.equal(requests[index].max_tokens ?? requests[index].max_completion_tokens, 16384, "actual native provider request receives the configured default budget");
+        assert.equal(requests[index].reasoning, undefined, "the platform does not force-disable provider reasoning");
         assert.equal(completions.length, 1, "one official message_end notification per assistant completion");
         assert.equal(completions[0].finishReason, scenario.reason, "length remains length; a normal stop is not an output limit");
         assert.equal(completions[0].outputTokens, scenario.output, "native usage retains all completion tokens, including reasoning");
@@ -86,7 +86,7 @@ test("native output-limit ChatStream persists partial text as failed and resumes
     calls.push(JSON.parse(raw));
     response.writeHead(200, { "content-type": "text/event-stream" });
     const send = (delta: unknown, finish_reason: string | null = null, usage?: unknown) => response.write(`data: ${JSON.stringify({
-      id: "output-limit-chat", object: "chat.completion.chunk", created: 1, model: "openrouter/free",
+      id: "output-limit-chat", object: "chat.completion.chunk", created: 1, model: "fixture/model",
       choices: [{ index: 0, delta, finish_reason }], ...(usage ? { usage } : {}),
     })}\n\n`);
     send({ role: "assistant" });
@@ -104,9 +104,9 @@ test("native output-limit ChatStream persists partial text as failed and resumes
   });
   await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
   const address = provider.address(); assert(address && typeof address !== "string");
-  const previousEnv = new Map(["OPENROUTER_API_KEY", "OPENROUTER_BASE_URL"].map((name) => [name, process.env[name]]));
-  process.env.OPENROUTER_API_KEY = "local-output-limit-chat";
-  process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  const previousEnv = new Map(["PI_API_KEY", "PI_BASE_URL"].map((name) => [name, process.env[name]]));
+  process.env.PI_API_KEY = "local-output-limit-chat";
+  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
   try {
     await db.insert(user).values([{ id: owner, email: actor.email, name: actor.name }, { id: agentUser, email: `${agentUser}@local.test`, name: "Output fixture", kind: "agent" }]);
     await db.insert(organization).values({ id: org, name: "Output fixture", slug: org });
@@ -121,7 +121,7 @@ test("native output-limit ChatStream persists partial text as failed and resumes
         const history = await loadMessages(thread.id, actor);
         const message: UIMessage = { id: randomUUID(), role: "user", parts: [{ type: "text", text: prompt }] };
         const run = await beginNativeRun(lease, actor, record, { id: message.id, parentId: history.headId, format: "ai-sdk/v6", content: { role: "user", parts: message.parts } }, agentMember);
-        const reader = createNativeChatStream({ actor, lease, record, run, harness: "pi", modelId: "openrouter/free", piModel: { contextWindow: 200000, maxTokens: 16384, reasoning: false },
+        const reader = createNativeChatStream({ actor, lease, record, run, harness: "pi", modelId: "fixture/model", piModel: { contextWindow: 200000, maxTokens: 16384, reasoning: false },
           instructions: "Verify the fixture only once. Keep the native history after an output limit.", tools, skills: [], prompt, messages: [message], metadata: {} }).getReader();
         const chunks = [];
         try { for (;;) { const chunk = await reader.read(); if (chunk.done) break; chunks.push(chunk.value); } }

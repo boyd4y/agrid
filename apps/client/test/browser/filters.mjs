@@ -5,7 +5,7 @@ assert((await fetch(frontend, { signal: AbortSignal.timeout(5000) })).ok, 'Use t
 const fixture = await createBrowserFixture({ name: 'Typed filters browser' });
 const { page, api, errors } = fixture;
 try {
-  const agent = (await api('/members/agents', { name: '筛选助手', persona: { defaultHarness: 'pi', defaultModel: 'openrouter/free', runtime: 'local', skillNames: ['table'] } })).member;
+  const agent = (await api('/members/agents', { name: '筛选助手', persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local', skillNames: ['table'] } })).member;
   fixture.users.push(agent.userId);
   const target = await api('/tables', { name: 'Filter relation target' });
   const targetTitle = (await api(`/tables/${target.id}`)).columns[0];

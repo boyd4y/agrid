@@ -26,7 +26,6 @@ export async function createBrowserFixture({ name = 'Builder Browser', modelRequ
   await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(port, '127.0.0.1', resolve); });
   await new Promise((resolve) => probe.close(resolve));
   const model = createServer(async (req, res) => {
-    if (req.method === 'GET') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: 'openrouter/free', context_length: 200000, top_provider: { max_completion_tokens: null } }] })); return; }
     if (modelRequest) await modelRequest(req, res);
     else { res.writeHead(500); res.end('No model calls expected in this browser regression'); }
   });
@@ -35,8 +34,8 @@ export async function createBrowserFixture({ name = 'Builder Browser', modelRequ
   const log = createWriteStream(artifact('api.log'));
   const server = spawn('pnpm', ['--filter', '@tabdo/server', 'exec', 'tsx', '--conditions=development', 'src/index.ts'], {
     cwd: workspace, detached: true, env: { ...process.env, DATABASE_URL: databaseUrl, PORT: String(port), APP_URL: frontend,
-      OPENROUTER_API_KEY: 'browser-local-fixture', OPENROUTER_BASE_URL: `http://127.0.0.1:${model.address().port}/v1`,
-      OPENAI_API_KEY: '', CODEX_API_KEY: '', ANTHROPIC_API_KEY: '', CLAUDE_API_KEY: '', PI_API_KEY: '', PI_BASE_URL: '' },
+      PI_MODEL: 'fixture/model', PI_CONTEXT_WINDOW: '200000', PI_API_KEY: 'browser-local-fixture', PI_BASE_URL: `http://127.0.0.1:${model.address().port}/v1`,
+      OPENAI_API_KEY: '', CODEX_API_KEY: '', ANTHROPIC_API_KEY: '', CLAUDE_API_KEY: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.pipe(log); server.stderr.pipe(log);

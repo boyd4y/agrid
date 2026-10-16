@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 import type { AskUserQuestionsInput, AskUserQuestionsOutput } from "@tabdo/shared";
 
 if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
-for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
+for (const key of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
 const { db, client } = await import("../../src/db/index.js");
 const { auth } = await import("../../src/auth/index.js");
 const { chatRoute } = await import("../../src/routes/chat.js");

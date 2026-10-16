@@ -9,14 +9,14 @@ const question = { allowPartialAnswers:false, questions:[
 const fixture = await createBrowserFixture({name:'Native question browser',modelRequest:async(req,res)=>{
   let raw=''; for await(const chunk of req)raw+=chunk;requests.push(JSON.parse(raw));
   res.writeHead(200,{'content-type':'text/event-stream'});
-  const send=(delta,finish_reason=null)=>res.write(`data: ${JSON.stringify({id:'native-questions',object:'chat.completion.chunk',created:1,model:'openrouter/free',choices:[{index:0,delta,finish_reason}]})}\n\n`);
+  const send=(delta,finish_reason=null)=>res.write(`data: ${JSON.stringify({id:'native-questions',object:'chat.completion.chunk',created:1,model:'fixture/model',choices:[{index:0,delta,finish_reason}]})}\n\n`);
   if(requests.length===1){send({role:'assistant',tool_calls:[{index:0,id:'browser-question',type:'function',function:{name:'askUserQuestions',arguments:JSON.stringify(question)}}]});send({},'tool_calls');}
   else{send({role:'assistant',content:'已收到结构化回答并继续原生会话。'});send({},'stop');}
   res.end('data: [DONE]\n\n');
 } });
 const {page,api,base,frontend,users,errors}=fixture;
 try{
-  const agent=(await api('/members/agents',{name:'提问助手',persona:{defaultHarness:'pi',defaultModel:'openrouter/free',runtime:'local'}})).member;users.push(agent.userId);
+  const agent=(await api('/members/agents',{name:'提问助手',persona:{defaultHarness:'pi',defaultModel:'fixture/model',runtime:'local'}})).member;users.push(agent.userId);
   await page.addInitScript((base)=>{const original=window.fetch;window.fetch=(input,init)=>typeof input==='string'&&input==='/api/chat'?original(base+input,{...init,credentials:'include'}):original(input,init);},base);
   await page.route('**/api/chat',route=>route.continue());
   const thread=await api('/threads',{clientId:crypto.randomUUID(),agentId:agent.id,context:{page:'ai'}});

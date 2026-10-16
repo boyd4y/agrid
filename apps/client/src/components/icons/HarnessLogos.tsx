@@ -57,26 +57,8 @@ export function PiLogo({ className, ...props }: IconProps) {
   );
 }
 
-/**
- * OpenRouter provider mark — standalone provider (not Pi).
- * Asset: apps/client/public/brand/openrouter-logo.svg
- */
-export function OpenRouterLogo({ className, ...props }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden
-      className={cn("size-3.5 shrink-0", className)}
-      {...props}
-    >
-      <path d="M16.804 2.137a1.5 1.5 0 0 1 1.5 1.5v6.5a.75.75 0 0 0 1.5 0v-6.5a3 3 0 0 0-3-3h-6.5a.75.75 0 0 0 0 1.5h6.5zm-9.608 19.726a1.5 1.5 0 0 1-1.5-1.5v-6.5a.75.75 0 0 0-1.5 0v6.5a3 3 0 0 0 3 3h6.5a.75.75 0 0 0 0-1.5h-6.5zM3.636 7.197a.75.75 0 0 0 1.061 0l6.01-6.01a.75.75 0 1 0-1.06-1.061L3.636 6.136a.75.75 0 0 0 0 1.061zm15.667 9.606a.75.75 0 0 0-1.061 0l-6.01 6.01a.75.75 0 1 0 1.06 1.061l6.011-6.01a.75.75 0 0 0 0-1.061zM8.25 15.75a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0 0 1.5h5.25zm12.75-6a.75.75 0 0 0 0-1.5H16a.75.75 0 0 0 0 1.5h5z" />
-    </svg>
-  );
-}
-
 export type HarnessLogoId = "codex" | "claude" | "pi";
-export type ProviderLogoId = "openrouter" | "openai" | "anthropic" | "pi";
+export type ProviderLogoId = "openai" | "anthropic" | "pi";
 
 export function HarnessLogo({
   id,
@@ -98,7 +80,6 @@ export function ProviderLogo({
   id: ProviderLogoId | string;
   className?: string;
 }) {
-  if (id === "openrouter") return <OpenRouterLogo className={className} />;
   if (id === "openai") return <OpenAILogo className={className} />;
   if (id === "anthropic") return <AnthropicLogo className={className} />;
   if (id === "pi") return <PiLogo className={className} />;

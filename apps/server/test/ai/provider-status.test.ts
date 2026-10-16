@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { listHarnesses } from "../../src/ai/model.js";
+import { listHarnesses, listProviders } from "../../src/ai/model.js";
 import { resolveNativeConfiguration } from "../../src/business/agent/runtime-configuration.js";
 
 test("Node status follows the same complete provider selection as native Pi", () => {
@@ -15,8 +15,13 @@ test("Node status follows the same complete provider selection as native Pi", ()
     assert.equal(selected.adapter.model.id, direct.defaultModel);
     process.env.PI_API_KEY = "";
     const fallback = listHarnesses().find(harness => harness.id === "pi")!;
-    assert.equal(fallback.provider, "openrouter");
-    assert.equal(fallback.defaultModel, "router/model");
+    assert.equal(fallback.provider, "pi");
+    assert.equal(fallback.available, false, "retired provider credentials never enable Pi");
+    assert.equal(fallback.defaultModel, "__harness_default__");
+    const providers = listProviders();
+    assert(providers.every(provider => provider.id !== ("openrouter" as string)));
+    assert.equal(providers[0].available, false);
+    assert.throws(() => resolveNativeConfiguration({ harness: "pi", mode: "local", env: process.env }), /Pi 未配置/);
     assert.equal(JSON.stringify(fallback).includes("fixture"), false);
   } finally {
     for (const [name, value] of previous) {

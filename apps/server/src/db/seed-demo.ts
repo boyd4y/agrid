@@ -482,7 +482,7 @@ async function ensureDemoAgent(organizationId: string) {
         skillNames: [],
         disabledTools: [],
         defaultHarness: "pi",
-        defaultModel: "openrouter/free",
+        defaultModel: "__harness_default__",
         runtime: "local",
         avatarColor: "#337ea9",
       },

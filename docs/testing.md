@@ -35,7 +35,7 @@ HARNESS_REMOTE_SMOKE=1 pnpm --filter @tabdo/server test:harness:remote
 
 随后 `session.stop()`、`sandbox.stop()`，通过官方 resume lookup 恢复同一 Sandbox，在新 turn 只读核对原生历史、CSV、生产脚本、输出文件和执行计数仍为一；输出字节保持不变，不再执行 Python。验收沿用产品的 node24 模板，先探测真实远程 `python3`；缺失则明确以失败退出，不安装任何宿主或远程包，也不把另一执行环境的能力计入产品验收。它不伪造 Sandbox，也不把普通本地执行计为远程成功。
 
-Pi 是 host runtime，因此模型由宿主本地 HTTP fixture 确定性响应，不需要远程 Sandbox 访问本地模型端点，不使用 OpenRouter 或其他付费模型。测试不导入应用数据库、不写业务数据、不启动或重启应用 API。实际远程 Sandbox 仍使用 Vercel 资源，脚本在 finally 中销毁自己创建的 Sandbox 和原生会话；清理失败也按失败退出并打印需要清理的测试资源 ID。只有实际创建、工具执行、停止恢复、历史/文件检查及清理全部通过才输出 PASS。
+Pi 是 host runtime，因此模型由宿主本地 HTTP fixture 确定性响应，不需要远程 Sandbox 访问本地模型端点，不请求远程模型。测试不导入应用数据库、不写业务数据、不启动或重启应用 API。实际远程 Sandbox 仍使用 Vercel 资源，脚本在 finally 中销毁自己创建的 Sandbox 和原生会话；清理失败也按失败退出并打印需要清理的测试资源 ID。只有实际创建、工具执行、停止恢复、历史/文件检查及清理全部通过才输出 PASS。
 
 当前本机缺少 Vercel 凭证：测试类型检查已通过，preflight 明确以 2 退出；真实远程验收仍待配置，不能记为完成。生产 Python 脚本使用同一 CSV 和参数在宿主做过窄契约验证，JSON 符合期待；这不证明原生 Sandbox 具备 Python，也不计为远程通过。官方接口依据：[HarnessAgent 会话恢复](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)、[Pi host runtime adapter](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-adapters)。
 

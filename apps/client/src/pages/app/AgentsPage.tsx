@@ -65,7 +65,7 @@ export function AgentsPage() {
                     <Badge variant="outline" className="gap-1"><HarnessLogo id={harness} className="size-3" />{HARNESS_LABELS[harness].split(" ")[0]}</Badge>
                     <Badge variant="outline" className="gap-1">{sandbox ? <Cloud className="size-3" /> : <Monitor className="size-3" />}{sandbox ? t("agents.sandbox") : t("agents.local")}</Badge>
                     <span className="flex items-center gap-1 text-xs text-muted-foreground"><BookOpen className="size-3" />{t("agents.skillCount", { count: skills.length })}</span>
-                    <span className="max-w-full truncate text-xs text-muted-foreground">{model === "__harness_default__" ? t("agents.defaultModel") : model.replace(/^openrouter\//, "")}</span>
+                    <span className="max-w-full truncate text-xs text-muted-foreground">{model === "__harness_default__" ? t("agents.defaultModel") : model}</span>
                 </>}
                 action={canManage && <Button variant="outline" size="sm" asChild><Link to={`/app/agents/${agent.id}/edit`} aria-label={t("agents.editAria", { name: agent.name })}><Pencil data-icon="inline-start" />{t("common:edit")}</Link></Button>}
               />;

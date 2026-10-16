@@ -66,7 +66,7 @@ Harness 1.0.149 会隐藏 host tool 参数校验原因，且忽略继承的 `str
 
 Codex 和 Claude Code 的 bridge 仍需已接入的网络 sandbox；真实文件和进程适配器并不代表这些 bridge 已完成接入。未配置运行环境或模型凭证时直接报错，原生工厂没有离线规则或普通模型调用回落。
 
-Pi 可配置 `OPENROUTER_API_KEY`；自定义兼容提供商需要 `PI_API_KEY`、`PI_BASE_URL` 和模型 ID。Codex、Claude Code 分别使用显式 OpenAI Responses、Anthropic Messages 配置。运行层不会自动发现服务器个人 CLI 登录信息。
+Pi 使用直连兼容提供商，需要 `PI_API_KEY`、`PI_BASE_URL` 和模型 ID（推荐 DeepSeek）。Codex、Claude Code 分别使用显式 OpenAI Responses、Anthropic Messages 配置。运行层不会自动发现服务器个人 CLI 登录信息。
 
 Sandbox 使用 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或部署环境 OIDC。已有 sandbox 必须通过 SDK resume lookup 恢复，不能拿旧 ID 调用 create 假装恢复。
 
@@ -108,11 +108,9 @@ Harness 内置工具由对应适配器管理，不在平台工具设置中单独
 
 2026-10-15：固定官方 Harness 1.0.152、Pi adapter 1.0.154，并统一 AI SDK 7.0.141。原生 Pi fixture 验证首次超时后重试成功不会追加旧的 `Request timed out.`，后续真正失败仍会如实报告；工具不因重试重复执行。此修复不消除供应商网络超时本身。
 
-OpenRouter通过公开 `/models` 辅助获取实际context_length与提供商输出上限，缓存5分钟，查询最多2秒。网络/HTTP/解析故障或目录遗漏ID不拦执行：优先复用已有真实缓存，无缓存则使用显式环境配置/保守默认，实际供应商最终判断模型能力；推测值不写成目录缓存。`PI_MAX_OUTPUT_TOKENS` 默认16384，且受成功目录中的提供商上限约束。冷缓存未知模型仍可能受保守32768窗口影响，需要真实 `PI_CONTEXT_WINDOW`；错误窗口可能触发Pi SDK自身上下文裁剪。没有以目录不可用或遗漏模型为由要求用户新建会话。
+Pi 只使用显式配置的直连提供商，不读取旧提供商的环境变量、不请求模型目录、不自动回退。`PI_CONTEXT_WINDOW` 默认32768，`PI_MAX_OUTPUT_TOKENS` 默认16384；应按实际模型能力配置。输出预算包含推理 token，预算耗尽可能没有正文。已保存的旧 Pi 默认路由别名由迁移0028归一为 Harness 默认模型，运行时也兼容未迁移的旧别名。
 
-2026-10-13 实际问题确认：末轮原生 assistant.stopReason=length、usage.output=8192、usage.reasoning=8192、text为0；前一轮已有正文但同样length，被旧逻辑误报completed。原因是推理计入总输出预算，且dynamic openrouter/free的reasoning=false让Pi跳过thinkingLevel=off的请求参数。
-
-使用官方 `createPi.providers.*.models[].samplingParams` 明确传递 `reasoning: { enabled: false, effort: "none" }`，让现有off设置真正进入OpenRouter请求；不修改SDK、不开额外工具循环。强制推理的模型可能拒绝none，此时按提供商真实错误处理，不能声称所有模型都能关闭推理。[Pi配置文档](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md#configure-sampling-by-thinking-level)、[OpenRouter输出与推理预算](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)。
+DeepSeek 的推理能力按已知模型识别；未指定 `PI_THINKING_LEVEL` 时保留原生默认。只有显式 `off` 才通过官方 samplingParams 传递 `thinking: { type: "disabled" }`，平台不为加速擅自关闭推理。
 
 当前Pi adapter把原生length归一化为stop。通过官方可信inline extension的 `message_end` 只读观察最后一个assistant的原始stopReason和usage，保存到消息metadata.completion；不将中间length提前定失败。最终length无论有无正文均标记failed，保留部分正文并提示达到输出上限，下一次用户输入沿原生会话接着回答，不自动重试或重放工具。其它空正文不推断为length。官方unfinished turn仍保持suspended，依SDK continuation继续。
 

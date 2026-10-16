@@ -9,7 +9,7 @@ const fixture = await createBrowserFixture({ name: 'Run recovery browser', model
   for await (const _ of req) { /* drain */ }
   requests++;
   res.writeHead(200, { 'content-type': 'text/event-stream' });
-  const send = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: 'native-run-browser', object: 'chat.completion.chunk', created: 1, model: 'openrouter/free', choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+  const send = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: 'native-run-browser', object: 'chat.completion.chunk', created: 1, model: 'fixture/model', choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
   if (requests === 1 || (mode === 'suspend' && requests === 2)) {
     const name = requests === 1 ? 'create_table' : 'list_tables';
     send({ role: 'assistant', tool_calls: [{ index: 0, id: `${mode}-${requests}`, type: 'function', function: { name, arguments: requests === 1 ? JSON.stringify({ name: names[mode] }) : '{}' } }] }); send({}, 'tool_calls');
@@ -26,7 +26,7 @@ const fixture = await createBrowserFixture({ name: 'Run recovery browser', model
 } });
 const { page, api, base, users, errors, artifact, frontend: ui } = fixture;
 try {
-  const agent = (await api('/members/agents', { name: '原生运行助手', persona: { defaultHarness: 'pi', defaultModel: 'openrouter/free', runtime: 'local' } })).member;
+  const agent = (await api('/members/agents', { name: '原生运行助手', persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local' } })).member;
   users.push(agent.userId);
   // Native browser fetch, streamed end to end. Reload really closes this HTTP socket.
   await page.addInitScript((base) => {

@@ -84,7 +84,7 @@ test("resuming a local native session refuses missing files instead of starting 
     ...options,
     harness: "pi",
     mode: "local",
-    env: { OPENROUTER_API_KEY: "fixture" },
+    env: { PI_API_KEY: "fixture", PI_BASE_URL: "http://127.0.0.1/v1", PI_MODEL: "fixture/model" },
   });
   await assert.rejects(
     openNativeSandbox({

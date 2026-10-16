@@ -10,7 +10,7 @@ import type { BackgroundWakeup } from "../../src/business/background.js";
 import { requirePlatformResources, withPlatformResources } from "../../src/resources/scope.js";
 
 if (!process.env.DATABASE_URL || !new URL(process.env.DATABASE_URL).pathname.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
-for (const key of ["OPENROUTER_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
+for (const key of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
 const { db, client } = await import("../../src/db/index.js");
 const { user, member, organization, userApiKeys, agentProfile, chatThreads, chatMessages, agentRuns, agentRuntimeSessions,
   automationRuns, automationEvents, automationOutbox, automationAgentActions, automationStepReceipts, automations, tables, rows } = await import("../../src/db/schema.js");
