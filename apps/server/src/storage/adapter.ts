@@ -41,14 +41,21 @@ export function storageConfig(env: NodeJS.ProcessEnv = process.env, driver = env
   if (driver !== "local" && driver !== "s3") throw new Error("FILE_STORAGE_DRIVER must be local or s3");
   const config: StorageConfig = { driver, localDir: path.resolve(env.FILE_STORAGE_LOCAL_DIR || defaultLocalDir) };
   if (driver === "s3") {
+    // Neon Object Storage injects AWS-standard names (AWS_ENDPOINT_URL_S3,
+    // AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY); fall back to them
+    // when the explicit FILE_STORAGE_S3_* settings are absent.
+    const endpoint = env.FILE_STORAGE_S3_ENDPOINT || env.AWS_ENDPOINT_URL_S3;
+    const region = env.FILE_STORAGE_S3_REGION || env.AWS_REGION || "us-east-1";
+    const accessKeyId = env.FILE_STORAGE_S3_ACCESS_KEY_ID || env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = env.FILE_STORAGE_S3_SECRET_ACCESS_KEY || env.AWS_SECRET_ACCESS_KEY;
     if (!env.FILE_STORAGE_S3_BUCKET) throw new Error("S3 file storage requires a bucket");
-    if (Boolean(env.FILE_STORAGE_S3_ACCESS_KEY_ID) !== Boolean(env.FILE_STORAGE_S3_SECRET_ACCESS_KEY)) throw new Error("S3 access key and secret key must be configured together");
-    if (env.FILE_STORAGE_S3_ENDPOINT) {
-      const endpoint = new URL(env.FILE_STORAGE_S3_ENDPOINT);
-      if (!["http:", "https:"].includes(endpoint.protocol) || endpoint.username || endpoint.password) throw new Error("Invalid FILE_STORAGE_S3_ENDPOINT");
+    if (Boolean(accessKeyId) !== Boolean(secretAccessKey)) throw new Error("S3 access key and secret key must be configured together");
+    if (endpoint) {
+      const parsed = new URL(endpoint);
+      if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("Invalid FILE_STORAGE_S3_ENDPOINT");
     }
     if (env.FILE_STORAGE_S3_FORCE_PATH_STYLE && !["true", "false"].includes(env.FILE_STORAGE_S3_FORCE_PATH_STYLE)) throw new Error("FILE_STORAGE_S3_FORCE_PATH_STYLE must be true or false");
-    config.s3 = { endpoint: env.FILE_STORAGE_S3_ENDPOINT || undefined, region: env.FILE_STORAGE_S3_REGION || "us-east-1", bucket: env.FILE_STORAGE_S3_BUCKET, accessKeyId: env.FILE_STORAGE_S3_ACCESS_KEY_ID, secretAccessKey: env.FILE_STORAGE_S3_SECRET_ACCESS_KEY, forcePathStyle: env.FILE_STORAGE_S3_FORCE_PATH_STYLE !== "false" };
+    config.s3 = { endpoint: endpoint || undefined, region, bucket: env.FILE_STORAGE_S3_BUCKET, accessKeyId, secretAccessKey, forcePathStyle: env.FILE_STORAGE_S3_FORCE_PATH_STYLE !== "false" };
   }
   return config;
 }

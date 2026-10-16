@@ -67,9 +67,9 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 
 ```bash
 cd /workspace/tabdo
-cp .env.example .env   # 已有 .env 可跳过
-docker compose up -d
 pnpm install
+pnpm local:config     # 创建 .env.development，已有文件保持不变
+pnpm local:infra      # 本机 PostgreSQL :5432 + Redis :6380
 pnpm db:migrate
 pnpm db:seed
 pnpm dev               # :5173 前端 + :3001 API
@@ -96,7 +96,19 @@ pnpm storybook
 
 ## 环境变量
 
-见 [`.env.example`](./.env.example)。要点：
+开发和线上配置分开：
+
+| 模式 | 配置来源 | 命令 |
+|------|---------|------|
+| 本地开发 | `.env.development`（模板 `.env.example`） | `pnpm dev`、`pnpm db:migrate`、`pnpm db:seed` |
+| 线上部署 | Railway 环境变量；本机显式运行线上命令时可用 `.env.production` | `pnpm start`、`pnpm start:worker`、`pnpm db:migrate:prod` |
+| 测试 | 显式注入隔离测试环境，`NODE_ENV=test`；不加载上述文件 | 见 [测试说明](docs/testing.md) |
+
+运行时不读取根目录 `.env`（包括 Neon CLI 生成的配置）。开发模式拒绝非本机数据库、Redis 和 API 地址，文件使用本地存储；远程模型服务可单独在开发配置中填写。已导出的环境变量优先于对应文件，误导出的线上连接会导致开发命令拒绝启动。开发与线上需使用不同的认证/加密密钥、队列前缀及存储位置。
+
+数据库命令默认只操作本地；线上迁移必须显式使用 `pnpm db:migrate:prod`，优先使用 `DATABASE_URL_UNPOOLED`。线上模板见 [`.env.production.example`](./.env.production.example)，不要在线上运行 Demo seed。
+
+配置项见 [`.env.example`](./.env.example)。要点：
 
 | 变量 | 说明 |
 |------|------|

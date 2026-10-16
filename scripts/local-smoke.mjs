@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
-const base = new URL(process.env.APP_URL || "http://localhost:3301");
+const base = new URL(process.env.LOCAL_PREVIEW_URL || "http://localhost:3301");
 assert(["localhost", "127.0.0.1", "[::1]"].includes(base.hostname), "Local smoke only accepts a loopback origin");
 const cookies = new Map();
 let tableId;

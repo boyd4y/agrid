@@ -108,7 +108,9 @@ export async function runMigrations(sql: Sql, folder = migrationsFolder) {
 }
 
 async function main() {
-  const sql = postgres(process.env.DATABASE_URL ?? "postgresql://tableapp:tableapp@localhost:5432/tableapp", { max: 1 });
+  // Neon: run migrations over the direct endpoint. The pooled (-pooler) host is
+  // PgBouncer in transaction mode, which drops session-level state that DDL relies on.
+  const sql = postgres(process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL ?? "postgresql://tableapp:tableapp@localhost:5432/tableapp", { max: 1 });
   try {
     await runMigrations(sql);
     console.log("Migrations complete");

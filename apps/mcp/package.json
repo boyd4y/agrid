@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts"
+    "dev": "node ../../scripts/run-env.mjs development tsx watch src/index.ts"
   },
   "dependencies": {
     "@tabdo/shared": "workspace:*",

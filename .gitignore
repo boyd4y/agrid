@@ -3,6 +3,7 @@ dist
 .env
 .env.*
 !.env.example
+!.env.production.example
 .local/
 *.log
 .DS_Store
@@ -30,3 +31,4 @@ storybook-static/
 
 # Local uploaded objects (configure FILE_STORAGE_LOCAL_DIR for persistent deployment)
 data/files/
+.neon

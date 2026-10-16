@@ -10,10 +10,10 @@ Set `BETTER_AUTH_URL` to the API origin and `APP_URL` to the frontend origin,
 matching the API deployment; empty values retain the application's local defaults.
 
 Supply values through exported host environment variables or a protected host
-`.env` / Compose `--env-file`. Compose explicitly injects the listed variables;
+`.env.production` / Compose `--env-file .env.production`. Compose explicitly injects the listed variables;
 an env file alone does not forward every variable to the container. Production
 must not rely on a baked `.env`: `.dockerignore` excludes it. Do not copy secrets
-into the image or commit deployment env files. See `.env.example` for names.
+into the image or commit deployment env files. See `.env.production.example` for deployment variables and `.env.example` for optional provider settings. Local `pnpm dev` uses `.env.development` and never reads this deployment configuration.
 
 The existing `DATABASE_URL`, `REDIS_URL`, `QUEUE_PREFIX`, `DB_POOL_MAX`,
 `WORKER_CONCURRENCY`, and `QUEUE_GLOBAL_CONCURRENCY` settings are preserved.

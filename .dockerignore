@@ -11,3 +11,6 @@ node_modules
 **/.env.*
 .local
 data
+
+# Local Neon CLI project/branch metadata
+.neon

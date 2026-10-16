@@ -81,3 +81,24 @@ test("storage configuration bounds uploads and supports paired credentials or th
   assert.throws(() => storageConfig({ FILE_STORAGE_DRIVER: "s3", FILE_STORAGE_S3_BUCKET: "fixture", FILE_STORAGE_S3_ACCESS_KEY_ID: "partial" }));
   assert.equal(storageConfig({ FILE_STORAGE_DRIVER: "s3", FILE_STORAGE_S3_BUCKET: "fixture" }).s3?.accessKeyId, undefined);
 });
+
+
+test("Neon AWS-standard storage settings configure the S3 adapter, while explicit settings take precedence", () => {
+  const env = {
+    FILE_STORAGE_DRIVER: "s3", FILE_STORAGE_S3_BUCKET: "assets",
+    AWS_ENDPOINT_URL_S3: "https://storage.example.test", AWS_REGION: "ap-southeast-1",
+    AWS_ACCESS_KEY_ID: "branch-key", AWS_SECRET_ACCESS_KEY: "branch-secret",
+  };
+  assert.deepEqual(storageConfig(env).s3, {
+    endpoint: env.AWS_ENDPOINT_URL_S3, region: env.AWS_REGION, bucket: "assets",
+    accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY, forcePathStyle: true,
+  });
+  const explicit = storageConfig({ ...env,
+    FILE_STORAGE_S3_ENDPOINT: "https://explicit.example.test", FILE_STORAGE_S3_REGION: "us-east-1",
+    FILE_STORAGE_S3_ACCESS_KEY_ID: "explicit-key", FILE_STORAGE_S3_SECRET_ACCESS_KEY: "explicit-secret",
+  }).s3!;
+  assert.equal(explicit.endpoint, "https://explicit.example.test");
+  assert.equal(explicit.region, "us-east-1");
+  assert.equal(explicit.accessKeyId, "explicit-key");
+  assert.equal(explicit.secretAccessKey, "explicit-secret");
+});

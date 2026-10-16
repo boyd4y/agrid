@@ -7,7 +7,16 @@ for (const path of ["../apps/server/dist/index.js", "../apps/server/dist/queue/m
   try { await access(new URL(path, import.meta.url)); }
   catch { throw new Error("Missing built application. Run pnpm local:setup before pnpm local:start."); }
 }
-const env = { ...process.env, NODE_ENV: "production", CLIENT_DIST_PATH: fileURLToPath(new URL("../apps/client/dist", import.meta.url)) };
+const env = {
+  ...process.env,
+  NODE_ENV: "production",
+  TABDO_ENV: "development",
+  PORT: "3301",
+  HOST: "127.0.0.1",
+  APP_URL: "http://localhost:3301",
+  BETTER_AUTH_URL: "http://localhost:3301",
+  CLIENT_DIST_PATH: fileURLToPath(new URL("../apps/client/dist", import.meta.url)),
+};
 let closing = false;
 const processes = [
   spawn(process.execPath, ["dist/index.js"], { cwd: server, env, stdio: "inherit" }),
