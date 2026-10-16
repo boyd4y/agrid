@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { before, after, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 if (!process.env.DATABASE_URL?.endsWith("_agent_test"))
   throw new Error("Use a dedicated *_agent_test database");
 const { db, client } = await import("../../src/db/index.js");
@@ -20,6 +20,7 @@ const cmds = await import("../../src/commands/index.js");
 const org = randomUUID(),
   foreignOrg = randomUUID();
 const owner = randomUUID(), scope = { organizationId: org, actorId: owner };
+const ruleIds: string[] = [];
 let customers: string,
   orders: string,
   foreign: string,
@@ -131,6 +132,7 @@ before(async () => {
   ).id;
 });
 after(async () => {
+  if (ruleIds.length) await db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
   await db.delete(organization).where(eq(organization.id, org));
   await db.delete(organization).where(eq(organization.id, foreignOrg));
   await db.delete(user).where(eq(user.id, owner));
@@ -426,7 +428,7 @@ test("single-direction target deletion updates source version and automation sna
     name: "关联已清除",
     type: "checkbox",
   });
-  await cmds.createAutomation({
+  const rule = await cmds.createAutomation({
     ...scope,
     tableId: orders,
     name: "删除关联后标记",
@@ -434,6 +436,7 @@ test("single-direction target deletion updates source version and automation sna
     conditions: [{ id: "empty", columnId: rel.id, op: "is_empty" }],
     actions: [{ type: "update_field", columnId: flag.id, value: true }],
   });
+  ruleIds.push(rule.id);
   await cmds.deleteRow({ ...scope, rowId: target.id });
   const after = await cmds.getRow({ ...scope, rowId: source.id });
   assert.deepEqual(after.cells[rel.id], []);
@@ -599,6 +602,7 @@ test("automation relation writes, inverse changes and receipts commit atomically
     trigger: { type: "field_changed", columnId: flag.id },
     actions: [{ type: "update_field", columnId: rel.id, value: [target.id] }],
   });
+  ruleIds.push(rule.id);
   await cmds.updateCell({
     ...scope,
     rowId: source.id,

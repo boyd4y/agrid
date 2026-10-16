@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import type { FormViewConfig } from "@tabdo/shared";
 import { ServiceError } from "../../src/business/errors.js";
 import { getDatabase } from "../../src/resources/scope.js";
-import { organization, automations, automationEvents, automationOutbox } from "../../src/business/db/schema.js";
+import { organization, automations, automationEvents, automationOutbox, automationRuns } from "../../src/business/db/schema.js";
 import * as commands from "../../src/business/commands/index.js";
 
 const connectionString = process.env.DATABASE_URL;
@@ -16,6 +16,7 @@ if (!connectionString || !new URL(connectionString).pathname.endsWith("_agent_te
 }
 const resource = createDatabase({ connectionString, poolMax: 4 });
 const org = randomUUID(), other = randomUUID();
+const ruleIds: string[] = [];
 const time = new Date("2026-10-15T02:03:04.000Z"), eventIds: string[] = [];
 const deps: CommandDependencies = Object.freeze({
   database: resource.db,
@@ -30,6 +31,8 @@ before(async () => {
   ]);
 });
 after(async () => {
+  // Runs intentionally survive product rule/organization deletion.
+  if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
   await resource.db.delete(organization).where(eq(organization.id, org));
   await resource.db.delete(organization).where(eq(organization.id, other));
   await resource.close();
@@ -55,9 +58,10 @@ test("backend commands need only explicit dependencies, without HTTP/auth/ALS co
 test("row mutation, injected clock/UUID and outbox queue are committed with the caller transaction", async () => {
   const table = await commands.createTable(deps, { organizationId: org, name: "Explicit event resources" });
   const column = (await commands.getTable(deps, { organizationId: org, tableId: table.id })).columns[0];
-  await resource.db.insert(automations).values({ organizationId: org, tableId: table.id,
+  const [rule] = await resource.db.insert(automations).values({ organizationId: org, tableId: table.id,
     source: { kind: "table", tableId: table.id }, name: "Explicit event", trigger: { type: "row_created" },
-    actions: [{ type: "update_field", columnId: column.id, value: "Result" }] });
+    actions: [{ type: "update_field", columnId: column.id, value: "Result" }] }).returning({ id: automations.id });
+  ruleIds.push(rule.id);
   await assert.rejects(resource.db.transaction(async tx => {
     await commands.addRow(deps, { organizationId: org, tableId: table.id, cells: { [column.id]: "Roll back" } }, tx);
     throw new Error("receipt failed");

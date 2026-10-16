@@ -9,11 +9,12 @@ const fixture=await createBrowserFixture({name:'Scheduled session browser',model
 }});
 const {page,api,frontend,base,ctx}=fixture;
 const db=postgres(databaseUrl);
+const runId=crypto.randomUUID();
 try {
  const agent=(await api('/members/agents',{name:'定时助手',persona:{defaultHarness:'pi',defaultModel:'fixture/model'}})).member;fixture.users.push(agent.userId);
  const task=await api('/automations',{name:'每日项目摘要',source:{kind:'schedule',cron:'0 9 * * *',timeZone:'Asia/Shanghai'},trigger:{type:'schedule_due'},actions:[{type:'run_agent',agentUserId:agent.userId,prompt:'汇总项目进度'}]});
  const second=await api('/automations',{name:'每周任务复盘',source:{kind:'schedule',cron:'0 17 * * 5',timeZone:'Asia/Shanghai'},trigger:{type:'schedule_due'},actions:[{type:'run_agent',agentUserId:agent.userId,prompt:'每周复盘'}]});
- const threadId=crypto.randomUUID(),runId=crypto.randomUUID(),userMessageId=crypto.randomUUID();
+ const threadId=crypto.randomUUID(),userMessageId=crypto.randomUUID();
  await db`insert into automation_runs (id,automation_id,trigger_type,status,rule_snapshot,finished_at) values (${runId},${task.id},'schedule_due','completed',${db.json(task)},now())`;
  await db`insert into chat_threads (id,user_id,organization_id,client_id,kind,scheduled_task_id,title,custom) values (${threadId},${fixture.users[0]},${fixture.organizations[0]},${'schedule-browser:'+runId},'scheduled_task',${task.id},'每日项目摘要 · 本次运行',${db.json({resourceKey:'schedule:'+task.id,agentId:agent.userId})})`;
  await db`insert into automation_agent_actions (run_id,step,thread_id,user_message_id) values (${runId},0,${threadId},${userMessageId})`;
@@ -59,4 +60,7 @@ try {
  const switched=await ctx.request.post(base+'/api/chat',{data:{id:ordinary.id,agentId:other.id,context:{page:'ai'},messages:[{id:crypto.randomUUID(),role:'user',parts:[{type:'text',text:'Switch agent'}]}]}});assert.equal(switched.status(),409);assert.equal(calls.length,2);
  assert.deepEqual(fixture.errors,[]);
  console.log('PASS: split task sidebar, run cards, empty state, native history continuation in the same session, DB separation from ordinary chat, updated previews and editing; no screenshots.');
-}finally{await db.end();await fixture.close();}
+}finally{
+ try{await db`delete from automation_runs where id=${runId}`;}
+ finally{try{await db.end();}finally{await fixture.close();}}
+}

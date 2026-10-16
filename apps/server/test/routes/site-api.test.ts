@@ -4,12 +4,12 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getIntrospectionQuery } from "graphql";
 import { Hono } from "hono";
 import { createLocalStorage } from "@tabdo/storage/local";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, columns, rows, automationEvents, automationOutbox } from "../../src/business/db/schema.js";
+import { organization, user, member, columns, rows, automationEvents, automationOutbox, automationRuns } from "../../src/business/db/schema.js";
 import { createSiteApiRoutes, createSiteKeysRoute } from "../../src/business/http/site-api.js";
 import { createRowsRoute } from "../../src/business/http/rows.js";
 import { createCommandsRoute } from "../../src/business/http/commands.js";
@@ -25,6 +25,7 @@ const connectionString = process.env.DATABASE_URL ?? "";
 assert(new URL(connectionString).pathname.endsWith("_agent_test"));
 const resource = createDatabase({ connectionString, poolMax: 4 });
 const org = randomUUID(), foreignOrg = randomUUID(), userId = randomUUID(), memberId = randomUUID();
+const ruleIds: string[] = [];
 const actor: Actor = { organizationId: org, userId, memberId, kind: "human", role: "owner", name: "Site API owner", email: `${userId}@local.test` };
 const wakeups: unknown[] = [];
 const deps = { database: resource.db, now: () => new Date(), uuid: randomUUID, automationQueueName: "fixture",
@@ -73,6 +74,7 @@ before(async () => {
   }
 });
 after(async () => {
+  if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
   await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org));
   for (const id of [org, foreignOrg]) await resource.db.delete(organization).where(eq(organization.id, id));
   await resource.db.delete(user).where(eq(user.id, userId));
@@ -132,7 +134,8 @@ test("table capabilities stay separate across GraphQL, REST and commands", async
 });
 
 test("public creates use the ordinary atomic automation outbox and only wake after commit", async () => {
-  await createAutomation(deps, { tableId, organizationId: org, name: "Website follow-up", actorId: userId, trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: numberId, value: 42 }] });
+  const rule = await createAutomation(deps, { tableId, organizationId: org, name: "Website follow-up", actorId: userId, trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: numberId, value: 42 }] });
+  ruleIds.push(rule.id);
   const before = wakeups.length;
   const result = await gql('mutation($id:ID!,$cells:JSON!){createRow(tableId:$id,cells:$cells){id}}', { id: tableId, cells: { [titleId]: "Queue submission" } }, createKey);
   assert(!result.body.errors, JSON.stringify(result.body));
