@@ -9,7 +9,8 @@
     "skills": "技能",
     "settings": "设置",
     "integrations": "集成",
-    "schedules": "定时任务"
+    "schedules": "定时任务",
+    "sites": "站点"
   },
   "shell": {
     "workspace": "工作区",

@@ -52,6 +52,7 @@ export function announceApiWrite(url: string, init: RequestInit | undefined, res
   const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
   rememberOwners(result, tableId ?? body.input?.tableId ?? (url === "/api/tables" && !Array.isArray(result) ? data.id : undefined));
   if (method === "GET") return;
+  if (/^\/api\/sites(?:\/|$)/.test(url)) { if (!url.endsWith("/preview")) notifyDataChanged(); return; }
   if (url === "/api/commands") {
     if (!writeCommands.has(body.command)) return;
     if(data.result?.affectedTableIds){for(const id of data.result.affectedTableIds)notifyDataChanged(id);return;}

@@ -141,6 +141,10 @@
     "other": {
       "name": "Other capabilities",
       "description": "Other tools offered by the selected runtime."
+    },
+    "sites": {
+      "name": "Sites",
+      "description": "Create custom pages, save versions, preview and publish."
     }
   },
   "partlyEnabled": "Partly enabled",

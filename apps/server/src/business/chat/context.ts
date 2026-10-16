@@ -9,10 +9,10 @@ import { and, eq } from "drizzle-orm";
 export type ChatContextDependencies = DatabaseDependencies & Readonly<{
   loadReport?: (id: string, organizationId: string) => Promise<Report>;
 }>;
-import { organization, tables, automations } from "../db/schema.js";
+import { organization, tables, automations, sites } from "../db/schema.js";
 import type { Actor } from "../auth/actor.js";
 
-const pages = { ai: "AI 工作区", tables: "表格列表", table: "表格详情", automations: "自动化", reports: "报告", skills: "Skill 管理", agents: "智能体", members: "成员", settings: "设置", schedules: "定时任务" };
+const pages = { ai: "AI 工作区", tables: "表格列表", table: "表格详情", automations: "自动化", reports: "报告", skills: "Skill 管理", agents: "智能体", members: "成员", settings: "设置", schedules: "定时任务", sites: "站点" };
 
 export async function resolveChatContext(deps: ChatContextDependencies, input: unknown, actor: Actor) {
   const context = chatContextSchema.parse(input ?? {});
@@ -23,6 +23,12 @@ export async function resolveChatContext(deps: ChatContextDependencies, input: u
     throw new ServiceError(400, { message: "表格详情缺少表格上下文" });
   }
   if (context.reportId && context.page !== "reports") throw new ServiceError(400, { message: "当前页面不应绑定报告" });
+  if (context.siteId && (context.page !== "sites" || context.tableId || context.reportId || context.scheduledTaskId)) throw new ServiceError(400, { message: "站点上下文无效" });
+  let site;
+  if (context.siteId) {
+    [site] = await deps.database.select({ id: sites.id, name: sites.name, version: sites.version }).from(sites).where(and(eq(sites.id, context.siteId), eq(sites.organizationId, actor.organizationId)));
+    if (!site) throw new ServiceError(404, { message: "站点不存在或不属于当前工作区" });
+  }
   let scheduledTask;
   if (context.scheduledTaskId) {
     if (context.page !== "schedules" || context.tableId || context.reportId) throw new ServiceError(400, { message: "定时任务会话上下文无效" });
@@ -52,6 +58,7 @@ export async function resolveChatContext(deps: ChatContextDependencies, input: u
     table
       ? `当前页面明确绑定的表格：${JSON.stringify({ id: table.id, name: table.name, description: table.description })}`
       : "当前页面没有绑定任何表格。禁止把第一张表、历史对话提到的表或预览中的表当作当前表格。",
+    ...(site ? [`当前站点：${JSON.stringify(site)}。修改前用get_site读取文件和最新version，用save_site保存完整文件集；页面未保存修改不在当前上下文中。`] : []),
     ...(report ? [`当前报告的已保存版本：${JSON.stringify({ id: report.id, name: report.name, version: report.version, widgets: report.widgets.map((w) => ({ id: w.id, title: w.title, type: w.type })) })}`, "报告组件各自有来源，不能把其中某张表当作当前表。编辑前 get_report 获取最新配置，修改报告用报告 tools，页面中未保存的手动修改不在此上下文中。"] : []),
     "未绑定表格时，先 list_tables；用户未指定目标且存在多个候选时先请用户选择。创建新表可用 create_table。只有明确目标后才可修改数据。",
     "历史消息可能来自此前的页面状态；以上当前页面上下文优先。表格、表单、自动化和报告工具均为内置工具。",

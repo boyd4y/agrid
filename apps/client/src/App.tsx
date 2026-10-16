@@ -32,6 +32,9 @@ import i18n from "@/i18n";
 const SkillsPage = lazy(() => import("@/pages/app/SkillsPage").then((module) => ({ default: module.SkillsPage })));
 const SkillDetailPage = lazy(() => import("@/pages/app/SkillDetailPage").then((module) => ({ default: module.SkillDetailPage })));
 
+const SitesPage = lazy(() => import("@/pages/app/SitesPage").then(module => ({ default: module.SitesPage })));
+const SiteDetailPage = lazy(() => import("@/pages/app/SiteDetailPage").then(module => ({ default: module.SiteDetailPage })));
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -62,6 +65,8 @@ export default function App() {
         >
           <Route index element={<WorkspaceHomePage />} />
           <Route path="tables" element={<TablesPage />} />
+          <Route path="sites" element={<Suspense fallback={null}><SitesPage /></Suspense>} />
+          <Route path="sites/:siteId" element={<Suspense fallback={null}><SiteDetailPage /></Suspense>} />
           <Route path="integrations" element={<Navigate to="/app/settings?tab=agentmail" replace />} />
           <Route path="schedules" element={<SchedulesPage />}>
             <Route index element={<ScheduledTasksEmpty />} />

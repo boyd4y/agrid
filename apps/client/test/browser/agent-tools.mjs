@@ -12,10 +12,10 @@ try {
   assert(formToolIds.includes('create_form_view'));
   assert(catalog.tools.every(tool => tool.source === 'platform'), 'catalog configures platform tools only');
   assert.equal(catalog.tools.some(tool => ['get_task_state', 'create_goal', 'update_goal', 'update_plan'].includes(tool.id)), false, 'retired task controls are absent');
-  const expectedGroups = ['platform-tables', 'platform-forms', 'platform-reports', 'platform-automations'].sort();
+  const expectedGroups = ['platform-tables', 'platform-forms', 'platform-reports', 'platform-automations', 'platform-sites'].sort();
   const assertPlatformGroups = async () => {
-    assert.deepEqual(await page.getByTestId('agent-tool-fields').locator('[data-tool-group]').evaluateAll(nodes => nodes.map(node => node.dataset.toolGroup).sort()), expectedGroups, 'exactly four platform groups; no native or task group');
-    assert.equal(await page.getByTestId('agent-tool-fields').getByRole('switch').count(), 4);
+    assert.deepEqual(await page.getByTestId('agent-tool-fields').locator('[data-tool-group]').evaluateAll(nodes => nodes.map(node => node.dataset.toolGroup).sort()), expectedGroups, 'exactly five platform groups; no native or task group');
+    assert.equal(await page.getByTestId('agent-tool-fields').getByRole('switch').count(), expectedGroups.length);
   };
   const group = id => page.getByTestId('agent-tool-fields').locator(`[data-tool-group="${id}"]`);
   const toggle = id => group(id).getByRole('switch');
@@ -85,8 +85,8 @@ try {
     await page.emulateMedia({ colorScheme: theme }); await page.waitForFunction(value => document.documentElement.classList.contains(value), theme); await noOverflow();
   }
   for (const width of [700, 320]) {
-    if (width === 320) { await page.getByRole('button', { name: '收起侧栏', exact: true }).click(); await page.waitForFunction(() => document.querySelector('[data-testid=app-sidebar]').getBoundingClientRect().width <= 56); }
     await page.setViewportSize({ width, height: 650 }); await noOverflow();
+    await page.waitForFunction(() => document.querySelector('[data-testid=app-sidebar]').getBoundingClientRect().width <= 56);
     await page.getByRole('tab', { name: '基础信息', exact: true }).click(); await noOverflow();
     await page.locator('#agentName').fill('保留跨 tab 草稿'); await page.getByRole('tab', { name: '工具', exact: true }).click(); await toggle('platform-forms').waitFor(); await noOverflow();
     await page.getByRole('tab', { name: '基础信息', exact: true }).click(); assert.equal(await page.locator('#agentName').inputValue(), '保留跨 tab 草稿'); await page.locator('#agentName').fill('能力配置助手');
@@ -107,5 +107,5 @@ try {
   const humanAvatar = await memberEditor.getByTestId('avatar-field').locator(':scope > div > span').first().boundingBox(); assert(humanAvatar.width <= 40 && humanAvatar.height <= 40, 'member and agent avatar editors share density');
   await memberEditor.getByRole('button', { name: '取消', exact: true }).click(); await memberEditor.waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);
-  console.log('PASS four platform capability groups without duplicate skill reader/no native or task config, mixed legacy platform choices, shared Harness settings, create/edit persistence, cancel/failed save/retry, settings-style vertical navigation without dot and keyboard, member avatar density, light/dark/700/320/footer; no model calls or screenshots');
+  console.log('PASS five platform capability groups without duplicate skill reader/no native or task config, mixed legacy platform choices, shared Harness settings, create/edit persistence, cancel/failed save/retry, settings-style vertical navigation without dot and keyboard, member avatar density, light/dark/700/320/footer; no model calls or screenshots');
 } finally { await fixture.close(); }

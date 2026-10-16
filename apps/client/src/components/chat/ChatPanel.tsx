@@ -59,6 +59,7 @@ import { prepareNativeChatRequest, shouldContinueNativeQuestions } from "@/lib/n
 export type { HarnessId } from "@/lib/harness";
 
 export type OpenPreviewPayload = {
+  siteId?: string | null;
   kind?: string;
   tableId?: string | null;
   viewId?: string | null;
@@ -101,6 +102,7 @@ const THREAD_COMPONENTS = {
 } as const;
 
 const MUTATING_TOOLS = new Set([
+  "save_site", "publish_site", "unpublish_site",
   "batch_add_rows",
   "batch_update_rows",
   "batch_delete_rows",
@@ -178,6 +180,7 @@ function extractOpenPreview(message: {
       open: output.open ?? input.open ?? true,
       kind: output.kind ?? input.kind ?? "table",
       tableId: (output.tableId ?? input.tableId) as string | null | undefined,
+      siteId: output.siteId ?? input.siteId,
       viewId: (output.viewId ?? input.viewId) as string | null | undefined,
     };
   }
@@ -297,6 +300,8 @@ function ScopedChatPanel({
   const page: ChatPageContext["page"] =
     scheduledTaskId ? "schedules" : variant === "home"
       ? "ai"
+      : /^\/app\/sites(?:\/|$)/.test(pathname)
+        ? "sites"
       : /^\/app\/skills(?:\/|$)/.test(pathname)
         ? "skills"
       : /^\/app\/reports(?:\/|$)/.test(pathname)
@@ -317,22 +322,23 @@ function ScopedChatPanel({
   const boundTableId =
     page === "table" || page === "automations" ? tableId : null;
 
+  const siteId = page === "sites" ? pathname.match(/^\/app\/sites\/([0-9a-f-]{36})$/)?.[1] ?? null : null;
   const reportId = page === "reports" ? pathname.match(/^\/app\/reports\/([0-9a-f-]{36})$/)?.[1] ?? null : null;
   const resourceKey = useMemo(
     () =>
       chatResourceKey({
         tableId: boundTableId,
         resourceKey:
-          resourceKeyProp ?? (reportId ? `report:${reportId}` : !boundTableId && page !== "ai" ? page : null),
+          resourceKeyProp ?? (siteId ? `site:${siteId}` : reportId ? `report:${reportId}` : !boundTableId && page !== "ai" ? page : null),
       }),
-    [boundTableId, resourceKeyProp, page, reportId],
+    [boundTableId, resourceKeyProp, page, reportId, siteId],
   );
 
   const requestRef = useRef<RequestBody>({
     agentId: null,
-    context: { page, tableId: boundTableId, reportId, scheduledTaskId },
+    context: { page, tableId: boundTableId, reportId, siteId, scheduledTaskId },
   });
-  requestRef.current = { agentId, context: { page, tableId: boundTableId, reportId, scheduledTaskId } };
+  requestRef.current = { agentId, context: { page, tableId: boundTableId, reportId, siteId, scheduledTaskId } };
   const threadAdapter = useMemo(
     () => createThreadAdapter(() => requestRef.current, remoteThreadId),
     [remoteThreadId],

@@ -9,7 +9,8 @@
     "skills": "Skills",
     "settings": "Settings",
     "integrations": "Integrations",
-    "schedules": "Scheduled tasks"
+    "schedules": "Scheduled tasks",
+    "sites": "Sites"
   },
   "shell": {
     "workspace": "Workspace",

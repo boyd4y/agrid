@@ -2,6 +2,7 @@ import { z } from "zod";
 
 /** Configurable platform wire IDs. Native tool availability belongs to the Harness. */
 export const PLATFORM_TOOL_IDS = [
+  "list_sites", "get_site", "save_site", "publish_site", "unpublish_site",
   "batch_add_rows", "batch_update_rows", "batch_delete_rows",
   "batch_add_columns", "batch_update_columns", "batch_delete_columns",
   "batch_set_relations", "batch_add_relations", "batch_remove_relations",

@@ -8,7 +8,7 @@ const localHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 const localUrls = [
   "DATABASE_URL", "DATABASE_URL_UNPOOLED", "REDIS_URL",
   "QUEUE_DATABASE_URL", "QUEUE_REDIS_URL", "APP_URL", "BETTER_AUTH_URL",
-  "TABDO_API_TARGET", "TABDO_API_URL", "TABLE_API_URL",
+  "TABDO_API_TARGET", "TABDO_API_URL", "TABLE_API_URL", "SITE_PUBLIC_ORIGIN",
 ];
 
 /** Load exactly one environment file. Never fall back to the CLI-managed root .env. */

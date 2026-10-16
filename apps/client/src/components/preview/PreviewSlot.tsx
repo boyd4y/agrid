@@ -1,3 +1,4 @@
+import { SitePreviewContent } from "./SitePreviewContent";
 import { ChevronDown, FileInput, Plus, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@tabdo/ui/components/button";
@@ -10,6 +11,7 @@ import { TablePreviewContent } from "./TablePreviewContent";
 import { FormPreviewContent } from "./FormPreviewContent";
 import { AutomationPreviewContent } from "./AutomationPreviewContent";
 
+registerPreviewSlot("site", ctx => <SitePreviewContent {...ctx} />);
 registerPreviewSlot("table", (ctx) => <TablePreviewContent {...ctx} />);
 registerPreviewSlot("form", (ctx) => <FormPreviewContent {...ctx} />);
 registerPreviewSlot("automations", (ctx) => <AutomationPreviewContent {...ctx} />);
@@ -51,14 +53,14 @@ export function PreviewSlot({ tabs, activeKind, contexts, tables, onOpenTab, onC
           {tabs.map((tab) => {
             const type = TYPES.find((type) => type.kind === tab.kind);
             const table = tables.find((table) => table.id === tab.tableId);
-            const name = table?.name ?? t("preview.table");
+            const name = tab.kind === "site" ? t("nav.sites") : table?.name ?? t("preview.table");
             return <div key={tab.kind} className="flex h-full shrink-0 items-center border-r border-border">
-              <TabsTrigger value={tab.kind} className="h-full max-w-48 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-muted/50 data-[state=active]:shadow-none" aria-label={`${type?.label ?? tab.kind} · ${name}`}>{tab.kind === "table" && <TableIcon name={table?.icon} className="size-3.5 shrink-0" />}<span className="truncate">{type?.label ?? tab.kind} · {name}</span></TabsTrigger>
-              <Button variant="ghost" size="icon" className="mr-1 size-6 shrink-0" aria-label={t("preview.closeTab", { label: type?.label ?? tab.kind })} onClick={() => onCloseTab(tab.kind)}><X className="size-3" /></Button>
+              <TabsTrigger value={tab.kind} className="h-full max-w-48 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-muted/50 data-[state=active]:shadow-none" aria-label={`${type?.label ?? (tab.kind === "site" ? t("nav.sites") : tab.kind)} · ${name}`}>{tab.kind === "table" && <TableIcon name={table?.icon} className="size-3.5 shrink-0" />}<span className="truncate">{type?.label ?? (tab.kind === "site" ? t("nav.sites") : tab.kind)} · {name}</span></TabsTrigger>
+              <Button variant="ghost" size="icon" className="mr-1 size-6 shrink-0" aria-label={t("preview.closeTab", { label: type?.label ?? (tab.kind === "site" ? t("nav.sites") : tab.kind) })} onClick={() => onCloseTab(tab.kind)}><X className="size-3" /></Button>
             </div>;
           })}
         </TabsList>
-        {tabs.map((tab) => <TabsContent key={`${tab.kind}:${tab.tableId}:${tab.viewId ?? ""}`} value={tab.kind} forceMount hidden={tab.kind !== activeKind} className="min-h-0 overflow-hidden data-[state=inactive]:hidden">
+        {tabs.map((tab) => <TabsContent key={`${tab.kind}:${tab.siteId ?? tab.tableId}:${tab.viewId ?? ""}`} value={tab.kind} forceMount hidden={tab.kind !== activeKind} className="min-h-0 overflow-hidden data-[state=inactive]:hidden">
           {getPreviewSlotRenderer(tab.kind)?.(contexts[tab.kind]) ?? <p className="p-4 text-sm text-muted-foreground">{t("preview.noContent")}</p>}
         </TabsContent>)}
       </Tabs>}

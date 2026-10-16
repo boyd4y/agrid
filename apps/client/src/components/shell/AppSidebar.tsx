@@ -1,3 +1,4 @@
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useEffect, useState } from "react";
 import { Pin, PinOff } from "lucide-react";
 import { TableIcon } from "@/components/table/TableIcon";
@@ -104,7 +105,9 @@ function NavItem({
  */
 export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }: Props) {
   const { t } = useTranslation(["app", "common", "errors"]);
-  const { sidebarCollapsed, toggleSidebar } = useAppShell();
+  const { sidebarCollapsed: preferredCollapsed, toggleSidebar } = useAppShell();
+  const narrow = useMediaQuery("(max-width: 767px)");
+  const sidebarCollapsed = preferredCollapsed || narrow;
   const { user, refetch } = useAuth();
   useEffect(() => {
     const update = () => void refetch();
@@ -194,6 +197,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
           />
           <NavItem {...nav("schedules")} collapsed={sidebarCollapsed} />
           <NavItem {...nav("reports")} collapsed={sidebarCollapsed} />
+          <NavItem {...nav("sites")} collapsed={sidebarCollapsed} />
           {tables.filter((table) => table.pinned).map((table) => <SidebarTable key={table.id} table={table} collapsed={sidebarCollapsed} onTogglePin={onTogglePin} />)}
         </div>
 

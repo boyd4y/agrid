@@ -96,3 +96,5 @@ export const commands = {
   setFormFieldSettings: viewCmds.setFormFieldSettings,
   setFormChrome: viewCmds.setFormChrome,
 };
+
+export { listSites, getSite, saveSite, restoreSiteRevision, publishSite, unpublishSite, deleteSite } from "../sites/service.js";

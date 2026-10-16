@@ -8,12 +8,12 @@ API 地址使用用户实际的 Tabdo 服务地址，不假设远程环境能访
 
 ## 有实际 SDK 文件时使用 SDK
 
-`@tabdo/sdk` 提供原生 ES module 和类型定义，但尚未发布到 npm/CDN。已有项目安装了 SDK 时使用包导入；平台或用户提供了实际浏览器构建文件时复制到站点并相对引用。不要凭空引用远程 CDN，也不要假设 Agent 工作区能访问平台仓库的 packages 目录。
+`@tabdo/sdk` 提供原生 ES module 和类型定义，但尚未发布到 npm/CDN。save_site 会自动加入当前平台构建的 tabdo.js，可直接相对引用。已有项目安装了 SDK 时也可使用包导入；其他环境须由平台或用户提供实际浏览器构建文件后再引用。不要凭空引用远程 CDN，也不要假设 Agent 工作区能访问平台仓库的 packages 目录。
 
 ```js
 import { createClient } from './tabdo.js'; // 此文件须实际存在
 
-const tabdo = createClient({ url: config.apiUrl, key: config.apiKey });
+const tabdo = createClient({ url: config.url, key: config.key });
 const content = tabdo.table(config.contentTableId);
 const page = await content.list({ limit: 20 });
 // 下一页保留同样的过滤、排序条件，并带上 page.nextCursor。
@@ -31,11 +31,11 @@ const receipt = await tabdo.table(config.submissionsTableId).create({
 
 ```js
 async function request(query, variables, signal) {
-  const response = await fetch(new URL('/api/graphql', config.apiUrl), {
+  const response = await fetch(new URL('/api/graphql', config.url), {
     method: 'POST', credentials: 'omit', redirect: 'error', signal,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${config.key}`,
     },
     body: JSON.stringify({ query, variables }),
   });

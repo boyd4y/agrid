@@ -8,10 +8,11 @@ import type { FullTable } from "@/types/table";
  */
 export type PreviewSlotKind = "table" | "form" | "automations" | (string & {});
 
-export type PreviewTab = { kind: PreviewSlotKind; tableId: string; viewId?: string | null };
+export type PreviewTab = { kind: PreviewSlotKind; tableId?: string; siteId?: string; viewId?: string | null };
 
 export type PreviewSlotContext = {
   active?: boolean;
+  siteId?: string;
   tableId: string | null;
   /** Form view id when kind=form */
   viewId?: string | null;

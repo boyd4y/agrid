@@ -1,3 +1,5 @@
+import { html } from "@codemirror/lang-html";
+import { css } from "@codemirror/lang-css";
 import * as React from "react";
 import { Annotation, Compartment, EditorState, Transaction, type Extension } from "@codemirror/state";
 import { EditorView, drawSelection, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
@@ -12,7 +14,7 @@ import { yaml } from "@codemirror/lang-yaml";
 import { tags } from "@lezer/highlight";
 import { cn } from "@tabdo/ui/lib/utils";
 
-export type CodeEditorLanguage = "text" | "markdown" | "python" | "json" | "javascript" | "typescript" | "yaml";
+export type CodeEditorLanguage = "text" | "html" | "css" | "markdown" | "python" | "json" | "javascript" | "typescript" | "yaml";
 export interface CodeEditorProps {
   value: string;
   onChange?: (value: string) => void;
@@ -24,6 +26,8 @@ export interface CodeEditorProps {
 }
 function languageFor(filename = ""): CodeEditorLanguage {
   const extension = filename.toLowerCase().split(".").pop();
+  if (extension === "html" || extension === "htm" || extension === "svg") return "html";
+  if (extension === "css") return "css";
   if (extension === "md" || extension === "markdown") return "markdown";
   if (extension === "py") return "python";
   if (extension === "json") return "json";
@@ -34,6 +38,8 @@ function languageFor(filename = ""): CodeEditorLanguage {
 }
 function languageExtension(language: CodeEditorLanguage, filename?: string): Extension {
   switch (language) {
+    case "html": return html();
+    case "css": return css();
     case "markdown": return markdown();
     case "python": return python();
     case "json": return json();

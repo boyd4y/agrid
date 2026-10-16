@@ -218,6 +218,13 @@
       "when": 1792116000000,
       "tag": "0030_unified_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792146000000,
+      "tag": "0031_sites",
+      "breakpoints": false
     }
   ]
 }

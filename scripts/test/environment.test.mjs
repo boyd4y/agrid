@@ -35,7 +35,7 @@ test("no scoped file falls back to local services, never legacy .env", t => {
   assert.equal(new URL(env.DATABASE_URL).hostname, "127.0.0.1");
 });
 
-for (const key of ["DATABASE_URL", "DATABASE_URL_UNPOOLED", "REDIS_URL", "QUEUE_DATABASE_URL", "QUEUE_REDIS_URL", "APP_URL", "BETTER_AUTH_URL", "TABDO_API_TARGET", "TABDO_API_URL", "TABLE_API_URL"]) {
+for (const key of ["DATABASE_URL", "DATABASE_URL_UNPOOLED", "REDIS_URL", "QUEUE_DATABASE_URL", "QUEUE_REDIS_URL", "APP_URL", "BETTER_AUTH_URL", "SITE_PUBLIC_ORIGIN", "TABDO_API_TARGET", "TABDO_API_URL", "TABLE_API_URL"]) {
   test(`development rejects a remote ${key} from either file or shell without revealing credentials`, t => {
     const remote = key.includes("DATABASE") ? "postgresql://private:password@neon.example/prod" : "https://private:password@remote.example";
     const root = fixture(t, { ".env.development": `${key}=${remote}` });

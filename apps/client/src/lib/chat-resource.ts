@@ -21,6 +21,7 @@ export function chatResourceKey(opts: {
 }
 
 export function resourceKeyLabel(key: ChatResourceKey): string {
+  if (key.startsWith("site:")) return i18n.t("sites:title");
   if (key.startsWith("report:")) return i18n.t("chat:resource.report");
   if (key.startsWith("table:")) return i18n.t("chat:resource.table");
   if (key === "workspace") return i18n.t("chat:resource.workspace");

@@ -1,3 +1,4 @@
+import type { SiteCommands, SiteResults } from "./sites.js";
 import type { BatchAddColumnsInput, BatchUpdateColumnsInput, BatchDeleteColumnsInput, BatchColumnsResult, BatchDeleteColumnsResult } from "./batch-columns.js";
 import type { BatchRelationsInput, BatchRelationsResult } from "./batch-relations.js";
 import type { RelationCommands, RelationResults } from "./relations.js";
@@ -39,6 +40,7 @@ import type {
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
   "getWorkspace", "listMembers",
+  "listSites", "getSite", "saveSite", "restoreSiteRevision", "publishSite", "unpublishSite", "deleteSite",
   "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
   "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
   "listTables",
@@ -159,7 +161,7 @@ export type ReorderColumnsInput = {
   columnIds: string[];
 };
 
-export type CommandInputMap = RelationCommands & {
+export type CommandInputMap = SiteCommands & RelationCommands & {
   batchAddColumns: BatchAddColumnsInput;
   batchUpdateColumns: BatchUpdateColumnsInput;
   batchDeleteColumns: BatchDeleteColumnsInput;
@@ -208,7 +210,7 @@ export type CommandInputMap = RelationCommands & {
   setFormChrome: SetFormChromeInput;
 };
 
-export type CommandResultMap = RelationResults & {
+export type CommandResultMap = SiteResults & RelationResults & {
   batchAddColumns: BatchColumnsResult;
   batchUpdateColumns: BatchColumnsResult;
   batchDeleteColumns: BatchDeleteColumnsResult;

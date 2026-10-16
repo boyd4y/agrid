@@ -41,7 +41,7 @@ export function WorkspaceHomePage() {
   }, [t]);
 
   // One request per dataset, even when several open Tabs use it. Reads never notify writes.
-  const refreshSignature = JSON.stringify([...new Set(tabs.map((tab) => tab.tableId))].sort().map((id) => [id, getTableRefreshToken(id)]));
+  const refreshSignature = JSON.stringify([...new Set(tabs.flatMap(tab => tab.tableId ? [tab.tableId] : []))].sort().map((id) => [id, getTableRefreshToken(id)]));
   useEffect(() => {
     for (const [id] of JSON.parse(refreshSignature) as [string, number][]) void loadTable(id);
   }, [refreshSignature, loadTable]);
@@ -78,6 +78,7 @@ export function WorkspaceHomePage() {
 
   const handleOpenPreview = useCallback((payload: OpenPreviewPayload) => {
     const kind = payload.kind ?? activeKind ?? "table";
+    if (kind === "site" && payload.siteId) { openTab({ kind, siteId: payload.siteId }); setPreviewOpen(payload.open !== false); return; }
     const tableId = payload.tableId ?? tabs.find((tab) => tab.kind === kind)?.tableId;
     if (tableId) openTab({ kind, tableId, viewId: payload.viewId });
     setPreviewOpen(payload.open !== false);
@@ -91,10 +92,10 @@ export function WorkspaceHomePage() {
 
   const contexts: Record<string, PreviewSlotContext> = {};
   for (const tab of tabs) contexts[tab.kind] = {
-    active: tab.kind === activeKind && previewOpen, tableId: tab.tableId, viewId: tab.viewId, table: cache[tab.tableId] ?? null,
+    active: tab.kind === activeKind && previewOpen, siteId: tab.siteId, tableId: tab.tableId ?? null, viewId: tab.viewId, table: cache[tab.tableId ?? ""] ?? null,
     refreshToken: getTableRefreshToken(tab.tableId),
-    setTable: (table) => setCache((previous) => ({ ...previous, [tab.tableId]: table })),
-    loading: loading[tab.tableId] ?? !cache[tab.tableId], error: errors[tab.tableId] ?? null,
+    setTable: (table) => setCache((previous) => ({ ...previous, [tab.tableId ?? ""]: table })),
+    loading: loading[tab.tableId ?? ""] ?? !cache[tab.tableId ?? ""], error: errors[tab.tableId ?? ""] ?? null,
     onRefresh: () => notifyTableMutated(tab.tableId), tablesMeta: tables,
     onSelectTable: (id) => openTab({ kind: tab.kind, tableId: id }),
     onCreateTable: () => { void createTable(); },

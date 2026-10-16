@@ -1,3 +1,5 @@
+import { createSiteTools } from "./sites.js";
+import { getSite } from "../../sites/service.js";
 import type { CommandDependencies } from "../../dependencies.js";
 import type { Transaction } from "../../db/types.js";
 import { MEMBER_LIST_SCHEMA } from "@tabdo/shared";
@@ -48,6 +50,7 @@ export function createTableTools(
   };
   return {
     ...createReportTools(deps, organizationId, transaction),
+    ...createSiteTools(deps, organizationId, actorId, transaction),
     ...createBatchTools(deps, defaultTableId, organizationId, actorId, transaction),
     get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow(dependencies(), {...input,...org}, currentTransaction())}),
     query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords(dependencies(), {...input,...org}, currentTransaction())}),
@@ -385,13 +388,14 @@ export function createTableTools(
 
     open_preview: tool({
       description:
-        "切换右侧工作面板并展示内容。面板默认打开，可手动收起。kind=table|form|automations；form 时可传 viewId。",
+        "切换右侧工作面板并展示内容。面板默认打开，可手动收起。kind=table|form|automations|site；site传siteId，form 时可传 viewId。",
       inputSchema: zodSchema(
         z.object({
           kind: z
             .string()
             .optional()
-            .describe("工作面板种类：table、form 或 automations，默认 table"),
+            .describe("工作面板种类：table、form、automations或site，默认table"),
+          siteId: z.string().uuid().optional().describe("站点ID（kind=site时）"),
           tableId: z
             .string()
             .uuid()
@@ -408,7 +412,12 @@ export function createTableTools(
             .describe("true 打开（默认），false 关闭"),
         })
       ),
-      execute: async ({ kind, tableId, viewId, open }) => {
+      execute: async ({ kind, tableId, viewId, siteId, open }) => {
+        if (kind === "site") {
+          if (!siteId) throw new Error("请指定siteId");
+          await getSite(dependencies(), { siteId, organizationId }, currentTransaction());
+          return { ok: true, open: open !== false, kind: "site", siteId };
+        }
         let id = tableId || defaultTableId || null;
         if (open !== false && viewId) {
           const view = await cmds.getView(dependencies(), { viewId, ...org }, currentTransaction());

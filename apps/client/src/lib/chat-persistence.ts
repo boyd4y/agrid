@@ -4,8 +4,9 @@ import { createAssistantStream } from "assistant-stream";
 import i18n from "@/i18n";
 
 export type ChatPageContext = {
-  page: "ai" | "tables" | "table" | "automations" | "reports" | "skills" | "agents" | "members" | "settings" | "schedules";
+  page: "ai" | "tables" | "table" | "automations" | "reports" | "skills" | "agents" | "members" | "settings" | "schedules" | "sites";
   tableId: string | null;
+  siteId?: string | null;
   reportId?: string | null;
   scheduledTaskId?: string | null;
 };

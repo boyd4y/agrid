@@ -521,3 +521,5 @@ export const apiKeyTables = pgTable("api_key_tables", {
   canDelete: boolean("can_delete").notNull().default(false),
 }, t => [uniqueIndex("api_key_tables_key_table_idx").on(t.keyId, t.tableId), index("api_key_tables_table_idx").on(t.tableId),
   check("api_key_tables_capability", sql`${t.canRead} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canDelete}`)]);
+
+export { sites, siteRevisions, sitePreviews } from "./sites-schema.js";

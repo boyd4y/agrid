@@ -33,7 +33,7 @@ export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; mi
   `;
   if (!reports) missing.push("reports (run pnpm db:migrate — migration 0013)");
 
-  for (const name of ["automations", "automation_runs", "table_views", "agent_runtime_sessions", "agent_runs", "agent_executions", "agent_execution_chunks", "file_objects", "api_keys", "api_key_tables"]) {
+  for (const name of ["automations", "automation_runs", "table_views", "agent_runtime_sessions", "agent_runs", "agent_executions", "agent_execution_chunks", "file_objects", "api_keys", "api_key_tables", "sites", "site_revisions", "site_previews"]) {
     const [{ present }] = await client`SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS present`;
     if (!present) missing.push(`${name} (run pnpm db:migrate)`);
   }

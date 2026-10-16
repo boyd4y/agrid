@@ -7,6 +7,7 @@ const harnesses: HarnessId[] = ["pi", "codex", "claude"];
 // Definitions only: no runtime, credentials, or tool execution during catalog reads.
 const platformTools: ToolSet = createTableTools();
 function group(id: string) {
+  if (id.includes("site")) return "站点";
   if (id.includes("report")) return "报告";
   if (id.includes("automation")) return "自动化";
   if (id.includes("form")) return "表单";

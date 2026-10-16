@@ -193,3 +193,7 @@ REDIS_URL=redis://127.0.0.1:6381 QUEUE_PREFIX=agrid-queue-test-event-local \
 `test/routes/api-key-migration.test.ts` 在事务内独立 schema 验证 0030 保留旧 Key/hash 和操作范围，结束后回滚。`site-api.test.ts` 验证逐表 CRUD、REST/GraphQL/SDK 一致性、无读取权限的更新/删除、版本冲突、私有关联删除保护和权限变更即时生效。限流用例使用独立本地 Redis 的 6381/16381 端口。
 
 浏览器套件 `api-keys`、`site-api` 验证合并后的设置入口、逐表权限矩阵和真实跨域 HTML 读写；运行方式与上文浏览器回归相同。
+
+## 站点闭环
+
+`test/routes/sites.test.ts` 验证独立工作区、真实本地对象存储、不可变发布版本、预览代数、并发保存冲突、存储失败保留原发布、历史恢复、撤下和删除。`pnpm test:browser -- sites` 使用真实原生Pi与本机provider fixture，通过原生read读取生产Site Skill，再执行真实save_site/open_preview；在浏览器完成代码编辑、实时预览、草稿恢复、API Key绑定、保存发布、SDK模块加载、读取活动、实际报名写入、版本恢复和撤下删除，并验证不透明源隔离及桌面/深色/窄屏。该fixture验证协议与业务操作，不代表真实DeepSeek模型的场景质量。

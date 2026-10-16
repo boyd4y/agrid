@@ -1,3 +1,4 @@
+import { siteCapabilities } from "../sites/capabilities.js";
 import { createSystemServices } from "@tabdo/core/services";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -10,13 +11,14 @@ import type { CommandDependencies, RuntimeDependencies } from "../business/depen
 export function runtimeDependencies(): RuntimeDependencies {
   const { database, background } = requirePlatformResources();
   return { database: database.db, ...createSystemServices(),
+    afterCommit: (tx, key, effect) => database.afterCommit(tx, key, effect),
     ...(background ? { wakeAfterCommit: (tx, wakeup) => database.afterCommit(tx,
       `${wakeup.kind}:${"threadId" in wakeup ? wakeup.threadId : ""}`, () => background.notify(wakeup)) } satisfies Pick<RuntimeDependencies, "wakeAfterCommit"> : {}),
   };
 }
 
 export function commandDependencies(): CommandDependencies {
-  return { ...runtimeDependencies(), automationQueueName: queueName };
+  return { ...runtimeDependencies(), automationQueueName: queueName, sites: siteCapabilities() };
 }
 
 export function mapServiceError(error: unknown): never {

@@ -1,3 +1,5 @@
+import sitesZh from "./locales/zh-CN/sites.json";
+import sitesEn from "./locales/en/sites.json";
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
@@ -84,6 +86,7 @@ const initial = readStoredLocale();
 void i18n.use(initReactI18next).init({
   resources: {
     "zh-CN": {
+      sites: sitesZh,
       icons: iconsZh,
       common: commonZh,
       errors: errorsZh,
@@ -101,6 +104,7 @@ void i18n.use(initReactI18next).init({
       integrations: integrationsZh,
     },
     en: {
+      sites: sitesEn,
       icons: iconsEn,
       common: commonEn,
       errors: errorsEn,
@@ -121,7 +125,7 @@ void i18n.use(initReactI18next).init({
   lng: initial,
   fallbackLng: "zh-CN",
   defaultNS: "common",
-  ns: ["icons", "common", "errors", "app", "chat", "docs", "marketing", "auth", "table", "filters", "form", "automation", "reports", "agents", "integrations"],
+  ns: ["sites", "icons", "common", "errors", "app", "chat", "docs", "marketing", "auth", "table", "filters", "form", "automation", "reports", "agents", "integrations"],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

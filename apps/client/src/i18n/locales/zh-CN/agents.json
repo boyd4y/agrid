@@ -141,6 +141,10 @@
     "other": {
       "name": "其他能力",
       "description": "所选运行方式提供的其他工具。"
+    },
+    "sites": {
+      "name": "站点",
+      "description": "创建自定义页面，保存版本、预览和发布。"
     }
   },
   "partlyEnabled": "部分开启",

@@ -47,4 +47,8 @@ API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运�
 
 迁移 `0030_unified_api_keys` 合并既有 Key 并保留原凭证，迁移后在设置的「API Key」中为每张表格独立勾选 CRUD 操作；`/api/graphql` 和附件路由共用现有 API 服务，限流使用既有 Redis。`BETTER_AUTH_URL` 应为公开 HTTPS 域名，以便附件生成正确地址。SDK 随仓库构建，npm/CDN 发布是独立操作。接入方式见 [表格 API 与 SDK](api/site-api.md)。
 
+## HTML 站点
+
+迁移 `0031_sites` 增加站点、不可变版本和短期预览。前端入口为 `/app/sites`；公开内容通过 `/s/:id/` 访问，发布资产写入上述 S3 bucket。保存版本不会直接发布。预览和公开文档带浏览器隔离策略，不可读取后台身份或存储。无需额外的站点进程或容器；可选 `SITE_PUBLIC_ORIGIN` 应实际路由到同一 API 服务，未配置时沿用 `BETTER_AUTH_URL` 的源。操作与边界见 [Site 工作流](site-workflow.md)。
+
 参考：[Railway 配置](https://docs.railway.com/config-as-code)、[Dockerfile](https://docs.railway.com/builds/dockerfiles)、[官方 Harness 会话](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)。
