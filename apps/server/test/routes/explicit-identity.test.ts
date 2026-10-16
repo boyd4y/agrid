@@ -38,10 +38,12 @@ test("identity service uses explicit database/session ports without resource sco
     const [key] = await db.insert(userApiKeys).values({ userId: owner.id, organizationId: orgA, name: "Explicit fixture", keyHash: await hashApiKey(raw), prefix: raw.slice(0, 12) }).returning();
     const bearer = request(`Bearer ${raw}`, cookie);
     const readsBeforeKey = cookieReads;
+    const compatibilityHeader = request(undefined, cookie); compatibilityHeader.headers.set("X-Tabdo-Key", raw);
+    assert.equal(await resolveActor(compatibilityHeader, deps), null);
     const actor = await resolveActor(bearer, deps);
-    assert.equal(actor?.organizationId, orgA);assert.equal(actor?.memberId, ownerMembership);assert.equal(cookieReads, readsBeforeKey);
+    assert.equal(actor, null, "table credentials never become workspace identities");assert.equal(cookieReads, readsBeforeKey);
     await db.update(member).set({ role: "member" }).where(eq(member.id, ownerMembership));
-    assert.equal((await resolveActor(bearer, deps))?.role, "member");
+    assert.equal(await resolveActor(bearer, deps), null);
     await db.delete(member).where(eq(member.id, ownerMembership));
     assert.equal(await resolveActor(bearer, deps), null);
     await db.insert(member).values({ id: ownerMembership, userId: owner.id, organizationId: orgA, role: "owner" });

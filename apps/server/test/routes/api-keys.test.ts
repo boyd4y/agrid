@@ -13,9 +13,10 @@ const { tablesRoute } = await import("../../src/routes/tables.js");
 const { commandsRoute } = await import("../../src/routes/commands.js");
 const { membersRoute } = await import("../../src/routes/members.js");
 const { organization, member, session, user, tables, userApiKeys, agentProfile, rows, invitation, chatThreads, agentRuntimeSessions, agentRuns } = await import("../../src/db/schema.js");
-const app = new Hono().route("/api/user/api-keys", apiKeysRoute).route("/api/tables", tablesRoute).route("/api/commands", commandsRoute).route("/api/members", membersRoute);
+const { siteApiRoute } = await import("../../src/routes/site-api.js");
+const app = new Hono().route("/api", siteApiRoute).route("/api/user/api-keys", apiKeysRoute).route("/api/tables", tablesRoute).route("/api/commands", commandsRoute).route("/api/members", membersRoute);
 
-test("personal keys bind user + workspace, retain live permissions, and expose their secret only on creation", async () => {
+test("unified API keys enforce table CRUD while workspace administration stays session-only", async () => {
   const orgA = randomUUID(), orgB = randomUUID(), tableA = randomUUID(), tableB = randomUUID();
   const users: string[] = [];
   let ownerId = "", cookie = "", otherCookie = "";
@@ -31,7 +32,7 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
     const other = await signup(); otherCookie = other.cookie;
     await db.insert(organization).values([{ id: orgA, name: "Keys A", slug: orgA }, { id: orgB, name: "Keys B", slug: orgB }]);
     const ownerMembership = randomUUID();
-    await db.insert(member).values([{ id: ownerMembership, userId: ownerId, organizationId: orgA, role: "owner" }, { id: randomUUID(), userId: ownerId, organizationId: orgB, role: "member" }, { id: randomUUID(), userId: other.id, organizationId: orgA, role: "owner" }]);
+    await db.insert(member).values([{ id: ownerMembership, userId: ownerId, organizationId: orgA, role: "owner" }, { id: randomUUID(), userId: ownerId, organizationId: orgB, role: "member" }, { id: randomUUID(), userId: other.id, organizationId: orgA, role: "member" }]);
     await db.update(session).set({ activeOrganizationId: orgA }).where(eq(session.userId, ownerId));
     await db.update(session).set({ activeOrganizationId: orgA }).where(eq(session.userId, other.id));
     await db.insert(tables).values([{ id: tableA, organizationId: orgA, name: "A" }, { id: tableB, organizationId: orgB, name: "B" }]);
@@ -39,7 +40,7 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
     assert.equal((await request("/user/api-keys", undefined, { name: " " })).status, 400);
     assert.equal((await request("/user/api-keys", undefined, { name: "bad", scope: "admin" })).status, 400);
     assert.equal((await app.request("http://localhost:3001/api/user/api-keys", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: "{" })).status, 400);
-    const createdResponse = await request("/user/api-keys", undefined, { name: " Local script " });
+    const createdResponse = await request("/user/api-keys", undefined, { name: " Local script ", permissions: [{ tableId: tableA, canRead: true, canCreate: true, canUpdate: true, canDelete: true }] });
     assert.equal(createdResponse.status, 201); assert.equal(createdResponse.headers.get("cache-control"), "private, no-store");
     const created = await createdResponse.json(); const raw = created.secret as string;
     assert.match(raw, /^tab_[A-Za-z0-9_-]{43}$/); assert.equal(created.key.name, "Local script");
@@ -49,17 +50,18 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
     assert.equal(JSON.stringify(stored).includes(raw), false);
     const listed = await (await request("/user/api-keys")).json();
     assert.equal(listed.keys.length, 1); assert.equal(JSON.stringify(listed).includes(raw), false); assert.equal("keyHash" in listed.keys[0], false);
-    assert.equal((await (await request("/user/api-keys", { Cookie: otherCookie })).json()).keys.length, 0);
-    assert.equal((await request(`/user/api-keys/${created.key.id}`, { Cookie: otherCookie }, undefined, "DELETE")).status, 404);
+    assert.equal((await request("/user/api-keys", { Cookie: otherCookie })).status, 403);
+    assert.equal((await request(`/user/api-keys/${created.key.id}`, { Cookie: otherCookie }, undefined, "DELETE")).status, 403);
     assert.deepEqual((await (await request("/tables", bearer)).json()).map((table: { id: string }) => table.id), [tableA]);
     assert.equal((await request(`/tables/${tableB}`, bearer)).status, 404);
-    const write = await request("/commands", bearer, { command: "addRow", input: { tableId: tableA, organizationId: orgB, cells: {} } });
-    assert.equal(write.status, 200); assert.equal((await write.json()).actor.userId, ownerId);
-    assert.equal((await request("/commands", bearer, { command: "addRow", input: { tableId: tableB, cells: {} } })).status, 400);
+    const write = await request("/commands", bearer, { command: "addRow", input: { tableId: tableA, cells: {} } });
+    assert.equal(write.status, 200); assert((await write.json()).result.id);
+    assert.equal((await request("/commands", bearer, { command: "addRow", input: { tableId: tableB, cells: {} } })).status, 404);
     assert.equal((await db.select().from(rows).where(eq(rows.tableId, tableB))).length, 0);
     const recipient = await signup();
     const sessionCount = (await db.select().from(session).where(eq(session.userId, ownerId))).length;
-    const invitedResponse = await request("/members/invite", bearer, { email: recipient.email, role: "member" });
+    assert.equal((await request("/members/invite", bearer, { email: recipient.email, role: "member" })).status, 401);
+    const invitedResponse = await request("/members/invite", { Cookie: cookie }, { email: recipient.email, role: "member" });
     assert.equal(invitedResponse.status, 200, await invitedResponse.clone().text());
     assert.equal(invitedResponse.headers.get("set-cookie"), null);
     const invited = (await invitedResponse.json()).invitation;
@@ -72,16 +74,16 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
     const directAuthResponse = await auth.handler(new Request("http://localhost:3001/api/auth/organization/invite-member", { method: "POST", headers: { ...bearer, Origin: "http://localhost:5173", "Content-Type": "application/json" }, body: JSON.stringify({ email: `not-invited-${randomUUID()}@local.test`, role: "member", organizationId: orgA }) }));
     assert.equal(directAuthResponse.status, 401, "the invitation bridge is not an auth HTTP credential or a leaked global context");
     await db.update(session).set({ activeOrganizationId: orgB }).where(eq(session.userId, ownerId));
-    assert.equal((await (await request("/user/api-keys")).json()).keys.length, 0);
-    assert.equal((await request(`/user/api-keys/${created.key.id}`, undefined, undefined, "DELETE")).status, 404);
+    assert.equal((await request("/user/api-keys")).status, 403);
+    assert.equal((await request(`/user/api-keys/${created.key.id}`, undefined, undefined, "DELETE")).status, 403);
     assert.deepEqual((await (await request("/tables", { ...bearer, Cookie: cookie, "X-Tabdo-Organization-Id": orgB })).json()).map((table: { id: string }) => table.id), [tableA]);
     await db.update(member).set({ role: "member" }).where(eq(member.id, ownerMembership));
-    assert.equal((await (await request("/members", bearer)).json()).actor.role, "member");
-    assert.equal((await request("/members/agents", bearer, { name: "Not allowed" })).status, 403);
-    assert.equal((await request("/members/invite", bearer, { email: `denied-${randomUUID()}@local.test`, role: "member" })).status, 403);
-    assert.equal((await request("/user/api-keys", bearer, { name: "Member's own key" })).status, 201, "members can manage their own credentials");
+    assert.equal((await request("/members", bearer)).status, 401);
+    assert.equal((await request("/members/agents", bearer, { name: "Not allowed" })).status, 401);
+    assert.equal((await request("/members/invite", bearer, { email: `denied-${randomUUID()}@local.test`, role: "member" })).status, 401);
+    assert.equal((await request("/user/api-keys", { Cookie: cookie }, { name: "Member's own key" })).status, 403, "members cannot change workspace key grants");
     await db.delete(member).where(eq(member.id, ownerMembership));
-    assert.equal((await request("/tables", bearer)).status, 401);
+    assert.equal((await request("/tables", bearer)).status, 200, "workspace capabilities do not impersonate their creator");
     await db.insert(member).values({ id: ownerMembership, userId: ownerId, organizationId: orgA, role: "owner" });
     await db.update(session).set({ activeOrganizationId: orgA }).where(eq(session.userId, ownerId));
     assert.equal((await request("/tables", bearer)).status, 200);
@@ -126,6 +128,7 @@ test("personal keys bind user + workspace, retain live permissions, and expose t
   } finally {
     await db.delete(organization).where(eq(organization.id, orgA)); await db.delete(organization).where(eq(organization.id, orgB));
     for (const id of users) await db.delete(user).where(eq(user.id, id));
+    await (await import("../../src/site-api/rate-limit.js")).closeSiteRateLimiter();
     await client.end();
   }
 });

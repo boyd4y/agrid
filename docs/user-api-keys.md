@@ -1,28 +1,26 @@
-# 个人 API Key
+# API Key
 
-在「设置 → API Key」创建当前工作区的个人 API Key。任何现有 human 成员都能管理自己的 Key；列表与删除只能操作自己的当前工作区 Key。创建后立即复制：完整密钥仅在创建响应与当前对话框中出现，关闭后无法回读。列表只保留名称、前缀和创建时间，删除后整条记录移除。
+统一入口为「设置 → API Key」。工作区所有者或管理员可以创建、编辑和删除 Key；每张表格一行，分别勾选**读取、新增、更新、删除**。未勾选的操作一律拒绝，新增表格不会自动加入。权限覆盖表内全部记录，不再区分“个人 Key”和“站点 Key”。
 
-Key 使用 `tab_` 前缀和32字节随机值。数据库 `user_api_keys`（迁移0022）只保存 SHA-256 摘要与归属，不保存明文或可解密的副本。创建、列表和删除响应使用 `Cache-Control: private, no-store`。服务端日志不输出 Key，客户端不写入 localStorage。
+Key 可用于 GraphQL、表格 REST 接口和 `@tabdo/sdk`，统一使用 `Authorization: Bearer KEY`。例如，同一 Key 可以读取商品表、仅向线索表新增记录，同时禁止修改或删除商品。写权限不自动包含读权限。Key 用于外部网站时，访问者可以看到它，因此只授予网站需要的权限。
 
-```sh
-curl "$TABDO_URL/api/tables" \
-  -H "Authorization: Bearer $TABDO_API_KEY"
-```
+Key 属于当前工作区，不冒充创建用户；修改权限或删除后，下一次请求立即生效。管理集成、邀请成员、运行智能体、修改表结构和管理其他 Key 仍需要登录会话。原生 `agt_` 智能体身份不受影响。
 
-每个 Key 固定绑定创建用户和创建时所选工作区，无需额外工作区请求头。切换网页工作区不会改变已有 Key 的归属。请求中的 organizationId 不能覆盖绑定关系。所有平台 API 继续走同一 Actor/租户与业务权限检查，Key 没有独立 scopes 或缓存角色；角色改变立即影响后续请求，成员移除、用户删除或删除 Key 后即无法继续使用。其他工作区需要分别创建 Key。
+创建后仅显示一次完整 Key，关闭后无法回读。数据库只保存 SHA-256 摘要、名称、前缀和创建信息。列表与管理响应禁止缓存，客户端不写入 localStorage；删除直接移除记录。
 
-接口：
+## 管理接口
 
-| 方法与路径 | 请求 | 响应 |
-| --- | --- | --- |
-| `GET /api/user/api-keys` | 当前登录/Key 身份 | `{keys:[{id,name,prefix,createdAt}]}` |
-| `POST /api/user/api-keys` | `{name}`，去首尾空格后1–100字符 | `201 {key:{…metadata},secret}`，完整密钥仅此一次 |
-| `DELETE /api/user/api-keys/:id` | 自己在当前工作区的 Key ID | `{id}`；记录从数据库删除 |
+管理接口使用登录会话，路径保持兼容：
 
-删除不保留摘要记录或列表项，密钥立即失效；重复删除返回404。旧版本已有撤销记录不作为有效Key列出或恢复。格式非法的 `tab_`、已删除或不再有成员身份的 Key 会被拒绝，即使请求同时带有效登录 cookie，也不会回退使用 cookie。现有 `agt_` 智能体凭证保持兼容。
+| 方法 | 路径 | 参数 |
+|---|---|---|
+| GET | `/api/user/api-keys` | 当前工作区 |
+| POST | `/api/user/api-keys` | `{ name, permissions }` |
+| PATCH | `/api/user/api-keys/:id` | `{ name, permissions }` |
+| DELETE | `/api/user/api-keys/:id` | Key ID |
 
-`/api/auth/*` 是登录、会话、密码及组织认证控制面，仍使用 Better Auth 的正常认证。平台 `/api/members/invite` 支持个人 Key：`auth/key-invitation-context.ts` 用仅服务端 AsyncLocalStorage 的调用上下文，通过 Better Auth 官方 before hook 提供临时邀请上下文。只有已验证 human `tab_` 发起的该平台调用、且精确路径为 `/organization/invite-member` 时生效；没有创建数据库 session、前端 cookie 或可通过 header/body 注入的全局身份。原 organization plugin 仍执行实时成员与角色检查、邀请限制、发送钩子和正常接受流程。升级 Better Auth 时应保持对应回归测试。
+每条 `permissions` 包含 `tableId` 和独立的 `canRead`、`canCreate`、`canUpdate`、`canDelete` 布尔值。不允许跨工作区授权；每张已选表格至少有一项权限。
 
-该桥使用 [Better Auth 官方 hooks/context 扩展](https://better-auth.com/docs/concepts/plugins)；已核对安装版本1.7.7的 `api/to-auth-endpoints.mjs`、`api/dispatch.mjs`、`api/routes/session.mjs` 和 `plugins/organization/routes/crud-invites.mjs`，没有绕过插件直接插入邀请记录。
+迁移 `0030_unified_api_keys` 保留已有 Key 值及 ID：原个人 Key 获得工作区当前各表的 CRUD 权限，原站点 Key 只保留原有表格的读取/新增权限。旧前缀、附件链接和接入请求头继续兼容。完整用法见 [表格 API 与 SDK](api/site-api.md)。
 
-验证仅使用 `*_agent_test` 数据库和新建的测试工作区：`apps/server/test/routes/api-keys.test.ts` 覆盖租户归属、body覆盖拒绝、密钥不回读、实时角色/成员变化、真实物理删除与cookie回退保护、Bearer邀请和原接受链、临时上下文不产生持久session、legacy agent兼容；`apps/client/test/browser/api-keys.mjs` 覆盖创建防重复、失败重试、一次性显示、复制调用、取消/删除重试及紧凑中英文主题交互。没有修改用户数据库。
+回归覆盖真实登录、权限独立性、跨组织拒绝、Key 不回读、即时编辑/删除、关联记录删除保护、SDK CRUD、REST/命令一致性和旧 Key 迁移。浏览器验证统一 Tab、逐表勾选、编辑持久化、窄屏/明暗主题以及 HTML 接入。

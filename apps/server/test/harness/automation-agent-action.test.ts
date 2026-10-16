@@ -12,7 +12,7 @@ import { requirePlatformResources, withPlatformResources } from "../../src/resou
 if (!process.env.DATABASE_URL || !new URL(process.env.DATABASE_URL).pathname.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
 for (const key of ["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[key] = "";
 const { db, client } = await import("../../src/db/index.js");
-const { user, member, organization, userApiKeys, agentProfile, chatThreads, chatMessages, agentRuns, agentRuntimeSessions,
+const { user, member, organization, account, agentProfile, chatThreads, chatMessages, agentRuns, agentRuntimeSessions,
   automationRuns, automationEvents, automationOutbox, automationAgentActions, automationStepReceipts, automations, tables, rows } = await import("../../src/db/schema.js");
 const { createTable, getTable, getRow, addRow } = await import("../../src/commands/index.js");
 const { createAutomation } = await import("../../src/automation/crud.js");
@@ -29,7 +29,7 @@ const app = new Hono().route("/api/chat", chatRoute).route("/api/threads", threa
 app.onError((error, c) => "getResponse" in error && typeof error.getResponse === "function" ? error.getResponse() : c.json({ error: error.message }, 500));
 const org = randomUUID(), owner = randomUUID(), ownerMember = randomUUID(), agentUser = randomUUID(), agentMember = randomUUID(), profileId = randomUUID();
 const actor: Actor = { kind: "human", userId: owner, memberId: ownerMember, organizationId: org, role: "owner", name: "Automation owner", email: `${owner}@local.test` };
-const apiKey = `tab_${randomBytes(32).toString("base64url")}`;
+let cookie = "";
 const runIds: string[] = [];
 let sourceId: string, anchorId: string, ruleId: string, mutationName = "", blockFirst: (() => Promise<void>) | undefined;
 let mutationInput: { rowId: string; columnId: string; value: string } | undefined;
@@ -62,7 +62,13 @@ before(async () => {
   await db.insert(user).values([{ id: owner, name: actor.name, email: actor.email }, { id: agentUser, name: "Native automation agent", email: `${agentUser}@local.test`, kind: "agent" }]);
   await db.insert(organization).values({ id: org, name: "Native automation actions", slug: org });
   await db.insert(member).values([{ id: ownerMember, userId: owner, organizationId: org, role: "owner" }, { id: agentMember, userId: agentUser, organizationId: org }]);
-  await db.insert(userApiKeys).values({ userId: owner, organizationId: org, name: "Fixture", keyHash: createHash("sha256").update(apiKey).digest("hex"), prefix: "fixture" });
+  const { hashPassword } = await import("better-auth/crypto");
+  const { auth } = await import("../../src/auth/index.js");
+  const password = "Native-session-fixture-123!";
+  await db.insert(account).values({ id: randomUUID(), userId: owner, accountId: owner, providerId: "credential", password: await hashPassword(password) });
+  const signed = await auth.handler(new Request("http://localhost:3001/api/auth/sign-in/email", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ email: actor.email, password }) }));
+  assert.equal(signed.status, 200);
+  cookie = signed.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
   await db.insert(agentProfile).values({ id: profileId, userId: agentUser, organizationId: org, memberId: agentMember, displayName: "Native automation agent", persona: { defaultHarness: "pi", defaultModel: "local-test", runtime: "local", skillNames: [] } });
   sourceId = (await createTable({ organizationId: org, name: "Event source" })).id;
   anchorId = (await addRow({ organizationId: org, tableId: sourceId, skipAutomation: true })).id;
@@ -131,7 +137,7 @@ test("native questions remain in the associated private chat and resume through 
   assert.deepEqual(await runAutomationAgentAction(task), waiting);assert.equal(requests.length, initialCalls + 1);
   const [run] = await db.select().from(agentRuns).where(eq(agentRuns.id, waiting.agentRunId));
   const answer = { action: "answered", answers: { direction: { optionIds: ["approve"] } } };
-  const response = await app.request("http://localhost:3001/api/chat", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ intent: "tool-result", id: waiting.threadId, agentId: agentMember,
+  const response = await app.request("http://localhost:3001/api/chat", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ intent: "tool-result", id: waiting.threadId, agentId: agentMember,
     context: { page: "ai" }, assistantMessageId: run.assistantMessageId, toolResults: [{ toolCallId: "native-question", output: answer }] }) });
   assert.equal(response.status, 200, await response.clone().text());assert.match(await response.text(), /Native answer received/);
   assert(wakeups.some(wakeup => wakeup.kind === "native-actions" && wakeup.threadId === waiting.threadId), "HTTP continuation wakes reconciliation after the canonical result commits");
@@ -202,7 +208,7 @@ test("native automation mutates its trigger row, parks a real question, then rec
   assert.equal((await db.select().from(automationOutbox).where(eq(automationOutbox.eventId, event.id)))[0].status, "done");
   const [mapping] = await mappings(automationRun.id);assert(mapping.agentRunId);
   const [nativeRun] = await db.select().from(agentRuns).where(eq(agentRuns.id, mapping.agentRunId));
-  const response = await app.request("http://localhost:3001/api/chat", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ intent: "tool-result", id: mapping.threadId, agentId: agentMember,
+  const response = await app.request("http://localhost:3001/api/chat", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ intent: "tool-result", id: mapping.threadId, agentId: agentMember,
     context: { page: "ai" }, assistantMessageId: nativeRun.assistantMessageId, toolResults: [{ toolCallId: "native-question", output: { action: "answered", answers: { direction: { optionIds: ["approve"] } } } }] }) });
   assert.equal(response.status, 200, await response.clone().text());assert.match(await response.text(), /Native answer received/);
   assert.equal(requests.length, initialCalls + 3);
@@ -238,7 +244,7 @@ test("scheduled occurrences are separate session types, private and continuable 
   assert.equal(result.status, "completed", result.error); assert(result.threadId);
   const [thread] = await db.select().from(chatThreads).where(eq(chatThreads.id, result.threadId));
   assert.equal(thread.kind, "scheduled_task"); assert.equal(thread.scheduledTaskId, rule.id); assert.equal(thread.custom.resourceKey, `schedule:${rule.id}`);
-  const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+  const headers = { Cookie: cookie, "Content-Type": "application/json" };
   const ordinary = await (await app.request("http://localhost/api/threads", { headers })).json();
   assert(!ordinary.threads.some((item: { id: string }) => item.id === thread.id));
   assert.equal((await app.request(`http://localhost/api/threads?after=${thread.id}`, { headers })).status, 400);

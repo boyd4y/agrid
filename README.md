@@ -210,4 +210,4 @@ Workspace 包统一为 `@tabdo/client`、`@tabdo/server`、`@tabdo/shared`、`@t
 
 ### 轻站点接入
 
-设置中的「站点 API」可集中授权表格的读取和新增能力。使用 `@tabdo/sdk` 或标准 GraphQL 接入；`pnpm dev:sites` 启动独立 HTML 示例。完整说明见 [站点数据 API 与 SDK](docs/api/site-api.md)。
+设置中的「API Key」可为每张表格独立授权读取、新增、更新和删除。使用 `@tabdo/sdk` 或标准 GraphQL 接入；`pnpm dev:sites` 启动独立 HTML 示例。完整说明见 [站点数据 API 与 SDK](docs/api/site-api.md)。

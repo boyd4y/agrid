@@ -4,10 +4,10 @@ import { FILTER_OPS, decodeCursor, opsForType, isFilterConditionComplete, valida
 import { columns, fileObjects, rows, tables } from "../db/schema.js";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Database } from "../db/types.js";
-import { addRow, queryRows } from "../commands/rows.js";
+import { addRow, queryRows, updateCells, deleteRow } from "../commands/rows.js";
 import { readRow } from "../commands/relation-reads.js";
 import { ServiceError } from "../errors.js";
-import { requireSiteTable, resolveSiteKey, type SitePrincipal } from "./keys.js";
+import { requireSiteTable, resolveSiteKey, canAccess, type Operation, type SitePrincipal } from "./keys.js";
 
 export type SiteContext = { principal: SitePrincipal; secret: string; baseUrl: string };
 export const cellSchema = z.union([z.string().max(64000), z.number().finite(), z.boolean(), z.array(z.string().max(64000)).max(100), z.null()]);
@@ -17,7 +17,7 @@ export const rowsOptions = z.object({ cursor: z.string().max(4000).nullable().op
 });
 const writable = new Set(["text", "number", "date", "checkbox", "select", "multi_select"]);
 export function readableColumn(col: ColumnDef, cols: ColumnDef[], principal: SitePrincipal): boolean {
-  if (col.type === "relation") return !!col.config.relation && principal.tableIds.has(col.config.relation.targetTableId);
+  if (col.type === "relation") return !!col.config.relation && canAccess(principal, col.config.relation.targetTableId, "read");
   if (col.type === "rollup") {
     const relation = cols.find(candidate => candidate.id === col.config.rollup?.relationColumnId);
     return !!relation && relation.type === "relation" && readableColumn(relation, cols, principal);
@@ -27,7 +27,7 @@ export function readableColumn(col: ColumnDef, cols: ColumnDef[], principal: Sit
   if (col.type === "formula") return !cols.some(candidate => ["relation", "rollup"].includes(candidate.type) && !readableColumn(candidate, cols, principal));
   return true;
 }
-export async function tableColumns(database: Database, principal: SitePrincipal, tableId: string, operation?: "read" | "create") {
+export async function tableColumns(database: Database, principal: SitePrincipal, tableId: string, operation?: Operation) {
   requireSiteTable(principal, tableId, operation);
   const [table] = await database.select().from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId)));
   if (!table) throw new ServiceError(404, { message: "Table not found" });
@@ -38,7 +38,7 @@ export async function siteTable(deps: CommandDependencies, context: SiteContext,
   const { table, cols } = await tableColumns(deps.database, context.principal, tableId);
   return { id: table.id, name: table.name, description: table.description,
     columns: cols.map(col => ({ id: col.id, name: col.name, type: col.type as ColumnType, options: col.config.options ?? [],
-      readable: context.principal.canRead && readableColumn(col, cols, context.principal), writable: context.principal.canCreate && writable.has(col.type) })) };
+      readable: canAccess(context.principal, tableId, "read") && readableColumn(col, cols, context.principal), writable: (canAccess(context.principal, tableId, "create") || canAccess(context.principal, tableId, "update")) && writable.has(col.type) })) };
 }
 export async function siteTables(deps: CommandDependencies, context: SiteContext) {
   const ids = [...context.principal.tableIds]; if (!ids.length) return [];
@@ -51,16 +51,16 @@ export async function siteTables(deps: CommandDependencies, context: SiteContext
   return found.map(table => {
     const cols = allCols.filter(col => col.tableId === table.id) as ColumnDef[];
     return { ...table, columns: cols.map(col => ({ id: col.id, name: col.name, type: col.type, options: col.config.options ?? [],
-      readable: context.principal.canRead && readableColumn(col, cols, context.principal), writable: context.principal.canCreate && writable.has(col.type) })) };
+      readable: canAccess(context.principal, table.id, "read") && readableColumn(col, cols, context.principal), writable: (canAccess(context.principal, table.id, "create") || canAccess(context.principal, table.id, "update")) && writable.has(col.type) })) };
   });
 }
-async function serializeRows(deps: CommandDependencies, context: SiteContext, tableId: string, cols: ColumnDef[], records: { id: string; cells: Record<string, CellValue>; createdAt: string | Date; updatedAt: string | Date }[]): Promise<SiteRow[]> {
+async function serializeRows(deps: CommandDependencies, context: SiteContext, tableId: string, cols: ColumnDef[], records: { id: string; version?: number; cells: Record<string, CellValue>; createdAt: string | Date; updatedAt: string | Date }[]): Promise<SiteRow[]> {
   const visible = cols.filter(col => readableColumn(col, cols, context.principal));
   const fileCols = visible.filter(col => col.type === "file");
   const ids = [...new Set(records.flatMap(row => fileCols.flatMap(col => Array.isArray(row.cells[col.id]) ? row.cells[col.id] as string[] : [])))].filter(value => z.uuid().safeParse(value).success);
   const files = ids.length ? await deps.database.select().from(fileObjects).where(and(eq(fileObjects.organizationId, context.principal.organizationId), eq(fileObjects.tableId, tableId), inArray(fileObjects.id, ids))) : [];
   const byId = new Map(files.map(file => [file.id, file]));
-  return records.map(row => ({ id: row.id, tableId,
+  return records.map(row => ({ id: row.id, tableId, version: row.version ?? 1,
     cells: Object.fromEntries(cols.map(col => [col.id, visible.includes(col) ? row.cells[col.id] ?? null : null])),
     files: fileCols.flatMap(col => (Array.isArray(row.cells[col.id]) ? row.cells[col.id] as string[] : []).flatMap(id => {
       const file = byId.get(id); if (!file || file.columnId !== col.id) return [];
@@ -126,4 +126,47 @@ export async function siteFileReference(deps: CommandDependencies, context: Site
   const [file] = await deps.database.select().from(fileObjects).where(and(eq(fileObjects.id, fileId), eq(fileObjects.organizationId, context.principal.organizationId), eq(fileObjects.tableId, tableId), eq(fileObjects.columnId, columnId)));
   if (!file) throw new ServiceError(404, { message: "File not found" });
   return file;
+}
+
+/** Writes revalidate live grants and keep schema/record validation inside the transaction. */
+export async function siteUpdateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, rawCells: unknown, expectedVersion?: number) {
+  const cells = z.record(z.uuid(), cellSchema).parse(rawCells);
+  if (expectedVersion !== undefined) z.number().int().min(1).parse(expectedVersion);
+  return deps.database.transaction(async tx => {
+    const principal = await resolveSiteKey(tx, context.secret, true);
+    requireSiteTable(principal, tableId, "update");
+    await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
+    const { cols } = await tableColumns(tx, principal, tableId, "update");
+    const [row] = await tx.select({ id: rows.id }).from(rows).where(and(eq(rows.id, z.uuid().parse(rowId)), eq(rows.tableId, tableId)));
+    if (!row) throw new ServiceError(404, { message: "Record not found" });
+    for (const [columnId, value] of Object.entries(cells)) {
+      const col = cols.find(c => c.id === columnId);
+      if (!col || !writable.has(col.type)) throw new ServiceError(400, { message: "This column cannot be written through the API" });
+      if (validateCell(col.type, value, col.config.options)) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
+    }
+    try {
+      const saved = await updateCells(deps, { rowId, cells, expectedVersion, organizationId: principal.organizationId }, tx);
+      return { id: saved.id, updatedAt: new Date(saved.updatedAt).toISOString(), version: saved.version ?? 1 };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("版本冲突")) throw new ServiceError(409, { message: "Record changed; reload before updating" });
+      throw error;
+    }
+  });
+}
+export async function siteDeleteRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string) {
+  return deps.database.transaction(async tx => {
+    const principal = await resolveSiteKey(tx, context.secret, true);
+    requireSiteTable(principal, tableId, "delete");
+    await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
+    const { cols } = await tableColumns(tx, principal, tableId, "delete");
+    const [row] = await tx.select().from(rows).where(and(eq(rows.id, z.uuid().parse(rowId)), eq(rows.tableId, tableId)));
+    if (!row) throw new ServiceError(404, { message: "Record not found" });
+    // Relation IDs live in the link table, not the stored cells JSON.
+    const resolved = await readRow(deps, row.id, cols, tx, true);
+    // Deleting a linked record also removes inverse links in another table.
+    for (const col of cols) if (col.type === "relation" && Array.isArray(resolved.cells[col.id]) && (resolved.cells[col.id] as string[]).length && col.config.relation)
+      requireSiteTable(principal, col.config.relation.targetTableId, "update");
+    await deleteRow(deps, { rowId, organizationId: principal.organizationId }, tx);
+    return { id: rowId };
+  });
 }

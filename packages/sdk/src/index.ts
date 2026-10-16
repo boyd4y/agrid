@@ -9,20 +9,20 @@ export class TabdoApiError extends Error {
 export type RequestOptions = { signal?: AbortSignal };
 export type ClientOptions = { url: string; key: string; fetch?: typeof globalThis.fetch };
 const columnFields = "id name type options { id label color } readable writable";
-const rowFields = "id tableId cells files { id columnId name mimeType size url } createdAt updatedAt";
+const rowFields = "id tableId version cells files { id columnId name mimeType size url } createdAt updatedAt";
 
 /** A dependency-free runtime: shared imports are types and disappear from JS. */
 export function createClient(options: ClientOptions) {
   const base = new URL(options.url);
   if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) throw new TypeError("Use an HTTP(S) Tabdo API URL without credentials");
-  if (!/^tab_pub_[A-Za-z0-9_-]{43}$/.test(options.key)) throw new TypeError("Use a publishable site API key, not a personal API key");
+  if (!/^tab_(?:pub_)?[A-Za-z0-9_-]{43}$/.test(options.key)) throw new TypeError("Use a valid API key");
   const endpoint = new URL("/api/graphql", base);
   const transport = options.fetch ?? globalThis.fetch;
   async function graphql<T>(query: string, variables: Record<string, unknown> = {}, request: RequestOptions & { operationName?: string } = {}): Promise<T> {
     let response: Response;
     try {
       response = await transport(endpoint.href, { method: "POST", credentials: "omit", redirect: "error",
-        headers: { "Content-Type": "application/json", "X-Tabdo-Key": options.key },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${options.key}` },
         body: JSON.stringify({ query, variables, ...(request.operationName ? { operationName: request.operationName } : {}) }), signal: request.signal });
     } catch (error) {
       if (request.signal?.aborted || error instanceof Error && error.name === "AbortError") throw error;
@@ -56,6 +56,13 @@ export function createClient(options: ClientOptions) {
       async get(rowId: string, request?: RequestOptions): Promise<SiteRow | null> {
         const result = await graphql<{ table: { row: SiteRow | null } }>(`query TableRow($id: ID!, $rowId: ID!) { table(id: $id) { row(id: $rowId) { ${rowFields} } } }`, { id: tableId, rowId }, request);
         return result.table.row;
+      },
+      async update(rowId: string, cells: Record<string, CellValue>, request?: RequestOptions & { expectedVersion?: number }): Promise<{ id: string; updatedAt: string; version: number }> {
+        const result = await graphql<{ updateRow: { id: string; updatedAt: string; version: number } }>("mutation UpdateRow($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int) { updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version) { id updatedAt version } }", { tableId, rowId, cells, version: request?.expectedVersion }, request);
+        return result.updateRow;
+      },
+      async delete(rowId: string, request?: RequestOptions): Promise<{ id: string }> {
+        return (await graphql<{ deleteRow: { id: string } }>("mutation DeleteRow($tableId: ID!, $rowId: ID!) { deleteRow(tableId: $tableId, rowId: $rowId) { id } }", { tableId, rowId }, request)).deleteRow;
       },
       async create(cells: Record<string, CellValue>, request?: RequestOptions): Promise<SiteCreateReceipt> {
         const result = await graphql<{ createRow: SiteCreateReceipt }>("mutation CreateRow($tableId: ID!, $cells: JSON!) { createRow(tableId: $tableId, cells: $cells) { id createdAt } }", { tableId, cells }, request);

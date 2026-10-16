@@ -511,21 +511,13 @@ export { agentExecutions, agentExecutionChunks } from "./execution-schema.js";
 // Retired gateway tables are retained for migration compatibility; no runtime uses them.
 export { agentExecutionGateways, agentExecutionToolCalls } from "./gateway-schema.js";
 
-/** Publishable credentials authorize only the data API, never workspace identity. */
-export const siteApiKeys = pgTable("site_api_keys", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
-  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
-  name: text("name").notNull(),
-  keyHash: text("key_hash").notNull(),
-  prefix: text("prefix").notNull(),
+/** Table CRUD capabilities belong to the application, credentials to auth. */
+export const apiKeyTables = pgTable("api_key_tables", {
+  keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").notNull().references(() => tables.id, { onDelete: "cascade" }),
   canRead: boolean("can_read").notNull().default(false),
   canCreate: boolean("can_create").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, t => [uniqueIndex("site_api_keys_hash_idx").on(t.keyHash),
-  index("site_api_keys_org_idx").on(t.organizationId), check("site_api_keys_capability", sql`${t.canRead} OR ${t.canCreate}`)]);
-
-export const siteApiKeyTables = pgTable("site_api_key_tables", {
-  keyId: uuid("key_id").notNull().references(() => siteApiKeys.id, { onDelete: "cascade" }),
-  tableId: uuid("table_id").notNull().references(() => tables.id, { onDelete: "cascade" }),
-}, t => [uniqueIndex("site_api_key_tables_key_table_idx").on(t.keyId, t.tableId), index("site_api_key_tables_table_idx").on(t.tableId)]);
+  canUpdate: boolean("can_update").notNull().default(false),
+  canDelete: boolean("can_delete").notNull().default(false),
+}, t => [uniqueIndex("api_key_tables_key_table_idx").on(t.keyId, t.tableId), index("api_key_tables_table_idx").on(t.tableId),
+  check("api_key_tables_capability", sql`${t.canRead} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canDelete}`)]);

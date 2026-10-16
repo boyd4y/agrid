@@ -20,10 +20,10 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-/** Personal API credentials are bound to one user/workspace; never store plaintext. */
-export const userApiKeys = pgTable("user_api_keys", {
+/** Workspace credentials store only hashes; application grants determine access. */
+export const userApiKeys = pgTable("api_keys", {
   id: uuid("id").defaultRandom().primaryKey(),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   keyHash: text("key_hash").notNull(),

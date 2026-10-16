@@ -1,38 +1,29 @@
-# Site data API and JavaScript SDK
+# Table API and JavaScript SDK
 
-Use Tabdo as the data source for a small website, catalog, landing page, or lead form. The public surface supports table metadata, record reads, attachments, and record creation. The existing workspace REST API remains unchanged.
+Manage all keys in **Settings → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
 
-## Start locally
+## Setup
 
-1. Run `pnpm install`, `pnpm build:foundation`, and `pnpm db:migrate` against the local development database.
-2. Start the product with `pnpm dev`.
-3. Open **Settings → Site API** as a workspace owner or admin. Create a key, select the allowed tables, and choose **Read only**, **Create only**, or **Read and create**.
-4. Copy the key and code before closing the dialog. Keys can be edited or deleted; deleted keys immediately lose data and attachment access.
+Run `pnpm build:foundation`, `pnpm db:migrate`, and `pnpm dev`. A workspace owner or admin can create a key, name it, and tick the operations needed for each table. Copy the key before closing the dialog; it is only shown once. Edit grants or physically delete a key to change access immediately.
 
-A site key starts with `tab_pub_` and is intended to appear in browser code. It grants the chosen capabilities to **all records and fields in the selected tables**. It does not identify an individual visitor. Do not select a table containing information that should remain internal. Future tables are not automatically included. There is no additional per-table publishing setup or row-policy language.
+All new keys use the `tab_` prefix and work with GraphQL, table REST endpoints, and the SDK. There is one credential model. Treat a key embedded in a website as visible to every visitor: only grant operations and tables you intend that website to expose. Keys authorize record operations, not workspace administration, agent execution, schema changes, or key management. Management continues to use the user's login session.
 
-Personal `tab_` API keys retain their existing user permissions and are not accepted by this public surface. Do not put a personal key in a site. A public key is not accepted by management REST, commands, chat, or key-management endpoints.
+Migration `0030_unified_api_keys` consolidates previous credentials without changing their values. Existing API keys receive CRUD grants for their workspace's current tables. Previous website keys retain exactly their original per-table read/create grants. Existing attachment links and the `X-Tabdo-Key` header remain compatible.
 
 ## SDK
-
-The workspace package is `@tabdo/sdk`. No npm or CDN publication is required for local use:
 
 ```sh
 pnpm --filter @tabdo/sdk build
 pnpm --dir packages/sdk pack --pack-destination /tmp
-# In another project, install the generated /tmp/tabdo-sdk-0.1.0.tgz.
+# Install /tmp/tabdo-sdk-0.1.0.tgz in another project.
 ```
 
-The package contains standalone ESM JavaScript and bundled TypeScript declarations. For plain HTML, copy `packages/sdk/dist/tabdo.js` beside your page and import `./tabdo.js` in a module script. It has no React, Node, or internal Tabdo runtime dependencies.
+For plain HTML, copy `packages/sdk/dist/tabdo.js` beside the page and import it as an ES module. The distribution has no React, Node, or internal Tabdo runtime dependencies. npm/CDN publication is separate from deploying the application.
 
 ```ts
-import { createClient, TabdoApiError } from '@tabdo/sdk';
+import { createClient } from '@tabdo/sdk';
 
-const tabdo = createClient({
-  url: 'https://YOUR_TABDO_API_ORIGIN',
-  key: 'YOUR_PUBLISHABLE_SITE_KEY',
-});
-
+const tabdo = createClient({ url: 'https://YOUR_TABDO_ORIGIN', key: 'YOUR_API_KEY' });
 const tables = await tabdo.tables();
 const table = tabdo.table('TABLE_UUID');
 const columns = await table.columns();
@@ -41,79 +32,73 @@ const page = await table.list({
   filters: [{ columnId: 'COLUMN_UUID', op: 'contains', value: 'launch' }],
   sort: { columnId: 'COLUMN_UUID', direction: 'asc' },
 });
-const next = page.hasMore ? await table.list({ limit: 20, cursor: page.nextCursor }) : null;
-const row = await table.get('ROW_UUID'); // null when the record does not exist
-const submission = await table.create({ COLUMN_UUID: 'Hello from the website' });
+const row = await table.get('ROW_UUID');
+const created = await table.create({ COLUMN_UUID: 'New submission' });
+await table.update(created.id, { COLUMN_UUID: 'Updated submission' });
+await table.delete(created.id);
 ```
 
-Keep the same filters and sort when continuing a cursor. Identifiers are stable UUIDs; names are display metadata, not API identifiers. `list()` defaults to 50 records and allows 1–100. `includeTotal: true` explicitly requests a matching count. Filters support `eq`, `neq`, `contains`, `not_contains`, `is_empty`, `is_not_empty`, `gt`, `gte`, `lt`, and `lte`, subject to the column type. `filterLogic` accepts `and` or `or`.
+Permissions are independent. For example, a key can read a catalog, create leads in another table, and have no update/delete access to either. Create/update/delete return receipts, so they do not require read permission or expose historical records. `update()` accepts `{ expectedVersion }` for optional optimistic concurrency.
 
-Each SDK method accepts a final `{ signal }` option. `createClient` also accepts an injected `fetch`. Failures throw `TabdoApiError` with `code`, HTTP `status`, and GraphQL `errors`; cancellations preserve `AbortError`. There are no automatic mutation retries, browser cookies, toasts, or framework state.
+`list()` defaults to 50 records, maximum 100. Reuse filters and sort when continuing with `cursor: page.nextCursor`. `includeTotal: true` requests a count. Field/table identifiers are stable UUIDs; names are display metadata. Filters support the operators appropriate to each column type. Each SDK method accepts a final `{ signal }`; injected `fetch` is supported. Errors expose `TabdoApiError.code`, `status`, and GraphQL errors. Requests omit cookies and do not retry mutations automatically.
 
 ## GraphQL
 
-The endpoint is `/api/graphql`. Send a publishable key in `X-Tabdo-Key` and JSON `{ query, variables, operationName? }`. Standard GraphQL clients and authenticated introspection are supported. GET supports queries; mutations require POST. HTTP batching and subscriptions are not provided.
+POST `/api/graphql` with `Authorization: Bearer YOUR_API_KEY` and JSON `{ query, variables, operationName? }`. Standard authenticated introspection and GET queries are supported. Mutations require POST. The fixed schema uses a JSON `cells` map for user-defined columns.
 
 ```graphql
-query Catalog($tableId: ID!, $options: RowsInput) {
-  table(id: $tableId) {
-    id
-    name
+query Catalog($id: ID!, $options: RowsInput) {
+  table(id: $id) {
     columns { id name type readable writable options { id label color } }
     rows(options: $options) {
       rows { id cells files { id columnId name mimeType size url } }
-      nextCursor
-      hasMore
-      totalMatched
+      nextCursor hasMore totalMatched
     }
   }
 }
-
-mutation Submit($tableId: ID!, $cells: JSON!) {
-  createRow(tableId: $tableId, cells: $cells) { id createdAt }
+mutation Create($table: ID!, $cells: JSON!) {
+  createRow(tableId: $table, cells: $cells) { id createdAt }
+}
+mutation Update($table: ID!, $row: ID!, $cells: JSON!, $version: Int) {
+  updateRow(tableId: $table, rowId: $row, cells: $cells, expectedVersion: $version) { id updatedAt version }
+}
+mutation Delete($table: ID!, $row: ID!) {
+  deleteRow(tableId: $table, rowId: $row) { id }
 }
 ```
 
-Use `tabdo.graphql<Result>(query, variables, { operationName, signal })` for raw GraphQL. The schema is fixed across workspaces: dynamic values use the JSON `cells` map. It does not generate GraphQL object types for each user table.
+Use `tabdo.graphql<Result>(query, variables, { operationName, signal })` for raw queries. Aliases/fragments cannot multiply writes: each operation permits one mutation.
 
-A create-only key can read table/column metadata to build a form, but cannot query records or attachments. Creation returns only the new ID and timestamp. Writable types are text, number, date, checkbox, select, and multi-select. Select values use option IDs. Formula/rollup, person, relation, and file writes are rejected. This prevents a public “create” from modifying inverse relations, assigning members, or referencing arbitrary uploads.
+## REST and commands
 
-Related records and member details are never automatically expanded. Relation and rollup values whose source table is not authorized are null and cannot be used for sorting or filtering. Formula values are conservatively null when a linked source in that table is private. Column metadata omits formula expressions and relation configuration.
+Use the same Bearer key and permissions:
 
-## Images and attachments
+| Method | Endpoint | Operation |
+|---|---|---|
+| GET | `/api/tables`, `/api/tables/:tableId` | Authorized table/column metadata |
+| GET | `/api/tables/:tableId/rows?limit=20&cursor=...` | Read records |
+| POST | `/api/tables/:tableId/rows/query` | Read records with JSON filter/sort options |
+| GET | `/api/tables/:tableId/rows/:rowId` | Read one record |
+| POST | `/api/tables/:tableId/rows` | Create with `{ cells }` |
+| PATCH | `/api/tables/:tableId/rows/:rowId` | Update with `{ cells, expectedVersion? }` |
+| DELETE | `/api/tables/:tableId/rows/:rowId` | Delete one record |
 
-Each returned row includes `files`, with metadata and a URL suitable for an `<img src>` or download link. The URL contains the publishable key, not a personal secret. Every request checks the live key, allowed table, row, column, and exact file reference; removing a reference or deleting the key removes access. Never log the full URL in application analytics.
+`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, and `deleteRow` through the same services. Clients cannot supply internal organization/actor/automation options. Other commands require the authenticated workspace interface.
 
-Attachment URLs use the configured public API origin (`BETTER_AUTH_URL`, falling back to `APP_URL`), preserving HTTPS behind a TLS-terminating proxy. The underlying local/S3 bucket remains private. Safe raster image types display inline; other formats download with restrictive content headers. Uploads are managed through the existing authenticated workspace UI, not this API. Responses use `private, no-store` so cached images cannot bypass a later permission change.
+## Fields and files
 
-## Limits and deployment
+Metadata is available for any granted table, including create-only tables so a form can discover its inputs. Writable fields currently include text, number, date, checkbox, single-select, and multi-select; selects use option IDs. Person, relation, file, formula, and rollup values cannot be written through the data API. Relation/rollup values sourced from a table without read permission are redacted; derived formulas are conservatively redacted too. Deleting a linked row additionally requires update permission on affected linked tables.
 
-The API process uses its existing Redis connection settings (`REDIS_URL`, `QUEUE_PREFIX`) for shared rate counters; no queue job is required. Defaults are 120 public requests and 20 creates per minute, per key and trusted peer address. Reverse-proxy headers supplied by clients are ignored, so behind a proxy the shared peer may conservatively share a bucket. Missing or unavailable rate-limit storage returns 503. The endpoint allows cross-origin public requests without cookies; management CORS is unchanged.
+Rows include `files` with metadata and URLs for referenced images/downloads. Each request rechecks the live key and exact table/record/column/file reference. Deleting the key or removing the file reference removes access. Upload files through the authenticated workspace UI. URLs use `BETTER_AUTH_URL` (fallback `APP_URL`) to preserve HTTPS behind a proxy. Safe raster images display inline; other formats download. File responses are not cached and use restrictive content headers. Avoid logging complete attachment URLs because they include the key.
 
-Requests are limited to 128 KiB, 20 root fields, depth 16, and 1,000 expanded selections. A request may read at most 1,000 requested rows across at most 30 row-query resolvers. Each mutation operation can create one record; aliases and fragments cannot bypass this. Unexpected errors do not expose SQL or stack traces. Expected errors use `extensions.code`, such as `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `BAD_USER_INPUT`, `QUERY_TOO_COMPLEX`, and `RATE_LIMITED`.
+## Limits and examples
 
-Apply migration `0029_site_api` before enabling the UI. It adds workspace-owned key/grant tables without changing personal API keys or existing table data. The standard server image includes the SDK workspace manifest; the SDK build produces all distributable artifacts. Deployment remains the existing Node API + worker + PostgreSQL + Redis arrangement.
+Existing Redis settings (`REDIS_URL`, `QUEUE_PREFIX`) provide shared rate counters: 120 requests and 20 writes per minute per key/trusted peer. Unavailable Redis fails closed. Limits include 128 KiB bodies, 20 GraphQL root fields, depth 16, 1,000 expanded selections/requested rows, and 30 row resolvers. REST mutations have the same permission checks and transaction/outbox behavior. No visitor cookies or workspace identity are inherited.
 
-## HTML examples
-
-```sh
-pnpm --filter @tabdo/sdk build
-node examples/sites/server.mjs
-```
-
-Open `http://127.0.0.1:4178/catalog.html` with a read key, or `/lead-form.html` with a create key. Configure the page through its URL fragment:
+Run `pnpm dev:sites` for the catalog and lead-form examples on `http://127.0.0.1:4178`. Configure a page using its URL fragment:
 
 ```text
-#url=http%3A%2F%2Flocalhost%3A3001&key=YOUR_SITE_KEY&table=TABLE_UUID
+#url=http%3A%2F%2Flocalhost%3A3001&key=YOUR_API_KEY&table=TABLE_UUID
 ```
 
-The catalog demonstrates pagination, escaped text rendering, and referenced images. The form discovers writable text/number columns and submits a new record without reading historical submissions. Configure links separately when using different tables or keys. The example server serves only its explicit example assets and the built SDK, never the repository or environment files.
-
-## Backend review decisions
-
-- GraphQL is a transport over the existing command layer, not a second database CRUD implementation. Creation retains formula evaluation, transactional automation matching, and post-commit Outbox wakeup.
-- Public capability identity remains separate from human/agent `Actor`; public submissions have no forged human `actorId`.
-- Site creation revalidates the live key in the write transaction and holds the table lock before validating column types. Management rejects cross-workspace grants.
-- Management metadata never returns key hashes or full credentials after creation. Deletion is physical, with cascading grant removal.
-- Table metadata is batched. Row query work, pagination, request size, and writes are bounded independently of GraphQL aliases.
-- Existing REST error conventions and endpoint consolidation are broader work; this feature leaves those contracts in place. No Postgres GraphQL extension, RLS policy engine, dynamic schema, GraphQL server package, or realtime subscription layer is introduced.
+The catalog demonstrates escaped text, cursor pagination, and referenced images. The form submits data without reading prior submissions. The example server only serves its explicit assets and built SDK.

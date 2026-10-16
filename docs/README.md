@@ -17,7 +17,7 @@
 - [文件字段与存储](file-storage.md)：单多文件、本地与 S3 存储配置。
 - [事件自动化与定时任务](event-automations.md)：来源、条件、数据动作与智能体运行。
 - [AgentMail 与 Webhook](integrations.md)：连接设置、凭证、接收接口与验收边界。
-- [个人 API Key](user-api-keys.md)：创建、访问权、存储与删除。
+- [API Key](user-api-keys.md)：逐表 CRUD 权限、创建、存储与删除。
 
 ## 架构与执行
 

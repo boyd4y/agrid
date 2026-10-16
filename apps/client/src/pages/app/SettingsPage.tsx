@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
-import { Moon, Sun, Monitor, Settings2, KeyRound, Mail, Webhook, Globe } from "lucide-react";
+import { Moon, Sun, Monitor, Settings2, KeyRound, Mail, Webhook } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@tabdo/ui/components/card";
 import { Field, FieldGroup, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
 import { Separator } from "@tabdo/ui/components/separator";
@@ -10,7 +10,6 @@ import { useTheme, type Theme } from "@/components/theme/theme-provider";
 import { useTranslation } from "react-i18next";
 import { setAppLocale, type AppLocale } from "@/i18n";
 import { useAuth } from "@/hooks/useAuth";
-import { SiteApiSettings } from "@/components/settings/SiteApiSettings";
 import { ApiKeysSettings } from "@/components/settings/ApiKeysSettings";
 import { IntegrationsPage } from "@/pages/app/IntegrationsPage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tabdo/ui/components/tabs";
@@ -23,12 +22,11 @@ export function SettingsPage() {
   const tabs = [
     { id: "general", label: t("settings.tabs.general"), icon: Settings2 },
     ...(user && user.kind !== "agent" ? [{ id: "api-keys", label: t("settings.tabs.apiKeys"), icon: KeyRound }] : []),
-    ...(user && user.kind !== "agent" ? [{ id: "site-api", label: t("settings.siteApi.title"), icon: Globe }] : []),
     { id: "agentmail", label: "AgentMail", icon: Mail },
     { id: "webhook", label: "Webhook", icon: Webhook },
   ];
   const requestedTab = searchParams.get("tab") ?? "general";
-  const normalizedTab = requestedTab === "integrations" ? "agentmail" : requestedTab;
+  const normalizedTab = requestedTab === "integrations" ? "agentmail" : requestedTab === "site-api" ? "api-keys" : requestedTab;
   const activeTab = tabs.some(tab => tab.id === normalizedTab) ? normalizedTab : "general";
   useEffect(() => {
     if (isPending || requestedTab === activeTab) return;
@@ -82,8 +80,7 @@ export function SettingsPage() {
             </Field></FieldGroup>
           </FieldSet>
         </TabsContent>
-        {user && user.kind !== "agent" && <TabsContent value="api-keys" className={paneClass}><ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} bare /></TabsContent>}
-        {user && user.kind !== "agent" && <TabsContent value="site-api" className={paneClass}><SiteApiSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} /></TabsContent>}
+        {user && user.kind !== "agent" && <TabsContent value="api-keys" className={paneClass}><ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} /></TabsContent>}
         <TabsContent value="agentmail" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:agentmail`} kind="agentmail" /></TabsContent>
         <TabsContent value="webhook" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:webhook`} kind="webhook" /></TabsContent>
       </Tabs>

@@ -1,5 +1,7 @@
 # 集成、事件自动化与用户 Key 设计
 
+> API Key 的现行模型已由迁移 0030 统一为逐表 CRUD 授权；下文个人 Key/用户身份桥接段落是历史设计，当前使用见 [API Key](user-api-keys.md)。
+
 2026-10-14，初始只读核对形成的设计与审计基线。后续个人 API Key 和集成后端已实施；本文保留设计依据，现行接口、部署与验收事实分别见 [user-api-keys.md](./user-api-keys.md) 和 [integrations.md](./integrations.md)。初次审计表格中的缺口描述不代表后续实现仍缺失。
 
 建议先统一“来源 → 事件 → 动作”，保留现有事务 outbox、BullMQ worker、执行 fence 和步骤凭据。邮件、Webhook、定时任务不依附虚构表格/记录；智能体动作只配置智能体与任务描述，后台消费官方 HarnessAgent，沿用真实原生工具、Skill、提问与结果保存。

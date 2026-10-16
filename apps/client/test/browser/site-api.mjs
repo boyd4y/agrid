@@ -27,24 +27,25 @@ try {
   await api(`/tables/${leads.id}/rows`, { cells: { [leadsTitle]: 'Private historical submission' } });
 
   await page.goto(frontend + '/app/settings?tab=site-api');
-  const settings = page.getByTestId('site-api-settings'); await settings.getByText('连接你的第一个站点', { exact: true }).waitFor();
+  const settings = page.getByTestId('api-keys-settings'); await settings.getByText('创建你的第一个 API Key', { exact: true }).waitFor();
   assert.equal(await page.locator('[data-state=open][data-slot=sheet-content]').count(), 0);
-  async function createKey(name, tableName, mode) {
-    await settings.getByRole('button', { name: '创建站点 Key', exact: true }).click();
+  async function createKey(name, grants) {
+    await settings.getByRole('button', { name: '创建 API Key', exact: true }).click();
     const dialog = page.getByRole('dialog'); await dialog.getByRole('textbox', { name: '名称', exact: true }).fill(name);
-    if (mode !== '只读') { await dialog.getByRole('combobox', { name: '权限', exact: true }).click(); await page.getByRole('option', { name: mode, exact: true }).click(); }
-    await dialog.getByRole('checkbox', { name: tableName, exact: true }).check();
-    await dialog.getByRole('button', { name: '创建站点 Key', exact: true }).click();
-    const secret = await dialog.getByRole('textbox', { name: '公开站点 Key', exact: true }).inputValue();
-    assert.match(secret, /^tab_pub_[A-Za-z0-9_-]{43}$/);
-    assert((await dialog.getByRole('textbox', { name: 'JavaScript 示例', exact: true }).inputValue()).includes(secret));
+    for (const [table, operations] of Object.entries(grants)) for (const operation of operations)
+      await dialog.getByRole('checkbox', { name: `${table} · ${operation}`, exact: true }).check();
+    await dialog.getByRole('button', { name: '创建 API Key', exact: true }).click();
+    const secret = await dialog.getByRole('textbox', { name: 'API Key', exact: true }).inputValue();
+    assert.match(secret, /^tab_[A-Za-z0-9_-]{43}$/);
     await dialog.getByRole('button', { name: '关闭', exact: true }).last().click();
     assert(!(await page.locator('body').innerText()).includes(secret));
-    await settings.getByText(name, { exact: true }).waitFor();
-    return secret;
+    await settings.getByText(name, { exact: true }).waitFor(); return secret;
   }
-  const readKey = await createKey('Catalog website', 'Site catalog', '只读');
-  const createOnlyKey = await createKey('Landing page leads', 'Site leads', '仅新增');
+  const readKey = await createKey('Catalog website', { 'Site catalog': ['读取'], 'Site leads': ['新增'] });
+  const createOnlyKey = await createKey('Landing page leads', { 'Site leads': ['新增', '更新', '删除'] });
+  assert.equal(await page.getByRole('tab', { name: '站点 API', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('tab').count(), 4);
+  await page.waitForURL(url => url.searchParams.get('tab') === 'api-keys');
   const rows = settings.locator('[data-slot=list-item]'); assert.equal(await rows.count(), 2);
   const background = await rows.first().evaluate(element => getComputedStyle(element).backgroundColor);
   await rows.first().hover(); await pause(180);
@@ -85,12 +86,22 @@ try {
   assert.equal(await site.getByText('Private historical submission', { exact: true }).count(), 0);
   assert((await api(`/tables/${leads.id}/rows/query`, {})).rows.some(row => row.cells[leadsTitle] === 'New landing page submission'));
   assert.equal(cookieSent, false, 'cross-origin SDK requests never send workspace cookies');
+  await site.evaluate(async ({base, key, table, column}) => {
+    const { createClient } = await import('/tabdo.js');
+    const client = createClient({ url: base, key });
+    const row = await client.table(table).create({ [column]: 'CRUD browser fixture' });
+    await client.table(table).update(row.id, { [column]: 'Updated browser fixture' });
+    await client.table(table).delete(row.id);
+    let denied = false; try { await client.table(table).list(); } catch { denied = true; }
+    if (!denied) throw Error('Update/delete grants must not imply read');
+  }, {base, key: createOnlyKey, table: leads.id, column: leadsTitle});
+
 
   await settings.getByRole('button', { name: '删除 Catalog website edited', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await settings.getByText('Catalog website edited', { exact: true }).waitFor({ state: 'hidden' });
   await site.goto(`http://127.0.0.1:${sitePort}/catalog.html#${fragment(readKey, catalog.id)}`);
-  await site.getByText('Invalid site API key', { exact: true }).waitFor();
+  await site.getByText('Invalid API key', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log('PASS site API: settings creation/edit/delete, selected-table permissions, hover/responsive controls, standalone SDK, real cross-origin HTML catalog/image/form, escaped content and immediate key deletion.');
 } finally {

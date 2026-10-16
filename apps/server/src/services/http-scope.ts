@@ -5,7 +5,6 @@ import { getAuth } from "../resources/scope.js";
 import { commandDependencies } from "./dependencies.js";
 import { loadBuiltinSkillDocuments } from "../skills/builtin-loader.js";
 import { getAgentToolCatalog } from "../harness/tool-catalog.js";
-import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
 import { discardQuestionSandbox } from "../harness/question-sandboxes.js";
 
 import { siteRateLimit } from "../site-api/rate-limit.js";
@@ -22,9 +21,7 @@ export async function acquireRequestScope(_request: Request): Promise<RequestSco
     identity: { database: commands.database, resolveSession: headers => getAuth().api.getSession({ headers }) },
     builtinSkills, toolCatalog: getAgentToolCatalog,
     async invite(actor, input, headers) {
-      const create = () => getAuth().api.createInvitation({ body: { ...input, organizationId: actor.organizationId }, headers });
-      return actor.kind === "human" && /^bearer tab_/i.test(headers.get("authorization") ?? "")
-        ? withUserKeyInvitation(actor, create) : create();
+      return getAuth().api.createInvitation({ body: { ...input, organizationId: actor.organizationId }, headers });
     },
     discardRuntime: discardQuestionSandbox,
     logger: { error: (event, error) => console.error(event, error) },

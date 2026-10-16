@@ -15,7 +15,6 @@ import { createRowsRoute } from "../../src/business/http/rows.js";
 import { createCommandsRoute } from "../../src/business/http/commands.js";
 import type { RequestScopeResolver } from "../../src/business/http/request.js";
 import type { Actor } from "../../src/business/auth/actor.js";
-import { createApiKey } from "@tabdo/auth/api-keys";
 import { createTable, getTable, addColumn, addRow, updateCells, createAutomation } from "../../src/business/commands/index.js";
 import { createSiteKey, updateSiteKey, resolveSiteKey } from "../../src/business/data-api/keys.js";
 import { uploadFiles } from "../../src/business/services/files.js";
@@ -35,7 +34,7 @@ let tableId = "", privateTableId = "", foreignTableId = "", titleId = "", number
 let limited = false, unavailable = false, acquired = 0, closed = 0;
 const files = { storage: () => ({ ...createLocalStorage(directory), driver: "local" as const }), limits: { maxBodyBytes: 1000000, maxFileBytes: 1000000, maxFiles: 10 } };
 const acquire: RequestScopeResolver = async () => { acquired++; return {
-  commands: deps, files, identity: { database: resource.db, resolveSession: async () => null },
+  commands: deps, files, identity: { database: resource.db, resolveSession: async headers => headers.get("Cookie") === "fixture=owner" ? { user: { id: userId, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } } : null },
   async siteRateLimit() { if (limited) throw new ServiceError(429, { message: "Limited" }); if (unavailable) throw new ServiceError(503, { message: "Unavailable" }); },
   async close() { closed++; },
 }; };
@@ -46,14 +45,14 @@ const gql = async (query: string, variables: Record<string, unknown> = {}, key =
   return { response, body: await response.json() };
 };
 const manage = (path: string, body?: unknown, method = body === undefined ? "GET" : "POST", key = personalKey) => app.request(`https://fixture.test/api/site-keys${path}`, { method,
-  headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  headers: { ...(key === personalKey ? { Cookie: "fixture=owner" } : { Authorization: `Bearer ${key}` }), "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
 before(async () => {
   directory = await mkdtemp(join(tmpdir(), "tabdo-site-test-"));
   await resource.db.insert(organization).values([{ id: org, name: "Site API", slug: org }, { id: foreignOrg, name: "Foreign", slug: foreignOrg }]);
   await resource.db.insert(user).values({ id: userId, name: actor.name, email: actor.email, kind: "human" });
   await resource.db.insert(member).values({ id: memberId, organizationId: org, userId, role: "owner" });
-  personalKey = (await createApiKey(deps, actor, { name: "Owner" })).secret;
+  personalKey = "owner-session";
   tableId = (await createTable(deps, { organizationId: org, name: "Public catalog" })).id;
   privateTableId = (await createTable(deps, { organizationId: org, name: "Private catalog" })).id;
   foreignTableId = (await createTable(deps, { organizationId: foreignOrg, name: "Foreign catalog" })).id;
@@ -69,7 +68,7 @@ before(async () => {
   fileId = (await uploadFiles({ ...deps, ...files }, org, tableId, fileColumnId, [new File([Uint8Array.from([137,80,78,71])], "image.png", { type: "image/png" })])).files[0].id;
   await updateCells(deps, { rowId, organizationId: org, cells: { [fileColumnId]: [fileId] } });
   for (const kind of ["read", "create", "both"]) {
-    const key = await createSiteKey(deps, actor, { name: kind, tableIds: [tableId], canRead: kind !== "create", canCreate: kind !== "read" });
+    const key = await createSiteKey(deps, actor, { name: kind, permissions: [{ tableId, canRead: kind !== "create", canCreate: kind !== "read", canUpdate: kind === "both", canDelete: kind === "both" }] });
     if (kind === "read") readKey = key.secret; else if (kind === "create") createKey = key.secret; else { bothKey = key.secret; bothId = key.key.id; }
   }
 });
@@ -83,18 +82,18 @@ after(async () => {
 test("site key management is workspace admin-only, hashed, scoped, editable and physically deletable", async () => {
   assert.equal((await manage("", undefined, "GET", "")).status, 401);
   assert.equal((await manage("", undefined, "GET", readKey)).status, 401);
-  const input = { name: "New site", tableIds: [tableId], canRead: true, canCreate: false };
-  assert.equal((await manage("", { ...input, tableIds: [foreignTableId] })).status, 400);
-  assert.equal((await manage("", { ...input, canRead: false })).status, 400);
+  const input = { name: "New API", permissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false }] };
+  assert.equal((await manage("", { ...input, permissions: [{ ...input.permissions[0], tableId: foreignTableId }] })).status, 400);
+  assert.equal((await manage("", { ...input, permissions: [{ ...input.permissions[0], canRead: false }] })).status, 400);
   const created = await manage("", input); assert.equal(created.status, 201);
-  const body = await created.json(); assert.match(body.secret, /^tab_pub_/);
+  const body = await created.json(); assert.match(body.secret, /^tab_/);
   const listing = await (await manage("")).json(); assert(!JSON.stringify(listing).includes(body.secret)); assert(!JSON.stringify(listing).includes("keyHash"));
   await resource.db.update(member).set({ role: "member" }).where(eq(member.id, memberId));
   try { assert.equal((await manage("")).status, 403); } finally { await resource.db.update(member).set({ role: "owner" }).where(eq(member.id, memberId)); }
-  assert.equal((await manage('/'+body.key.id, { ...input, tableIds: [privateTableId] }, "PATCH")).status, 200);
+  assert.equal((await manage('/'+body.key.id, { ...input, permissions: [{ ...input.permissions[0], tableId: privateTableId }] }, "PATCH")).status, 200);
   assert((await resolveSiteKey(resource.db, body.secret)).tableIds.has(privateTableId));
   assert.equal((await manage('/'+body.key.id, undefined, "DELETE")).status, 200);
-  await assert.rejects(resolveSiteKey(resource.db, body.secret), /Invalid site/);
+  await assert.rejects(resolveSiteKey(resource.db, body.secret), /Invalid API/);
 });
 
 test("standard GraphQL scopes tables, columns, rows and cursors and does not expand private linked data", async () => {
@@ -114,7 +113,7 @@ test("standard GraphQL scopes tables, columns, rows and cursors and does not exp
   assert.equal(schema.body.data.__schema.queryType.name, "Query");
 });
 
-test("read-only and create-only capabilities stay separate; public keys never become REST or command identities", async () => {
+test("table capabilities stay separate across GraphQL, REST and commands", async () => {
   const mutation = 'mutation($id:ID!,$cells:JSON!) { createRow(tableId:$id,cells:$cells) { id createdAt } }';
   assert((await gql(mutation, { id: tableId, cells: { [titleId]: "Denied" } })).body.errors);
   assert((await gql('query($id:ID!){table(id:$id){rows{rows{id}}}}', { id: tableId }, createKey)).body.errors);
@@ -125,10 +124,11 @@ test("read-only and create-only capabilities stay separate; public keys never be
   const accepted = await gql(mutation, { id: tableId, cells: { [titleId]: "Website submission", [numberId]: 3 } }, createKey);
   assert(!accepted.body.errors, JSON.stringify(accepted.body)); assert.deepEqual(Object.keys(accepted.body.data.createRow).sort(), ["createdAt", "id"]);
   assert((await gql(mutation, { id: privateTableId, cells: {} }, createKey)).body.errors);
-  for (const path of [`/api/tables/${tableId}/rows`, "/api/commands"]) {
-    const result = await app.request("https://fixture.test"+path, { method: "POST", headers: { Authorization: `Bearer ${bothKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ command: "listTables", input: {} }) });
-    assert.equal(result.status, 401);
-  }
+  const rest = await app.request(`https://fixture.test/api/tables/${tableId}/rows`, { headers: { Authorization: `Bearer ${readKey}` } });
+  assert.equal(rest.status, 200);
+  const denied = await app.request("https://fixture.test/api/commands", { method: "POST", headers: { Authorization: `Bearer ${bothKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ command: "createAutomation", input: { tableId } }) });
+  assert.equal(denied.status, 403);
+
 });
 
 test("public creates use the ordinary atomic automation outbox and only wake after commit", async () => {
@@ -180,11 +180,11 @@ test("the real SDK queries GraphQL and creates through the same grants; edited a
   assert.equal((await client.tables()).length, 1); assert((await client.table(tableId).columns()).length);
   const created = await client.table(tableId).create({ [titleId]: "SDK submission" }); assert.equal((await client.table(tableId).get(created.id))!.cells[titleId], "SDK submission");
   const page = await client.table(tableId).list({ limit: 1 }); assert.equal(page.rows.length, 1);
-  await updateSiteKey(deps, actor, bothId, { name: "Changed", tableIds: [privateTableId], canRead: true, canCreate: false });
+  await updateSiteKey(deps, actor, bothId, { name: "Changed", permissions: [{ tableId: privateTableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false }] });
   await assert.rejects(client.table(tableId).list(), /Table not found/);
   assert.equal((await client.tables())[0].id, privateTableId);
   assert.equal((await manage('/'+bothId, undefined, "DELETE")).status, 200);
-  await assert.rejects(client.tables(), /Invalid site API key/);
+  await assert.rejects(client.tables(), /Invalid API key/);
 });
 
 
@@ -195,4 +195,31 @@ test("public resource startup and cleanup failures never leak internal errors or
   const cleanup = new Hono().route("/api", createSiteApiRoutes(async request => ({ ...await acquire(request), logger: { error() { throw new Error("private-logger-password"); } }, close: async () => { throw new Error("private-cleanup-password"); } })));
   const saved = await cleanup.request("https://fixture.test/api/graphql", { method: "POST", headers: { "Content-Type": "application/json", "X-Tabdo-Key": readKey }, body: JSON.stringify({ query: "{tables{id}}" }) });
   assert.equal(saved.status, 200); const result = await saved.json(); assert(!result.errors); assert(result.data.tables.length);
+});
+
+test("one key has independent per-table CRUD, update/delete work without reads, and linked deletes cannot edit private tables", async () => {
+  const permissions = [
+    { tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false },
+    { tableId: privateTableId, canRead: false, canCreate: true, canUpdate: true, canDelete: true },
+  ];
+  const key = await createSiteKey(deps, actor, { name: "Mixed CRUD", permissions });
+  const sdk = createClient({ url: "https://fixture.test", key: key.secret, fetch: async (input, init) => app.request(String(input), init) });
+  await sdk.table(tableId).list();
+  await assert.rejects(sdk.table(tableId).create({ [titleId]: "Denied" }));
+  const title = (await sdk.table(privateTableId).columns()).find(col => col.type === "text")!.id;
+  const created = await sdk.table(privateTableId).create({ [title]: "Created" });
+  await assert.rejects(sdk.table(privateTableId).list());
+  const updated = await sdk.table(privateTableId).update(created.id, { [title]: "Updated" });
+  assert.equal(updated.id, created.id); assert.equal(updated.version, 2);
+  await assert.rejects(sdk.table(privateTableId).update(created.id, { [title]: "Stale write" }, { expectedVersion: 1 }), error => (error as { code: string }).code === "CONFLICT");
+  assert.equal((await resource.db.select().from(rows).where(eq(rows.id, created.id)))[0].cells[title], "Updated");
+  assert.equal((await sdk.table(privateTableId).delete(created.id)).id, created.id);
+  await updateSiteKey(deps, actor, key.key.id, { name: "Removed writes", permissions: [{ ...permissions[1], canUpdate: false, canDelete: false }] });
+  await assert.rejects(sdk.table(privateTableId).update(created.id, {}));
+  await assert.rejects(sdk.table(privateTableId).delete(created.id));
+  await assert.rejects(sdk.table(tableId).list());
+  const linked = await createSiteKey(deps, actor, { name: "Delete only", permissions: [{ tableId, canRead: false, canCreate: false, canUpdate: false, canDelete: true }] });
+  const deleter = createClient({ url: "https://fixture.test", key: linked.secret, fetch: async (input, init) => app.request(String(input), init) });
+  await assert.rejects(deleter.table(tableId).delete(rowId));
+  assert((await resource.db.select().from(rows).where(eq(rows.id, rowId))).length);
 });

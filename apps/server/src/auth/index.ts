@@ -1,6 +1,5 @@
 import { db } from "../db/index.js";
 import { sendInviteEmail } from "./email.js";
-import { userKeyInvitationContext } from "./key-invitation-context.js";
 import { createAuth, DEV_SECRET, assertProductionAuthSecret } from "@tabdo/auth";
 
 const secret = process.env.NODE_ENV === "production"
@@ -12,7 +11,6 @@ export const auth = createAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",
   secret,
   production: process.env.NODE_ENV === "production",
-  hooks: { before: userKeyInvitationContext },
   sendInviteEmail,
 });
 export type AuthSession = typeof auth.$Infer.Session;

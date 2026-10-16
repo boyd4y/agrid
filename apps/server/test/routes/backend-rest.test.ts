@@ -12,7 +12,6 @@ import { createColumnsRoute } from "../../src/business/http/columns.js";
 import { createThreadsRoute } from "../../src/business/http/threads.js";
 import { createMembersRoute } from "../../src/business/http/members.js";
 import { createApiKeysRoute } from "../../src/business/http/api-keys.js";
-import { createApiKey } from "../../src/business/services/api-keys.js";
 import { organization, user, member, agentProfile, agentRuntimeSessions, agentRuns } from "../../src/business/db/schema.js";
 import { agentExecutions } from "../../src/business/db/schema.js";
 import { loadBuiltinSkillDocuments } from "../../src/skills/builtin-loader.js";
@@ -32,7 +31,7 @@ const acquire: RequestScopeResolver = async () => {
   const resource = createDatabase({ connectionString, poolMax: 1 });
   return {
     commands: { database: resource.db, now: () => new Date(), uuid: randomUUID, automationQueueName: "fixture" },
-    identity: { database: resource.db, resolveSession: async () => null },
+    identity: { database: resource.db, resolveSession: async headers => headers.get("Cookie") === "fixture=owner" ? { user: { id: account, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } } : null },
     builtinSkills: builtins, toolCatalog: getAgentToolCatalog,
     async discardRuntime(runtimeId, executionIds = []) {
       // No compute was launched in this fixture. Capture the cleanup contract.
@@ -45,13 +44,13 @@ const app = new Hono().route("/api/tables", createTablesRoute(acquire)).route("/
   .route("/api", createColumnsRoute(acquire)).route("/api/threads", createThreadsRoute(acquire))
   .route("/api/members", createMembersRoute(acquire)).route("/api/user/api-keys", createApiKeysRoute(acquire));
 const request = (path: string, body?: unknown, method = body === undefined ? "GET" : "POST", key = secret) => app.request(`https://fixture.test/api${path}`, {
-  method, headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body),
+  method, headers: { Cookie: key === secret ? "fixture=owner" : "", "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body),
 });
 before(async () => {
   await admin.db.insert(organization).values({ id: org, name: "Portable REST", slug: org });
   await admin.db.insert(user).values({ id: account, name: actor.name, email: actor.email, emailVerified: true, kind: "human" });
   await admin.db.insert(member).values({ id: membership, userId: account, organizationId: org, role: "owner" });
-  secret = (await createApiKey({ database: admin.db }, actor, { name: "Fixture" })).secret;
+  secret = "session";
 });
 after(async () => {
   await admin.db.delete(organization).where(eq(organization.id, org));
@@ -60,7 +59,7 @@ after(async () => {
   await admin.close();
 });
 
-test("shared REST factories operate through real Bearer identity with per-request DB lifetime and no ALS", async () => {
+test("shared REST factories operate through session identity with per-request DB lifetime and no ALS", async () => {
   assert.equal((await request("/tables", undefined, "GET", "")).status, 401);
   const created = await request("/tables", { name: "Portable table" }); assert.equal(created.status, 201);
   const table = await created.json();

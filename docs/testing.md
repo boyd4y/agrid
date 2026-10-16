@@ -187,3 +187,9 @@ REDIS_URL=redis://127.0.0.1:6381 QUEUE_PREFIX=agrid-queue-test-event-local \
 ```
 
 真实 PG/Redis 验证事务提交与嵌套 savepoint 回滚、通知失败不影响提交、空闲期间 SQL 计数不增长、及时投递、多批 drain、延迟重试、定时任务改期/停用、重复消息、启动恢复和丢失通知的安全扫描。原生 Pi 提问续接回归另验证 canonical checkpoint 提交后的线程级通知。测试不证明真实 Neon 已休眠或 Railway 已部署。
+
+## API Key 与表格数据 API
+
+`test/routes/api-key-migration.test.ts` 在事务内独立 schema 验证 0030 保留旧 Key/hash 和操作范围，结束后回滚。`site-api.test.ts` 验证逐表 CRUD、REST/GraphQL/SDK 一致性、无读取权限的更新/删除、版本冲突、私有关联删除保护和权限变更即时生效。限流用例使用独立本地 Redis 的 6381/16381 端口。
+
+浏览器套件 `api-keys`、`site-api` 验证合并后的设置入口、逐表权限矩阵和真实跨域 HTML 读写；运行方式与上文浏览器回归相同。

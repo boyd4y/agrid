@@ -8,7 +8,7 @@ test("SDK sends variables over cookie-free GraphQL and preserves cursor/filter o
   const requests: Record<string, any>[] = [];
   const client = createClient({ url: "https://tabdo.test", key, fetch: async (url, options) => {
     assert.equal(url, "https://tabdo.test/api/graphql"); assert.equal(options?.credentials, "omit"); assert.equal(options?.redirect, "error");
-    assert.equal(new Headers(options?.headers).get("X-Tabdo-Key"), key);
+    assert.equal(new Headers(options?.headers).get("Authorization"), `Bearer ${key}`);
     const body = JSON.parse(String(options?.body)); requests.push(body);
     const data = body.query.includes("query Tables") ? { tables: [] } : body.query.includes("query TableColumns") ? { table: { columns: [] } }
       : body.query.includes("query TableRows") ? { table: { rows: { rows: [], nextCursor: "next", hasMore: true, limit: 2, totalMatched: null } } }
@@ -23,8 +23,8 @@ test("SDK sends variables over cookie-free GraphQL and preserves cursor/filter o
   assert.equal(requests[4].variables.cells.field, "Submitted"); assert(!requests[4].query.includes("Submitted"));
 });
 
-test("SDK exposes structured GraphQL/HTTP failures, rejects personal credentials and preserves cancellation", async () => {
-  assert.throws(() => createClient({ url: "https://tabdo.test", key: "tab_" + "a".repeat(43) }), /publishable/);
+test("SDK exposes structured GraphQL/HTTP failures, accepts unified credentials and preserves cancellation", async () => {
+  assert(createClient({ url: "https://tabdo.test", key: "tab_" + "a".repeat(43) }));
   assert.throws(() => createClient({ url: "file:///tmp/data", key }), /HTTP/);
   const client = createClient({ url: "https://tabdo.test", key, fetch: async () => Response.json({ data: null, errors: [{ message: "Denied", extensions: { code: "FORBIDDEN" } }] }) });
   await assert.rejects(client.tables(), (error: unknown) => error instanceof TabdoApiError && error.code === "FORBIDDEN" && error.status === 200);

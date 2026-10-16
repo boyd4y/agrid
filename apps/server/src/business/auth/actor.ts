@@ -10,6 +10,8 @@ export type ActorDependencies = Omit<IdentityDependencies, "database" | "resolve
 
 /** Legacy agent keys are a Tabdo credential extension; ordinary identity stays in auth. */
 export function resolveActor(req: Request, deps: ActorDependencies): Promise<Actor | null> {
+  // Table API keys are capabilities; they cannot inherit the creator's workspace identity.
+  if (req.headers.has("X-Tabdo-Key") || req.headers.get("authorization")?.toLowerCase().startsWith("bearer tab_")) return Promise.resolve(null);
   return resolveIdentity(req, { ...deps, async resolveBearer(raw) {
     if (!raw.toLowerCase().startsWith("agt_")) return undefined;
     const hash = await hashApiKey(raw);

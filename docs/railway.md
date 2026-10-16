@@ -43,8 +43,8 @@ API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运�
 
 检查 `/api/health`、登录、文件上传下载、推理和工具流、连续对话、显式取消、数据自动化和定时历史。集成测试仅使用隔离 `_agent_test` / `_queue_test` 数据库及专用 Redis；不指向线上数据。线上冒烟仅使用自身新建的临时资源并在结束后清理；一次发布检查不能代替真实模型或远程 Sandbox 专项验收。
 
-## 站点 API
+## 表格 API
 
-迁移 `0029_site_api` 为站点公开 Key 添加独立的授权表，不改变个人 API Key。发布后在设置的「站点 API」中授权表格；`/api/graphql` 和附件路由共用现有 API 服务，限流使用既有 Redis。`BETTER_AUTH_URL` 应为公开 HTTPS 域名，以便附件生成正确地址。SDK 随仓库构建，npm/CDN 发布是独立操作。接入方式见 [站点 API 与 SDK](api/site-api.md)。
+迁移 `0030_unified_api_keys` 合并既有 Key 并保留原凭证，迁移后在设置的「API Key」中为每张表格独立勾选 CRUD 操作；`/api/graphql` 和附件路由共用现有 API 服务，限流使用既有 Redis。`BETTER_AUTH_URL` 应为公开 HTTPS 域名，以便附件生成正确地址。SDK 随仓库构建，npm/CDN 发布是独立操作。接入方式见 [表格 API 与 SDK](api/site-api.md)。
 
 参考：[Railway 配置](https://docs.railway.com/config-as-code)、[Dockerfile](https://docs.railway.com/builds/dockerfiles)、[官方 Harness 会话](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)。

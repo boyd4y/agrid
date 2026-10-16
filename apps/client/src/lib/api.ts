@@ -118,15 +118,12 @@ function uploadFiles(tableId: string, columnId: string, files: File[], onProgres
     xhr.send(body);
   });
 }
-export type UserApiKeyInfo = { id: string; name: string; prefix: string; createdAt: string };
+export type UserApiKeyInfo = import("@tabdo/shared").ApiKeyInfo;
 
 export const api = {
-  listSiteKeys: (signal?: AbortSignal) => request<{ keys: import("@tabdo/shared").SiteKeyInfo[] }>("/api/site-keys", { signal }),
-  createSiteKey: (input: import("@tabdo/shared").SiteKeyInput) => request<{ key: import("@tabdo/shared").SiteKeyInfo; secret: string }>("/api/site-keys", { method: "POST", body: JSON.stringify(input), errorToast: false }),
-  updateSiteKey: (id: string, input: import("@tabdo/shared").SiteKeyInput) => request<{ key: import("@tabdo/shared").SiteKeyInfo }>(`/api/site-keys/${id}`, { method: "PATCH", body: JSON.stringify(input), errorToast: false }),
-  deleteSiteKey: (id: string) => request<{ id: string }>(`/api/site-keys/${id}`, { method: "DELETE", errorToast: false }),
   listApiKeys: (signal?: AbortSignal) => request<{ keys: UserApiKeyInfo[] }>("/api/user/api-keys", { signal }),
-  createApiKey: (name: string) => request<{ key: UserApiKeyInfo; secret: string }>("/api/user/api-keys", { method: "POST", body: JSON.stringify({ name }), errorToast: false }),
+  createApiKey: (input: import("@tabdo/shared").ApiKeyInput) => request<{ key: UserApiKeyInfo; secret: string }>("/api/user/api-keys", { method: "POST", body: JSON.stringify(input), errorToast: false }),
+  updateApiKey: (id: string, input: import("@tabdo/shared").ApiKeyInput) => request<{ key: UserApiKeyInfo }>(`/api/user/api-keys/${id}`, { method: "PATCH", body: JSON.stringify(input), errorToast: false }),
   deleteApiKey: (id: string) => request<{ id: string }>(`/api/user/api-keys/${id}`, { method: "DELETE", errorToast: false }),
   uploadFiles,
   getFiles: (ids: string[]) => request<{ files: import("@tabdo/shared").StoredFile[] }>(`/api/files?ids=${encodeURIComponent(ids.join(","))}`),

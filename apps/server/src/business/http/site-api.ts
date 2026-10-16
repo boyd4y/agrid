@@ -1,3 +1,4 @@
+import { createDataRestRoutes } from "./data-rest.js";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -16,7 +17,7 @@ export const siteSchemaSDL = /* GraphQL */ `
   type SelectOption { id: ID!, label: String!, color: String }
   type Column { id: ID!, name: String!, type: String!, options: [SelectOption!]!, readable: Boolean!, writable: Boolean! }
   type File { id: ID!, columnId: ID!, name: String!, mimeType: String!, size: Int!, url: String! }
-  type Row { id: ID!, tableId: ID!, cells: JSON!, files: [File!]!, createdAt: String!, updatedAt: String! }
+  type Row { id: ID!, tableId: ID!, version: Int!, cells: JSON!, files: [File!]!, createdAt: String!, updatedAt: String! }
   type RowsPage { rows: [Row!]!, nextCursor: String, hasMore: Boolean!, totalMatched: Int, limit: Int! }
   enum FilterOperator { eq neq contains not_contains is_empty is_not_empty gt gte lt lte }
   enum FilterLogic { and or }
@@ -27,7 +28,13 @@ export const siteSchemaSDL = /* GraphQL */ `
   type Table { id: ID!, name: String!, description: String, columns: [Column!]!, rows(options: RowsInput): RowsPage!, row(id: ID!): Row }
   type Query { tables: [Table!]!, table(id: ID!): Table }
   type CreateRowPayload { id: ID!, createdAt: String! }
-  type Mutation { createRow(tableId: ID!, cells: JSON!): CreateRowPayload! }
+  type UpdateRowPayload { id: ID!, updatedAt: String!, version: Int! }
+  type DeleteRowPayload { id: ID! }
+  type Mutation {
+    createRow(tableId: ID!, cells: JSON!): CreateRowPayload!
+    updateRow(tableId: ID!, rowId: ID!, cells: JSON!, expectedVersion: Int): UpdateRowPayload!
+    deleteRow(tableId: ID!, rowId: ID!): DeleteRowPayload!
+  }
 `;
 
 /** Expand fragments when charging complexity, so aliases/fragments cannot bypass limits. */
@@ -40,7 +47,7 @@ const boundedQuery: ValidationRule = context => ({ Document(node) {
       if (depth > 16 || fields > 1000 || roots > 20) { exceeded = true; return; }
       for (const selection of set.selections) {
         if (selection.kind === Kind.FIELD) {
-          fields++; if (depth === 1) { roots++; if (selection.name.value === "createRow") creates++; }
+          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow"].includes(selection.name.value)) creates++; }
           if (fields > 1000 || roots > 20) { exceeded = true; return; }
           if (selection.selectionSet) walk(selection.selectionSet, depth + 1, path);
         } else if (selection.kind === Kind.INLINE_FRAGMENT) walk(selection.selectionSet, depth, path);
@@ -68,7 +75,7 @@ function publicError(error: unknown, scope?: RequestScope): never {
   if (error instanceof GraphQLError) throw error;
   if (error instanceof ZodError) throw new GraphQLError("Invalid request data", { extensions: { code: "BAD_USER_INPUT" } });
   if (error instanceof ServiceError) {
-    const code = ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
+    const code = ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
     throw new GraphQLError(error.message, { extensions: { code, http: { status: error.status } } });
   }
   observe(scope, "site-api.request", error);
@@ -89,7 +96,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
   const route = new Hono();
   // This public surface never uses cookies and never inherits management CORS.
   for (const path of ["/graphql", "/site-files/*"]) {
-    route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "X-Tabdo-Key"], maxAge: 600 }));
+    route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key"], maxAge: 600 }));
     route.use(path, async (c, next) => { c.header("Cache-Control", "private, no-store"); c.header("Referrer-Policy", "no-referrer"); await next(); });
   }
   route.use("/graphql", bodyLimit({ maxSize: 128 * 1024, onError: c => c.json({ errors: [{ message: "Request body too large", extensions: { code: "PAYLOAD_TOO_LARGE" } }] }, 413) }));
@@ -112,7 +119,18 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
       keys.requireSiteTable(ctx.principal, args.tableId, "create");
       await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
       return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells);
-    }) },
+    }),
+      updateRow: safe(async (_root: unknown, args: { tableId: string; rowId: string; cells: unknown; expectedVersion?: number }, ctx: GraphContext) => {
+        keys.requireSiteTable(ctx.principal, args.tableId, "update");
+        await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
+        return data.siteUpdateRow(ctx.scope.commands, ctx, args.tableId, args.rowId, args.cells, args.expectedVersion);
+      }),
+      deleteRow: safe(async (_root: unknown, args: { tableId: string; rowId: string }, ctx: GraphContext) => {
+        keys.requireSiteTable(ctx.principal, args.tableId, "delete");
+        await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
+        return data.siteDeleteRow(ctx.scope.commands, ctx, args.tableId, args.rowId);
+      }),
+    },
   } });
   const yoga = createYoga<GraphContext>({ schema, graphqlEndpoint: "/api/graphql", graphiql: options.graphiql ?? false,
     cors: false, batching: false, logging: false,
@@ -122,7 +140,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
     let scope: RequestScope | undefined;
     try {
       scope = await acquire(c.req.raw);
-      const secret = c.req.header("X-Tabdo-Key") ?? "";
+      const secret = keys.requestApiKey(c.req.raw);
       const principal = await keys.resolveSiteKey(scope.commands.database, secret);
       // The composition supplies a trusted client address; forwarded headers
       // are deliberately not accepted from arbitrary browsers.
@@ -160,6 +178,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
       return c.json({ error: "File access failed" }, 500);
     } finally { await closePublicScope(scope); }
   });
+  route.route("/", createDataRestRoutes(acquire, options));
   return route;
 }
 
