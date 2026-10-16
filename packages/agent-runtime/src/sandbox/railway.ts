@@ -55,19 +55,32 @@ export function createRailwaySandboxAdapter(options: { token: string; environmen
       },
       async spawn(settings) {
         active(settings.abortSignal);
-        let stdout!: ReadableStreamDefaultController<Uint8Array>, stderr!: ReadableStreamDefaultController<Uint8Array>;
         const encoder = new TextEncoder();
-        const out = new ReadableStream<Uint8Array>({ start(controller) { stdout = controller; } });
-        const err = new ReadableStream<Uint8Array>({ start(controller) { stderr = controller; } });
+        const output = () => {
+          let controller!: ReadableStreamDefaultController<Uint8Array>, open = true;
+          const stream = new ReadableStream<Uint8Array>({
+            start(value) { controller = value; },
+            // Cancelling a reader releases its output, not the native process.
+            cancel() { open = false; },
+          });
+          return { stream,
+            write(chunk: string) { if (open) controller.enqueue(encoder.encode(chunk)); },
+            close() { if (open) { open = false;controller.close(); } },
+            error(reason: unknown) { if (open) { open = false;controller.error(reason); } },
+          };
+        };
+        const stdout = output(), stderr = output();
         const handle = native.exec(settings.command, { cwd: settings.workingDirectory ?? cwd, env: settings.env,
           signal: settings.abortSignal, captureOutput: false, ephemeral: true,
-          onStdout: chunk => stdout.enqueue(encoder.encode(chunk)), onStderr: chunk => stderr.enqueue(encoder.encode(chunk)) });
+          onStdout: stdout.write, onStderr: stderr.write });
         processes.add(handle);
         const complete = Promise.resolve(handle).then(result => ({ exitCode: result.exitCode ?? 128 }));
-        void complete.finally(() => { processes.delete(handle);stdout.close();stderr.close(); }).catch(() => {});
-        void complete.catch(() => {});
+        void complete.then(
+          () => { processes.delete(handle);stdout.close();stderr.close(); },
+          error => { processes.delete(handle);stdout.error(error);stderr.error(error); },
+        );
         let killing: Promise<void> | undefined;
-        return { stdout: out, stderr: err, wait: () => complete,
+        return { stdout: stdout.stream, stderr: stderr.stream, wait: () => complete,
           kill: () => killing ??= (async () => { if (processes.has(handle)) await handle.kill("KILL");await complete.catch(() => {}); })() };
       },
       async run(settings) {

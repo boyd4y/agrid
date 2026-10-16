@@ -5,16 +5,19 @@ import { createRailwaySandboxAdapter } from "../src/sandbox/railway.js";
 
 function fixture() {
   const data = new Map<string, Uint8Array>();
+  const pending = new Map<string, { stdout: (chunk: string) => void; stderr: (chunk: string) => void; finish: (exitCode: number | null) => void; fail: (error: unknown) => void }>();
   let destroyed = 0, killed = 0;
   const exec = (command: string, options?: ExecOptions) => {
     let resolve!: (result: ExecResult) => void, reject!: (error: unknown) => void;
     const promise = new Promise<ExecResult>((accept, fail) => { resolve = accept;reject = fail; });
     const finish = (exitCode: number | null) => resolve({ exitCode, stdout: command === "pwd" ? "/home/railway\n" : "", stderr: "", truncated: false, timedOut: false });
+    pending.set(command, { stdout: chunk => options?.onStdout?.(chunk), stderr: chunk => options?.onStderr?.(chunk), finish, fail: reject });
     const abort = () => reject(options?.signal?.reason);
     options?.signal?.addEventListener("abort", abort, { once: true });
     void promise.finally(() => options?.signal?.removeEventListener("abort", abort)).catch(() => {});
     queueMicrotask(() => {
       if (options?.signal?.aborted) { abort();return; }
+      if (command === "manual") return;
       if (command !== "pwd") { options?.onStdout?.("out");options?.onStderr?.("err"); }
       if (command !== "long") finish(command === "failure" ? 7 : 0);
     });
@@ -28,9 +31,62 @@ function fixture() {
     },
     heartbeat: async () => {}, destroy: async () => { destroyed++; },
   } as unknown as Sandbox;
-  return { native, data, destroyed: () => destroyed, killed: () => killed };
+  return { native, data, pending, destroyed: () => destroyed, killed: () => killed };
 }
 const settings = { token: "fixture-only", environmentId: "dedicated-fixture" };
+
+test("Railway reader cancellation discards only that output and preserves the running ExecHandle", async () => {
+  const f = fixture(), create = mock.method(Sandbox, "create", async () => f.native);
+  const { session } = await createRailwaySandboxAdapter(settings).create();
+  try {
+    for (const cancelled of ["stdout", "stderr", "both"] as const) {
+      const child = await session.spawn({ command: "manual" });
+      const stdout = child.stdout.getReader(), stderr = child.stderr.getReader();
+      if (cancelled !== "stderr") await stdout.cancel();
+      if (cancelled !== "stdout") await stderr.cancel();
+      const process = f.pending.get("manual")!;
+      assert.doesNotThrow(() => { process.stdout("late output");process.stderr("late error"); });
+      let completed = false;
+      void Promise.resolve(child.wait()).then(() => { completed = true; });
+      await Promise.resolve();
+      assert.equal(completed, false, "reader cancellation must not settle or kill the process");
+      assert.equal(f.killed(), 0);
+      process.finish(7);
+      assert.deepEqual(await child.wait(), { exitCode: 7 });
+      for (const [name, reader] of [["stdout", stdout], ["stderr", stderr]] as const) {
+        if (cancelled !== "both" && cancelled !== name) {
+          const chunk = await reader.read();
+          assert.equal(new TextDecoder().decode(chunk.value), name === "stdout" ? "late output" : "late error");
+        }
+        assert.equal((await reader.read()).done, true);
+      }
+      assert.doesNotThrow(() => { process.stdout("after exit");process.stderr("after exit"); });
+      stdout.releaseLock();stderr.releaseLock();
+    }
+  } finally { await session.destroy();create.mock.restore(); }
+});
+
+test("Railway keeps transport and abort failures observable after output cancellation", async () => {
+  const f = fixture(), create = mock.method(Sandbox, "create", async () => f.native);
+  const { session } = await createRailwaySandboxAdapter(settings).create();
+  try {
+    for (const cancelOutput of [false, true]) {
+      const controller = new AbortController();
+      const child = await session.spawn({ command: "manual", abortSignal: controller.signal });
+      const stdout = child.stdout.getReader(), stderr = child.stderr.getReader();
+      if (cancelOutput) await stdout.cancel();
+      const error = new Error(cancelOutput ? "fixture abort" : "fixture transport failure");
+      const wait = assert.rejects(Promise.resolve(child.wait()), reason => reason === error);
+      const reads = [assert.rejects(stderr.read(), reason => reason === error)];
+      if (!cancelOutput) reads.push(assert.rejects(stdout.read(), reason => reason === error));
+      if (cancelOutput) controller.abort(error);else f.pending.get("manual")!.fail(error);
+      await Promise.all([wait, ...reads]);
+      assert.equal(f.killed(), 0);
+      assert.doesNotThrow(() => { f.pending.get("manual")!.stdout("late");f.pending.get("manual")!.stderr("late"); });
+      stdout.releaseLock();stderr.releaseLock();
+    }
+  } finally { await session.destroy();create.mock.restore(); }
+});
 
 test("Railway maps actual IDs, streamed files/processes, endpoints and idempotent lifecycle", async (context) => {
   const f = fixture();
