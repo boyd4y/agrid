@@ -6,8 +6,9 @@ import { createDatabase } from "../../src/business/db/factory.js";
 import { createAuth } from "@tabdo/auth";
 import { getAuth, getDatabase, getDatabaseClient, requirePlatformResources, withPlatformResources } from "../../src/resources/scope.js";
 import { createApp } from "../../src/app.js";
-import { member, organization, user } from "../../src/db/schema.js";
-import { createTable } from "../../src/commands/index.js";
+import { member, organization, user, automationEvents } from "../../src/db/schema.js";
+import { createTable, getTable } from "../../src/commands/index.js";
+import type { BackgroundWakeup } from "../../src/business/background.js";
 
 test("concurrent product HTTP requests isolate database/auth resources and restore nested scopes", { timeout: 30000 }, async () => {
   const connectionString = process.env.DATABASE_URL ?? "";
@@ -18,7 +19,9 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
   const settings = { appUrl: "http://localhost:5173", baseURL: "http://localhost:3001", production: false, sendInviteEmail: async () => {} };
   const authA = createAuth({ ...settings, database: databaseA.db, secret: "scoped-one-explicit-test-signing-secret-12345" });
   const authB = createAuth({ ...settings, database: databaseB.db, secret: "scoped-two-explicit-test-signing-secret-67890" });
-  const resourcesA = { database: databaseA, auth: authA }, resourcesB = { database: databaseB, auth: authB };
+  const hintsA: BackgroundWakeup[] = [], hintsB: BackgroundWakeup[] = [];
+  const resourcesA = { database: databaseA, auth: authA, background: { notify: (hint: BackgroundWakeup) => { hintsA.push(hint); } } };
+  const resourcesB = { database: databaseB, auth: authB, background: { notify: (hint: BackgroundWakeup) => { hintsB.push(hint); } } };
   const appA = createApp({ appUrl: settings.appUrl, resources: resourcesA });
   const appB = createApp({ appUrl: settings.appUrl, resources: resourcesB });
   const email = `scope-${randomUUID()}@example.test`, orgId = randomUUID();
@@ -74,6 +77,20 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
     assert.equal(allowed.status, 200);
     assert(JSON.stringify(await allowed.json()).includes(table.id));
     assert.equal((await appB.request("http://localhost:3001/api/tables", { headers: { cookie } })).status, 401);
+    const schema = await withPlatformResources(resourcesA, () => getTable({ tableId: table.id, organizationId: orgId }));
+    async function command(name: string, input: unknown) {
+      const response = await appA.request("http://localhost:3001/api/commands", { method: "POST",
+        headers: { cookie, "content-type": "application/json", origin: settings.appUrl },
+        body: JSON.stringify({ command: name, input }) });
+      assert.equal(response.status, 200, await response.clone().text());
+      return (await response.json()).result;
+    }
+    await command("createAutomation", { tableId: table.id, name: "HTTP wakeup regression",
+      trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: schema.columns[0].id, value: "complete" }] });
+    hintsA.length = 0;
+    await command("addRow", { tableId: table.id, cells: { [schema.columns[0].id]: "HTTP committed row" } });
+    assert.deepEqual(hintsA, [{ kind: "outbox" }], "real HTTP writes retain the post-commit background notifier");
+    assert.deepEqual(hintsB, [], "background capabilities remain isolated between application instances");
     assert.equal((await appA.request("http://localhost:3001/detached-scope")).status, 200);
     assert.throws(getDatabase, /entry point/);
     releaseDetached();
@@ -82,6 +99,7 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
   } finally {
     releaseDetached();
     await detached?.catch(() => {});
+    await databaseA.db.delete(automationEvents).where(eq(automationEvents.organizationId, orgId));
     await databaseA.db.delete(organization).where(eq(organization.id, orgId));
     await databaseA.db.delete(user).where(eq(user.email, email));
     await Promise.all([databaseA.close(), databaseB.close()]);

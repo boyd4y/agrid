@@ -23,7 +23,7 @@ import { nativeDrainStarted, registerNativeRun } from "./harness/drain.js";
 /** Shared route assembly. The caller owns the supplied resources' lifetime. */
 export function createApp(options: { appUrl: string; resources: PlatformResources }) {
   const appUrl = options.appUrl;
-  const resources = Object.freeze({ database: options.resources.database, auth: options.resources.auth });
+  const resources = Object.freeze({ ...options.resources });
   const app = new Hono();
 
   app.use("*", (_c, next) => withPlatformResources(resources, next));
