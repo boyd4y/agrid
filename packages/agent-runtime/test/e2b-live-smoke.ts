@@ -12,6 +12,7 @@ import { createPi } from "@ai-sdk/harness-pi";
 import { createCodex } from "@ai-sdk/harness-codex";
 import { createClaudeCode } from "@ai-sdk/harness-claude-code";
 import { createE2BSandboxAdapter } from "../src/sandbox/e2b.js";
+import { withoutRequestTransformations } from "./fixture/e2b-forwarded-session.js";
 
 // Explicit opt-in only; this file is intentionally outside *.test.ts.
 const envIndex = process.argv.indexOf("--env-file");
@@ -274,8 +275,14 @@ async function piProbe() {
 }
 
 async function bridgeProbe(kind: "codex" | "claude-code") {
+  const forwarded = process.argv.includes("--credential-mode=forwarded");
+  const stopToCancel = process.argv.includes("--cancel-mode=stop");
+  const forHarness = forwarded ? withoutRequestTransformations : (session: Parameters<typeof withoutRequestTransformations>[0]) => session;
+  log(`${kind}-credential-mode`, "INFO", forwarded ? "SDK forwarding: dummy model credential enters Sandbox; optional request transformations absent; production default unchanged" : "default brokered path");
+  log(`${kind}-cancel-mode`, "INFO", stopToCancel ? "official session.stop()" : "AbortSignal");
   const sandbox = (await makeAdapter(kind).create()).session; known.add(sandbox.id); log("resource", "CREATED", sandbox.id);
   let session: HarnessAgentSession | undefined;
+  let phase = "prerequisites";
   try {
     const info = await Sandbox.getInfo(sandbox.id, { apiKey });
     log(`${kind}-resource-spec`, "INFO", JSON.stringify({ templateId: info.templateId, cpuCount: info.cpuCount, memoryMB: info.memoryMB }));
@@ -287,7 +294,8 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
       log(`${kind}-test-only-provision`, "PASS", "pnpm@10.32.1 installed only in disposable sandbox");
     }
     await sandbox.writeTextFile({ path: "e2b-model.mjs", content: await readFile(new URL("./fixture/e2b-model.mjs", import.meta.url), "utf8") });
-    const model = await sandbox.spawn({ command: "node e2b-model.mjs" });
+    const model = await sandbox.run({ command: "nohup node e2b-model.mjs > e2b-model.log 2>&1 < /dev/null & echo $! > e2b-model.pid" });
+    assert.equal(model.exitCode, 0);
     let ready = false;
     for (let i = 0; i < 30; i++) {
       if ((await sandbox.run({ command: "curl --fail --silent http://127.0.0.1:4010/health" })).exitCode === 0) { ready = true; break; }
@@ -299,37 +307,51 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
     const makeAgent = () => new HarnessAgent({ harness, model: kind === "codex" ? "gpt-5" : "claude-sonnet-4-5", permissionMode: "allow-all", sandboxConfig: { workDir: "bridge-work" }, tools: {} });
     const agent = makeAgent();
     // Attempt the actual official bootstrap before classifying missing dependencies.
-    session = await agent.createSession({ sessionId: `${runId}-${kind}`, sandboxSession: sandbox, abortSignal: AbortSignal.timeout(240_000) });
+    phase = "official createSession";
+    session = await agent.createSession({ sessionId: `${runId}-${kind}`, sandboxSession: forHarness(sandbox), abortSignal: AbortSignal.timeout(240_000) });
     log(`${kind}-bootstrap`, "PASS");
+    phase = "first native generate";
     const result = await agent.generate({ session, prompt: "Run the remote shell fixture once.", abortSignal: AbortSignal.timeout(60_000) });
     assert.equal(result.text, "E2B bridge complete.");
     const countPath = `${sandbox.defaultWorkingDirectory}/bridge-work/bridge-count`;
     assert.equal(await sandbox.readTextFile({ path: countPath }), "committed\n");
     const requests = await sandbox.readTextFile({ path: "bridge-requests.json" });
-    assert(requests?.includes("bridge-remote-tool-result"), "real shell result reaches remote model fixture");
+    assert(requests && requests.includes("bridge-remote-tool-result"), "real shell result reaches remote model fixture");
+    if (forwarded) {
+      const recorded = JSON.parse(requests) as { dummyCredentialReceived?: boolean }[];
+      assert(recorded.some(entry => entry.dummyCredentialReceived), "actual native HTTP request must carry the forwarded dummy model credential");
+    }
+    phase = "first official session.stop";
     const resumeFrom = JSON.parse(JSON.stringify(await session.stop())); session = undefined;
+    phase = "sandbox pause/connect";
     await sandbox.stop();
     assert.equal((await Sandbox.getInfo(sandbox.id, { apiKey })).state, "paused");
     const resumed = (await makeAdapter(kind).resume({ sandboxId: sandbox.id })).session;
     assert.equal(resumed.id, sandbox.id);
     assert.equal(await resumed.readTextFile({ path: countPath }), "committed\n");
     const next = makeAgent();
-    session = await next.createSession({ sessionId: `${runId}-${kind}`, sandboxSession: resumed, resumeFrom, abortSignal: AbortSignal.timeout(60_000) });
+    phase = "official resumed createSession/generate";
+    session = await next.createSession({ sessionId: `${runId}-${kind}`, sandboxSession: forHarness(resumed), resumeFrom, abortSignal: AbortSignal.timeout(60_000) });
     assert.equal((await next.generate({ session, prompt: "Recall the completed write without repeating it.", abortSignal: AbortSignal.timeout(60_000) })).text, "E2B bridge complete.");
     assert.equal(await resumed.readTextFile({ path: countPath }), "committed\n");
     const historyRequests = JSON.parse(await resumed.readTextFile({ path: "bridge-requests.json" }) ?? "[]") as { body: unknown }[];
     const latest = JSON.stringify(historyRequests.at(-1)?.body);
     assert(latest.includes("bridge-remote-tool-result") && latest.includes("E2B bridge complete."), "resumed native model request must carry actual prior tool result and reply");
     log(`${kind}-model-fixture-opaque-resume`, "PASS", sandbox.id);
+    phase = "native cancellation";
     await resumed.writeTextFile({ path: "bridge-phase", content: "cancel" });
     const controller = new AbortController();
     const running = await next.stream({ session, prompt: "Start the cancellable remote command.", abortSignal: controller.signal });
-    const drain = (async () => { for await (const _ of running.stream) { /* actual bridge turn */ } })();
+    let finished = false;
+    const drain = (async () => { try { for await (const _ of running.stream) { /* actual bridge turn */ } } finally { finished = true; } })();
     const pidPath = `${sandbox.defaultWorkingDirectory}/bridge-work/bridge-cancel.pid`;
     let pid: string | null = null;
     for (let i = 0; i < 100 && !pid; i++) { pid = await resumed.readTextFile({ path: pidPath }); if (!pid) await sleep(100); }
     assert(pid, "bridge shell must actually start before cancellation");
-    const cancelledAt = Date.now(); controller.abort();
+    assert(!finished, "cancel the active native turn before its command yields a background session");
+    const cancelledAt = Date.now();
+    if (stopToCancel) { await within(session.stop(), 10_000, `${kind} session.stop cancellation deadline exceeded`); session = undefined; }
+    else controller.abort();
     await within(drain, 10_000, `${kind} cancellation did not settle within 10 seconds`);
     let status = "";
     const deadline = Date.now() + 5_000;
@@ -338,12 +360,25 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
       if (!status || status.startsWith("Z")) break;
       await sleep(100);
     } while (Date.now() < deadline);
-    assert(!status || status.startsWith("Z"), `cancelled bridge command still running: ${status}`);
+    if (status && !status.startsWith("Z")) {
+      log(`${kind}-cancel-process`, "FAIL", `${pid.trim()}: ${status}; ${Date.now() - cancelledAt}ms after ${stopToCancel ? "session.stop" : "AbortSignal"}`);
+      if (!stopToCancel && session) {
+        try {
+          await within(session.stop(), 10_000, "official session.stop deadline exceeded"); session = undefined;
+          const afterStop = (await resumed.run({ command: `ps -o stat=,comm= -p ${pid.trim()} || true` })).stdout.trim();
+          log(`${kind}-stop-after-abort`, !afterStop || afterStop.startsWith("Z") ? "PASS" : "FAIL", afterStop || "process absent");
+        } catch (error) { log(`${kind}-stop-after-abort`, "FAIL", clean(error)); }
+      }
+      throw new Error(`cancelled bridge command still running: ${status}`);
+    }
     assert.equal(await resumed.readTextFile({ path: countPath }), "committed\n");
-    log(`${kind}-cancel`, "PASS", `${Date.now() - cancelledAt}ms`);
-    await session.stop(); session = undefined;
-    await model.kill(); await model.wait();
+    log(`${kind}-cancel`, "PASS", `${stopToCancel ? "session.stop" : "AbortSignal"}: ${Date.now() - cancelledAt}ms`);
+    await session?.stop(); session = undefined;
   } catch (error) {
+    log(`${kind}-failed-phase`, "FAIL", phase);
+    if (error instanceof Error && error.stack) {
+      log(`${kind}-error-frames`, "INFO", error.stack.split("\n").filter(line => line.trim().startsWith("at ")).slice(0, 10).join("\n"));
+    }
     try {
       const metrics = await Sandbox.getMetrics(sandbox.id, { apiKey });
       log(`${kind}-memory-diagnostic`, "INFO", JSON.stringify({ samples: metrics.length,
@@ -351,6 +386,8 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
       const kernel = await sandbox.run({ command: "sudo dmesg | grep -E 'Out of memory|Killed process|oom-kill' | tail -5" });
       if (kernel.stdout) log(`${kind}-kernel-diagnostic`, "INFO", kernel.stdout.slice(-2000));
       const requests = await sandbox.readTextFile({ path: "bridge-requests.json" });
+      const fixtureLog = await sandbox.readTextFile({ path: "e2b-model.log" });
+      if (fixtureLog) log(`${kind}-fixture-process`, "INFO", fixtureLog.slice(-2000));
       if (requests) {
         const entries = JSON.parse(requests) as { path: string; body: { tools?: { name: string; type: string }[] } }[];
         log(`${kind}-fixture-diagnostic`, "INFO", JSON.stringify(entries.map(entry => ({ path: entry.path, tools: entry.body.tools?.map(tool => `${tool.type}:${tool.name}`) }))));

@@ -12,7 +12,8 @@ const server = createServer(async (request, response) => {
   let raw = ""; for await (const part of request) raw += part;
   const body = JSON.parse(raw || "{}");
   if (request.url?.includes("count_tokens")) { response.setHeader("content-type", "application/json"); response.end('{"input_tokens":100}'); return; }
-  requests.push({ path: request.url, body });
+  requests.push({ path: request.url, body, dummyCredentialReceived:
+    request.headers.authorization === "Bearer local-fixture" || request.headers["x-api-key"] === "local-fixture" });
   writeFileSync("bridge-requests.json", JSON.stringify(requests));
   calls++;
   let phase = "write";
@@ -28,7 +29,7 @@ const server = createServer(async (request, response) => {
     const names = (body.tools ?? []).map(tool => tool.name);
     const name = ["exec_command", "shell_command", "shell"].find(name => names.includes(name));
     if (!name && invoke) { response.statusCode = 400; response.end(JSON.stringify({ error: { message: `No shell fixture tool: ${names.join(",")}` } })); return; }
-    const input = name === "exec_command" ? { cmd: toolCommand, yield_time_ms: 1000 } : name === "shell_command" ? { command: toolCommand } : { command: ["bash", "-lc", toolCommand] };
+    const input = name === "exec_command" ? { cmd: toolCommand, yield_time_ms: cancelling ? 10000 : 1000 } : name === "shell_command" ? { command: toolCommand } : { command: ["bash", "-lc", toolCommand] };
     const output = invoke ? { type: "function_call", id: `fc_e2b_${calls}`, call_id: `call_e2b_${calls}`, name, arguments: JSON.stringify(input), status: "completed" }
       : { type: "message", id: `msg_${calls}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: reply, annotations: [] }] };
     const result = { id: `resp_${calls}`, object: "response", created_at: 1, status: "in_progress", model: body.model, output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } };
