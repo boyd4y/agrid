@@ -98,13 +98,13 @@ async function main() {
         assert(mountedSkill?.includes(report.content), "SDK mounts the production Skill body before its first model request");
         assert.equal(await sandbox.readTextFile({ path: posix.join(skillDir, script.path), abortSignal: signal }), script.content, "the real Python script is mounted before the first model request");
         assert(messages.includes(report.name) && messages.includes(report.description), "production skill metadata reaches native provider");
-        assert(!messages.includes("csv.DictReader") && !body.messages.some((message) => contentText(message.content).includes(report.content)), "full production skill and script are read on demand through native tools");
+        assert(!messages.includes("csv.DictReader") && !body.messages.some((message) => contentText(message.content).includes(report.content) || contentText(message.content).includes(reference.content)), "full production skill, reference and script are read on demand through native tools");
         name = "read"; args = pathArgument(name, posix.join(workDir, "AGENTS.md"));
       }
       else if (nth === 2) { assert(messages.includes("remote-agents-marker")); name = "read"; args = pathArgument(name, posix.join(skillDir, "SKILL.md")); }
       else if (nth === 3) { assert(toolTexts(body).some((text) => text.includes(report.content)), "native read returns the complete current production Skill body"); name = "read"; args = pathArgument(name, posix.join(skillDir, reference.path)); }
-      else if (nth === 4) { assert(messages.includes("统计口径")); name = "read"; args = pathArgument(name, posix.join(skillDir, script.path)); }
-      else if (nth === 5) { assert(messages.includes("csv.DictReader")); name = "write"; args = { ...pathArgument(name, posix.join(workDir, "report-input.csv")), content: csv }; }
+      else if (nth === 4) { assert(toolTexts(body).some((text) => text.includes(reference.content)), "native read returns the complete production reference"); name = "read"; args = pathArgument(name, posix.join(skillDir, script.path)); }
+      else if (nth === 5) { assert(toolTexts(body).some((text) => text.includes(script.content)), "native read returns the complete production Python script"); name = "write"; args = { ...pathArgument(name, posix.join(workDir, "report-input.csv")), content: csv }; }
       else if (nth === 6) {
         name = "bash"; args = { command: `set -eu; command -v python3 >/dev/null; test ! -e ${shellQuote(posix.join(workDir, "report-count.txt"))}; python3 ${shellQuote(posix.join(skillDir, script.path))} ${shellQuote(posix.join(workDir, "report-input.csv"))} --group category --metric sum --value amount > ${shellQuote(posix.join(workDir, "report-output.json"))}; printf 'executed\\n' >> ${shellQuote(posix.join(workDir, "report-count.txt"))}; ${outputCommand()}`, timeout: 30 };
       }
@@ -112,7 +112,8 @@ async function main() {
       else if (nth === 8) {
         assert(messages.includes(firstReply), "official native journal restores the first reply");
         assert(messages.includes("Run the production report skill"), "official native journal restores the first user prompt");
-        assert(messages.includes("csv.DictReader") && messages.includes("统计口径"), "official native journal restores production script/reference reads");
+        assert(toolTexts(body).some((text) => text.includes(reference.content)), "official native journal restores the complete production reference read");
+        assert(toolTexts(body).some((text) => text.includes(script.content)), "official native journal restores the complete production Python script read");
         verifyNativeOutput(body);
         name = "bash"; args = { command: `set -eu; test "$(wc -l < ${shellQuote(posix.join(workDir, "report-count.txt"))})" -eq 1; ${outputCommand()}`, timeout: 30 };
       } else if (nth === 9) { verifyNativeOutput(body); }
