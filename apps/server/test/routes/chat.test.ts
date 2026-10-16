@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
+import { createServer, type RequestListener } from "node:http";
 import { Hono } from "hono";
+import { withChatFixture } from "../helpers/chat-fixture.js";
+import { activeNativeRunCount, waitForNativeDrain } from "../../src/harness/drain.js";
 import { and, eq } from "drizzle-orm";
 
 // Integration tests must never connect to the application database or a live model.
@@ -31,6 +33,16 @@ const users: string[] = [];
 let cookie = "", otherCookie = "", ownerId = "", agentId = "", agentUserId = "", threadId = "", tableId = "", foreignTableId = "";
 const req = async (path: string, body?: unknown, method = "POST", authCookie = cookie) => app.request(`http://localhost:3001/api${path}`, { method: body === undefined && method === "POST" ? "GET" : method, headers: { Cookie: authCookie, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 const actor = () => ({ userId: ownerId, organizationId: orgId, kind: "human" as const, memberId: "owner", role: "owner", name: "Owner", email: "test@local.test" });
+
+async function stopOwnedChat(ownedThreadId?: string, submission?: Promise<Response>) {
+  await submission;
+  if (!ownedThreadId) return;
+  const { runs } = await (await req(`/threads/${ownedThreadId}/runs`)).json();
+  for (const run of runs) if (run.status === "running") {
+    assert.equal((await req(`/threads/${ownedThreadId}/runs/${run.id}/cancel`, {})).status, 200);
+  }
+  await waitForNativeDrain();
+}
 
 async function signUp() {
   const response = await auth.handler(new Request("http://localhost:3001/api/auth/sign-up/email", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:5173" }, body: JSON.stringify({ email: `chat-${randomUUID()}@local.test`, password: "Test-chat-password-123!", name: "Chat Test" }) }));
@@ -548,11 +560,13 @@ test("native persona policy updates survive new turns and generate internal AGEN
   }
 });
 
-for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as const) test(`native run ${stop} stops a waiting model, checkpoints the result and never repeats the completed mutation`, { timeout: 15_000 }, async () => {
+for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as const) test(`native run ${stop} stops a waiting model, checkpoints the result and never repeats the completed mutation`, { timeout: 15_000 }, async (t) => {
   let requests = 0, reachedSecond!: () => void;
   const waiting = new Promise<void>((resolve) => { reachedSecond = resolve; });
   const tableName = `Cancellation-${randomUUID()}`;
-  const provider = createServer(async (request, response) => {
+  let ownedThreadId: string | undefined;
+  let submission: Promise<Response> | undefined;
+  const handler: RequestListener = async (request, response) => {
     for await (const _chunk of request) { /* drain the request body */ }
     requests++;
     response.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -565,36 +579,41 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
       response.flushHeaders();
       reachedSecond(); // Model stalls after a successful host mutation.
     }
-  });
-  await new Promise<void>((resolve) => provider.listen(0, "127.0.0.1", resolve));
-  const address = provider.address(); assert(address && typeof address !== "string");
-  const previousURL = process.env.PI_BASE_URL, previousPoll = process.env.AI_RUN_POLL_MS, previousTotal = process.env.AI_CHAT_TOTAL_MS;
-  const limitNames = ["AI_CHAT_FIRST_CHUNK_MS", "AI_CHAT_STEP_MS", "AI_CHAT_CHUNK_MS"];
-  const previousLimits = Object.fromEntries(limitNames.map((name) => [name, process.env[name]]));
-  process.env.PI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
-  process.env.PI_API_KEY = "local-test-provider"; process.env.AI_RUN_POLL_MS = "200";
-  if (stop === "timeout") process.env.AI_CHAT_TOTAL_MS = "1000";
-  if (["first-output", "step", "chunk"].includes(stop)) process.env.AI_CHAT_TOTAL_MS = "3000";
-  if (stop === "first-output") process.env.AI_CHAT_FIRST_CHUNK_MS = "350";
-  if (stop === "step") process.env.AI_CHAT_STEP_MS = "350";
-  if (stop === "chunk") process.env.AI_CHAT_CHUNK_MS = "350";
-  try {
-    const thread = await (await req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
-    const response = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "cancel-user", role: "user", parts: [{ type: "text", text: "创建表格后继续说明" }] }] });
+  };
+  await withChatFixture(t, {
+    handler,
+    env: {
+      PI_API_KEY: "local-test-provider", AI_RUN_POLL_MS: "200",
+      AI_CHAT_TOTAL_MS: stop === "timeout" ? "1000" : ["first-output", "step", "chunk"].includes(stop) ? "3000" : undefined,
+      AI_CHAT_FIRST_CHUNK_MS: stop === "first-output" ? "350" : undefined,
+      AI_CHAT_STEP_MS: stop === "step" ? "350" : undefined,
+      AI_CHAT_CHUNK_MS: stop === "chunk" ? "350" : undefined,
+    },
+    stop: () => stopOwnedChat(ownedThreadId, submission),
+    drained: async () => {
+      await waitForNativeDrain();
+      assert.equal(activeNativeRunCount(), 0);
+    },
+  }, async (fixture) => {
+    const request: typeof req = (...args) => fixture.wait(req(...args));
+    const thread = await (await request("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId })).json();
+    ownedThreadId = thread.id;
+    submission = req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "cancel-user", role: "user", parts: [{ type: "text", text: "创建表格后继续说明" }] }] });
+    const response = await fixture.wait(submission);
     assert.equal(response.status, 200);
     const completion = response.text();
-    await waiting;
-    const active = await (await req(`/threads/${thread.id}/runs`)).json();
+    await fixture.handshake(waiting, completion, () => `stop=${stop}, modelRequests=${requests}, thread=${thread.id}`);
+    const active = await (await request(`/threads/${thread.id}/runs`)).json();
     assert.equal(active.runs[0].status, "running");
-    assert.equal((await req(`/threads/${thread.id}`, undefined, "DELETE")).status, 409);
-    const concurrent = await req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "concurrent-user", role: "user", parts: [{ type: "text", text: "另外一个请求" }] }] });
+    assert.equal((await request(`/threads/${thread.id}`, undefined, "DELETE")).status, 409);
+    const concurrent = await request("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "concurrent-user", role: "user", parts: [{ type: "text", text: "另外一个请求" }] }] });
     assert.equal(concurrent.status, 409); assert.match(await concurrent.text(), /正在运行/);
-    if (stop === "cancel") assert.equal((await req(`/threads/${thread.id}/runs/${active.runs[0].id}/cancel`, {})).status, 200);
-    const stream = await completion;
+    if (stop === "cancel") assert.equal((await request(`/threads/${thread.id}/runs/${active.runs[0].id}/cancel`, {})).status, 200);
+    const stream = await fixture.wait(completion);
     const explanation = stop === "cancel" ? /已停止执行/ : stop === "first-output" ? /模型首个输出等待超时/ : stop === "step" ? /本轮步骤执行超时/ : stop === "chunk" ? /模型输出流超时/ : /本轮执行超时/;
     if (stop === "cancel") assert(!stream.includes("系统提示") && !stream.includes("已停止执行"));
     else assert.match(stream, explanation);
-    const finished = await (await req(`/threads/${thread.id}/runs`)).json();
+    const finished = await (await request(`/threads/${thread.id}/runs`)).json();
     assert.equal(finished.runs[0].status, stop === "cancel" ? "cancelled" : "failed");
     const history = await loadMessages(thread.id, actor());
     assert.equal(history.messages.length, 2);
@@ -605,16 +624,44 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
     const [checkpoint] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.threadId, thread.id));
     assert(checkpoint.resumeState); assert(checkpoint.workspace?.some((entry) => entry.path.endsWith(".jsonl")));
     assert.equal(checkpoint.lastAssistantMessageId, history.headId);
-    const tables = await (await req("/tables")).json();
+    const tables = await (await request("/tables")).json();
     assert.equal(tables.filter((table: { name: string }) => table.name === tableName).length, 1);
     assert.equal(requests, 2);
-  } finally {
-    process.env.PI_API_KEY = ""; process.env.PI_BASE_URL = previousURL ?? "";
-    if (previousPoll === undefined) delete process.env.AI_RUN_POLL_MS; else process.env.AI_RUN_POLL_MS = previousPoll;
-    if (previousTotal === undefined) delete process.env.AI_CHAT_TOTAL_MS; else process.env.AI_CHAT_TOTAL_MS = previousTotal;
-    for (const [name, value] of Object.entries(previousLimits)) { if (value === undefined) delete process.env[name];else process.env[name] = value; }
-    provider.closeAllConnections(); await new Promise<void>((resolve) => provider.close(() => resolve()));
-  }
+  });
+});
+
+test("aborting a model handshake drains the real accepted run before restoring the next case's environment", { timeout: 15_000 }, async (t) => {
+  const names = ["PI_API_KEY", "PI_BASE_URL", "AI_RUN_POLL_MS", "AI_CHAT_TOTAL_MS", "AI_CHAT_FIRST_CHUNK_MS"];
+  const previous = Object.fromEntries(names.map(name => [name, process.env[name]]));
+  const abort = new AbortController(), reason = new Error("test aborted while waiting for the second model request");
+  let ownedThreadId: string | undefined, submission: Promise<Response> | undefined;
+  let requests = 0;
+  await assert.rejects(withChatFixture({ signal: abort.signal, after: t.after.bind(t), diagnostic: t.diagnostic.bind(t) }, {
+    env: { PI_API_KEY: "abort-test-provider", AI_RUN_POLL_MS: "200", AI_CHAT_TOTAL_MS: "3000", AI_CHAT_FIRST_CHUNK_MS: "350" },
+    handler: async (request, response) => {
+      for await (const _chunk of request) { /* drain the actual Harness model request */ }
+      requests++;
+      response.writeHead(200, { "Content-Type": "text/event-stream" }); response.flushHeaders();
+      abort.abort(reason);
+    },
+    stop: () => stopOwnedChat(ownedThreadId, submission),
+    drained: async () => {
+      assert.equal(activeNativeRunCount(), 0);
+      assert.equal(process.env.AI_CHAT_FIRST_CHUNK_MS, "350");
+    },
+  }, async fixture => {
+    const thread = await (await fixture.wait(req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId }))).json();
+    ownedThreadId = thread.id;
+    submission = req("/chat", { id: thread.id, agentId, context: { page: "ai" }, messages: [{ id: "aborted-handshake-user", role: "user", parts: [{ type: "text", text: "等待模型响应" }] }] });
+    const response = await fixture.wait(submission);
+    await fixture.handshake(new Promise<void>(() => {}), response.text(), () => `modelRequests=${requests}`);
+    assert.fail("the second model request was never reached");
+  }), error => error === reason);
+  assert.equal(requests, 1);
+  assert.equal(activeNativeRunCount(), 0);
+  assert.deepEqual(Object.fromEntries(names.map(name => [name, process.env[name]])), previous);
+  const { runs } = await (await req(`/threads/${ownedThreadId}/runs`)).json();
+  assert.equal(runs[0].status, "cancelled");
 });
 
 test("native step limit suspends a turn and ordinary follow-up officially resumes without replaying tools", { timeout: 15_000 }, async () => {
