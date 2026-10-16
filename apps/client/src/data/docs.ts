@@ -81,13 +81,13 @@ export function searchDocs(query: string, locale?: string): DocsPage[] {
     .map((x) => x.p);
 }
 
-/** Markdown-ish index for /docs/llms.txt generators */
+/** Markdown index linking to documentation pages for /docs/llms.txt generators. */
 export function docsLlmsLines(origin: string = BRAND.url, locale?: string): string[] {
   const lines = ["# tabdo", ""];
   for (const section of docsNav(locale)) {
     lines.push(`## ${section.title}`);
     for (const p of section.pages) {
-      lines.push(`- [${p.title}](${origin}/docs/${p.slug}.md): ${p.description}`);
+      lines.push(`- [${p.title}](${origin}/docs/${p.slug}): ${p.description}`);
     }
     lines.push("");
   }
