@@ -16,9 +16,10 @@ import { loadBuiltinSkillDocuments } from "../../src/skills/builtin-loader.js";
 type ProviderRequest = { messages: { role: string; content: unknown }[]; tools?: { function: { name: string; parameters?: { properties?: Record<string, unknown> } } }[] };
 const providerFlag = process.argv.indexOf("--provider");
 const selectedProvider = sandboxProviderSchema.parse(providerFlag < 0 ? "vercel" : process.argv[providerFlag + 1]);
-const credentialNames = ["VERCEL_TOKEN", "VERCEL_TEAM_ID", "VERCEL_PROJECT_ID", "VERCEL_OIDC_TOKEN", "E2B_API_KEY", "E2B_TEMPLATE", "E2B_TIMEOUT_MS",
+const configurationNames = ["VERCEL_TOKEN", "VERCEL_TEAM_ID", "VERCEL_PROJECT_ID", "VERCEL_OIDC_TOKEN", "E2B_API_KEY", "E2B_TEMPLATE", "E2B_TIMEOUT_MS",
   "RAILWAY_API_TOKEN", "RAILWAY_ENVIRONMENT_ID", "RAILWAY_SANDBOX_ENVIRONMENT_ID", "RAILWAY_SANDBOX_CHECKPOINT", "RAILWAY_SANDBOX_REGION", "RAILWAY_SANDBOX_IDLE_MINUTES"] as const;
-const credentials = Object.fromEntries(credentialNames.map(name => [name, process.env[name]?.trim() || undefined]));
+const credentials = Object.fromEntries(configurationNames.map(name => [name, process.env[name]?.trim() || undefined]));
+const credentialNames = ["VERCEL_TOKEN", "VERCEL_OIDC_TOKEN", "E2B_API_KEY", "RAILWAY_API_TOKEN"] as const;
 const providerStatus = listRuntimeProviders(credentials).find(entry => entry.id === selectedProvider)!;
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const redact = (value: string) => {
@@ -26,6 +27,12 @@ const redact = (value: string) => {
   return value.slice(0, 2000);
 };
 const assertion = (error: unknown) => error instanceof assert.AssertionError ? redact(error.message) : error instanceof Error ? error.name : "unknown error";
+const contentText = (content: unknown): string => {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map(contentText).join("\n");
+  if (content && typeof content === "object" && "text" in content) return contentText(content.text);
+  return "";
+};
 
 async function main() {
   if (!providerStatus.available) {
@@ -60,15 +67,9 @@ async function main() {
   let session: HarnessAgentSession | undefined, workDir = "", skillDir = "", phase = "provider fixture startup";
   let passed = false, cleanupFailed = false;
   const outputCommand = () => `printf 'remote-report-json='; cat ${shellQuote(posix.join(workDir, "report-output.json"))}; printf 'remote-report-executions=1\\n'`;
+  const toolTexts = (body: ProviderRequest) => body.messages.filter((message) => message.role === "tool").map((message) => contentText(message.content));
   const verifyNativeOutput = (body: ProviderRequest) => {
-    const contentText = (content: unknown): string => {
-      if (typeof content === "string") return content;
-      if (Array.isArray(content)) return content.map(contentText).join("\n");
-      if (content && typeof content === "object" && "text" in content) return contentText(content.text);
-      return "";
-    };
-    const texts = body.messages.filter((message) => message.role === "tool").map((message) => contentText(message.content));
-    const output = texts.at(-1);
+    const output = toolTexts(body).at(-1);
     assert(output, "real native bash output must reach the model");
     const match = output.match(/remote-report-json=(\[[^\r\n]+\])/);
     console.log(`[remote-smoke] report self-owned data ${JSON.stringify({ modelCall: calls.length, expected, actual: match ? redact(match[1]) : null,
@@ -97,11 +98,11 @@ async function main() {
         assert(mountedSkill?.includes(report.content), "SDK mounts the production Skill body before its first model request");
         assert.equal(await sandbox.readTextFile({ path: posix.join(skillDir, script.path), abortSignal: signal }), script.content, "the real Python script is mounted before the first model request");
         assert(messages.includes(report.name) && messages.includes(report.description), "production skill metadata reaches native provider");
-        assert(!messages.includes("先明确报告给谁看") && !messages.includes("csv.DictReader"), "full production skill and script are read on demand through native tools");
+        assert(!messages.includes("csv.DictReader") && !body.messages.some((message) => contentText(message.content).includes(report.content)), "full production skill and script are read on demand through native tools");
         name = "read"; args = pathArgument(name, posix.join(workDir, "AGENTS.md"));
       }
       else if (nth === 2) { assert(messages.includes("remote-agents-marker")); name = "read"; args = pathArgument(name, posix.join(skillDir, "SKILL.md")); }
-      else if (nth === 3) { assert(messages.includes("先明确报告给谁看")); name = "read"; args = pathArgument(name, posix.join(skillDir, reference.path)); }
+      else if (nth === 3) { assert(toolTexts(body).some((text) => text.includes(report.content)), "native read returns the complete current production Skill body"); name = "read"; args = pathArgument(name, posix.join(skillDir, reference.path)); }
       else if (nth === 4) { assert(messages.includes("统计口径")); name = "read"; args = pathArgument(name, posix.join(skillDir, script.path)); }
       else if (nth === 5) { assert(messages.includes("csv.DictReader")); name = "write"; args = { ...pathArgument(name, posix.join(workDir, "report-input.csv")), content: csv }; }
       else if (nth === 6) {
