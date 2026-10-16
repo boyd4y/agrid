@@ -57,24 +57,53 @@ Harness 1.0.149 会隐藏 host tool 参数校验原因，且忽略继承的 `str
 
 `get_workspace` 读取当前工作区及执行成员身份；`list_members` 按姓名或邮箱查找人员与智能体，支持 `kind=human|agent`、offset/limit 分页。成员返回 `userId` 与成员记录 `id`，person 字段和 run_agent 的 agentUserId 都使用 `userId`。智能体查询还返回显示名与人设，不返回 API Key。两项工具共用已认证工作区范围及 UI 成员数据，MCP 使用相同命令层；模型不能传入其他 organizationId。原生 Harness 负责执行工具，平台不要求用户手动查找 ID。
 
-## 运行环境
+## 运行方式、提供商与配置（2026-10-17）
 
-| 模式 | 当前 adapter | 文件和命令能力 |
+产品将助手（Pi、Codex、Claude Code）与运行方式分开选择。Local 在当前服务主机或专用容器执行；Sandbox 再选择 Vercel、E2B 或 Railway。显式选中的提供商会随对话固定保存。编辑智能体的模式/提供商不会迁移既有对话；旧配置不可用时请求会明确失败，不能静默切到别的提供商。
+
+### 环境变量
+
+下表中的控制面凭证（例如各 Sandbox 提供商的访问凭证）只注入服务端进程，不写入 Sandbox 模板或客户端。模型服务凭证不同：官方 Harness 流程可能会按助手与提供商配置将其转发到受信任的 Sandbox。不要假设凭证 brokering 已提供隔离代理，也不要把本地 dummy 模型凭证验收当作真实模型凭证的转发或安全验证。`.env.example` 是配置名的完整入口；下面概括运行所需条件：
+
+### 模型服务配置
+
+模型凭证由所选助手的原生集成使用。Sandbox 模式下，凭证可能按官方 Harness credential forwarding 流程转发到受信任的 Sandbox；除非相应能力明确受支持，不要假定平台会通过 brokering 拦截或隔离模型凭证。
+
+| 助手 | 凭证与兼容接口 | 模型选择 |
 | --- | --- | --- |
-| local | Pi + Node 文件/进程适配器 | 每个会话独立真实临时目录，使用系统 bash、Node、Python 等已安装工具；CF 模式在专属容器内运行 |
-| sandbox | 官方 Vercel sandbox + Pi/Codex/Claude Code | 远程文件与进程；原生 session 与 sandbox 分别保存和恢复 |
+| Pi | 必须同时设置 `PI_API_KEY` 与 `PI_BASE_URL`；endpoint 使用 OpenAI-compatible API。 | 智能体中选择的模型 ID 优先；否则使用 `PI_MODEL`。可选 `PI_THINKING_LEVEL`、`PI_CONTEXT_WINDOW`、`PI_MAX_OUTPUT_TOKENS`。 |
+| Codex | 设置 `OPENAI_API_KEY` 或 `CODEX_API_KEY`；可选 `OPENAI_BASE_URL` 或 `CODEX_BASE_URL`，自定义服务必须兼容 OpenAI Responses API。 | 智能体模型 ID 优先，否则使用 `CODEX_MODEL` 或原生默认模型。 |
+| Claude Code | 设置 `ANTHROPIC_API_KEY` 或 `CLAUDE_API_KEY`；可选 `ANTHROPIC_BASE_URL`，自定义服务必须兼容 Anthropic Messages API。 | 智能体模型 ID 优先，否则使用 `CLAUDE_MODEL` 或原生默认模型。 |
 
-Codex 和 Claude Code 的 bridge 仍需已接入的网络 sandbox；真实文件和进程适配器并不代表这些 bridge 已完成接入。未配置运行环境或模型凭证时直接报错，原生工厂没有离线规则或普通模型调用回落。
+优先级和协议按当前解析行为执行：每个助手只使用自己的完整凭证配置，不混用其他助手的密钥。Pi 的模型 ID 必须属于直连 endpoint；旧 `openrouter/free`、`openrouter/auto` 路由别名不能作为原生 Codex/Claude Code 模型 ID。
 
-Pi 使用直连兼容提供商，需要 `PI_API_KEY`、`PI_BASE_URL` 和模型 ID（推荐 DeepSeek）。Codex、Claude Code 分别使用显式 OpenAI Responses、Anthropic Messages 配置。运行层不会自动发现服务器个人 CLI 登录信息。
+| 运行方式/提供商 | 配置 | 默认和限制 |
+| --- | --- | --- |
+| Local | `HARNESS_LOCAL_ENABLED=true`；可选 `LOCAL_SANDBOX_NPM_REGISTRY`、`LOCAL_SANDBOX_HTTPS_PROXY`、`LOCAL_SANDBOX_DIRECTORY` | 本地模式默认启用。Codex/Claude Code 的持久工作目录应在 API/worker 可共同访问的同一磁盘或挂载卷。命令以宿主权限运行；目录隔离不是 OS 安全边界，仅用于受信任开发环境或专用容器。 |
+| Vercel | `VERCEL_TOKEN` + `VERCEL_TEAM_ID` + `VERCEL_PROJECT_ID`，或 `VERCEL_OIDC_TOKEN` | 新 Sandbox 默认提供商为 `vercel`，历史默认保持不变。本轮无真实云凭证，云端运行/恢复尚未验收；代码配置与契约测试不等于真实云验证。 |
+| E2B | 必需 `E2B_API_KEY`；可选 `E2B_TEMPLATE`、`E2B_TIMEOUT_MS` | 当前仅 Pi 可用。默认 timeout 为 30 分钟；自定义值必须为正整数。当前 Codex/Claude Code 组合在创建前禁用，不使用 test-only credential forwarding。 |
+| Railway | 必需 `RAILWAY_API_TOKEN`、`RAILWAY_SANDBOX_ENVIRONMENT_ID`；可选 `RAILWAY_SANDBOX_CHECKPOINT`、`RAILWAY_SANDBOX_REGION`、`RAILWAY_SANDBOX_IDLE_MINUTES` | Sandbox 环境 ID 必须与应用部署的 `RAILWAY_ENVIRONMENT_ID` 不同，不能将应用生产环境用于 Sandbox。Pi 当前可用；Codex、Claude、Claude Code 暂时禁用。设置空闲期限可控制 VM 到期销毁时间；过期后原会话不能恢复。 |
 
-Sandbox 使用 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或部署环境 OIDC。已有 sandbox 必须通过 SDK resume lookup 恢复，不能拿旧 ID 调用 create 假装恢复。
+`SANDBOX_PROVIDER` 是新 Sandbox 对话的服务端默认值，仅当对话没有显式选择提供商时使用；默认 `vercel`。`RAILWAY_SANDBOX_IDLE_MINUTES` 应设置为非负整数。Railway 没有 pause：每轮停止时关闭本轮进程/句柄，但 VM 会继续运行，并在空闲期限到达或显式销毁前持续计费。E2B stop 会暂停；同一 Sandbox 通过原 ID 恢复。过期或销毁后不能用 create 替代恢复。Vercel 本轮没有真实云验收，不推断其实际部署行为超出既有 SDK 公共契约。
 
-四个内置技能来自 `apps/server/skills/{table,form,report,automation}` 的真实 `SKILL.md` 与递归引用/脚本文件。工作区启用和智能体分配的交集作为官方 `skills` bundle 传入 Harness；首次模型请求只收到名称、描述与读取位置，完整业务方法通过原生 `read` 按需读取。`skills-bundle.test.ts` 使用真实四包和官方 Pi 原生工具验证逐文件挂载、读取完整 report 文档/脚本及 `bash` 读取 reference；停止后恢复工作区并撤销 report 分配，SDK 移除旧目录，新 turn 无法再读取旧脚本。平台 API 与 Explorer 保持内置内容只读，管理员启停不修改内容。[官方 Skills 文档](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)说明这种按需加载与后续 turn 更新方式。
+E2B 官方 Harness adapter 不接受 credential request transformation 的 header matcher；Harness 的凭证 brokering 需要按请求头匹配凭证时，当前会在创建前拒绝 Codex/Claude Code 组合。单独的测试夹具曾通过测试专用视图隐藏可选 brokering 方法，观察 SDK 将 dummy 模型凭证直接转发给 Sandbox 的行为；该路径没有改变生产 adapter，也没有证明真实凭证转发的安全性或生产可用性。不得将其作为生产开关或支持承诺。
 
-命令直接通过系统 bash 启动真实进程，文件读写落在真实目录；Railway Node 镜像包含 bash、Node 和 Python 3。普通 Node 本地模式使用宿主已安装的程序，临时目录用于文件组织，并不提供操作系统级隔离；远程工作区由所选 Sandbox 提供对应执行能力。工作区快照仅收集自有目录，不跟随符号链接，不保存服务器文件或环境变量。旧内存工作区快照按逻辑路径恢复到真实目录，原生会话继续由 SDK 恢复。
+四个内置技能通过官方 `skills` bundle 提供。工作区启用和智能体分配的交集作为 bundle 传入 Harness；首次模型请求只收到名称、描述与读取位置，完整方法按需读取。工作区或分配变更会更新后续 turn 可读取的内容。平台 API 与 Explorer 中的内置内容保持只读，管理员启停不修改技能内容。实现和官方接口的具体说明见 [Harness Skills 文档](https://ai-sdk.dev/docs/ai-sdk-harnesses/skills)。
 
-真实远程验收使用显式启用的 `test:harness:remote` 命令，覆盖原生远程 read/write/bash、AGENTS 与按需读取的真实生产 report Skill/reference/Python script。原生 write 创建独立 CSV，原生 bash 执行 `summarize-csv.py` 并校验真实 JSON 聚合；停止 Sandbox 后通过官方恢复核对原生历史、文件/输出保留和脚本计数仍为一，最终销毁测试资源。它使用当前产品 node24 模板，缺少 Python 会明确失败，不能靠安装解释器或宿主运行冒充该环境支持。Pi 模型由宿主本地 fixture 提供，不需要付费模型或业务数据库。缺凭证、未启用或任何执行/清理失败都不算 PASS；本机当前缺 Vercel 凭证，只完成类型检查、阻断 preflight 和生产脚本的宿主窄参数/JSON契约验证，真实远程仍未验收。命令和退出码见 [测试说明](testing.md)。
+提供商/助手组合当前的证据范围：
+
+| 组合 | 截至 2026-10-17 的实际验证与限制 |
+| --- | --- |
+| Local / Pi | 两轮真实产品运行、真实表命令、问答续接/取消代表场景已验证。 |
+| Local / Codex | 两轮产品运行及本地 SDK/工具/文件与同 ID 历史恢复范围已验证；首次深路径测试启动失败且原始原因未知。Local 的长时 shell 命令取消未验证。 |
+| Local / Claude Code | 两轮产品运行及外部目录 SDK/工具/文件与同 ID 历史恢复范围已验证；长时 shell 命令取消未验证。 |
+| E2B / Pi | 最终版本两轮真实云产品运行、同 ID 恢复与资源销毁验证通过。 |
+| E2B / Codex、Claude Code | 创建前拒绝；默认凭证代理组合不兼容，未创建 Sandbox。 |
+| Railway / Pi | 最终版本两轮真实云产品运行通过。一次运行的自动清理未能确认，随后对本次运行自有 ID 做了精确补偿销毁，原因未知；另一次独立运行中，公共自动销毁调用一次，首次只读状态即为 DESTROYED，后续独立检查仍为 DESTROYED。产品资源销毁通过，但早先异常原因仍未定位。 |
+| Railway / Codex、Claude、Claude Code | 当前创建前拒绝。Codex 的执行与同 ID 恢复曾通过，但长命令活跃取消失败，因此该组合暂禁；Claude 初次生成/夹具疑点未排除，恢复取消未验。不得据部分成功启用。 |
+| Vercel / 所有助手 | 配置解析与现有契约保留；本轮无真实云凭证，真实云创建/恢复未验证。 |
+
+核心集成验收中的 HTTP 模型响应由本地 fixture 提供，但助手、工具、数据库/队列链和云 Sandbox 是真实执行对象。fixture 只替代模型服务响应，不能计作真实模型或额外云端能力验证。另一次 Railway 生命周期观察记录了产品入口完成后宿主进程没有自然退出；这项受限结束与云资源销毁结果分开，不以销毁成功覆盖宿主退出问题。不要把实现存在、契约测试或 preflight 写成真实云 PASS。
 
 ## 并发边界
 

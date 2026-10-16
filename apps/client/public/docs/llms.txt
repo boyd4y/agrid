@@ -8,7 +8,7 @@
 - [From an idea to the next step](https://tabdo.ai/docs/how-it-works): Describe a goal, organize what you know, review the result, and choose what to do next.
 
 ## Agents
-- [Choose a model and run mode](https://tabdo.ai/docs/harness): Choose from available models and run modes in your workspace.
+- [Choose a model and run mode](https://tabdo.ai/docs/harness): Choose an available model, Local or Sandbox mode, and provider for a new conversation; review environment limits.
 - [Create and manage agents](https://tabdo.ai/docs/agent-auth): Create agents, edit settings, and review workspace permissions.
 
 ## For people

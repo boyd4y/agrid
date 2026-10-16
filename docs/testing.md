@@ -10,9 +10,13 @@ pnpm typecheck:test
 pnpm --filter @tabdo/shared test
 pnpm --filter @tabdo/client test
 # 数据库须独立、已迁移，名称以 _agent_test 结尾
-DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm test
+DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
+DATABASE_URL_UNPOOLED=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
+  pnpm test
 pnpm build
 ```
+
+运行数据库测试或迁移时，显式将 `DATABASE_URL` 与 `DATABASE_URL_UNPOOLED` 都指向同一个专用测试库。迁移优先使用 `DATABASE_URL_UNPOOLED`；若当前 shell 已有私有/Neon 配置，只覆盖一个 URL 可能会把迁移导向另一个数据库。测试库必须独立，不能使用用户或业务数据。
 
 server 常规入口覆盖 AI 错误、关联、报告/独立自动化、Skill、原生 Harness 和 chat API。仍保留 `test:chat`、`test:relations`、`test:reports`、`test:skills`、`test:harness` 各业务入口。`test:queue` 单独运行，因为它要求专用队列数据库和 Redis，不能与其他用例共用存储。
 
@@ -24,20 +28,26 @@ pnpm --filter @tabdo/server exec tsx --test test/harness/skills-bundle.test.ts
 
 ## 显式启用的真实 Sandbox 验收
 
-`apps/server/test/harness/remote-smoke.ts` 不在常规测试的 `*.test.ts` 范围内。它需要 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID` 三项完整配置，或有效 `VERCEL_OIDC_TOKEN`。凭证通过环境或仓库 `.env` 读取，脚本不输出凭证值。先检查配置，再显式启用真实资源创建：
+`apps/server/test/harness/remote-smoke.ts` 是显式远程验收入口，实际创建 Pi Sandbox，并让 Pi 使用本地确定性 HTTP 模型 fixture；fixture 不替代 Sandbox、文件/命令、同 ID 恢复或资源销毁。脚本默认选择 Vercel，可用 `--provider vercel|e2b|railway` 指定提供商。先根据 `.env.example` 在测试进程环境中配置对应凭证：
+
+- Vercel：`VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`，或 `VERCEL_OIDC_TOKEN`。
+- E2B：`E2B_API_KEY`；`E2B_TEMPLATE` 与 `E2B_TIMEOUT_MS` 可选。
+- Railway：`RAILWAY_API_TOKEN` 与专用 `RAILWAY_SANDBOX_ENVIRONMENT_ID`；可选 checkpoint、region 和 idle timeout。不要使用应用部署环境 ID。
+
+先检查配置，再明确启用真实资源创建：
 
 ```bash
-pnpm --filter @tabdo/server test:harness:remote -- --preflight
-HARNESS_REMOTE_SMOKE=1 pnpm --filter @tabdo/server test:harness:remote
+pnpm --filter @tabdo/server test:harness:remote -- --provider e2b --preflight
+HARNESS_REMOTE_SMOKE=1 pnpm --filter @tabdo/server test:harness:remote -- --provider e2b
 ```
 
-缺少凭证或未启用时退出码为 2，并明确输出 BLOCKED；preflight 只检查配置存在，不能证明凭证有效，也不算远程验收通过。实际执行使用官方 `createNativeAgent` / `openNativeSandbox` 创建独立 UUID 的 Pi + Vercel Sandbox；复用生产 builtin loader 挂载真实 report bundle，原生 read 按需读取 AGENTS、完整 SKILL.md、metrics reference 和 `scripts/summarize-csv.py`，原生 write 写独立 fixture CSV，再由原生 bash 执行 `python3 ... --group category --metric sum --value amount`。模型收到的真实 JSON 和远程输出文件都需满足求和、空值、负数与行数断言。
+将 `e2b` 替换为 `vercel` 或 `railway` 可检查另一提供商。缺少配置、组合当前不可用或未设置 `HARNESS_REMOTE_SMOKE=1` 时退出码为 2，不创建 Sandbox。preflight 只检查配置是否存在；不验证凭证有效性，也不算远程验收通过。失败、跳过、fixture 或实现代码不能记为云 PASS。
 
-随后 `session.stop()`、`sandbox.stop()`，通过官方 resume lookup 恢复同一 Sandbox，在新 turn 只读核对原生历史、CSV、生产脚本、输出文件和执行计数仍为一；输出字节保持不变，不再执行 Python。验收沿用产品的 node24 模板，先探测真实远程 `python3`；缺失则明确以失败退出，不安装任何宿主或远程包，也不把另一执行环境的能力计入产品验收。它不伪造 Sandbox，也不把普通本地执行计为远程成功。
+截至 2026-10-17 的支持边界：Local 的 Pi、Codex、Claude Code 均有实际产品运行；E2B 仅开放 Pi，其他组合默认拒绝；Railway Pi 有最终真实云产品运行记录，Codex/Claude/Claude Code 当前拒绝且不应新建云资源；Vercel 真实云运行尚未验收。详细结果见内部 `docs/agent-runtime.md` 的组合矩阵。不要把 provider preflight、契约测试或本地模型 fixture 当成相应 Harness/提供商的真实云验证。
 
-Pi 是 host runtime，因此模型由宿主本地 HTTP fixture 确定性响应，不需要远程 Sandbox 访问本地模型端点，不请求远程模型。测试不导入应用数据库、不写业务数据、不启动或重启应用 API。实际远程 Sandbox 仍使用 Vercel 资源，脚本在 finally 中销毁自己创建的 Sandbox 和原生会话；清理失败也按失败退出并打印需要清理的测试资源 ID。只有实际创建、工具执行、停止恢复、历史/文件检查及清理全部通过才输出 PASS。
+运行会检查二进制文件读写、缺失文件、非零退出码、公开端口、AGENTS 文档、按需读取的 report Skill/reference/Python script、CSV 聚合结果和执行计数。脚本完成一个原生 turn 后停止会话并尝试以同一 Sandbox ID 恢复，然后确认历史、文件和输出保留且脚本未重放，最后销毁本次创建的资源。Railway 的停止会关闭执行句柄但不会暂停 VM；它会运行并可能继续计费，直到空闲超时或显式销毁。E2B stop 会暂停环境；到期或销毁后不能恢复旧会话。任何未销毁的资源必须依据脚本报告的自有 Sandbox ID 清理，不触碰其他环境。
 
-当前本机缺少 Vercel 凭证：测试类型检查已通过，preflight 明确以 2 退出；真实远程验收仍待配置，不能记为完成。生产 Python 脚本使用同一 CSV 和参数在宿主做过窄契约验证，JSON 符合期待；这不证明原生 Sandbox 具备 Python，也不计为远程通过。官方接口依据：[HarnessAgent 会话恢复](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)、[Pi host runtime adapter](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-adapters)。
+本机曾因缺少 Vercel 凭证而无法进行真实 Vercel 云验收；该限制不代表 E2B/Railway 的验证结果。每次准备真实验收前都要重新确认所用凭证、隔离环境和当前支持组合。
 
 ## 实际浏览器回归
 
@@ -73,8 +83,11 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 专用 PostgreSQL 数据库名称必须以 `_queue_test` 结尾，并先执行迁移；Redis 使用专用实例与 `agrid-queue-test` 前缀。下面使用本地已有测试实例，绝不能改成业务数据库/Redis：
 
 ```bash
-DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/agrid_atomic_queue_test pnpm --filter @tabdo/server db:migrate
 DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/agrid_atomic_queue_test \
+DATABASE_URL_UNPOOLED=postgresql://tableapp:tableapp@localhost:5432/agrid_atomic_queue_test \
+  pnpm --filter @tabdo/server db:migrate
+DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/agrid_atomic_queue_test \
+DATABASE_URL_UNPOOLED=postgresql://tableapp:tableapp@localhost:5432/agrid_atomic_queue_test \
 REDIS_URL=redis://127.0.0.1:6381 QUEUE_PREFIX=agrid-queue-test-regression \
 AUTOMATION_LEASE_MS=1000 WORKER_LOCK_MS=1000 WORKER_STALLED_MS=1000 \
 QUEUE_TEST_REDIS_CONTAINER=agrid-queue-test-redis pnpm --filter @tabdo/server test:queue

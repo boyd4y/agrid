@@ -74,14 +74,17 @@ export const docsPages: DocsPage[] = [
     slug: "harness",
     sectionId: "agents",
     title: "Choose a model and run mode",
-    description: "See which AI models and run modes are available in your workspace and what to do when an option is unavailable.",
+    description: "Choose an available model, Local or Sandbox mode, and a provider for a new conversation.",
     body: [
       { type: "ol", items: [
-        "Open /app/agents and create or edit an agent. In its basic settings, choose an AI assistant, available model, and run mode from the options shown. Options can differ by assistant.",
+        "Open /app/agents and create or edit an agent. Choose an assistant, an available model, and either Local or Sandbox mode. The choices can differ by assistant and workspace.",
+        "If you choose Sandbox, select a provider that is marked available. E2B is currently available with Pi; Railway is unavailable with Codex and Claude Code. If an option is disabled, choose another available provider or ask a workspace admin.",
+        "Local runs commands with the permissions of its environment. Use it only in a trusted development environment or a dedicated container.",
         "To use a model not listed, choose the custom model option and enter its model ID as prompted. Use a name and persona to identify the agent and describe how it should help.",
-        "After creation, you can edit its model, run mode, persona, skills, and tools. The selected assistant type cannot be changed while editing; create another agent to use a different type.",
+        "After creation, you can edit its model, mode, provider, persona, skills, and tools. The selected assistant type cannot be changed while editing; create another agent to use a different type. After changing the mode or provider, start a new conversation to use the new environment. Existing conversations are not migrated; if you see an environment-changed message, follow it and start a new conversation.",
       ] },
-      { type: "callout", tone: "info", text: "Choose options marked as available in the interface. If a model or run mode is not configured or will not start, ask a workspace admin to check available settings. A custom model ID must be supported by the selected service." },
+      { type: "callout", tone: "info", text: "A provider that is unavailable will not be replaced silently. If the assistant, model, or environment cannot be selected or started, ask a workspace admin to check the available settings. A custom model ID must be supported by the selected service." },
+      { type: "callout", tone: "warn", text: "Railway environments keep running and may continue to incur charges after a turn, until the idle timeout or destruction. After an environment expires, its conversation cannot resume; start a new conversation in an available environment." },
       {
         type: "cards",
         items: [
@@ -94,12 +97,12 @@ export const docsPages: DocsPage[] = [
     slug: "agent-auth",
     sectionId: "agents",
     title: "Create and manage agents",
-    description: "Create agents, choose a model and run mode, and edit settings with the right workspace permissions.",
+    description: "Create agents, choose an available model and environment, and edit settings with the right workspace permissions.",
     body: [
       { type: "p", text: "Only a workspace owner or admin can create or edit agents. Agents appear in the /app/agents list: select one to start a conversation, or open its settings to make changes." },
       { type: "ol", items: [
         "Go to /app/agents and select Create agent. Enter a name and persona describing how you want the agent to help organize information or move a plan forward.",
-        "Choose an assistant type, available model, and run mode from the options shown. Select available skills and tools as needed, then complete the steps on the page and save.",
+        "Choose an assistant, available model, Local or Sandbox mode, and an available Sandbox provider when needed. Select available skills and tools as needed, then complete the steps on the page and save. After changing the mode or provider, start a new conversation to use the new environment. If an existing conversation reports that its environment has changed, follow the prompt and start a new conversation.",
         "To make changes later, open the agent from the list and edit its name, persona, model, run mode, skills, or tools. The assistant type cannot be changed after creation; create another agent to use a different type.",
       ] },
       { type: "callout", tone: "info", text: "If you do not see the create or edit controls, you may not have the required owner/admin permission. If a model or run mode cannot be selected or started, ask a workspace admin to check available settings. Using agents in tabdo does not require creating an API key." },
