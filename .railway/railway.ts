@@ -1,4 +1,4 @@
-import { defineRailway, github, preserve, project, redis, service } from "railway/iac";
+import { defineRailway, github, preserve, project, service } from "railway/iac";
 
 // Railway infrastructure as code. Replaces the deprecated railway.api.json /
 // railway.worker.json Config as Code files, which new services can no longer opt
@@ -7,9 +7,10 @@ import { defineRailway, github, preserve, project, redis, service } from "railwa
 // API and worker build the same monorepo image (Dockerfile.server) and share one
 // environment contract. Postgres lives on Neon; Railway owns only Redis.
 // Preview with `railway config plan`. Do not `config apply` without review.
+// Manage only Tabdo application services; existing data services remain untouched.
+export const partial = "tabdo-app";
+
 export default defineRailway(() => {
-  // Railway-managed Redis for BullMQ.
-  const cache = redis("Redis");
 
   // Secrets and the Neon connection string stay in Railway variables; the graph
   // only records that they exist, so `config plan` never rewrites them.
@@ -19,7 +20,7 @@ export default defineRailway(() => {
     BETTER_AUTH_URL: preserve(),
     APP_URL: preserve(),
     INTEGRATION_ENCRYPTION_KEY: preserve(),
-    REDIS_URL: cache.env.REDIS_URL,
+    REDIS_URL: "${{Redis.REDIS_URL}}",
     QUEUE_PREFIX: "tabdo-production",
     DB_POOL_MAX: "10",
     NODE_ENV: "production",
@@ -66,6 +67,6 @@ export default defineRailway(() => {
   });
 
   return project("tabdo", {
-    resources: [cache, api, worker],
+    resources: [api, worker],
   });
 });

@@ -1,6 +1,8 @@
 # Tabdo on Railway
 
-`railway.ts` declares three resources: `api`, `worker`, and Railway Redis. Both
+`railway.ts` manages `api` and `worker` under the `tabdo-app` partial and references
+the existing Railway Redis. Database services and their volumes remain outside
+application ownership, so applying this file cannot delete unrelated data services. Both
 application services build the repository root with `Dockerfile.server`. The API
 also serves the built React app. PostgreSQL and private S3 storage remain on Neon.
 
