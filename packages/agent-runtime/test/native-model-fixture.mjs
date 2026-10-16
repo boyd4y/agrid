@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 /** HTTP model protocol only; native execution remains in the official Harness. */
 export function createNativeModelFixture(selected, toolName = "receipt", toolInput = {}) {
   let requests = 0, turn = 0, toolIssued = false;
+  let heldResponse;
   const bodies = [], errors = [];
   const firstReply = `First receipt saved ${randomUUID()}`, secondReply = "Receipt remembered without replay";
   const model = createServer(async (request, response) => {
@@ -16,6 +17,10 @@ export function createNativeModelFixture(selected, toolName = "receipt", toolInp
       const body = JSON.parse(raw);bodies.push(body);
       if (request.url?.includes("count_tokens")) { response.end(JSON.stringify({ input_tokens: 100 }));return; }
       requests++;
+      if (heldResponse && body.stream !== false) {
+        response.writeHead(200, { "content-type": "text/event-stream" });response.write(": waiting for cancellation\n\n");
+        heldResponse();heldResponse = undefined;return;
+      }
       const tools = body.tools ?? [];
       const receipt = tools.find((entry) => (entry.name ?? entry.function?.name)?.includes(toolName));
       const call = turn === 0 && !toolIssued && Boolean(receipt);
@@ -63,5 +68,6 @@ export function createNativeModelFixture(selected, toolName = "receipt", toolInp
     } catch (error) { errors.push(String(error));response.writeHead(500);response.end(); }
   });
 
-  return { model, bodies, errors, firstReply, secondReply, nextTurn: () => { turn++; }, get requests() { return requests; } };
+  return { model, bodies, errors, firstReply, secondReply, nextTurn: () => { turn++; },
+    holdNextResponse: () => new Promise(resolve => { heldResponse = resolve; }), get requests() { return requests; } };
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createNativeModelFixture } from "./native-model-fixture.mjs";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHarnessAgent } from "../src/harness/agent.js";
@@ -85,8 +85,21 @@ try {
   assert.equal((await agent.generate({ session, prompt: "Remember the previous receipt without saving again.", abortSignal: AbortSignal.timeout(60_000) })).text, secondReply);
   assert.equal(writes, 1);assert.equal(await opened.session.readTextFile({ path: "receipt.txt" }), "committed once");
   assert(JSON.stringify(bodies.at(-1)).includes(firstReply), "official native history survives resume");
+  const activeResponse = fixture.holdNextResponse();
+  const cancellation = new AbortController();
+  const pending = agent.generate({ session, prompt: "Wait for this response.", abortSignal: AbortSignal.any([cancellation.signal, AbortSignal.timeout(30_000)]) });
+  // Attach rejection handling before aborting a genuinely active HTTP turn.
+  const cancelled = assert.rejects(pending, /cancel|abort/i);
+  await Promise.race([activeResponse, new Promise<never>((_, reject) => {
+    const timer = setTimeout(() => reject(new Error("Native cancellation request never reached model fixture")), 20_000);timer.unref();
+  })]);
+  cancellation.abort(new DOMException("fixture active cancellation", "AbortError"));
+  await cancelled;
+  assert.equal(writes, 1);
   await session.stop();session = undefined;
-  console.log(`[local-native] PASS ${selected}: real official template, bridge, model protocol fixture, host tool, file, opaque resume, history, no replay; ${fixture.requests} model calls`);
+  await opened.session.destroy();
+  await assert.rejects(stat(opened.workspace.root), { code: "ENOENT" });
+  console.log(`[local-native] PASS ${selected}: real official template, bridge, model protocol fixture, host tool, file, opaque resume, history, no replay, active cancellation and cleanup; ${fixture.requests} model calls`);
 } catch (error) {
   console.error(`[local-native] FAIL ${selected}`, error, errors);process.exitCode = 1;
 } finally {

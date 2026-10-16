@@ -82,6 +82,63 @@ test("native Bash executes pipes, real Node and Python zipfile without inheritin
   }
 });
 
+test("local pnpm installs generated projects without adopting an ancestor workspace or bootstrapping its package manager", { timeout: 15_000 }, async () => {
+  const ancestor = await mkdtemp(join(tmpdir(), "tabdo-pnpm ' ancestor-"));
+  const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: {}, storageDirectory: join(ancestor, "sandboxes") });
+  await writeFile(join(ancestor, "package.json"), JSON.stringify({ name: "host-must-not-install", packageManager: "pnpm@0.0.0" }));
+  await writeFile(join(ancestor, "pnpm-workspace.yaml"), 'packages: ["**"]\n');
+  await writeFile(join(ancestor, ".npmrc"), "registry=http://127.0.0.1:1\n");
+  const opened = await adapter.create({ sandboxId: "owned-home" });
+  try {
+    // Check the boundary before invoking real pnpm: a missing boundary must
+    // fail safely without starting the known recursive version installer.
+    assert((await readFile(join(opened.workspace.root, ".local-tools/pnpm"), "utf8")).includes("--ignore-workspace"));
+    const standalone = await opened.session.run({ command: "pnpm config get registry", env: { npm_config_manage_package_manager_versions: "false" }, abortSignal: AbortSignal.timeout(5000) });
+    assert.equal(standalone.exitCode, 0, standalone.stderr);
+    assert.notEqual(standalone.stdout.trim(), "http://127.0.0.1:1", "an empty working directory must not adopt the host project config");
+    const project = ".generated/.bridge";
+    await opened.session.writeTextFile({ path: `${project}/package.json`, content: JSON.stringify({ name: "generated-bridge", private: true,
+      scripts: { postinstall: "node -e \"require('fs').writeFileSync('installed.txt', 'real install')\"" } }) });
+    const lock = "lockfileVersion: '9.0'\n\nsettings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\n\nimporters:\n\n  .: {}\n";
+    await opened.session.writeTextFile({ path: `${project}/pnpm-lock.yaml`, content: lock });
+    await opened.session.writeTextFile({ path: "sibling/package.json", content: JSON.stringify({ name: "sibling-must-not-install",
+      scripts: { postinstall: "exit 91" } }) });
+    const controller = new AbortController();
+    const child = await opened.session.spawn({ command: "pnpm install --frozen-lockfile --offline --store-dir .pnpm-store",
+      workingDirectory: join(opened.session.defaultWorkingDirectory, project), abortSignal: controller.signal });
+    let guard: Error | undefined;
+    const timer = setTimeout(() => controller.abort(new Error("pnpm fixture exceeded five seconds")), 5000);
+    const monitor = setInterval(() => {
+      execFile("/bin/ps", ["-axo", "pgid=,stat="], (error, stdout) => {
+        if (error) { guard = error;controller.abort(error);return; }
+        const count = stdout.split("\n").filter(line => line.trim().split(/\s+/)[0] === String(child.pid)).length;
+        if (count > 6) { guard = new Error(`pnpm fixture exceeded six owned processes (${count})`);controller.abort(guard); }
+      });
+    }, 50);
+    try {
+      const [stdout, stderr, result] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.wait()]);
+      assert.equal(guard, undefined);
+      assert.equal(result.exitCode, 0, `${stdout}\n${stderr}`);
+      assert.equal(await opened.session.readTextFile({ path: `${project}/installed.txt` }), "real install", "bootstrap must actually install, never silently skip");
+      assert.equal(await opened.session.readTextFile({ path: `${project}/pnpm-lock.yaml` }), lock);
+      await assert.rejects(stat(join(ancestor, "pnpm-lock.yaml")), { code: "ENOENT" });
+      await assert.rejects(stat(join(opened.session.defaultWorkingDirectory, "sibling/node_modules")), { code: "ENOENT" });
+    } finally { clearTimeout(timer);clearInterval(monitor);await child.kill(); }
+    // Preserve an explicit nested workspace's native settings across reconnect.
+    const ownConfig = 'packages: ["workspace/*"]\n';
+    await opened.session.writeTextFile({ path: "pnpm-workspace.yaml", content: ownConfig });
+    await opened.session.writeTextFile({ path: "package.json", content: '{"name":"owned-workspace","private":true}' });
+    await opened.session.writeTextFile({ path: ".npmrc", content: "registry=http://127.0.0.1:2\n" });
+    const registry = await opened.session.run({ command: "pnpm config get registry", abortSignal: AbortSignal.timeout(5000) });
+    assert.equal(registry.exitCode, 0, registry.stderr);
+    assert.equal(registry.stdout.trim(), "http://127.0.0.1:2");
+    await opened.session.stop();
+    const resumed = await adapter.resume({ sandboxId: opened.session.id });
+    try { assert.equal(await resumed.session.readTextFile({ path: "pnpm-workspace.yaml" }), ownConfig); }
+    finally { await resumed.session.destroy(); }
+  } finally { await opened.session.destroy();await rm(ancestor, { recursive: true, force: true }); }
+});
+
 test("filesystem APIs reject traversal and symlink escapes, while snapshots do not follow links", async () => {
   const opened = await createLocalSandboxAdapter({ cwd: "/workspace", env: {} }).create();
   const outside = await mkdtemp(join(tmpdir(), "tabdo-outside-fixture-"));
