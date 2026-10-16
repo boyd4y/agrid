@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { Sandbox } from "e2b";
 import { createCredentialRequestTransformation } from "@ai-sdk/harness/utils";
 import { createE2BSandboxAdapter } from "../src/sandbox/e2b.js";
+import { withoutRequestTransformations } from "./fixture/e2b-forwarded-session.js";
 
 function fixture() {
   let pauses = 0, kills = 0;
@@ -112,4 +113,17 @@ test("fixed official E2B provider rejects Harness credential header matchers wit
       error instanceof Error && error.name === "AI_HarnessCapabilityUnsupportedError" && error.message.includes("headers matchers are not supported"));
   }
   await session.destroy();
+});
+
+test("test-only forwarding view omits optional brokering and preserves the real session and lifecycle", async t => {
+  const f = fixture();
+  t.mock.method(Sandbox, "create", async () => f.native);
+  const { session } = await createE2BSandboxAdapter({ apiKey: "fixture" }).create();
+  const view = withoutRequestTransformations(session);
+  assert.equal(view.id, session.id);
+  assert(!("addRequestTransformations" in view)); assert.equal(view.addRequestTransformations, undefined);
+  assert(!("setRequestTransformations" in view)); assert.equal(view.setRequestTransformations, undefined);
+  assert.equal(typeof session.addRequestTransformations, "function", "the original production session is unchanged");
+  assert.deepEqual(await view.getPortEndpoint({ port: 4000 }), await session.getPortEndpoint({ port: 4000 }));
+  await view.stop(); await view.destroy(); assert.equal(f.pauses(), 1); assert.equal(f.kills(), 1);
 });
