@@ -32,3 +32,6 @@ storybook-static/
 # Local uploaded objects (configure FILE_STORAGE_LOCAL_DIR for persistent deployment)
 data/files/
 .neon
+
+# Herdr agent team: local identity and team coordination
+.herdr/
