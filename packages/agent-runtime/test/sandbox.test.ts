@@ -16,7 +16,7 @@ test("real disk sessions restore through an explicit caller-owned workspace call
   try {
     assert.equal(first.session.id, "opaque-environment");
     assert.equal(first.session.defaultWorkingDirectory, join(fs.root, "project"));
-    assert.equal(adapter.networkAccessible, false);
+    assert.equal(adapter.networkAccessible, true);
     const original = join(first.session.defaultWorkingDirectory, "note.txt");
     await first.session.writeTextFile({ path: original, content: "persisted" });
     assert.equal(await readFile(original, "utf8"), "persisted", "writes reach the real OS filesystem");
@@ -165,4 +165,34 @@ test("aborted creation signal does not poison later SDK checkpoint I/O, while ex
     await opened.session.writeTextFile({ path: "checkpoint/after-process.jsonl", content: "cleanup remains available" });
     assert.equal(await opened.session.readTextFile({ path: "checkpoint/after-process.jsonl" }), "cleanup remains available");
   } finally { await opened.session.destroy(); }
+});
+
+test("local bridge endpoints, template failure cleanup and durable ID lookup use the same owned resource", async () => {
+  const storage = await mkdtemp(join(tmpdir(), "tabdo-local-store-"));
+  let attemptedRoot = "";
+  try {
+    const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: {}, storageDirectory: storage });
+    await assert.rejects(adapter.create({ sandboxId: "failed-template", template: { identity: "fail", prepare: async ({ session }) => {
+      attemptedRoot = join(storage, "failed-template");
+      await session.writeTextFile({ path: "partial.txt", content: "cleanup" });throw new Error("template failed");
+    } } }), /template failed/);
+    await assert.rejects(stat(attemptedRoot), { code: "ENOENT" });
+    const first = await adapter.create({ sandboxId: "same-resource" });
+    const port = first.session.ports[0];
+    assert(port > 0);
+    assert.equal((await first.session.getPortEndpoint({ port, protocol: "ws" })).url, `ws://127.0.0.1:${port}`);
+    await assert.rejects(Promise.resolve(first.session.getPortEndpoint({ port: port === 1 ? 2 : 1 })), /not assigned/);
+    await first.session.writeBinaryFile({ path: "saved.bin", content: new Uint8Array([0, 255, 1]) });
+    await assert.rejects(adapter.create({ sandboxId: "same-resource" }), { code: "EEXIST" });
+    await first.session.stop();
+    const second = await createLocalSandboxAdapter({ cwd: "/workspace", env: {}, storageDirectory: storage }).resume({ sandboxId: first.session.id });
+    assert.equal(second.workspace.root, first.workspace.root, "native dependency and opaque journal paths remain stable");
+    assert.deepEqual(new Uint8Array((await second.session.readBinaryFile({ path: "saved.bin" }))!), new Uint8Array([0, 255, 1]));
+    await second.session.destroy();
+    await assert.rejects(adapter.resume({ sandboxId: "same-resource" }), { code: "ENOENT" });
+    await assert.rejects(adapter.resume({ sandboxId: "../escape" }), /Invalid local sandbox ID/);
+    const controller = new AbortController();
+    await assert.rejects(adapter.create({ sandboxId: "cancel-template", abortSignal: controller.signal, template: { identity: "cancel", prepare: async () => { controller.abort(new Error("cancel creation")); } } }), /cancel creation/);
+    await assert.rejects(stat(join(storage, "cancel-template")), { code: "ENOENT" });
+  } finally { await rm(storage, { recursive: true, force: true }); }
 });

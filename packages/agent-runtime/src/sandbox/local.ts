@@ -1,8 +1,9 @@
 import { spawn as spawnChild, type ChildProcess } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, lstat } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:net";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { HarnessV1NetworkSandboxSession } from "@ai-sdk/harness";
@@ -18,14 +19,25 @@ export type LocalSandboxAdapter = Omit<SandboxAdapter<DiskWorkspace>, "create" |
 };
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === "ENOENT";
 
+async function localPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => { server.once("error", reject);server.listen(0, "127.0.0.1", resolve); });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Cannot allocate local bridge port");
+  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  return address.port;
+}
+
 /** Real host/container execution. Directory checks are not an OS security boundary. */
 export function createLocalSandboxAdapter(options: {
   cwd: string;
   env: Record<string, string>;
+  /** Stable, caller-owned storage for runtimes whose installed dependencies cannot fit a JSON snapshot. */
+  storageDirectory?: string;
   createFilesystem?: () => Promise<DiskWorkspace>;
   restoreFilesystem?: (reference: SandboxResumeOptions) => Promise<DiskWorkspace>;
 }): LocalSandboxAdapter {
-  const open = async (workspace: DiskWorkspace, request: SandboxCreateOptions) => {
+  const open = async (workspace: DiskWorkspace, request: SandboxCreateOptions, preserveOnFailure = false) => {
     request.abortSignal?.throwIfAborted();
     const workingDirectory = ["/", "/workspace", "/project"].includes(options.cwd)
       ? workspace.resolve(options.cwd.slice(1)) : workspace.resolve(options.cwd);
@@ -138,23 +150,50 @@ export function createLocalSandboxAdapter(options: {
       },
     };
     const stop = async () => { stopped = true;await Promise.all([...processes].map(process => process.kill())); };
+    const ports = [await localPort()];
+    const getPortEndpoint: HarnessV1NetworkSandboxSession["getPortEndpoint"] = async ({ port, protocol = "http" }) => {
+      active();
+      if (!ports.includes(port)) throw new SandboxConfigurationError(`Local port ${port} is not assigned to this session`);
+      if (protocol === "https") throw new SandboxConfigurationError("Local bridge endpoints use loopback HTTP/WS without TLS");
+      return { url: `${protocol === "ws" ? "ws" : "http"}://127.0.0.1:${port}` };
+    };
     const session: HarnessV1NetworkSandboxSession = { ...sessionFiles, id: request.sandboxId ?? randomUUID(), defaultWorkingDirectory: workingDirectory,
-      ports: [], getPortEndpoint: async () => { throw new SandboxConfigurationError("Local execution does not expose network ports"); },
-      getPortUrl: async () => { throw new SandboxConfigurationError("Local execution does not expose network ports"); },
+      ports, getPortEndpoint, getPortUrl: async settings => (await getPortEndpoint(settings)).url,
       restricted: () => Object.freeze({ ...sessionFiles }), stop, destroy: async () => { await stop();await workspace.dispose(); },
     };
-    return { session, workspace };
+    try {
+      await request.template?.prepare({ session: session.restricted(), abortSignal: request.abortSignal });
+      request.abortSignal?.throwIfAborted();
+      return { session, workspace };
+    } catch (error) { if (preserveOnFailure) await session.stop();else await session.destroy();throw error; }
   };
-  return { networkAccessible: false,
+  return { networkAccessible: true,
     async create(request = {}) {
       request.abortSignal?.throwIfAborted();
-      const workspace = await (options.createFilesystem?.() ?? createDiskWorkspace());
-      try { return await open(workspace, request); } catch (error) { await workspace.dispose();throw error; }
+      const sandboxId = request.sandboxId ?? randomUUID();
+      let workspace: DiskWorkspace;
+      if (options.storageDirectory) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(sandboxId)) throw new SandboxConfigurationError("Invalid local sandbox ID");
+        await mkdir(options.storageDirectory, { recursive: true, mode: 0o700 });
+        const directory = join(options.storageDirectory, sandboxId);
+        await mkdir(directory, { mode: 0o700 }); // EEXIST is a create conflict, never resume.
+        workspace = new DiskWorkspace(directory);
+      } else workspace = await (options.createFilesystem?.() ?? createDiskWorkspace());
+      try { return await open(workspace, { ...request, sandboxId }); } catch (error) { await workspace.dispose();throw error; }
     },
     async resume(request) {
       request.abortSignal?.throwIfAborted();
+      let workspace: DiskWorkspace;
+      if (options.storageDirectory) {
+        if (!/^[A-Za-z0-9_-]{1,128}$/.test(request.sandboxId)) throw new SandboxConfigurationError("Invalid local sandbox ID");
+        const directory = join(options.storageDirectory, request.sandboxId);
+        if (!(await lstat(directory)).isDirectory()) throw new SandboxConfigurationError("Local sandbox directory is missing or invalid");
+        workspace = new DiskWorkspace(directory);
+        // A failed attach never owns destruction of an existing directory.
+        return open(workspace, request, true);
+      }
       if (!options.restoreFilesystem) throw new SandboxConfigurationError("Local resume requires a persisted workspace restorer");
-      const workspace = await options.restoreFilesystem(request);
+      workspace = await options.restoreFilesystem(request);
       try { return await open(workspace, request); } catch (error) { await workspace.dispose();throw error; }
     },
   };

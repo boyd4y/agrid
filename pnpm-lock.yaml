@@ -354,6 +354,9 @@ importers:
       e2b:
         specifier: 2.56.0
         version: 2.56.0
+      railway:
+        specifier: 3.16.0
+        version: 3.16.0
     devDependencies:
       '@types/node':
         specifier: ^22.14.1

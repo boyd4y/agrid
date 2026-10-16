@@ -69,6 +69,12 @@
       "development": "./src/sandbox/e2b.ts",
       "import": "./dist/sandbox/e2b.js",
       "default": "./dist/sandbox/e2b.js"
+    },
+    "./sandbox/railway": {
+      "types": "./src/sandbox/railway.ts",
+      "development": "./src/sandbox/railway.ts",
+      "import": "./dist/sandbox/railway.js",
+      "default": "./dist/sandbox/railway.js"
     }
   },
   "scripts": {
@@ -79,18 +85,19 @@
   },
   "dependencies": {
     "@ai-sdk/harness": "1.0.152",
-    "ai": "7.0.141",
-    "@ai-sdk/harness-pi": "1.0.154",
-    "@ai-sdk/harness-codex": "1.0.154",
     "@ai-sdk/harness-claude-code": "1.0.156",
+    "@ai-sdk/harness-codex": "1.0.154",
+    "@ai-sdk/harness-pi": "1.0.154",
     "@ai-sdk/sandbox-vercel": "1.0.152",
-    "@tabdo/core": "workspace:*",
     "@e2b/ai-sdk-sandbox": "0.3.0",
-    "e2b": "2.56.0"
+    "@tabdo/core": "workspace:*",
+    "ai": "7.0.141",
+    "e2b": "2.56.0",
+    "railway": "3.16.0"
   },
   "devDependencies": {
-    "typescript": "^5.8.3",
+    "@types/node": "^22.14.1",
     "tsx": "^4.19.3",
-    "@types/node": "^22.14.1"
+    "typescript": "^5.8.3"
   }
 }
