@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { withChatFixture } from "../helpers/chat-fixture.js";
 import { activeNativeRunCount, waitForNativeDrain } from "../../src/harness/drain.js";
 import { and, eq } from "drizzle-orm";
+import type { AgentRunSummary } from "@tabdo/shared";
 
 // Integration tests must never connect to the application database or a live model.
 if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
@@ -34,14 +35,17 @@ let cookie = "", otherCookie = "", ownerId = "", agentId = "", agentUserId = "",
 const req = async (path: string, body?: unknown, method = "POST", authCookie = cookie) => app.request(`http://localhost:3001/api${path}`, { method: body === undefined && method === "POST" ? "GET" : method, headers: { Cookie: authCookie, "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 const actor = () => ({ userId: ownerId, organizationId: orgId, kind: "human" as const, memberId: "owner", role: "owner", name: "Owner", email: "test@local.test" });
 
-async function stopOwnedChat(ownedThreadId?: string, submission?: Promise<Response>) {
+async function stopOwnedChat(ownedThreadId?: string, submission?: Promise<Response>, observe?: (stage: string, runs: AgentRunSummary[]) => void) {
   await submission;
   if (!ownedThreadId) return;
-  const { runs } = await (await req(`/threads/${ownedThreadId}/runs`)).json();
+  const { runs }: { runs: AgentRunSummary[] } = await (await req(`/threads/${ownedThreadId}/runs`)).json();
+  observe?.("before-cancel", runs);
   for (const run of runs) if (run.status === "running") {
     assert.equal((await req(`/threads/${ownedThreadId}/runs/${run.id}/cancel`, {})).status, 200);
   }
+  if (observe) observe("cancel-requested", (await (await req(`/threads/${ownedThreadId}/runs`)).json()).runs);
   await waitForNativeDrain();
+  if (observe) observe("native-drained", (await (await req(`/threads/${ownedThreadId}/runs`)).json()).runs);
 }
 
 async function signUp() {
@@ -631,23 +635,33 @@ for (const stop of ["cancel", "timeout", "first-output", "step", "chunk"] as con
 });
 
 test("aborting a model handshake drains the real accepted run before restoring the next case's environment", { timeout: 15_000 }, async (t) => {
-  const names = ["PI_API_KEY", "PI_BASE_URL", "AI_RUN_POLL_MS", "AI_CHAT_TOTAL_MS", "AI_CHAT_FIRST_CHUNK_MS"];
+  const timeoutNames = ["AI_CHAT_TOTAL_MS", "AI_CHAT_FIRST_CHUNK_MS", "AI_CHAT_STEP_MS", "AI_CHAT_CHUNK_MS"];
+  const names = ["PI_API_KEY", "PI_BASE_URL", "AI_RUN_POLL_MS", ...timeoutNames];
   const previous = Object.fromEntries(names.map(name => [name, process.env[name]]));
   const abort = new AbortController(), reason = new Error("test aborted while waiting for the second model request");
   let ownedThreadId: string | undefined, submission: Promise<Response> | undefined;
   let requests = 0;
-  await assert.rejects(withChatFixture({ signal: abort.signal, after: t.after.bind(t), diagnostic: t.diagnostic.bind(t) }, {
-    env: { PI_API_KEY: "abort-test-provider", AI_RUN_POLL_MS: "200", AI_CHAT_TOTAL_MS: "3000", AI_CHAT_FIRST_CHUNK_MS: "350" },
+  const observe = (stage: string, runs: AgentRunSummary[] = []) => t.diagnostic(JSON.stringify({
+    stage, at: new Date().toISOString(), threadId: ownedThreadId, modelRequests: requests,
+    nativeRuns: activeNativeRunCount(),
+    timeouts: Object.fromEntries(timeoutNames.map(name => [name, process.env[name] ?? null])),
+    runs: runs.map(({ id, status, error, cancelRequestedAt, startedAt, endedAt, activity }) => ({ id, status, error, cancelRequestedAt, startedAt, endedAt, activity })),
+  }));
+  await assert.rejects(withChatFixture({ signal: AbortSignal.any([t.signal, abort.signal]), after: t.after.bind(t), diagnostic: t.diagnostic.bind(t) }, {
+    // This fixture stops through test abort and public cancellation only. The five
+    // stop cases above continue to own their original business timeout thresholds.
+    env: { PI_API_KEY: "abort-test-provider", AI_RUN_POLL_MS: "200", ...Object.fromEntries(timeoutNames.map(name => [name, undefined])) },
     handler: async (request, response) => {
       for await (const _chunk of request) { /* drain the actual Harness model request */ }
       requests++;
       response.writeHead(200, { "Content-Type": "text/event-stream" }); response.flushHeaders();
+      observe("test-abort");
       abort.abort(reason);
     },
-    stop: () => stopOwnedChat(ownedThreadId, submission),
+    stop: () => stopOwnedChat(ownedThreadId, submission, observe),
     drained: async () => {
       assert.equal(activeNativeRunCount(), 0);
-      assert.equal(process.env.AI_CHAT_FIRST_CHUNK_MS, "350");
+      for (const name of timeoutNames) assert.equal(process.env[name], undefined);
     },
   }, async fixture => {
     const thread = await (await fixture.wait(req("/threads", { clientId: randomUUID(), context: { page: "ai" }, agentId }))).json();
@@ -661,7 +675,10 @@ test("aborting a model handshake drains the real accepted run before restoring t
   assert.equal(activeNativeRunCount(), 0);
   assert.deepEqual(Object.fromEntries(names.map(name => [name, process.env[name]])), previous);
   const { runs } = await (await req(`/threads/${ownedThreadId}/runs`)).json();
-  assert.equal(runs[0].status, "cancelled");
+  observe("environment-restored", runs);
+  assert.equal(runs[0].status, "cancelled", JSON.stringify(runs[0]));
+  assert(runs[0].cancelRequestedAt, "public Run records the cancellation request");
+  assert(runs[0].endedAt, "public Run records completion before environment restoration");
 });
 
 test("native step limit suspends a turn and ordinary follow-up officially resumes without replaying tools", { timeout: 15_000 }, async () => {

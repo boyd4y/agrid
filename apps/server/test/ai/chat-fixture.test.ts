@@ -64,6 +64,37 @@ for (const failure of ["no second request", "completion error", "test abort", "H
   });
 }
 
+test("a native drain deadline reports cleanup failure and preserves the original handshake error", { timeout: 5_000 }, async (t) => {
+  const previous = snapshot(), original = new Error("original handshake failure");
+  let provider: ChatTestFixture["provider"] | undefined;
+  let drainStarted = false, drainFinished = false;
+  // Inspect the expected rejecting cleanup through the body path, rather than
+  // registering it as an unhandled failing hook on this parent regression test.
+  await assert.rejects(withChatFixture({ signal: t.signal, after: () => {}, diagnostic: t.diagnostic.bind(t) }, {
+    env,
+    handler: (_request, response) => response.end(),
+    drained: async () => {
+      drainStarted = true;
+      await new Promise<void>(() => {});
+      drainFinished = true;
+    },
+  }, async fixture => {
+    provider = fixture.provider;
+    await fixture.handshake(never(), Promise.reject(original), () => "modelRequests=0");
+  }), error => {
+    assert(error instanceof AggregateError);
+    assert.equal(error.cause, original);
+    assert.equal(error.errors[0], original);
+    const cleanup = error.errors[1];
+    assert(cleanup instanceof AggregateError);
+    assert.match(String(cleanup.errors[0]), /native run drain did not finish within 2000ms/);
+    return true;
+  });
+  assert.equal(drainStarted, true); assert.equal(drainFinished, false);
+  assert.equal(provider?.listening, false);
+  assert.deepEqual(snapshot(), previous);
+});
+
 test("real Node test timeout runs cleanup before the next test and the process exits", { timeout: 10_000 }, async (t) => {
   const childEnv = { ...process.env };
   delete childEnv.NODE_TEST_CONTEXT;
