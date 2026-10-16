@@ -1,21 +1,31 @@
 # tabdo Docs
 
-> Dual entry: For AI Agents (MCP, Skill) and For Humans (UI, API).
+> An AI-native workspace for personal plans and small team projects. Use the guides to organize information, take action, and review results.
 > Fetch this index before exploring further.
 
-- [Welcome](https://tabdo.ai/docs/welcome): An AI-native workspace built on flexible data.
-- [How it works](https://tabdo.ai/docs/how-it-works): Discover schema → window-query rows → patch cells.
-- [MCP](https://tabdo.ai/docs/mcp): Connect Claude, Codex, Cursor via MCP.
-- [Skill](https://tabdo.ai/docs/skill): Install the tabdo skill in Cursor / Claude Code.
-- [Agents & authentication](https://tabdo.ai/docs/agent-auth): Create in-app agents with a signed-in session; no agent key is required.
-- [Workspace UI](https://tabdo.ai/docs/human-quickstart): Sign up, open /app, edit tables and boards.
-- [HTTP API](https://tabdo.ai/docs/api-quickstart): Call POST /api/commands from your own code.
-- [Same-origin architecture](https://tabdo.ai/docs/architecture): UI · Tools · MCP · API Key share one Command Layer.
-- [Tables, columns & rows](https://tabdo.ai/docs/tables): Column types and JSONB cells built for 100k+ rows.
-- [Members: humans & agents](https://tabdo.ai/docs/members): One user + member model; equal roles.
-- [Views, filters & board](https://tabdo.ai/docs/views): Grid, board, AND/OR filters, sorts.
-- [Command API](https://tabdo.ai/docs/commands): POST /api/commands — the single write entry.
-- [REST aliases](https://tabdo.ai/docs/rest): Same handlers as the command layer.
-- [Authentication](https://tabdo.ai/docs/auth): Better Auth sessions and agent API keys.
+## Welcome
+- [Welcome](https://tabdo.ai/docs/welcome): Bring a personal plan or small team project; organize information, take action, and adjust the result.
+- [From an idea to the next step](https://tabdo.ai/docs/how-it-works): Describe a goal, organize what you know, review the result, and choose what to do next.
 
-Optional markdown mirrors: https://tabdo.ai/docs/<slug>.md
+## Agents
+- [Choose a model and run mode](https://tabdo.ai/docs/harness): Choose from available models and run modes in your workspace.
+- [Create and manage agents](https://tabdo.ai/docs/agent-auth): Create agents, edit settings, and review workspace permissions.
+
+## For people
+- [Getting started](https://tabdo.ai/docs/human-quickstart): Choose a workspace and agent, organize information, add records, and review results.
+- [HTTP API](https://tabdo.ai/docs/api-quickstart): Discover tables, paginate records, and manage records with per-table tab_ permissions.
+- [Tables, columns, and records](https://tabdo.ai/docs/tables): Create columns, enter records, and use files, relations, rollups, and formulas.
+- [Views and boards](https://tabdo.ai/docs/views): Create grid, board, and form views; filter, sort, and review records.
+- [Forms](https://tabdo.ai/docs/forms): Design a data entry view and review submissions in the same table.
+- [Automations and scheduled tasks](https://tabdo.ai/docs/automations): Trigger agent and data actions from table changes, webhooks, email, or a schedule.
+- [Event sources: AgentMail and Webhook](https://tabdo.ai/docs/integrations): Configure email or HTTP event sources and review their automation results.
+- [Reports](https://tabdo.ai/docs/reports): Summarize workspace tables with metrics, charts, and text.
+- [Sites](https://tabdo.ai/docs/sites): Edit HTML, CSS, and JavaScript files, preview changes, and publish a site version.
+
+## Concepts and references
+- [Data access and permissions](https://tabdo.ai/docs/architecture): Understand workspace roles and per-table data access keys.
+- [Workspace members](https://tabdo.ai/docs/members): Review roles and invite workspace members.
+- [Data REST API](https://tabdo.ai/docs/rest): Table metadata, paginated reads, and record CRUD routes.
+- [GraphQL API](https://tabdo.ai/docs/graphql): GraphQL queries, pagination, mutations, and limits.
+- [JavaScript / TypeScript SDK](https://tabdo.ai/docs/sdk): Install and use the published @tabdo/sdk package.
+- [Authentication](https://tabdo.ai/docs/auth): Use your tabdo account for workspace features and tab_ keys for authorized table data.
