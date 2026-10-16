@@ -5,8 +5,26 @@ import { createBullMQTransport } from "../src/bullmq.js";
 import { createRedisClient, waitForRedisReady, redisConnectionOptions } from "../src/redis.js";
 
 const url = process.env.QUEUE_ADAPTER_TEST_REDIS_URL;
+function assertTestRedisUrl(value: string) {
+  const endpoint = new URL(value);
+  assert(["redis:", "rediss:"].includes(endpoint.protocol) && endpoint.hostname === "127.0.0.1"
+    && ["6381", "16381"].includes(endpoint.port), "Use dedicated local test Redis at 127.0.0.1 on port 6381 or 16381");
+}
+
+test("transport fixture only accepts explicitly isolated local Redis endpoints without connecting", () => {
+  for (const port of ["6381", "16381"]) {
+    assert.doesNotThrow(() => assertTestRedisUrl(`redis://127.0.0.1:${port}`));
+    assert.throws(() => assertTestRedisUrl(`redis://example.test:${port}`), /dedicated local test Redis/);
+    assert.throws(() => assertTestRedisUrl(`redis://127.0.0.1@example.test:${port}`), /dedicated local test Redis/);
+  }
+  for (const endpoint of ["redis://127.0.0.1:6379", "redis://127.0.0.1", "redis://127.0.0.1:6380",
+    "redis://192.168.1.2:16381", "http://127.0.0.1:16381"]) {
+    assert.throws(() => assertTestRedisUrl(endpoint), /dedicated local test Redis/);
+  }
+});
+
 test("transport publishes stable unrelated messages and exposes inspection without provider objects", { skip: !url }, async () => {
-  assert.equal(new URL(url!).port, "6381", "Use the dedicated local test Redis");
+  assertTestRedisUrl(url!);
   const connection = redisConnectionOptions(url!, "producer");
   const prefix = `agrid-queue-test-transport-${randomUUID()}`;
   const queue = createBullMQTransport<{ recipient: string } | { keys: string[] }>({
