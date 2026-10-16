@@ -48,7 +48,9 @@ async function main() {
   const script = report.files.find((file) => file.path === "scripts/summarize-csv.py");
   const reference = report.files.find((file) => file.path === "references/metrics.md");
   assert(script && reference, "use actual production script and reference files");
-  const agents = "# AGENTS.md\n\nRemote smoke policy: remote-agents-marker. Run the production report CSV script once, then inspect preserved results.\n";
+  // The production factory trims agentsDocument before onSession writes it.
+  // Keep the fixture canonical so both complete-file equality checks stay strict.
+  const agents = "# AGENTS.md\n\nRemote smoke policy: remote-agents-marker. Run the production report CSV script once, then inspect preserved results.";
   const csv = "category,amount\nEast,10.5\nEast,3\nEast,\nWest,-2\nWest,\n,\n";
   const expected = [{ group: "", value: null, rows: 1 }, { group: "East", value: 13.5, rows: 3 }, { group: "West", value: -2, rows: 2 }];
   const firstReply = "Remote first turn complete", secondReply = "Remote history and files recovered without replay";
