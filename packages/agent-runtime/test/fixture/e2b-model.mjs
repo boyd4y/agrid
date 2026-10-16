@@ -1,11 +1,12 @@
 // Deterministic HTTP model only. All execution remains in the official CLI.
 import { createServer } from "node:http";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 let calls = 0;
 const requests = [];
 const command = "printf 'committed\\n' >> bridge-count; printf 'bridge-remote-tool-result'";
 const reply = "E2B bridge complete.";
+let writeIssued = false, cancelIssued = false;
 const server = createServer(async (request, response) => {
   if (request.url === "/health") { response.end("ready"); return; }
   let raw = ""; for await (const part of request) raw += part;
@@ -14,21 +15,28 @@ const server = createServer(async (request, response) => {
   requests.push({ path: request.url, body });
   writeFileSync("bridge-requests.json", JSON.stringify(requests));
   calls++;
+  let phase = "write";
+  try { phase = readFileSync("bridge-phase", "utf8").trim(); } catch { /* initial phase */ }
+  const cancelling = phase === "cancel" && !cancelIssued;
+  const executing = phase === "write" && !writeIssued;
+  const invoke = executing || cancelling;
+  const toolCommand = cancelling ? "echo $$ > bridge-cancel.pid; exec sleep 60" : command;
+  const markInvocation = () => { if (cancelling) cancelIssued = true; else writeIssued = true; };
   const send = (event, data) => response.write(`event: ${event}\ndata: ${JSON.stringify({ type: event, ...data })}\n\n`);
   response.setHeader("content-type", "text/event-stream");
   if (request.url?.includes("responses")) {
     const names = (body.tools ?? []).map(tool => tool.name);
     const name = ["exec_command", "shell_command", "shell"].find(name => names.includes(name));
-    if (!name && calls === 1) { response.statusCode = 400; response.end(JSON.stringify({ error: { message: `No shell fixture tool: ${names.join(",")}` } })); return; }
-    const input = name === "exec_command" ? { cmd: command, yield_time_ms: 1000 } : name === "shell_command" ? { command } : { command: ["bash", "-lc", command] };
-    const output = calls === 1 ? { type: "function_call", id: "fc_e2b", call_id: "call_e2b", name, arguments: JSON.stringify(input), status: "completed" }
+    if (!name && invoke) { response.statusCode = 400; response.end(JSON.stringify({ error: { message: `No shell fixture tool: ${names.join(",")}` } })); return; }
+    const input = name === "exec_command" ? { cmd: toolCommand, yield_time_ms: 1000 } : name === "shell_command" ? { command: toolCommand } : { command: ["bash", "-lc", toolCommand] };
+    const output = invoke ? { type: "function_call", id: `fc_e2b_${calls}`, call_id: `call_e2b_${calls}`, name, arguments: JSON.stringify(input), status: "completed" }
       : { type: "message", id: `msg_${calls}`, role: "assistant", status: "completed", content: [{ type: "output_text", text: reply, annotations: [] }] };
     const result = { id: `resp_${calls}`, object: "response", created_at: 1, status: "in_progress", model: body.model, output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } };
     send("response.created", { response: result });
-    send("response.output_item.added", { output_index: 0, item: { ...output, ...(calls === 1 ? { arguments: "" } : { content: [] }) } });
-    if (calls === 1) {
+    send("response.output_item.added", { output_index: 0, item: { ...output, ...(invoke ? { arguments: "" } : { content: [] }) } });
+    if (invoke) {
       send("response.function_call_arguments.delta", { item_id: output.id, output_index: 0, delta: output.arguments });
-      send("response.function_call_arguments.done", { item_id: output.id, output_index: 0, arguments: output.arguments });
+      send("response.function_call_arguments.done", { item_id: output.id, output_index: 0, name, arguments: output.arguments });
     } else {
       send("response.content_part.added", { item_id: output.id, output_index: 0, content_index: 0, part: { type: "output_text", text: "", annotations: [] } });
       send("response.output_text.delta", { item_id: output.id, output_index: 0, content_index: 0, delta: reply });
@@ -37,10 +45,12 @@ const server = createServer(async (request, response) => {
     }
     send("response.output_item.done", { output_index: 0, item: output });
     send("response.completed", { response: { ...result, status: "completed", output: [output] } });
+    if (invoke) markInvocation();
   } else if (request.url?.includes("messages")) {
-    const tool = calls === 1;
-    const block = tool ? { type: "tool_use", id: "toolu_e2b", name: "Bash", input: { command, description: "E2B remote proof" } } : { type: "text", text: reply };
+    const tool = invoke && body.tools?.some(entry => entry.name === "Bash");
+    const block = tool ? { type: "tool_use", id: `toolu_e2b_${calls}`, name: "Bash", input: { command: toolCommand, description: "E2B remote proof" } } : { type: "text", text: reply };
     const message = { id: `msg_${calls}`, type: "message", role: "assistant", model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 1 } };
+    if (tool) markInvocation();
     if (!body.stream) { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ ...message, content: [block], stop_reason: tool ? "tool_use" : "end_turn" })); return; }
     send("message_start", { message });
     send("content_block_start", { index: 0, content_block: tool ? { ...block, input: {} } : { type: "text", text: "" } });

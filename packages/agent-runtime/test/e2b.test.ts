@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Sandbox } from "e2b";
+import { createCredentialRequestTransformation } from "@ai-sdk/harness/utils";
 import { createE2BSandboxAdapter } from "../src/sandbox/e2b.js";
 
 function fixture() {
@@ -96,4 +97,19 @@ test("E2B cleanup errors retain both causes and the resource ID", async t => {
     identity: "failure", prepare: async () => { throw original; },
   } }), error => error instanceof AggregateError && error.message.includes(f.native.sandboxId)
     && error.errors[0] === original && error.errors[1] === cleanup);
+});
+
+test("fixed official E2B provider rejects Harness credential header matchers without widening their scope", async t => {
+  const f = fixture();
+  t.mock.method(Sandbox, "create", async () => f.native);
+  const { session } = await createE2BSandboxAdapter({ apiKey: "fixture" }).create();
+  const matchHeaders: Record<string, string>[] = [{ Authorization: "Bearer placeholder" }, { "x-api-key": "placeholder" }];
+  for (const headers of matchHeaders) {
+    const transformation = createCredentialRequestTransformation({ matchUrl: "https://model.example.test/v1",
+      matchHeaders: headers, transformHeaders: { Authorization: "fixture" } });
+    assert(transformation.match.headers?.length, "the public Harness helper requires credential-value matching");
+    await assert.rejects(async () => session.addRequestTransformations?.([transformation]), error =>
+      error instanceof Error && error.name === "AI_HarnessCapabilityUnsupportedError" && error.message.includes("headers matchers are not supported"));
+  }
+  await session.destroy();
 });

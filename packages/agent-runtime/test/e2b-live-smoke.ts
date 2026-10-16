@@ -277,7 +277,9 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
   const sandbox = (await makeAdapter(kind).create()).session; known.add(sandbox.id); log("resource", "CREATED", sandbox.id);
   let session: HarnessAgentSession | undefined;
   try {
-    const capability = await sandbox.run({ command: "node --version; command -v pnpm || true" });
+    const info = await Sandbox.getInfo(sandbox.id, { apiKey });
+    log(`${kind}-resource-spec`, "INFO", JSON.stringify({ templateId: info.templateId, cpuCount: info.cpuCount, memoryMB: info.memoryMB }));
+    const capability = await sandbox.run({ command: "node --version; pnpm --version" });
     log(`${kind}-prerequisites`, "INFO", capability.stdout.trim());
     if (process.argv.includes("--provision-bridge")) {
       const provision = await sandbox.run({ command: "sudo npm install -g pnpm@10.32.1" });
@@ -286,10 +288,12 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
     }
     await sandbox.writeTextFile({ path: "e2b-model.mjs", content: await readFile(new URL("./fixture/e2b-model.mjs", import.meta.url), "utf8") });
     const model = await sandbox.spawn({ command: "node e2b-model.mjs" });
+    let ready = false;
     for (let i = 0; i < 30; i++) {
-      if ((await sandbox.run({ command: "curl --fail --silent http://127.0.0.1:4010/health" })).exitCode === 0) break;
+      if ((await sandbox.run({ command: "curl --fail --silent http://127.0.0.1:4010/health" })).exitCode === 0) { ready = true; break; }
       await sleep(100);
     }
+    assert(ready, "in-sandbox HTTP model fixture must be ready");
     const harness = kind === "codex" ? createCodex({ auth: { OPENAI_API_KEY: "local-fixture", OPENAI_BASE_URL: "http://127.0.0.1:4010/v1" } })
       : createClaudeCode({ auth: { ANTHROPIC_API_KEY: "local-fixture", ANTHROPIC_BASE_URL: "http://127.0.0.1:4010" } });
     const makeAgent = () => new HarnessAgent({ harness, model: kind === "codex" ? "gpt-5" : "claude-sonnet-4-5", permissionMode: "allow-all", sandboxConfig: { workDir: "bridge-work" }, tools: {} });
@@ -305,14 +309,40 @@ async function bridgeProbe(kind: "codex" | "claude-code") {
     assert(requests?.includes("bridge-remote-tool-result"), "real shell result reaches remote model fixture");
     const resumeFrom = JSON.parse(JSON.stringify(await session.stop())); session = undefined;
     await sandbox.stop();
+    assert.equal((await Sandbox.getInfo(sandbox.id, { apiKey })).state, "paused");
     const resumed = (await makeAdapter(kind).resume({ sandboxId: sandbox.id })).session;
+    assert.equal(resumed.id, sandbox.id);
+    assert.equal(await resumed.readTextFile({ path: countPath }), "committed\n");
     const next = makeAgent();
     session = await next.createSession({ sessionId: `${runId}-${kind}`, sandboxSession: resumed, resumeFrom, abortSignal: AbortSignal.timeout(60_000) });
     assert.equal((await next.generate({ session, prompt: "Recall the completed write without repeating it.", abortSignal: AbortSignal.timeout(60_000) })).text, "E2B bridge complete.");
     assert.equal(await resumed.readTextFile({ path: countPath }), "committed\n");
+    const historyRequests = JSON.parse(await resumed.readTextFile({ path: "bridge-requests.json" }) ?? "[]") as { body: unknown }[];
+    const latest = JSON.stringify(historyRequests.at(-1)?.body);
+    assert(latest.includes("bridge-remote-tool-result") && latest.includes("E2B bridge complete."), "resumed native model request must carry actual prior tool result and reply");
+    log(`${kind}-model-fixture-opaque-resume`, "PASS", sandbox.id);
+    await resumed.writeTextFile({ path: "bridge-phase", content: "cancel" });
+    const controller = new AbortController();
+    const running = await next.stream({ session, prompt: "Start the cancellable remote command.", abortSignal: controller.signal });
+    const drain = (async () => { for await (const _ of running.stream) { /* actual bridge turn */ } })();
+    const pidPath = `${sandbox.defaultWorkingDirectory}/bridge-work/bridge-cancel.pid`;
+    let pid: string | null = null;
+    for (let i = 0; i < 100 && !pid; i++) { pid = await resumed.readTextFile({ path: pidPath }); if (!pid) await sleep(100); }
+    assert(pid, "bridge shell must actually start before cancellation");
+    const cancelledAt = Date.now(); controller.abort();
+    await within(drain, 10_000, `${kind} cancellation did not settle within 10 seconds`);
+    let status = "";
+    const deadline = Date.now() + 5_000;
+    do {
+      status = (await resumed.run({ command: `ps -o stat=,comm= -p ${pid.trim()} || true` })).stdout.trim();
+      if (!status || status.startsWith("Z")) break;
+      await sleep(100);
+    } while (Date.now() < deadline);
+    assert(!status || status.startsWith("Z"), `cancelled bridge command still running: ${status}`);
+    assert.equal(await resumed.readTextFile({ path: countPath }), "committed\n");
+    log(`${kind}-cancel`, "PASS", `${Date.now() - cancelledAt}ms`);
     await session.stop(); session = undefined;
     await model.kill(); await model.wait();
-    log(`${kind}-model-fixture-opaque-resume`, "PASS");
   } catch (error) {
     try {
       const metrics = await Sandbox.getMetrics(sandbox.id, { apiKey });
