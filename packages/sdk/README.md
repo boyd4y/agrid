@@ -16,7 +16,16 @@ Create a key in **Settings → API Key** and independently select Read, Create, 
 
 Every operation supports a final `{ signal }`. Inject a custom transport through `createClient({ url, key, fetch })`. Use `tabdo.graphql<T>(query, variables, { operationName, signal })` for raw GraphQL. Failures throw `TabdoApiError`; writes are never retried automatically.
 
-`dist/index.js` is the package ESM entry. `dist/tabdo.js` can be copied beside a plain HTML page and imported with `<script type="module">`. No CDN or npm publication is assumed.
+Install the published package with `npm install @tabdo/sdk`. `dist/index.js` is the package ESM entry; `dist/tabdo.js` is the standalone browser module, also declared as the package's jsDelivr/UNPKG entry. After publishing the matching npm version, plain HTML can import it directly:
+
+```html
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@tabdo/sdk@0.1.1/dist/tabdo.js';
+  const tabdo = createClient({ url: 'https://YOUR_TABDO_ORIGIN', key: 'YOUR_API_KEY' });
+</script>
+```
+
+Each Tabdo deployment sets one fixed `SITE_SDK_URL`. Overseas defaults to the versioned jsDelivr URL above; a separate China deployment can configure its own CDN URL serving the same module. Site authors do not select providers, and the platform does not copy the SDK source into site files. npm publication is a separate, explicit release action; configuring a URL does not publish the package.
 
 The repository guide at `docs/api/site-api.md` documents GraphQL, filtering, pagination, attachment URLs, permissions, limits, packaging, and executable HTML examples.
 

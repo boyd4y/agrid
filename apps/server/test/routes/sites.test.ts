@@ -17,13 +17,16 @@ import { db, client } from "../../src/db/index.js";
 import { auth } from "../../src/auth/index.js";
 import type { RequestScopeResolver } from "../../src/business/http/request.js";
 import type { SiteDetail, SiteSourceFile } from "@tabdo/shared";
+import { siteSdkUrl } from "../../src/sites/capabilities.js";
+import { getSiteConfig } from "../../src/business/sites/service.js";
+import { buildAgentSkillInstructions } from "../../src/business/skills/runtime.js";
 
 const org = randomUUID(), foreign = randomUUID();
 let directory = "", uid = "", cookie = "", current: SiteDetail, puts = 0, failAt = Infinity;
 const inputFiles = (text: string): SiteSourceFile[] => [
   { path: "index.html", content: `<!doctype html><html><head><link rel="stylesheet" href="./assets/theme.css"></head><body><h1>${text}</h1><script type="module" src="./app.js"></script></body></html>` },
   { path: "assets/theme.css", content: "h1 { color: rgb(20, 80, 120); }" },
-  { path: "app.js", content: "import { createClient } from './tabdo.js'; window.sdkReady = typeof createClient === 'function';" },
+  { path: "app.js", content: `import { createClient } from ${JSON.stringify(siteSdkUrl())}; window.sdkReady = typeof createClient === 'function';` },
 ];
 const dependencies = () => {
   const base = commandDependencies(), storage = createLocalStorage(directory);
@@ -59,10 +62,13 @@ after(async () => {
 test("site source is scoped and versioned; preview is private and does not save or publish", async () => {
   assert.equal((await req("/api/sites", undefined, "GET", "")).status, 401);
   const saved = await req("/api/sites", { name: "Knowledge", files: inputFiles("First") }); assert.equal(saved.status, 201); current = await saved.json();
-  assert.equal(current.version, 1); assert(current.files.some(file => file.path === "tabdo.js" && file.content.includes("createClient")));
+  assert.equal(current.version, 1); assert.deepEqual(current.files, inputFiles("First"), "saved files contain only the author's files, without an injected SDK");
+  assert.equal((await req("/api/sites/config", undefined, "GET", "")).status, 401);
+  assert.deepEqual(await (await req("/api/sites/config")).json(), { sdkUrl: siteSdkUrl() });
   assert.equal((await req(`/s/${current.id}/`, undefined, "GET", "")).status, 404);
   const preview = await (await req(`/api/sites/${current.id}/preview`, { files: inputFiles("Unsaved"), generation: 1 })).json();
   const response = await app.request(preview.url); assert.equal(response.status, 200); assert((await response.text()).includes("Unsaved"));
+  assert.equal((await app.request(new URL("tabdo.js", preview.url).href)).status, 404, "preview does not invent an SDK file");
   assert.match(response.headers.get("Content-Security-Policy")!, /^sandbox allow-scripts/); assert(!response.headers.get("Content-Security-Policy")!.includes("allow-same-origin"));
   assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
   assert.equal((await req(`/api/sites/${current.id}`)).status, 200); assert.equal((await (await req(`/api/sites/${current.id}`)).json()).version, 1);
@@ -92,11 +98,24 @@ test("publication serves real stored files; failed writes keep old publication; 
   assert.equal((await req(`/api/sites/${current.id}/publish`, { revisionId: current.revisionId })).status, 200);
   assert((await (await publicPage(current.id)).text()).includes("Second"));
   const stored = (await db.select().from(siteRevisions).where(eq(siteRevisions.id, current.revisionId)))[0];
+  assert.deepEqual(Object.keys(stored.assets!).sort(), inputFiles("Second").map(file => file.path).sort(), "publication uploads only site source, without copying an SDK bundle");
   assert.equal(await readFile(join(directory, stored.assets!["index.html"]), "utf8"), inputFiles("Second")[0].content);
   const restored = await req(`/api/sites/${current.id}/restore`, { revisionId: firstRevision, expectedVersion: 2 }); assert.equal(restored.status, 200);
   current = await restored.json(); assert.equal(current.version, 3); assert.equal(current.revisions.length, 3); assert(current.files[0].content.includes("First"));
   assert((await (await publicPage(current.id)).text()).includes("Second"));
   assert.equal((await req(`/s/${current.id}/v/${current.revisionId}/index.html`)).status, 404, "unpublished versions have no public assets");
+});
+test("deployment SDK configuration defaults overseas and accepts an independent fixed China source", () => {
+  assert.equal(siteSdkUrl({}), "https://cdn.jsdelivr.net/npm/@tabdo/sdk@0.1.1/dist/tabdo.js");
+  const chinaUrl = "https://static.tabdo.example.cn/sdk/0.1.1/tabdo.js";
+  const config = getSiteConfig({ ...dependencies(), sites: { ...dependencies().sites, sdkUrl: siteSdkUrl({ NODE_ENV: "production", SITE_SDK_URL: chinaUrl }) } });
+  assert.equal(config.sdkUrl, chinaUrl);
+  assert(buildAgentSkillInstructions([], config.sdkUrl).includes(chinaUrl), "native instructions and frontend metadata use the same configured URL");
+  assert.equal(siteSdkUrl({ NODE_ENV: "test", SITE_SDK_URL: "http://127.0.0.1:4199/sdk.js" }), "http://127.0.0.1:4199/sdk.js");
+  for (const url of ["file:///tmp/sdk.js", "javascript:alert(1)", "https://private:secret@cdn.example/sdk.js", "http://remote.example/sdk.js", "https://cdn.example/sdk.js#fragment"]) {
+    assert.throws(() => siteSdkUrl({ NODE_ENV: "production", SITE_SDK_URL: url }), error => error instanceof Error && !error.message.includes("private") && !error.message.includes("secret"));
+  }
+  assert.throws(() => siteSdkUrl({ NODE_ENV: "production", SITE_SDK_URL: "http://localhost:4199/sdk.js" }));
 });
 test("native tools, shared commands, and bound chat use the same site services", async () => {
   const tools = createTableTools(dependencies(), undefined, org, uid);

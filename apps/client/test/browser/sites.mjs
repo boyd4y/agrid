@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBrowserFixture, postgres, databaseUrl, artifact, pause } from './fixture.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'tabdo-site-workflow-'));
+const sdkBytes = await readFile(new URL('../../../../packages/sdk/dist/tabdo.js', import.meta.url));
+let sdkRequests = 0;
+// A separate-origin CDN fixture serves the real distribution; nothing is copied into site files.
+const sdkServer = createServer((_req, res) => { sdkRequests++; res.writeHead(200, { 'content-type': 'text/javascript', 'access-control-allow-origin': '*' }); res.end(sdkBytes); });
+await new Promise(resolve => sdkServer.listen(0, '127.0.0.1', resolve)); sdkServer.unref();
+const sdkUrl = `http://127.0.0.1:${sdkServer.address().port}/npm/@tabdo/sdk@0.1.1/dist/tabdo.js`;
 let nativeFiles, nativeId, calls = 0, readSkill = false;
-const fixture = await createBrowserFixture({ name: 'Sites workflow', serverEnv: { FILE_STORAGE_LOCAL_DIR: directory }, modelRequest: async(req, res) => {
+const fixture = await createBrowserFixture({ name: 'Sites workflow', serverEnv: { FILE_STORAGE_LOCAL_DIR: directory, SITE_SDK_URL: sdkUrl }, modelRequest: async(req, res) => {
   let raw = ''; for await (const part of req) raw += part;
   const body = JSON.parse(raw); calls++;
   res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -14,6 +21,7 @@ const fixture = await createBrowserFixture({ name: 'Sites workflow', serverEnv: 
   let name, args;
   if (calls === 1) {
     const system = body.messages.filter(message => message.role === 'system').map(message => typeof message.content === 'string' ? message.content : JSON.stringify(message.content)).join('\n');
+    assert(system.includes(sdkUrl), 'native instructions use the same deployment SDK URL as the editor');
     const path = system.match(/\/[^\s"'<>()[\]\\]+\/site\/SKILL\.md/)?.[0];
     assert(path, 'native harness advertises the actual Site skill path');
     const props = body.tools.find(tool => tool.function.name === 'read').function.parameters.properties;
@@ -43,11 +51,20 @@ try {
   nativeFiles = [
     { path: 'index.html', content: '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>活动报名</title><link rel="stylesheet" href="./styles.css"></head><body><main><h1>活动报名</h1><p id="event">正在加载活动…</p><form id="registration"><label>姓名<input id="name" name="name" aria-label="姓名"></label><button type="submit">提交报名</button></form><p id="result" role="status"></p></main><script type="module" src="./app.js"></script></body></html>' },
     { path: 'styles.css', content: 'body{margin:0;padding:32px;font:16px/1.6 system-ui;background:#fff;color:#37352f}main{max-width:600px;margin:auto}label{display:block}input,button{padding:12px;margin-top:16px;border-radius:6px;border:1px solid #d0d0d0}button{display:block;background:#1769b7;color:#fff}' },
-    { path: 'app.js', content: `import { createClient } from './tabdo.js'; import { config } from './tabdo-config.js';\nconst client = createClient(config);\nconst rows = await client.table('${content.id}').list();document.querySelector('#event').textContent = rows.rows[0].cells['${title}'];\ndocument.querySelector('form').addEventListener('submit',async event=>{event.preventDefault(); const button=document.querySelector('button');button.disabled=true;try {await client.table('${submissions.id}').create({'${name}':document.querySelector('input').value}); document.querySelector('#result').textContent='报名已收到';}catch(error){document.querySelector('#result').textContent=error.message;}finally{button.disabled=false;}});` },
+    { path: 'app.js', content: `import { createClient } from '${sdkUrl}'; import { config } from './tabdo-config.js';\nconst client = createClient(config);\nconst rows = await client.table('${content.id}').list();document.querySelector('#event').textContent = rows.rows[0].cells['${title}'];\ndocument.querySelector('form').addEventListener('submit',async event=>{event.preventDefault(); const button=document.querySelector('button');button.disabled=true;try {await client.table('${submissions.id}').create({'${name}':document.querySelector('input').value}); document.querySelector('#result').textContent='报名已收到';}catch(error){document.querySelector('#result').textContent=error.message;}finally{button.disabled=false;}});` },
     { path: 'tabdo-config.js', content: `export const config = ${JSON.stringify({ url: base, key: key.secret })};` },
   ];
   await page.goto(frontend + '/app/sites');
   await page.getByText('创建你的第一个站点', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '新建站点', exact: true }).first().click();
+  await page.getByRole('dialog').getByRole('textbox', { name: '站点名称', exact: true }).fill('Deployment SDK starter');
+  await page.getByRole('dialog').getByRole('button', { name: '新建站点', exact: true }).click();
+  await page.getByTestId('site-editor').waitFor();
+  const starter = (await api('/sites')).find(site => site.name === 'Deployment SDK starter');
+  const starterFiles = (await api('/sites/' + starter.id)).files;
+  assert.equal(starterFiles.length, 4); assert(!starterFiles.some(file => file.path === 'tabdo.js'));
+  assert(starterFiles.find(file => file.path === 'app.js').content.includes(sdkUrl));
+  await api('/sites/' + starter.id, undefined, 'DELETE');
   await page.goto(frontend + '/app');
   const composer = page.getByRole('textbox', { name: '消息输入框' }); await composer.waitFor();
   await composer.fill('使用 site 技能创建活动报名网站并打开预览。'); await composer.press('Enter');
@@ -76,6 +93,7 @@ try {
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   visitor = await ctx.newPage(); visitor.on('pageerror', error => errors.push(error.message));
   const site = await api('/sites/' + nativeId); await visitor.goto(site.publicUrl);
+  assert(!site.files.some(file => file.path === 'tabdo.js'));
   await visitor.getByRole('heading', { name: '春日活动报名', exact: true }).waitFor();
   await visitor.getByText('春日设计分享会', { exact: true }).waitFor();
   const isolation = await visitor.evaluate(() => {
@@ -119,5 +137,6 @@ try {
   await page.getByRole('button', { name: '确认删除', exact: true }).click();
   await page.getByText('创建你的第一个站点', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
-  console.log('PASS native Site skill read + real save/preview tools, editor live preview/recovery/save, published SDK module imports, opaque-origin isolation, actual registration, version restore, unpublish, desktop/dark/mobile and deletion');
-} catch(error) { console.error('Site browser diagnostics:', errors, page.url(), (await page.locator('body').innerText().catch(()=>'' )).slice(0,1200)); throw error; } finally { await visitor?.close(); await db.end(); await fixture.close(); await rm(directory, { recursive: true, force: true }); }
+  assert(sdkRequests > 0, 'preview and published pages load the actual SDK from the separate CDN origin');
+  console.log('PASS deployment-configured external SDK in UI starter and native instructions, no SDK source injection, native Site skill + real save/preview, editor recovery/save, cross-origin SDK loading, isolation, actual registration, restore, unpublish, desktop/dark/mobile and deletion');
+} catch(error) { console.error('Site browser diagnostics:', errors, page.url(), (await page.locator('body').innerText().catch(()=>'' )).slice(0,1200)); throw error; } finally { await visitor?.close(); await db.end(); await fixture.close(); sdkServer.closeAllConnections(); await new Promise(resolve => sdkServer.close(resolve)); await rm(directory, { recursive: true, force: true }); }

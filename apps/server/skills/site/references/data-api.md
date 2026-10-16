@@ -6,12 +6,12 @@ API 地址使用用户实际的 Tabdo 服务地址，不假设远程环境能访
 
 四种操作互相独立：新增、更新、删除不要求读取；仅新增的收集表仍可查询表/列元数据。Key 管理、智能体运行和表结构修改需要登录会话，不属于站点数据 API。权限编辑或删除 Key 后，下次请求立即按新授权处理。
 
-## 有实际 SDK 文件时使用 SDK
+## 使用独立发布的 SDK
 
-`@tabdo/sdk` 提供原生 ES module 和类型定义，但尚未发布到 npm/CDN。save_site 会自动加入当前平台构建的 tabdo.js，可直接相对引用。已有项目安装了 SDK 时也可使用包导入；其他环境须由平台或用户提供实际浏览器构建文件后再引用。不要凭空引用远程 CDN，也不要假设 Agent 工作区能访问平台仓库的 packages 目录。
+`@tabdo/sdk` 提供浏览器 ESM 和类型定义。构建项目安装后用 `import { createClient } from '@tabdo/sdk'`；纯HTML页面使用当前部署在系统上下文中提供的完整SDK URL，海外默认jsDelivr，国内部署由平台配置自己的固定URL。无需让用户选择国内或海外来源，不复制SDK源码，也不依赖工作区的 packages 目录。以下URL是默认版本的示例，实际以当前部署配置为准；对应npm版本发布后才能访问，不把未发布链接称为已验证。CDN不可用时说明依赖未就绪，不能偷偷把SDK源码塞回站点。
 
 ```js
-import { createClient } from './tabdo.js'; // 此文件须实际存在
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@tabdo/sdk@0.1.1/dist/tabdo.js';
 
 const tabdo = createClient({ url: config.url, key: config.key });
 const content = tabdo.table(config.contentTableId);
@@ -25,7 +25,7 @@ const receipt = await tabdo.table(config.submissionsTableId).create({
 
 `table.columns()` 返回字段元数据；`get(rowId)`、`update(rowId, cells, { expectedVersion })`、`delete(rowId)` 分别受读取、更新、删除权限约束。`list()` 默认 50 行、最多 100 行，使用 nextCursor/hasMore 分页。查询总数需 includeTotal；不要一次下载所有记录。
 
-## 没有 SDK 文件时直接使用 GraphQL
+## 直接使用 GraphQL
 
 原生 fetch 即可连接同一接口，无需等待安装或额外服务。以下是页面内的请求示例，不是平台已存在的工具。config 需替换为真实配置；构建页面时可先留集中配置位置，待用户在可信配置入口填写 Key。
 

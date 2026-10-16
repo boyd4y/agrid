@@ -15,10 +15,10 @@ Migration `0030_unified_api_keys` consolidates previous credentials without chan
 ```sh
 pnpm --filter @tabdo/sdk build
 pnpm --dir packages/sdk pack --pack-destination /tmp
-# Install /tmp/tabdo-sdk-0.1.0.tgz in another project.
+# Install /tmp/tabdo-sdk-0.1.1.tgz in another project.
 ```
 
-For plain HTML, copy `packages/sdk/dist/tabdo.js` beside the page and import it as an ES module. The distribution has no React, Node, or internal Tabdo runtime dependencies. npm/CDN publication is separate from deploying the application.
+For applications, install the published `@tabdo/sdk` package. For plain HTML, import the standalone browser module directly from the deployment's fixed `SITE_SDK_URL`, for example `https://cdn.jsdelivr.net/npm/@tabdo/sdk@0.1.1/dist/tabdo.js` after that npm version is published. The distribution has no React, Node, or internal Tabdo runtime dependencies. npm/CDN publication is separate from deploying the application; configuring the CDN URL does not publish anything. Site files do not receive an injected SDK bundle.
 
 ```ts
 import { createClient } from '@tabdo/sdk';

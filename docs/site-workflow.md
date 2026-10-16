@@ -14,7 +14,15 @@
 
 每个文档通过 HTTP `Content-Security-Policy: sandbox` 和嵌入 iframe 的 sandbox 获取不透明源；不授予 allow-same-origin，禁止读取后台 Cookie、localStorage或父窗口。HTML/SVG安全头在直接访问时仍生效。源文件按文本下载，禁止在管理页面直接执行。参考：[CSP sandbox](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/sandbox)。
 
-站点默认与API共用服务进程，也可将 SITE_PUBLIC_ORIGIN 指向同一API部署的独立域名；该域名需实际配置路由。开发使用现有Vite和API，不增加容器。公开页面使用既有普通API Key，按表授权；既有SDK构建随站点提供，不假设npm/CDN已发布。后台身份、数据库和模型密钥不进入站点。
+站点默认与API共用服务进程，也可将 SITE_PUBLIC_ORIGIN 指向同一API部署的独立域名；该域名需实际配置路由。开发使用现有Vite和API，不增加容器。公开页面使用既有普通API Key，按表授权。后台身份、数据库和模型密钥不进入站点。
+
+## SDK 部署配置
+
+SDK独立发布到npm；构建项目通过包名安装，纯HTML通过完整URL进行ESM导入。每套Tabdo部署固定一个 `SITE_SDK_URL`，海外默认 `https://cdn.jsdelivr.net/npm/@tabdo/sdk@0.1.1/dist/tabdo.js`；国内独立部署时替换成自己的固定HTTPS CDN地址，不做用户侧选择或地域自动判断。该配置是公开模块地址，不含凭证；生产拒绝HTTP，开发测试允许显式配置本地HTTP模块源。
+
+`GET /api/sites/config` 为已登录的工作区用户提供相同的地址，新建站点模板和原生智能体系统上下文共用配置。保存、预览和发布不读取SDK构建文件，也不注入 `tabdo.js`；发布只上传站点提交的源文件。对应npm版本必须另行发布，配置URL不代表该版本已存在。
+
+已保存页面中的版本化URL保持固定，修改部署配置影响后续生成的引用。旧站点如仍含本地SDK，可在编辑时替换引用并删除SDK文件，再保存成新版本；不批量改写历史或已发布资产。旧 `tabdo.js` 不再是特殊只读文件。
 
 数据API仍限制可写字段类型。表单UI校验不等于不可绕过的服务端业务规则，行级访客身份、支付和硬性名额需对应后端能力。
 
@@ -30,4 +38,4 @@
 
 ## 本次验证
 
-隔离本地 PostgreSQL 下的服务端187项测试、客户端15项测试、共享契约11项测试及环境隔离18项测试通过；全仓构建通过。`sites` 浏览器用例覆盖真实 Pi Harness 读取技能、保存和打开预览、草稿恢复、版本恢复、发布及真实受限Key报名写入。模型响应使用确定性测试提供方，不作为真实模型设计质量的证明。`agent-tools` 浏览器用例确认站点作为第五个能力分组，与现有配置一致。
+原闭环验收已完成服务端187项、客户端15项、共享契约11项及环境隔离18项测试和全仓构建。`sites` 浏览器用例覆盖真实Pi Harness读取技能、保存预览、草稿恢复、版本恢复、发布及受限Key报名写入；模型使用确定性测试提供方，不作为开放式模型设计质量证明。SDK配置调整后，该用例通过独立端口的CDN测试服务加载真实SDK构建，验证跨域模块引用和数据读写，不依赖尚未发布的npm版本，也不复制SDK进站点。

@@ -30,11 +30,12 @@ export function SitesPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault(); if (saving || !name.trim()) return; setSaving(true); setFormError("");
     try {
+      const { sdkUrl } = await api.getSiteConfig();
       const escaped = name.trim().replace(/[&<>"']/g, value => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[value]!));
       const site = await api.saveSite({ name: name.trim(), files: [
         { path: "index.html", content: `<!doctype html>\n<html lang="${t("htmlLang")}">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width,initial-scale=1">\n  <title>${escaped}</title>\n  <link rel="stylesheet" href="./styles.css">\n</head>\n<body>\n  <main><h1>${escaped}</h1><p>${t("starterText")}</p></main>\n  <script type="module" src="./app.js"></script>\n</body>\n</html>\n` },
         { path: "styles.css", content: "body { margin: 0; padding: 48px 24px; font-family: system-ui, sans-serif; color: #37352f; background: #fff; }\nmain { max-width: 720px; margin: auto; }\nh1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; }\np { line-height: 1.7; }\n" },
-        { path: "app.js", content: "import { createClient } from './tabdo.js';\nimport { config } from './tabdo-config.js';\n\n// Connect the tables needed by this page after configuring an API key.\nexport const tabdo = config.key ? createClient(config) : null;\n" },
+        { path: "app.js", content: `import { createClient } from ${JSON.stringify(sdkUrl)};\nimport { config } from './tabdo-config.js';\n\n// Connect the tables needed by this page after configuring an API key.\nexport const tabdo = config.key ? createClient(config) : null;\n` },
         { path: "tabdo-config.js", content: "export const config = {\n  url: location.origin,\n  key: '',\n};\n" },
       ] });
       navigate(`/app/sites/${site.id}`);

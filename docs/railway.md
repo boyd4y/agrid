@@ -51,4 +51,6 @@ API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运�
 
 迁移 `0031_sites` 增加站点、不可变版本和短期预览。前端入口为 `/app/sites`；公开内容通过 `/s/:id/` 访问，发布资产写入上述 S3 bucket。保存版本不会直接发布。预览和公开文档带浏览器隔离策略，不可读取后台身份或存储。无需额外的站点进程或容器；可选 `SITE_PUBLIC_ORIGIN` 应实际路由到同一 API 服务，未配置时沿用 `BETTER_AUTH_URL` 的源。操作与边界见 [Site 工作流](site-workflow.md)。
 
+API和worker配置相同的 `SITE_SDK_URL`，作为这套部署唯一的浏览器SDK来源。海外默认使用固定版本jsDelivr地址；国内另部署一套时配置其CDN地址，无需用户切换。先独立发布对应npm版本并确认链接可用，再启用引用该版本的站点；应用部署不会自动执行npm发布。历史站点文件保留已保存的引用。
+
 参考：[Railway 配置](https://docs.railway.com/config-as-code)、[Dockerfile](https://docs.railway.com/builds/dockerfiles)、[官方 Harness 会话](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)。

@@ -11,6 +11,10 @@ export function createSitesRoute(acquire: RequestScopeResolver) {
   const route = createRequestRoute(acquire);
   route.use("*", bodyLimit({ maxSize: 3 * 1024 * 1024 }));
   route.use("*", async(c, next) => { c.header("Cache-Control", "no-store"); await next(); });
+  route.get("/config", c => {
+    const scope = requireActorOrg(c); if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+    return c.json(service.getSiteConfig(c.get("resources").commands));
+  });
   route.get("/", async c => {
     const scope = requireActorOrg(c); if (!scope.ok) return c.json({ error: scope.error }, scope.status);
     return c.json(await service.listSites(c.get("resources").commands, { organizationId: scope.organizationId }));
@@ -77,7 +81,7 @@ export function createSiteAssetsRoute(acquire: RequestScopeResolver) {
         if (!key || !driver) return new Response("Not found", { status: 404 }); body = await caps.storage(driver).open(key);
       }
       const csp = ["sandbox allow-scripts allow-forms allow-downloads", "default-src 'none'",
-        `script-src 'unsafe-inline' https: ${url.origin}`, `style-src 'unsafe-inline' https: ${url.origin}`,
+        `script-src 'unsafe-inline' https: ${url.origin} ${new URL(caps.sdkUrl).origin}`, `style-src 'unsafe-inline' https: ${url.origin}`,
         `img-src https: data: blob: ${url.origin}`, `font-src https: data: ${url.origin}`,
         `connect-src ${caps.apiOrigin} ${url.origin}`, "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join("; ");
       return new Response(body, { headers: { "Content-Type": service.siteMime(path), "Content-Security-Policy": csp,

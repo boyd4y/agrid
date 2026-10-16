@@ -12,7 +12,7 @@ description: 创建或修改连接 Tabdo 表格的自定义 HTML 网站，用于
 
 用实际可用的 list_tables、get_table 读取表格和字段 UUID，缺少结构时配合 table 技能补齐。区分公开内容和收集数据：内容表一般只读，报名或反馈表一般仅新增。浏览器筛选不是数据权限，不能用一个只读 Key 暴露含内部资料的整张表。
 
-已有站点先 list_sites / get_site；修改前读取最新 version 和文件，get_site 可按 path 读取单个文件。用 Harness 原生文件工具生成或修改实际文件，随后调用 save_site 把完整文件集保存到平台。新建传 name/files，修改另传 siteId/expectedVersion；files 会整体替换，不遗漏原有资源。tabdo.js 是平台提供的 SDK 文件，无需自行复制；沿用已有项目结构，没有项目时可从 index.html、styles.css、app.js 开始。普通静态页面不需要长驻 Agent 或额外后端。保留用户已有内容和文件，增量修改。组件库、构建方式和资源来源以当前项目为准；日期、时间、下拉选择等交互沿用项目的自定义控件风格，避免弹出浏览器原生选择器。
+已有站点先 list_sites / get_site；修改前读取最新 version 和文件，get_site 可按 path 读取单个文件。用 Harness 原生文件工具生成或修改实际文件，随后调用 save_site 把完整文件集保存到平台。新建传 name/files，修改另传 siteId/expectedVersion；files 会整体替换，不遗漏原有资源。SDK是独立发布的npm包，纯HTML页面直接导入当前部署提供的固定CDN地址，不复制SDK源码或创建本地tabdo.js。沿用已有项目结构，没有项目时可从 index.html、styles.css、app.js 开始。普通静态页面不需要长驻 Agent 或额外后端。保留用户已有内容和文件，增量修改。组件库、构建方式和资源来源以当前项目为准；日期、时间、下拉选择等交互沿用项目的自定义控件风格，避免弹出浏览器原生选择器。
 
 ## 接入数据
 

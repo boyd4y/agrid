@@ -90,9 +90,9 @@ function SiteEditor({ siteId }: { siteId: string }) {
   const editor = <div className="flex h-full min-h-0 min-w-0 flex-col">
     <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-3"><span className="truncate text-xs font-medium">{active?.path}</span>{active && <div className="flex shrink-0 gap-1">
       <Button variant="ghost" size="icon" className="size-7" aria-label={t("downloadFile")} onClick={() => { const url = URL.createObjectURL(new Blob([active.content], { type: "text/plain;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = active.path.split("/").at(-1)!; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }}><Download /></Button>
-      {!["index.html", "tabdo.js"].includes(active.path) && !historical && <Button variant="destructive-ghost" size="icon" className="size-7" aria-label={t("deleteFile")} onClick={() => setRemoving(active.path)}><Trash2 /></Button>}
+      {active.path !== "index.html" && !historical && <Button variant="destructive-ghost" size="icon" className="size-7" aria-label={t("deleteFile")} onClick={() => setRemoving(active.path)}><Trash2 /></Button>}
     </div>}</div>
-    {active && <CodeEditor key={active.path} filename={active.path} value={active.content} aria-label={t("codeEditor", { path: active.path })} readOnly={!!historical || active.path === "tabdo.js"} onChange={content => setFiles(current => current.map(file => file.path === active.path ? { ...file, content } : file))} className="min-h-0 flex-1" />}
+    {active && <CodeEditor key={active.path} filename={active.path} value={active.content} aria-label={t("codeEditor", { path: active.path })} readOnly={!!historical} onChange={content => setFiles(current => current.map(file => file.path === active.path ? { ...file, content } : file))} className="min-h-0 flex-1" />}
   </div>;
   const preview = <SitePreview siteId={siteId} files={shownFiles} />;
   return <div className="flex h-full min-h-0 flex-col" data-testid="site-editor">

@@ -133,6 +133,7 @@ export const api = {
   listAgentRunEvents: (threadId: string, runId: string, signal?: AbortSignal) => request<{ events: import("@tabdo/shared").AgentRunEvent[] }>(`/api/threads/${threadId}/runs/${runId}/events`, { signal }),
   cancelAgentRun: (threadId: string, runId: string) => request<{ ok: boolean }>(`/api/threads/${threadId}/runs/${runId}/cancel`, { method: "POST", body: "{}" }),
   getChatMessages: (threadId: string, signal?: AbortSignal) => request<{ headId: string | null; messages: Array<{ id: string; parentId: string | null; format: string; content: Record<string, unknown> }> }>(`/api/threads/${threadId}/messages`, { signal }),
+  getSiteConfig: () => request<import("@tabdo/shared").SiteConfig>("/api/sites/config"),
   listSites: () => request<import("@tabdo/shared").SiteSummary[]>("/api/sites"),
   getSite: (id: string, revisionId?: string) => request<import("@tabdo/shared").SiteDetail>(`/api/sites/${id}${revisionId ? `?revisionId=${revisionId}` : ""}`),
   saveSite: (input: import("@tabdo/shared").SaveSiteInput) => request<import("@tabdo/shared").SiteDetail>("/api/sites", { method: "POST", body: JSON.stringify(input) }),

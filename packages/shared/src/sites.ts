@@ -22,6 +22,8 @@ export const SITE_SAVE_SCHEMA = z.strictObject({
 }).refine(input => !input.siteId || input.expectedVersion !== undefined, "An existing site requires expectedVersion");
 export type SiteSourceFile = z.infer<typeof SITE_FILE_SCHEMA>;
 export type SaveSiteInput = z.infer<typeof SITE_SAVE_SCHEMA>;
+/** One fixed browser SDK source per Tabdo deployment, shared by all sites. */
+export type SiteConfig = { sdkUrl: string };
 export type SiteSummary = { id: string; name: string; version: number; publishedRevisionId: string | null; publishedVersion: number | null; publicUrl: string; updatedAt: string };
 export type SiteRevision = { id: string; version: number; createdAt: string; createdByUserId: string | null };
 export type SiteDetail = SiteSummary & { files: SiteSourceFile[]; revisionId: string; revisions: SiteRevision[] };

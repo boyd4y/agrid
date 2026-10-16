@@ -1,6 +1,6 @@
 import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
-import { SITE_FILES_SCHEMA, SITE_SAVE_SCHEMA, type SiteDetail, type SiteSourceFile, type SiteSummary } from "@tabdo/shared";
+import { SITE_FILES_SCHEMA, SITE_SAVE_SCHEMA, type SiteConfig, type SiteDetail, type SiteSummary } from "@tabdo/shared";
 import { sites, siteRevisions, sitePreviews } from "../db/schema.js";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
@@ -17,9 +17,8 @@ export function siteMime(path: string) {
   const extension = path.split(".").at(-1)?.toLowerCase();
   return ({ html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", mjs: "text/javascript; charset=utf-8", json: "application/json; charset=utf-8", svg: "image/svg+xml", txt: "text/plain; charset=utf-8", md: "text/plain; charset=utf-8" } as Record<string,string>)[extension ?? ""] ?? "application/octet-stream";
 }
-export function siteFiles(deps: CommandDependencies, raw: unknown): SiteSourceFile[] {
-  const files = SITE_FILES_SCHEMA.parse(raw).filter(file => file.path !== "tabdo.js");
-  return SITE_FILES_SCHEMA.parse([...files, { path: "tabdo.js", content: capabilities(deps).sdk }]);
+export function getSiteConfig(deps: CommandDependencies): SiteConfig {
+  return { sdkUrl: capabilities(deps).sdkUrl };
 }
 async function owned(deps: CommandDependencies, input: Scope & { siteId: string }, tx?: Transaction, lock = false) {
   const query = (tx ?? deps.database).select().from(sites).where(and(eq(sites.id, uuid(input.siteId)), eq(sites.organizationId, org(input))));
@@ -47,7 +46,7 @@ export async function getSite(deps: CommandDependencies, input: Scope & { siteId
 }
 export async function saveSite(deps: CommandDependencies, raw: Scope & Record<string, unknown>, transaction?: Transaction) {
   const { organizationId: _org, actorId: _actor, ...value } = raw;
-  const input = SITE_SAVE_SCHEMA.parse(value), organizationId = org(raw), files = siteFiles(deps, input.files);
+  const input = SITE_SAVE_SCHEMA.parse(value), organizationId = org(raw), files = input.files;
   return inTransaction(deps, transaction, async tx => {
     let site;
     if (input.siteId) {
@@ -108,7 +107,7 @@ export async function deleteSite(deps: CommandDependencies, input: Scope & { sit
   });
 }
 export async function previewSite(deps: CommandDependencies, input: Scope & { siteId: string; files: unknown; token?: string; generation?: number }) {
-  await owned(deps, input); const files = siteFiles(deps, input.files), now = deps.now();
+  await owned(deps, input); const files = SITE_FILES_SCHEMA.parse(input.files), now = deps.now();
   await deps.database.delete(sitePreviews).where(and(eq(sitePreviews.siteId, input.siteId), lt(sitePreviews.expiresAt, now)));
   const expiresAt = new Date(now.getTime() + 2 * 3600_000), generation = input.generation ?? 1;
   const [preview] = input.token
