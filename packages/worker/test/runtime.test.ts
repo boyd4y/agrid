@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn } from "node:child_process";
 import { startWorkerService } from "../src/runtime.js";
-import { signal, eventually } from "./fixtures.js";
+import { signal } from "./fixtures.js";
 
 test("polling isolates task/logger failures, never overlaps and interrupts idle before ordered/repeated cleanup", async () => {
   const entered = signal(), finish = signal(), second = signal();
@@ -45,20 +45,32 @@ test("Node host drains on SIGTERM, handles SIGINT during startup and enforces sh
       import { runWorkerProcess } from ${JSON.stringify(entry)};
       const mode = ${JSON.stringify(mode)};
       setInterval(() => {}, 1000);
-      console.log('HOST_CREATED');
       await runWorkerProcess({ shutdownTimeoutMs: 100,
-        start: () => ({ ready: mode === 'starting' ? new Promise(() => {}) : Promise.resolve(),
-          async close() { if (mode === 'timeout') await new Promise(() => {}); console.log('DRAINED'); } }),
+        start: () => {
+          // The host installs signal handlers before calling start; ready may still be pending.
+          console.log('HOST_CREATED');
+          return { ready: mode === 'starting' ? new Promise(() => {}) : Promise.resolve(),
+            async close() { if (mode === 'timeout') await new Promise(() => {}); console.log('DRAINED'); } };
+        },
         onReady() { console.log('READY'); }, onError(e) { console.log(e.message); }
       });
-    `], { stdio: ["ignore", "pipe", "pipe"] });
-    let output = ""; child.stdout.on("data", (bytes) => { output += String(bytes); });
+    `], { stdio: ["ignore", "pipe", "pipe"], timeout: 3000, killSignal: "SIGKILL" });
+    let output = "", signaled = false;
+    child.stdout.on("data", (bytes) => {
+      output += String(bytes);
+      if (!signaled && output.includes(mode === "starting" ? "HOST_CREATED" : "READY")) {
+        signaled = true;
+        child.kill(mode === "starting" ? "SIGINT" : "SIGTERM");
+      }
+    });
     child.stderr.on("data", (bytes) => { output += String(bytes); });
-    const exited = new Promise<number | null>((resolve) => child.once("exit", resolve));
+    const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+      child.once("close", (code, signal) => resolve({ code, signal }));
+    });
     try {
-      await eventually(async () => output.includes(mode === "starting" ? "HOST_CREATED" : "READY"));
-      child.kill(mode === "starting" ? "SIGINT" : "SIGTERM");
-      assert.equal(await exited, mode === "timeout" ? 1 : 0, output);
+      assert.deepEqual(await exited, { code: mode === "timeout" ? 1 : 0, signal: null }, output);
+      assert(signaled, output);
+      if (mode === "starting") assert(!output.includes("READY"), output);
       assert(output.includes(mode === "timeout" ? "deadline exceeded" : "DRAINED"), output);
     } finally { child.kill("SIGKILL"); }
   }
