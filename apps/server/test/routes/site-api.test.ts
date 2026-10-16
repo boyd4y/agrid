@@ -20,6 +20,7 @@ import { createSiteKey, updateSiteKey, resolveSiteKey } from "../../src/business
 import { uploadFiles } from "../../src/business/services/files.js";
 import { ServiceError } from "../../src/business/errors.js";
 import { createClient } from "@tabdo/sdk";
+import { cleanupFixture, deleteFixtureEvents } from "../helpers/fixture-cleanup.js";
 
 const connectionString = process.env.DATABASE_URL ?? "";
 assert(new URL(connectionString).pathname.endsWith("_agent_test"));
@@ -74,11 +75,15 @@ before(async () => {
   }
 });
 after(async () => {
-  if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
-  await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org));
-  for (const id of [org, foreignOrg]) await resource.db.delete(organization).where(eq(organization.id, id));
-  await resource.db.delete(user).where(eq(user.id, userId));
-  await resource.close(); await rm(directory, { recursive: true, force: true });
+  await cleanupFixture([
+    ["owned events/outbox", () => deleteFixtureEvents(resource.db, [org, foreignOrg])],
+    ["owned runs", async () => { if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds)); }],
+    ["organization", () => resource.db.delete(organization).where(eq(organization.id, org))],
+    ["foreign organization", () => resource.db.delete(organization).where(eq(organization.id, foreignOrg))],
+    ["owner", () => resource.db.delete(user).where(eq(user.id, userId))],
+    ["database", () => resource.close()],
+    ["storage", () => rm(directory, { recursive: true, force: true })],
+  ]);
 });
 
 test("site key management is workspace admin-only, hashed, scoped, editable and physically deletable", async () => {

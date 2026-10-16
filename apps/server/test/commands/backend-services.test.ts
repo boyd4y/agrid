@@ -9,6 +9,7 @@ import { ServiceError } from "../../src/business/errors.js";
 import { getDatabase } from "../../src/resources/scope.js";
 import { organization, automations, automationEvents, automationOutbox, automationRuns } from "../../src/business/db/schema.js";
 import * as commands from "../../src/business/commands/index.js";
+import { cleanupFixture, deleteFixtureEvents } from "../helpers/fixture-cleanup.js";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString || !new URL(connectionString).pathname.endsWith("_agent_test")) {
@@ -31,11 +32,13 @@ before(async () => {
   ]);
 });
 after(async () => {
-  // Runs intentionally survive product rule/organization deletion.
-  if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
-  await resource.db.delete(organization).where(eq(organization.id, org));
-  await resource.db.delete(organization).where(eq(organization.id, other));
-  await resource.close();
+  await cleanupFixture([
+    ["owned events/outbox", () => deleteFixtureEvents(resource.db, [org, other])],
+    ["owned runs", async () => { if (ruleIds.length) await resource.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds)); }],
+    ["organization", () => resource.db.delete(organization).where(eq(organization.id, org))],
+    ["peer organization", () => resource.db.delete(organization).where(eq(organization.id, other))],
+    ["database", () => resource.close()],
+  ]);
 });
 
 test("backend commands need only explicit dependencies, without HTTP/auth/ALS composition", async () => {

@@ -6,7 +6,8 @@ import { createDatabase } from "../../src/business/db/factory.js";
 import { createAuth } from "@tabdo/auth";
 import { getAuth, getDatabase, getDatabaseClient, requirePlatformResources, withPlatformResources } from "../../src/resources/scope.js";
 import { createApp } from "../../src/app.js";
-import { member, organization, user, automationEvents, automationRuns } from "../../src/db/schema.js";
+import { member, organization, user, automationRuns } from "../../src/db/schema.js";
+import { cleanupFixture, deleteFixtureEvents } from "../helpers/fixture-cleanup.js";
 import { createTable, getTable } from "../../src/commands/index.js";
 import type { BackgroundWakeup } from "../../src/business/background.js";
 
@@ -101,10 +102,13 @@ test("concurrent product HTTP requests isolate database/auth resources and resto
   } finally {
     releaseDetached();
     await detached?.catch(() => {});
-    if (ruleIds.length) await databaseA.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
-    await databaseA.db.delete(automationEvents).where(eq(automationEvents.organizationId, orgId));
-    await databaseA.db.delete(organization).where(eq(organization.id, orgId));
-    await databaseA.db.delete(user).where(eq(user.email, email));
-    await Promise.all([databaseA.close(), databaseB.close()]);
+    await cleanupFixture([
+      ["owned events/outbox", () => deleteFixtureEvents(databaseA.db, [orgId])],
+      ["owned runs", async () => { if (ruleIds.length) await databaseA.db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds)); }],
+      ["organization", () => databaseA.db.delete(organization).where(eq(organization.id, orgId))],
+      ["owner", () => databaseA.db.delete(user).where(eq(user.email, email))],
+      ["database A", () => databaseA.close()],
+      ["database B", () => databaseB.close()],
+    ]);
   }
 });

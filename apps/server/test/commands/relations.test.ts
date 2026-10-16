@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { before, after, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { cleanupFixture, deleteFixtureEvents } from "../helpers/fixture-cleanup.js";
 if (!process.env.DATABASE_URL?.endsWith("_agent_test"))
   throw new Error("Use a dedicated *_agent_test database");
 const { db, client } = await import("../../src/db/index.js");
@@ -132,11 +133,14 @@ before(async () => {
   ).id;
 });
 after(async () => {
-  if (ruleIds.length) await db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds));
-  await db.delete(organization).where(eq(organization.id, org));
-  await db.delete(organization).where(eq(organization.id, foreignOrg));
-  await db.delete(user).where(eq(user.id, owner));
-  await client.end();
+  await cleanupFixture([
+    ["owned events/outbox", () => deleteFixtureEvents(db, [org, foreignOrg])],
+    ["owned runs", async () => { if (ruleIds.length) await db.delete(automationRuns).where(inArray(automationRuns.automationId, ruleIds)); }],
+    ["organization", () => db.delete(organization).where(eq(organization.id, org))],
+    ["foreign organization", () => db.delete(organization).where(eq(organization.id, foreignOrg))],
+    ["owner", () => db.delete(user).where(eq(user.id, owner))],
+    ["database", () => client.end()],
+  ]);
 });
 
 test("canonical bidirectional relations and live rollups follow changes", async () => {
