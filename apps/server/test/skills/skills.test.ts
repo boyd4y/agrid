@@ -40,7 +40,7 @@ test("SKILL.md parses standard frontmatter and refuses malformed, duplicate or a
 
 test("builtins are actual read-only documents with workspace-specific persisted enabled state", async () => {
   assert.equal((await req("", "GET", undefined, "")).status, 401);
-  const library = await (await req()).json(); assert.equal(library.canManage, true); assert.equal(library.skills.length, 4);
+  const library = await (await req()).json(); assert.equal(library.canManage, true); assert.equal(library.skills.length, 5);
   const builtin = library.skills.find((skill: any) => skill.name === "table");
   assert.equal(builtin.document, undefined); assert.equal(builtin.builtin, true);
   const detail = await (await req(`/${encodeURIComponent(builtin.id)}`)).json(); assert.ok(detail.files.some((file: any) => file.path === "references/relations.md"));
@@ -49,7 +49,7 @@ test("builtins are actual read-only documents with workspace-specific persisted 
   assert.equal((await req(`/${encodeURIComponent(builtin.id)}/enabled`, "PUT", { enabled: false })).status, 200);
   assert.equal((await service.listSkills(org)).find((skill) => skill.id === builtin.id)?.enabled, false);
   assert.equal((await service.listSkills(foreignOrg)).find((skill) => skill.id === builtin.id)?.enabled, true);
-  const runtimeSkills = await service.loadHarnessSkills(org); assert.equal(runtimeSkills.length, 3); assert.ok(runtimeSkills.every((skill) => skill.content.length > 20 && !skill.name.includes("builtin:")));
+  const runtimeSkills = await service.loadHarnessSkills(org); assert.equal(runtimeSkills.length, 4); assert.ok(runtimeSkills.every((skill) => skill.content.length > 20 && !skill.name.includes("builtin:")));
 });
 
 test("custom documents persist; edits use version checks and reject namespace conflicts", async () => {
@@ -94,6 +94,16 @@ test("agent creation and editing persist persona and assigned skills, with runti
   const updated = await request(`/agents/${agent.id}`, { persona: { systemPrompt: "Collect only necessary information.", skillNames: ["form"] } }, "PATCH");
   assert.equal(updated.status, 200); const saved = (await updated.json()).member;
   assert.equal(saved.agent.persona.systemPrompt, "Collect only necessary information."); assert.deepEqual(saved.agent.persona.skillNames, ["form"]);
+  const siteAssignment = await request(`/agents/${agent.id}`, { persona: { skillNames: ["site"] } }, "PATCH");
+  assert.equal(siteAssignment.status, 200);
+  assert.deepEqual((await siteAssignment.json()).member.agent.persona.skillNames, ["site"]);
+  const siteContext = await resolveAgentSkills(org, ["site"]);
+  assert.deepEqual(siteContext.skills.map(skill => skill.name), ["site"]);
+  assert.ok(siteContext.skills[0].files?.some(file => file.path === "references/data-api.md"));
+  assert.equal((await req("/builtin%3Asite/enabled", "PUT", { enabled: false })).status, 200);
+  assert.deepEqual((await resolveAgentSkills(org, ["site"])).skills, []);
+  assert.deepEqual((await resolveAgentSkills(foreignOrg, ["site"])).skills.map(skill => skill.name), ["site"]);
+  assert.equal((await req("/builtin%3Asite/enabled", "PUT", { enabled: true })).status, 200);
   assert.equal((await request(`/agents/${agent.id}`, { persona: { skillNames: ["foreign-secret"] } }, "PATCH")).status, 400);
   assert.equal((await request(`/agents/${agent.id}`, { persona: { skillNames: ["form", "form"] } }, "PATCH")).status, 400);
   assert.equal((await request(`/agents/${agent.id}`, { persona: { defaultHarness: "codex" } }, "PATCH")).status, 400);

@@ -16,7 +16,7 @@ pnpm build
 
 server 常规入口覆盖 AI 错误、关联、报告/独立自动化、Skill、原生 Harness 和 chat API。仍保留 `test:chat`、`test:relations`、`test:reports`、`test:skills`、`test:harness` 各业务入口。`test:queue` 单独运行，因为它要求专用队列数据库和 Redis，不能与其他用例共用存储。
 
-`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产四个内置 bundle，使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将四包工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。该用例通过原生 bash 执行真实 Python 脚本并断言聚合输出；真实文件、引用和会话跨恢复保留。普通 Node 用例验证宿主进程；远程 Sandbox 需单独显式启用验收。单独运行：
+`apps/server/test/harness/skills-bundle.test.ts` 无数据库依赖，读取生产内置 bundle（含 site），使用真实官方 Pi native read/bash 验证按需加载完整文档、引用和脚本。它还将工作区快照恢复为仅分配 form 的新实例，验证 SDK 删除 report 挂载并拒绝旧脚本读取。该用例通过原生 bash 执行真实 Python 脚本并断言聚合输出；真实文件、引用和会话跨恢复保留。普通 Node 用例验证宿主进程；远程 Sandbox 需单独显式启用验收。单独运行：
 
 ```bash
 pnpm --filter @tabdo/server exec tsx --test test/harness/skills-bundle.test.ts

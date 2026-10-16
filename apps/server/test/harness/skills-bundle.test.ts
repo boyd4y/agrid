@@ -9,7 +9,7 @@ import { createNativeAgent, openNativeSandbox } from "../../src/harness/runtime.
 
 test("real builtin skill bundles load progressively through official Pi read/bash, with real Python, Node, binary files and isolated process environment", { timeout: 25000 }, async () => {
   const bundles = loadBuiltinSkillDocuments();
-  assert.deepEqual(bundles.map((skill) => skill.name), ["automation", "form", "report", "table"]);
+  assert.deepEqual(bundles.map((skill) => skill.name), ["automation", "form", "report", "site", "table"]);
   const report = bundles.find((skill) => skill.name === "report")!;
   const script = report.files.find((file) => file.path === "scripts/summarize-csv.py")!;
   assert(script);
@@ -82,7 +82,7 @@ test("real builtin skill bundles load progressively through official Pi read/bas
       const revokedRead = requests[7].messages.filter((message) => message.role === "tool").at(-1);
       assert.match(String(revokedRead?.content), /ENOENT|not found|does not exist|outside|unable to resolve path/i, "native read cannot fetch revoked skill files");
     } finally { await nextSession.stop(); await next.sandbox.destroy(); }
-    console.log("PASS real four-bundle mount + progressive native read/bash, actual Python+Node scripts, binary persistence, credential-free process environment and cold revocation.");
+    console.log("PASS real builtin bundle mount + progressive native read/bash, actual Python+Node scripts, binary persistence, credential-free process environment and cold revocation.");
   } finally {
     await session.stop().catch(() => {}); await opened.sandbox.destroy(); http.closeAllConnections(); await new Promise<void>((resolve) => http.close(() => resolve()));
   }

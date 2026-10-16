@@ -1,14 +1,14 @@
 import { createClient } from './tabdo.js';
 
 // Supply public configuration in the URL fragment, or replace these defaults.
-// Example: #url=http%3A%2F%2Flocalhost%3A3001&key=tab_pub_...&table=TABLE_ID
+// Example: #url=http%3A%2F%2Flocalhost%3A3001&key=tab_...&table=TABLE_ID
 const settings = new URLSearchParams(location.hash.slice(1));
 const url = settings.get('url') || 'http://localhost:3001';
 const key = settings.get('key') || '';
 const tableId = settings.get('table') || '';
 const status = document.querySelector('#status');
 if (!key || !tableId) {
-  status.textContent = 'Add #url=YOUR_API_URL&key=YOUR_PUBLISHABLE_KEY&table=TABLE_ID to this page URL. Create the key in Settings → Site API.';
+  status.textContent = 'Add #url=YOUR_API_URL&key=YOUR_API_KEY&table=TABLE_ID to this page URL. Create the key in Settings → API Key and grant the required table operations.';
 } else {
   try {
     const tabdo = createClient({ url, key }), table = tabdo.table(tableId);
