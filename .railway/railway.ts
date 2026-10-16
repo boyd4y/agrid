@@ -25,6 +25,8 @@ export default defineRailway(() => {
     NODE_ENV: "production",
     TABDO_ENV: "production",
     HOST: "0.0.0.0",
+    PORT: "3001",
+    WEBHOOK_PUBLIC_URL: preserve(),
     AUTH_REQUIRED: "true",
     FILE_STORAGE_DRIVER: "s3",
     DATABASE_URL_UNPOOLED: preserve(),
