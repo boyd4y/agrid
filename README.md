@@ -207,3 +207,7 @@ Compose 样例见 `docker-compose.workers.yml`；生产 Redis 使用专用持久
 关联与汇总已实现，详见 [关联与汇总](docs/table-relations.md)。新增迁移 `0012_table_relations`，本地执行 `pnpm db:migrate`。
 
 Workspace 包统一为 `@tabdo/client`、`@tabdo/server`、`@tabdo/shared`、`@tabdo/mcp`；根包名称为 `tabdo`。
+
+### 轻站点接入
+
+设置中的「站点 API」可集中授权表格的读取和新增能力。使用 `@tabdo/sdk` 或标准 GraphQL 接入；`pnpm dev:sites` 启动独立 HTML 示例。完整说明见 [站点数据 API 与 SDK](docs/api/site-api.md)。

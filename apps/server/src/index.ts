@@ -6,6 +6,7 @@ import { client } from "./db/index.js";
 import { assertSchemaReady } from "./db/schema-ready.js";
 import { activeNativeRunCount, beginNativeDrain, waitForNativeDrain } from "./harness/drain.js";
 import { createNodeHttpResources, withNodeResources, backgroundNotifications } from "./resources/node.js";
+import { closeSiteRateLimiter } from "./site-api/rate-limit.js";
 import { mountClientAssets } from "./client-assets.js";
 
 const app = createApp({ appUrl: process.env.APP_URL || "http://localhost:5173", resources: await createNodeHttpResources() });
@@ -31,6 +32,7 @@ function drainAndStop() {
     if ("closeIdleConnections" in server) server.closeIdleConnections();
     await Promise.all([waitForNativeDrain(), connectionsClosed]);
     await backgroundNotifications.drain();
+    await closeSiteRateLimiter();
     await client.end();
     if (process.connected) process.disconnect();
   })().catch((error) => { console.error("[api] shutdown failed", error); process.exitCode = 1; });

@@ -1,0 +1,177 @@
+import { Hono, type Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { cors } from "hono/cors";
+import { createSchema, createYoga } from "graphql-yoga";
+import { GraphQLError, GraphQLScalarType, Kind, valueFromASTUntyped, type ValidationRule, type SelectionSetNode, type FragmentDefinitionNode } from "graphql";
+import { ZodError } from "zod";
+import type { RequestScope, RequestScopeResolver } from "./request.js";
+import { createRequestRoute, requireActorOrg } from "./request.js";
+import { ServiceError } from "../errors.js";
+import * as keys from "../data-api/keys.js";
+import * as data from "../data-api/data.js";
+import { downloadFile } from "../services/files.js";
+
+export const siteSchemaSDL = /* GraphQL */ `
+  scalar JSON
+  type SelectOption { id: ID!, label: String!, color: String }
+  type Column { id: ID!, name: String!, type: String!, options: [SelectOption!]!, readable: Boolean!, writable: Boolean! }
+  type File { id: ID!, columnId: ID!, name: String!, mimeType: String!, size: Int!, url: String! }
+  type Row { id: ID!, tableId: ID!, cells: JSON!, files: [File!]!, createdAt: String!, updatedAt: String! }
+  type RowsPage { rows: [Row!]!, nextCursor: String, hasMore: Boolean!, totalMatched: Int, limit: Int! }
+  enum FilterOperator { eq neq contains not_contains is_empty is_not_empty gt gte lt lte }
+  enum FilterLogic { and or }
+  enum SortDirection { asc desc }
+  input FilterInput { id: String, columnId: ID!, op: FilterOperator!, value: JSON }
+  input SortInput { columnId: ID!, direction: SortDirection! }
+  input RowsInput { cursor: String, limit: Int = 50, filters: [FilterInput!], filterLogic: FilterLogic, sort: SortInput, includeTotal: Boolean }
+  type Table { id: ID!, name: String!, description: String, columns: [Column!]!, rows(options: RowsInput): RowsPage!, row(id: ID!): Row }
+  type Query { tables: [Table!]!, table(id: ID!): Table }
+  type CreateRowPayload { id: ID!, createdAt: String! }
+  type Mutation { createRow(tableId: ID!, cells: JSON!): CreateRowPayload! }
+`;
+
+/** Expand fragments when charging complexity, so aliases/fragments cannot bypass limits. */
+const boundedQuery: ValidationRule = context => ({ Document(node) {
+  const fragments = new Map(node.definitions.filter((definition): definition is FragmentDefinitionNode => definition.kind === Kind.FRAGMENT_DEFINITION).map(fragment => [fragment.name.value, fragment]));
+  for (const operation of node.definitions) {
+    if (operation.kind !== Kind.OPERATION_DEFINITION) continue;
+    let fields = 0, roots = 0, creates = 0, exceeded = false;
+    const walk = (set: SelectionSetNode, depth: number, path: Set<string>) => {
+      if (depth > 16 || fields > 1000 || roots > 20) { exceeded = true; return; }
+      for (const selection of set.selections) {
+        if (selection.kind === Kind.FIELD) {
+          fields++; if (depth === 1) { roots++; if (selection.name.value === "createRow") creates++; }
+          if (fields > 1000 || roots > 20) { exceeded = true; return; }
+          if (selection.selectionSet) walk(selection.selectionSet, depth + 1, path);
+        } else if (selection.kind === Kind.INLINE_FRAGMENT) walk(selection.selectionSet, depth, path);
+        else {
+          const name = selection.name.value, fragment = fragments.get(name);
+          if (fragment && !path.has(name)) walk(fragment.selectionSet, depth, new Set([...path, name]));
+        }
+        if (exceeded) return;
+      }
+    };
+    walk(operation.selectionSet, 1, new Set());
+    if (exceeded || creates > 1) context.reportError(new GraphQLError("Query exceeds the site API limits", { extensions: { code: "QUERY_TOO_COMPLEX" } }));
+  }
+} });
+
+type GraphContext = data.SiteContext & { scope: RequestScope; ip: string; budget: { rows: number; queries: number } };
+function charge(context: GraphContext, rows: number) {
+  context.budget.rows -= rows; context.budget.queries--;
+  if (context.budget.rows < 0 || context.budget.queries < 0) throw new GraphQLError("Query exceeds the site API limits", { extensions: { code: "QUERY_TOO_COMPLEX" } });
+}
+function observe(scope: RequestScope | undefined, event: string, error: unknown) {
+  try { scope?.logger?.error(event, error instanceof Error ? error.name : "unknown"); } catch { /* Observation cannot alter an accepted response. */ }
+}
+function publicError(error: unknown, scope?: RequestScope): never {
+  if (error instanceof GraphQLError) throw error;
+  if (error instanceof ZodError) throw new GraphQLError("Invalid request data", { extensions: { code: "BAD_USER_INPUT" } });
+  if (error instanceof ServiceError) {
+    const code = ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
+    throw new GraphQLError(error.message, { extensions: { code, http: { status: error.status } } });
+  }
+  observe(scope, "site-api.request", error);
+  throw new GraphQLError("Request could not be completed", { extensions: { code: "INTERNAL_SERVER_ERROR" } });
+}
+const safe = <A extends unknown[], R>(fn: (...args: A) => R | Promise<R>) => async (...args: A) => {
+  try { return await fn(...args); } catch (error) { return publicError(error, (args[2] as GraphContext)?.scope); }
+};
+
+async function closePublicScope(scope: RequestScope | undefined) {
+  try { await scope?.close(); }
+  catch (error) { observe(scope, "site-api.close", error); }
+}
+
+export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { graphiql?: boolean; publicOrigin?: string; clientIp?: (context: Context) => string } = {}) {
+  const publicUrl = options.publicOrigin ? new URL(options.publicOrigin) : undefined;
+  if (publicUrl && (!["http:", "https:"].includes(publicUrl.protocol) || publicUrl.username || publicUrl.password)) throw new TypeError("Invalid public API origin");
+  const route = new Hono();
+  // This public surface never uses cookies and never inherits management CORS.
+  for (const path of ["/graphql", "/site-files/*"]) {
+    route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "X-Tabdo-Key"], maxAge: 600 }));
+    route.use(path, async (c, next) => { c.header("Cache-Control", "private, no-store"); c.header("Referrer-Policy", "no-referrer"); await next(); });
+  }
+  route.use("/graphql", bodyLimit({ maxSize: 128 * 1024, onError: c => c.json({ errors: [{ message: "Request body too large", extensions: { code: "PAYLOAD_TOO_LARGE" } }] }, 413) }));
+  const schema = createSchema<GraphContext>({ typeDefs: siteSchemaSDL, resolvers: {
+    JSON: new GraphQLScalarType({ name: "JSON", serialize: value => value, parseValue: value => value, parseLiteral: (node, variables) => valueFromASTUntyped(node, variables) }),
+    Query: {
+      tables: safe((_root: unknown, _args: unknown, ctx: GraphContext) => data.siteTables(ctx.scope.commands, ctx)),
+      table: safe((_root: unknown, args: { id: string }, ctx: GraphContext) => data.siteTable(ctx.scope.commands, ctx, args.id)),
+    },
+    Table: {
+      columns: safe((table: { id: string; columns?: unknown[] }, _args: unknown, ctx: GraphContext) => table.columns ?? data.siteTable(ctx.scope.commands, ctx, table.id).then(value => value.columns)),
+      rows: safe((table: { id: string }, args: { options?: { limit?: number } }, ctx: GraphContext) => {
+        charge(ctx, args.options?.limit ?? 50); return data.siteRows(ctx.scope.commands, ctx, table.id, args.options);
+      }),
+      row: safe((table: { id: string }, args: { id: string }, ctx: GraphContext) => {
+        charge(ctx, 1); return data.siteRow(ctx.scope.commands, ctx, table.id, args.id);
+      }),
+    },
+    Mutation: { createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
+      keys.requireSiteTable(ctx.principal, args.tableId, "create");
+      await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
+      return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells);
+    }) },
+  } });
+  const yoga = createYoga<GraphContext>({ schema, graphqlEndpoint: "/api/graphql", graphiql: options.graphiql ?? false,
+    cors: false, batching: false, logging: false,
+    plugins: [{ onValidate({ addValidationRule }: { addValidationRule(rule: ValidationRule): void }) { addValidationRule(boundedQuery); } }],
+  });
+  route.on(["GET", "POST"], "/graphql", async c => {
+    let scope: RequestScope | undefined;
+    try {
+      scope = await acquire(c.req.raw);
+      const secret = c.req.header("X-Tabdo-Key") ?? "";
+      const principal = await keys.resolveSiteKey(scope.commands.database, secret);
+      // The composition supplies a trusted client address; forwarded headers
+      // are deliberately not accepted from arbitrary browsers.
+      const ip = options.clientIp?.(c) ?? "unknown";
+      if (!scope.siteRateLimit) throw new ServiceError(503, { message: "Site API rate limiting is unavailable" });
+      await scope.siteRateLimit({ keyId: principal.id, ip, kind: "read" });
+      return await yoga.fetch(c.req.raw, { principal, secret, baseUrl: publicUrl?.origin ?? new URL(c.req.url).origin, scope, ip, budget: { rows: 1000, queries: 30 } });
+    } catch (error) {
+      try { publicError(error, scope); } catch (mapped) {
+        const fault = mapped as GraphQLError;
+        const status = error instanceof ServiceError ? error.status : error instanceof ZodError ? 400 : 500;
+        return Response.json({ errors: [{ message: fault.message, extensions: { code: fault.extensions.code } }] }, { status });
+      }
+    } finally { await closePublicScope(scope); }
+  });
+  route.get("/site-files/:tableId/:rowId/:columnId/:fileId", async c => {
+    let scope: RequestScope | undefined;
+    try {
+      scope = await acquire(c.req.raw);
+      const secret = c.req.query("key") ?? "";
+      const principal = await keys.resolveSiteKey(scope.commands.database, secret);
+      const { tableId, rowId, columnId, fileId } = c.req.param();
+      if (!scope.files || !scope.siteRateLimit) throw new ServiceError(503, { message: "File access is unavailable" });
+      await scope.siteRateLimit({ keyId: principal.id, ip: options.clientIp?.(c) ?? "unknown", kind: "read" });
+      await data.siteFileReference(scope.commands, { principal, secret, baseUrl: c.req.url }, tableId, rowId, columnId, fileId);
+      const { record, body } = await downloadFile({ ...scope.commands, ...scope.files, logger: scope.logger }, principal.organizationId, fileId);
+      const inline = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"].includes(record.mimeType);
+      const encoded = encodeURIComponent(record.name).replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+      return new Response(body, { headers: { "Content-Type": record.mimeType, "Content-Length": String(record.size),
+        "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="download"; filename*=UTF-8''${encoded}`,
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox", "Referrer-Policy": "no-referrer" } });
+    } catch (error) {
+      if (error instanceof ServiceError) return c.json({ error: error.message }, error.status as 400);
+      observe(scope, "site-api.file", error);
+      return c.json({ error: "File access failed" }, 500);
+    } finally { await closePublicScope(scope); }
+  });
+  return route;
+}
+
+export function createSiteKeysRoute(acquire: RequestScopeResolver) {
+  const route = createRequestRoute(acquire);
+  route.use("*", async (c, next) => {
+    const scope = requireActorOrg(c); if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+    c.set("actor", scope.actor); c.header("Cache-Control", "private, no-store"); await next();
+  });
+  route.get("/", async c => c.json(await keys.listSiteKeys(c.get("resources").commands, c.get("actor"))));
+  route.post("/", async c => c.json(await keys.createSiteKey(c.get("resources").commands, c.get("actor"), await c.req.json().catch(() => null)), 201));
+  route.patch("/:id", async c => c.json(await keys.updateSiteKey(c.get("resources").commands, c.get("actor"), c.req.param("id"), await c.req.json().catch(() => null))));
+  route.delete("/:id", async c => c.json(await keys.deleteSiteKey(c.get("resources").commands, c.get("actor"), c.req.param("id"))));
+  return route;
+}

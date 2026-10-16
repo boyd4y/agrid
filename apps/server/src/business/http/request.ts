@@ -11,6 +11,7 @@ import { ServiceError } from "../errors.js";
 export type RequestScope = Readonly<{
   commands: CommandDependencies;
   files?: FileCapabilities;
+  siteRateLimit?: import("../data-api/keys.js").SiteRateLimit;
   integrations?: IntegrationCapabilities;
   identity: ActorDependencies;
   builtinSkills?: readonly SkillDocument[];

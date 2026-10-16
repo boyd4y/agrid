@@ -15,7 +15,7 @@ async function files(directory) {
 }
 const imports = source => [...source.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s*)["']([^"']+)["']/g)].map(match => match[1]);
 const boundaries = {
-  core: [], db: [], auth: ["core"], queue: [], worker: ["queue"], storage: [], "agent-runtime": ["core"], shared: [], ui: [],
+  core: [], db: [], auth: ["core"], queue: [], worker: ["queue"], storage: [], "agent-runtime": ["core"], shared: [], ui: [], sdk: ["shared"],
 };
 const graph = new Map();
 for (const [name, allowed] of Object.entries(boundaries)) {

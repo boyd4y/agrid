@@ -167,7 +167,44 @@
       "deleteDescription": "删除“{{name}}”后无法恢复，使用此密钥的脚本将立即失去访问权限。",
       "deleting": "删除中…"
     },
-    "generalDescription": "调整外观和语言。"
+    "generalDescription": "调整外观和语言。",
+    "siteApi": {
+      "title": "站点 API",
+      "description": "通过 GraphQL 和 JavaScript SDK，让网站读取内容或收集提交。",
+      "create": "创建站点 Key",
+      "edit": "编辑站点 Key",
+      "editNamed": "编辑 {{name}}",
+      "emptyTitle": "连接你的第一个站点",
+      "emptyDescription": "集中选择表格，让网站展示内容、收集报名或接收线索。",
+      "noTables": "先创建一张表格，再连接你的站点。",
+      "adminOnly": "请联系工作区所有者或管理员管理站点 API。",
+      "name": "名称",
+      "permissions": "权限",
+      "tables": "允许访问的表格",
+      "tablesHint": "包含所选表格的全部记录和字段。未来新增的表格不会自动加入。",
+      "grantDescription": "此 Key 可用于浏览器，权限统一应用到所有选中的表格。",
+      "createdTitle": "站点 Key 已创建",
+      "once": "请立即复制 Key，关闭后不会再次显示。",
+      "key": "公开站点 Key",
+      "copyKey": "复制 Key",
+      "example": "JavaScript 示例",
+      "copyCode": "复制代码",
+      "copied": "已复制",
+      "copyFailed": "复制失败，请选中文本手动复制。",
+      "loadFailed": "站点 API 设置加载失败",
+      "saveFailed": "站点 Key 保存失败",
+      "saving": "保存中…",
+      "deleteNamed": "删除 {{name}}",
+      "deleteTitle": "删除站点 Key？",
+      "deleteDescription": "使用“{{name}}”的站点将立即失去访问权限，包括关联图片和附件。",
+      "removedTable": "已删除的表格",
+      "noAuthorizedTables": "已无可访问的表格",
+      "modes": {
+        "read": "只读",
+        "create": "仅新增",
+        "both": "读和新增"
+      }
+    }
   },
   "directory": {
     "loadingLabel": "加载{{label}}",

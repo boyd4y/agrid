@@ -8,13 +8,15 @@ import { getAgentToolCatalog } from "../harness/tool-catalog.js";
 import { withUserKeyInvitation } from "../auth/key-invitation-context.js";
 import { discardQuestionSandbox } from "../harness/question-sandboxes.js";
 
+import { siteRateLimit } from "../site-api/rate-limit.js";
+
 const builtinSkills = loadBuiltinSkillDocuments();
 
 /** Node-only ports. The public HTTP factories themselves remain Web portable. */
 export async function acquireRequestScope(_request: Request): Promise<RequestScope> {
   const commands = commandDependencies();
   return {
-    commands,
+    commands, siteRateLimit,
     integrations: integrationCapabilities(),
     files: { storage: getStorageAdapter, limits: uploadLimits() },
     identity: { database: commands.database, resolveSession: headers => getAuth().api.getSession({ headers }) },

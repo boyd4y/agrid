@@ -6,12 +6,12 @@
 
 | 服务 | 配置 | 职责 |
 |---|---|---|
-| api | `/railway.api.json` | 同源前端、Hono API 和聊天；发布前运行数据库迁移 |
-| worker | `/railway.worker.json` | outbox relay、BullMQ 消费、定时任务和后台 Agent |
+| api | `.railway/railway.ts` 中的 `api` | 同源前端、Hono API 和聊天；发布前运行数据库迁移 |
+| worker | `.railway/railway.ts` 中的 `worker` | outbox relay、BullMQ 消费、定时任务和后台 Agent |
 | PostgreSQL | Railway 或已有实例 | 业务、认证、消息、Run、执行租约与原生恢复信息 |
 | Redis | Railway 或已有实例 | BullMQ；启用持久化并配置 `noeviction` |
 
-API 和 worker 都从仓库根目录构建 `Dockerfile.server`。在各 service 的 Settings → Config as Code 指定对应配置文件。工作目录已由镜像设置为 `/app/apps/server`。先让 API 迁移和健康检查通过，再启动 worker；生产不执行 seed。
+API 和 worker 都从仓库根目录构建 `Dockerfile.server`，GitHub `master` 更新会触发部署。现有应用服务由 `.railway/railway.ts` 管理；根目录的 `railway.api.json`、`railway.worker.json` 保留作旧配置参考。工作目录由镜像设置为 `/app/apps/server`。API 的发布前命令是 `node dist/db/migrate.js`；生产不执行 seed。发布涉及 worker 所需的新表时，先完成兼容性迁移，再更新两个服务。
 
 ## 共同环境变量
 
@@ -41,6 +41,10 @@ API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运�
 
 ## 验收
 
-检查 `/api/health`、登录、文件上传下载、推理和工具流、连续对话、显式取消、数据自动化和定时历史。集成测试仅使用隔离 `_agent_test` / `_queue_test` 数据库及专用 Redis；不指向线上数据。当前未声称已部署 Railway 或完成真实模型/远程 Sandbox 验收。
+检查 `/api/health`、登录、文件上传下载、推理和工具流、连续对话、显式取消、数据自动化和定时历史。集成测试仅使用隔离 `_agent_test` / `_queue_test` 数据库及专用 Redis；不指向线上数据。线上冒烟仅使用自身新建的临时资源并在结束后清理；一次发布检查不能代替真实模型或远程 Sandbox 专项验收。
+
+## 站点 API
+
+迁移 `0029_site_api` 为站点公开 Key 添加独立的授权表，不改变个人 API Key。发布后在设置的「站点 API」中授权表格；`/api/graphql` 和附件路由共用现有 API 服务，限流使用既有 Redis。`BETTER_AUTH_URL` 应为公开 HTTPS 域名，以便附件生成正确地址。SDK 随仓库构建，npm/CDN 发布是独立操作。接入方式见 [站点 API 与 SDK](api/site-api.md)。
 
 参考：[Railway 配置](https://docs.railway.com/config-as-code)、[Dockerfile](https://docs.railway.com/builds/dockerfiles)、[官方 Harness 会话](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)。

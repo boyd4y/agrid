@@ -1,3 +1,4 @@
+import { siteApiRoute, siteKeysRoute } from "./routes/site-api.js";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -35,6 +36,9 @@ export function createApp(options: { appUrl: string; resources: PlatformResource
     const release = registerNativeRun();
     try { await next(); } finally { release(); }
   });
+  // Mount the cookie-free public data API before management CORS and identity middleware.
+  app.route("/api", siteApiRoute);
+
   app.use(
     "*",
     cors({
@@ -71,6 +75,7 @@ export function createApp(options: { appUrl: string; resources: PlatformResource
   app.route("/api/skills", skillsRoute);
   app.route("/api", filesRoute);
   app.route("/api/user/api-keys", apiKeysRoute);
+  app.route("/api/site-keys", siteKeysRoute);
   app.route("/api/integrations", integrationsRoute);
   app.route("/api/webhook-endpoints", webhookEndpointsRoute);
   app.route("/api/webhooks", webhooksRoute);

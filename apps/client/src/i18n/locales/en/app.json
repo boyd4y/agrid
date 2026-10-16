@@ -167,7 +167,44 @@
       "deleteDescription": "Deleting “{{name}}” cannot be undone. Scripts using it will lose access immediately.",
       "deleting": "Deleting…"
     },
-    "generalDescription": "Adjust appearance and language."
+    "generalDescription": "Adjust appearance and language.",
+    "siteApi": {
+      "title": "Site API",
+      "description": "Connect a website to your tables with GraphQL and the JavaScript SDK.",
+      "create": "Create site key",
+      "edit": "Edit site key",
+      "editNamed": "Edit {{name}}",
+      "emptyTitle": "Connect your first site",
+      "emptyDescription": "Choose tables once, then let your site read content or collect submissions.",
+      "noTables": "Create a table first, then connect your site.",
+      "adminOnly": "Ask a workspace owner or admin to manage site API access.",
+      "name": "Name",
+      "permissions": "Permissions",
+      "tables": "Allowed tables",
+      "tablesHint": "All records and fields in the selected tables are included. New tables are not added automatically.",
+      "grantDescription": "This publishable key can be used in a browser. Its permissions apply to every selected table.",
+      "createdTitle": "Your site key is ready",
+      "once": "Copy the key now. It will not be displayed again.",
+      "key": "Publishable key",
+      "copyKey": "Copy key",
+      "example": "JavaScript example",
+      "copyCode": "Copy code",
+      "copied": "Copied",
+      "copyFailed": "Could not copy. Select the text and copy it manually.",
+      "loadFailed": "Could not load site API settings",
+      "saveFailed": "Could not save site key",
+      "saving": "Saving…",
+      "deleteNamed": "Delete {{name}}",
+      "deleteTitle": "Delete site key?",
+      "deleteDescription": "Sites using “{{name}}” will immediately lose access, including attached images and files.",
+      "removedTable": "Deleted table",
+      "noAuthorizedTables": "No remaining authorized tables",
+      "modes": {
+        "read": "Read only",
+        "create": "Create only",
+        "both": "Read and create"
+      }
+    }
   },
   "directory": {
     "loadingLabel": "Loading {{label}}",

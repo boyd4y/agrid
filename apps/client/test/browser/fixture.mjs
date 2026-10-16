@@ -20,7 +20,7 @@ export const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const launchOptions = process.env.BROWSER_EXECUTABLE_PATH ? { executablePath: process.env.BROWSER_EXECUTABLE_PATH } : process.env.BROWSER_CHANNEL === 'bundled' ? {} : { channel: process.env.BROWSER_CHANNEL ?? 'chrome' };
 
 /** Owns only its API process and freshly created workspace/users; never resets a database. */
-export async function createBrowserFixture({ name = 'Builder Browser', modelRequest } = {}) {
+export async function createBrowserFixture({ name = 'Builder Browser', modelRequest, serverEnv = {} } = {}) {
   const port = Number(process.env.BROWSER_API_PORT ?? 3112);
   const probe = createServer();
   await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(port, '127.0.0.1', resolve); });
@@ -33,9 +33,9 @@ export async function createBrowserFixture({ name = 'Builder Browser', modelRequ
   const base = `http://localhost:${port}`;
   const log = createWriteStream(artifact('api.log'));
   const server = spawn('pnpm', ['--filter', '@tabdo/server', 'exec', 'tsx', '--conditions=development', 'src/index.ts'], {
-    cwd: workspace, detached: true, env: { ...process.env, DATABASE_URL: databaseUrl, PORT: String(port), APP_URL: frontend,
+    cwd: workspace, detached: true, env: { ...process.env, DATABASE_URL: databaseUrl, PORT: String(port), APP_URL: frontend, BETTER_AUTH_URL: base,
       PI_MODEL: 'fixture/model', PI_CONTEXT_WINDOW: '200000', PI_API_KEY: 'browser-local-fixture', PI_BASE_URL: `http://127.0.0.1:${model.address().port}/v1`,
-      OPENAI_API_KEY: '', CODEX_API_KEY: '', ANTHROPIC_API_KEY: '', CLAUDE_API_KEY: '' },
+      OPENAI_API_KEY: '', CODEX_API_KEY: '', ANTHROPIC_API_KEY: '', CLAUDE_API_KEY: '', ...serverEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.pipe(log); server.stderr.pipe(log);

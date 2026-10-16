@@ -133,7 +133,8 @@ try {
   assert.equal(await page.getByRole('tabpanel', { name: 'AgentMail', exact: true }).evaluate(element => element.scrollWidth <= element.clientWidth + 1), true, '320px embedded mail settings do not overflow the panel');
   assert.equal(await page.locator('h1').count(), 1, 'embedded mail settings have no nested page header');
   assert.equal(await page.getByTestId('app-sidebar').locator('a[href="/app/integrations"]').count(), 0);
-  assert.equal(await settingsTabs.getByRole('tab').count(), 4, 'settings expose General, API Key, AgentMail, and Webhook only');
+  assert.equal(await settingsTabs.getByRole('tab').count(), 5, 'settings expose General, API Key, Site API, AgentMail, and Webhook');
+  assert.equal(await settingsTabs.getByRole('tab', { name: 'Site API', exact: true }).count(), 1);
   assert.equal(await page.getByRole('tab', { name: 'Integrations', exact: true }).count(), 0);
   assert.equal(await page.getByRole('tab', { name: 'Shortcuts', exact: true }).count(), 0);
   await page.reload();
@@ -151,5 +152,5 @@ try {
   await page.waitForURL('**/app/settings?tab=general&keep=1');
   assert.equal(await page.getByRole('tab', { name: 'General', exact: true }).getAttribute('aria-selected'), 'true');
   assert.deepEqual(errors, []);
-  console.log('PASS API keys: navigation without dot+selected background, list hover/focus+destructive icon feedback+320px persisted row, guarded creation/failure retry, one-time secret/copy, metadata reload, cancel/delete failure retry+persisted removal, immediate denial, four settings tabs+legacy/deep-link/reload/back navigation, compact English dark form');
+  console.log('PASS API keys: navigation without dot+selected background, list hover/focus+destructive icon feedback+320px persisted row, guarded creation/failure retry, one-time secret/copy, metadata reload, cancel/delete failure retry+persisted removal, immediate denial, five settings tabs+legacy/deep-link/reload/back navigation, compact English dark form');
 } finally { await fixture.close(); }

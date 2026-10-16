@@ -1,0 +1,31 @@
+{
+  "name": "@tabdo/sdk",
+  "version": "0.1.0",
+  "description": "Browser and server client for the Tabdo table data API",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.3",
+    "@tabdo/shared": "workspace:*",
+    "tsup": "^8.5.0"
+  }
+}

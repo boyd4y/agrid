@@ -43,30 +43,33 @@
     "@aws-sdk/client-s3": "^3.1150.0",
     "@better-auth/drizzle-adapter": "^1.7.7",
     "@hono/node-server": "^1.14.1",
+    "@tabdo/agent-runtime": "workspace:*",
+    "@tabdo/auth": "workspace:*",
+    "@tabdo/core": "workspace:*",
+    "@tabdo/db": "workspace:*",
+    "@tabdo/queue": "workspace:*",
     "@tabdo/shared": "workspace:*",
+    "@tabdo/storage": "workspace:*",
+    "@tabdo/worker": "workspace:*",
     "ai": "7.0.141",
     "better-auth": "^1.7.7",
     "cron-parser": "^5.6.0",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.45.4",
+    "graphql": "^16.14.2",
+    "graphql-yoga": "^5.24.5",
     "hono": "^4.7.8",
     "postgres": "^3.4.5",
     "resend": "^6.32.1",
     "svix": "^2.8.0",
     "yaml": "^2.8.1",
-    "zod": "^4.6.5",
-    "@tabdo/agent-runtime": "workspace:*",
-    "@tabdo/queue": "workspace:*",
-    "@tabdo/storage": "workspace:*",
-    "@tabdo/core": "workspace:*",
-    "@tabdo/auth": "workspace:*",
-    "@tabdo/db": "workspace:*",
-    "@tabdo/worker": "workspace:*"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
     "drizzle-kit": "^0.31.0",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@tabdo/sdk": "workspace:*"
   }
 }
