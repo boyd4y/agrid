@@ -64,13 +64,14 @@ test("agent creation uses a human session, creates no key, and enforces roles", 
   const [profile] = await db.select().from(agentProfile).where(eq(agentProfile.userId, agentUserId));
   assert.equal(profile.apiKeyHash, null); assert.equal(profile.apiKeyPrefix, null);
   assert.equal(profile.persona.runtime, "local");
-  assert.equal((await req("/members/agents", { name: "Unsupported local", persona: { defaultHarness: "codex", runtime: "local" } })).status, 400);
+  const local = await req("/members/agents", { name: "Local Codex", persona: { defaultHarness: "codex", runtime: "local" } });
+  assert.equal(local.status, 201);users.push((await local.json()).member.userId);
   assert.equal((await req("/members/agents", { name: "Invalid native model", persona: { defaultHarness: "claude", defaultModel: "openrouter/free" } })).status, 400);
   const native = await req("/members/agents", { name: "Native Codex", persona: { defaultHarness: "codex" } });
   assert.equal(native.status, 201);
   const codex = (await native.json()).member; users.push(codex.userId);
   assert.equal(codex.agent.persona.runtime, "sandbox"); assert.equal(codex.agent.persona.defaultModel, "__harness_default__");
-  assert.equal((await req(`/members/agents/${codex.id}`, { persona: { runtime: "local" } }, "PATCH")).status, 400);
+  assert.equal((await req(`/members/agents/${codex.id}`, { persona: { runtime: "local" } }, "PATCH")).status, 200);
 });
 
 test("agent platform tool settings normalize legacy IDs, persist, and enforce owner role", async () => {

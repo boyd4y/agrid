@@ -1,6 +1,6 @@
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { DISABLED_TOOLS_SCHEMA, type SkillDocument, type AgentToolCatalog } from "@tabdo/shared";
+import { DISABLED_TOOLS_SCHEMA, sandboxProviderSchema, type SkillDocument, type AgentToolCatalog } from "@tabdo/shared";
 import type { RuntimeDependencies } from "../dependencies.js";
 import { ServiceError } from "../errors.js";
 import { agentProfile, member, user, organization, agentRuns, chatThreads } from "../db/schema.js";
@@ -88,6 +88,7 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
           disabledTools: DISABLED_TOOLS_SCHEMA.optional(),
           defaultHarness: z.enum(["codex", "claude", "pi"]).optional(),
           runtime: z.enum(["local", "sandbox"]).optional(),
+          sandboxProvider: sandboxProviderSchema.optional(),
           defaultModel: z.string().optional(),
           avatarColor: z.string().optional(),
         })
@@ -110,9 +111,9 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
     defaultHarness: body.persona?.defaultHarness ?? ("pi" as const),
     defaultModel: body.persona?.defaultModel?.trim() || NATIVE_DEFAULT_MODEL,
     runtime: body.persona?.runtime ?? (body.persona?.defaultHarness && body.persona.defaultHarness !== "pi" ? "sandbox" as const : "local" as const),
+    sandboxProvider: body.persona?.sandboxProvider,
     avatarColor: body.persona?.avatarColor,
   };
-  if (persona.defaultHarness !== "pi" && persona.runtime === "local") throw new ServiceError(400, {message: "本地模式目前只支持 Pi；Codex 和 Claude Code 请使用 Sandbox"});
   if (persona.defaultHarness !== "pi" && ["openrouter/free", "auto"].includes(persona.defaultModel)) throw new ServiceError(400, {message: "请选择此 Harness 的原生模型或 Harness 默认模型"});
 
   persona.disabledTools = validateDisabledTools(persona.defaultHarness, persona.disabledTools);
@@ -180,6 +181,7 @@ export async function updateAgent(deps: MemberDependencies, actor: Actor, raw: u
           /** Rejected if present and differs — harness locked at create */
           defaultHarness: z.enum(["codex", "claude", "pi"]).optional(),
           runtime: z.enum(["local", "sandbox"]).optional(),
+          sandboxProvider: sandboxProviderSchema.optional(),
         })
         .optional(),
     })
@@ -225,6 +227,7 @@ export async function updateAgent(deps: MemberDependencies, actor: Actor, raw: u
           skillNames: body.persona.skillNames ?? profile.persona?.skillNames,
           disabledTools: body.persona.disabledTools ?? profile.persona?.disabledTools,
           runtime: body.persona.runtime ?? profile.persona?.runtime,
+          sandboxProvider: body.persona.sandboxProvider ?? profile.persona?.sandboxProvider,
           defaultModel:
             body.persona.defaultModel ?? profile.persona?.defaultModel,
           avatarColor:
@@ -233,7 +236,6 @@ export async function updateAgent(deps: MemberDependencies, actor: Actor, raw: u
       : {}),
     defaultHarness: lockedHarness,
   };
-  if (lockedHarness !== "pi" && nextPersona.runtime === "local") throw new ServiceError(400, {message: "本地模式目前只支持 Pi；Codex 和 Claude Code 请使用 Sandbox"});
   if (lockedHarness !== "pi" && ["openrouter/free", "auto"].includes(nextPersona.defaultModel ?? "")) throw new ServiceError(400, {message: "请选择此 Harness 的原生模型或 Harness 默认模型"});
 
   nextPersona.disabledTools = validateDisabledTools(lockedHarness, nextPersona.disabledTools);

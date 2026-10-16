@@ -2,15 +2,20 @@ import { and, eq } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import type { DatabaseDependencies } from "../dependencies.js";
 
-import { agentProfile, member } from "../db/schema.js";
+import { agentProfile, agentRuntimeSessions, member } from "../db/schema.js";
+import { requireThread } from "../chat/store.js";
+import { resolveRuntimeProvider } from "./sandbox-configuration.js";
+import type { RuntimeEnvironment } from "./contracts.js";
 import type { Actor } from "../auth/actor.js";
 import type { resolveChatContext } from "../chat/context.js";
 import { HARNESSES, NATIVE_DEFAULT_MODEL, type HarnessId } from "./contracts.js";
 import { validateDisabledTools } from "../services/tool-settings.js";
 
 /** Product admission only: scoped identity/persona resolution, no SDK or tool closures. */
-export async function resolveChatAgentConfiguration(deps: DatabaseDependencies, { actor, agentId, context, boundTableId, validateInput }: {
+export async function resolveChatAgentConfiguration(deps: DatabaseDependencies, { actor, agentId, context, boundTableId, validateInput, threadId, env = {} }: {
   actor: Actor; agentId: string; context: Awaited<ReturnType<typeof resolveChatContext>>;
+  threadId?: string;
+  env?: RuntimeEnvironment;
   /** A server-validated automation target; never accepted from a chat client. */
   boundTableId?: string;
   validateInput?: (harness: HarnessId) => void;
@@ -68,8 +73,20 @@ export async function resolveChatAgentConfiguration(deps: DatabaseDependencies, 
   validateInput?.(harness);
 
   const mode = profile.persona?.runtime ?? (harness === "pi" ? "local" : "sandbox");
+  let pinnedProvider;
+  if (threadId) {
+    await requireThread(deps, threadId, actor);
+    const [record] = await deps.database.select({ provider: agentRuntimeSessions.provider }).from(agentRuntimeSessions)
+      .where(and(eq(agentRuntimeSessions.threadId, threadId), eq(agentRuntimeSessions.agentProfileId, profile.id)));
+    pinnedProvider = record?.provider;
+  }
+  // A deployment default only selects new conversations. Explicit agent changes
+  // are checked against the pinned row under the lease before accepting input.
+  const provider = mode === "local" ? "local" : profile.persona?.sandboxProvider
+    ?? (pinnedProvider !== "local" ? pinnedProvider : undefined)
+    ?? resolveRuntimeProvider(mode, undefined, env);
   const disabledTools = validateDisabledTools(harness, profile.persona?.disabledTools ?? []);
-  return { profile, harness, modelId, mode, disabledTools, tableId };
+  return { profile, harness, modelId, mode, provider, disabledTools, tableId };
 }
 
 /** Product policy stays identical across embedded and remote execution. */

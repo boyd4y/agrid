@@ -113,7 +113,7 @@ test("unified API keys enforce table CRUD while workspace administration stays s
       [ownerId, orgA, "running"],
     ] as const) {
       const [thread] = await db.insert(chatThreads).values({ userId: runUser, organizationId: runOrg, clientId: randomUUID() }).returning();
-      const [runtime] = await db.insert(agentRuntimeSessions).values({ threadId: thread.id, agentProfileId: profile.id, harness: "pi", mode: "local", sandboxId: randomUUID() }).returning();
+      const [runtime] = await db.insert(agentRuntimeSessions).values({ threadId: thread.id, agentProfileId: profile.id, harness: "pi", mode: "local", provider: "local", sandboxId: randomUUID() }).returning();
       const [run] = await db.insert(agentRuns).values({ threadId: thread.id, runtimeSessionId: runtime.id, userMessageId: randomUUID(), assistantMessageId: randomUUID(), fence: 1, status }).returning();
       runIds.push(run.id);
     }

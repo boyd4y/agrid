@@ -11,14 +11,23 @@ const options = {
   skills: [],
   env: {},
 };
-test("native runtime refuses unsupported local adapters and missing provider/sandbox configuration", () => {
+test("default E2B bridge incompatibility is rejected before sandbox allocation", async () => {
+  const env = { E2B_API_KEY: "fixture", OPENAI_API_KEY: "fixture", ANTHROPIC_API_KEY: "fixture" };
+  for (const harness of ["codex", "claude"] as const) {
+    assert.throws(() => createNativeAgent({ ...options, harness, mode: "sandbox", provider: "e2b", env }), /默认凭证代理与此 Harness 不兼容/);
+    const agent = createNativeAgent({ ...options, harness, mode: "local", env });
+    agent.getSandboxTemplate = async () => { throw new Error("must reject before bootstrap/allocation"); };
+    await assert.rejects(openNativeSandbox({ agent, mode: "sandbox", provider: "e2b", sandboxId: "unallocated", hasResumeState: false, env }), /默认凭证代理与此 Harness 不兼容/);
+  }
+});
+test("native runtime refuses missing model and sandbox configuration", () => {
   assert.throws(
     () => createNativeAgent({ ...options, harness: "codex", mode: "local" }),
-    /需要.*Sandbox/,
+    /Codex 需要/,
   );
   assert.throws(
     () => createNativeAgent({ ...options, harness: "claude", mode: "local" }),
-    /需要.*Sandbox/,
+    /Claude Code 需要/,
   );
   assert.throws(
     () => createNativeAgent({ ...options, harness: "pi", mode: "local" }),
@@ -26,7 +35,7 @@ test("native runtime refuses unsupported local adapters and missing provider/san
   );
   assert.throws(
     () => createNativeAgent({ ...options, harness: "pi", mode: "sandbox" }),
-    /Sandbox 未配置/,
+    /vercel 运行环境不可用/,
   );
   assert.throws(
     () =>

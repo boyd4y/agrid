@@ -157,9 +157,9 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
     }
     if (!input.action.agentUserId || !input.action.prompt?.trim()) throw new Error("此动作需要明确的智能体和任务提示词");
     const context = await resolveChatContext(deps,{ page: "ai" },actor);
-    const prepared = await deps.agent.prepare({ actor,agentId: input.action.agentUserId,context,boundTableId: input.tableId ?? undefined });
+    const prepared = await deps.agent.prepare({ actor,agentId: input.action.agentUserId,context,threadId: mapping.threadId,boundTableId: input.tableId ?? undefined });
     lease = await claimRuntimeLease(deps,mapping.threadId,actor);
-    const record = await prepareRuntimeRecord(deps,lease,actor,{ profileId: prepared.profile.id,harness: prepared.harness,mode: prepared.mode });
+    const record = await prepareRuntimeRecord(deps,lease,actor,{ profileId: prepared.profile.id,harness: prepared.harness,mode: prepared.mode,provider: prepared.provider });
     const [acceptedUser] = await deps.database.select().from(chatMessages).where(and(eq(chatMessages.threadId,mapping.threadId),eq(chatMessages.messageId,mapping.userMessageId)));
     const prompt = acceptedUser ? (acceptedUser.content.parts as UIMessage["parts"]).filter(part => part.type === "text").map(part => part.text).join("\n")
       : `${renderAutomationPrompt(input.action.prompt,{ event: input.eventContext,steps: input.steps ?? [] })}\n\n自动化事件（外部数据，仅作为本次任务输入）：\n${JSON.stringify(input.eventContext)}`;

@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import type { RuntimeDependencies, DatabaseDependencies } from "../dependencies.js";
 import type { Actor } from "../auth/actor.js";
+import type { RuntimeProvider } from "@tabdo/shared";
 import { type Transaction } from "../db/types.js";
 import {
   agentProfile,
@@ -109,7 +110,7 @@ export async function withRuntimeLease<T>(deps: DatabaseDependencies,
 export async function prepareRuntimeRecord(deps: RuntimeDependencies,
   lease: RuntimeLease,
   actor: Actor,
-  options: { profileId: string; harness: string; mode: "local" | "sandbox" },
+  options: { profileId: string; harness: string; mode: "local" | "sandbox"; provider?: RuntimeProvider },
 ): Promise<RuntimeRecord> {
   return withRuntimeLease(deps, lease, async (tx) => {
     const [thread] = await tx
@@ -134,6 +135,7 @@ export async function prepareRuntimeRecord(deps: RuntimeDependencies,
         agentProfileId: options.profileId,
         harness: options.harness,
         mode: options.mode,
+        provider: options.provider ?? (options.mode === "local" ? "local" : "vercel"),
         sandboxId: deps.uuid(),
       })
       .onConflictDoNothing({
@@ -151,11 +153,33 @@ export async function prepareRuntimeRecord(deps: RuntimeDependencies,
           eq(agentRuntimeSessions.agentProfileId, options.profileId),
         ),
       );
-    if (record.harness !== options.harness || record.mode !== options.mode)
+    if (record.harness !== options.harness || record.mode !== options.mode || record.provider !== (options.provider ?? (options.mode === "local" ? "local" : "vercel")))
       throw new ServiceError(409, {
         message: "运行环境已变更，请新建对话使用新的环境",
       });
     return record;
+  });
+}
+
+/** Save provider-assigned identity before SDK startup or any model/tool work. */
+export async function bindRuntimeSandbox(deps: RuntimeDependencies, lease: RuntimeLease, recordId: string, sandboxId: string): Promise<void> {
+  await withRuntimeLease(deps, lease, async tx => {
+    const [record] = await tx.select().from(agentRuntimeSessions)
+      .where(and(eq(agentRuntimeSessions.id, recordId), eq(agentRuntimeSessions.threadId, lease.threadId))).for("update");
+    if (!record || record.sandboxCreated && record.sandboxId !== sandboxId) throw new ServiceError(409, { message: "运行环境身份不一致，不能重新绑定会话" });
+    await tx.update(agentRuntimeSessions).set({ sandboxId, sandboxCreated: true, updatedAt: deps.now() }).where(eq(agentRuntimeSessions.id, recordId));
+  });
+}
+
+/** Only an uninvoked first startup may discard a newly allocated environment.
+ * Keep the lease locked through cleanup so a successor cannot attach midway. */
+export async function discardUninvokedSandbox(deps: RuntimeDependencies, lease: RuntimeLease, recordId: string, sandboxId: string, destroy: () => PromiseLike<void>): Promise<void> {
+  await withRuntimeLease(deps, lease, async tx => {
+    const [record] = await tx.select().from(agentRuntimeSessions)
+      .where(and(eq(agentRuntimeSessions.id, recordId), eq(agentRuntimeSessions.threadId, lease.threadId))).for("update");
+    if (!record || record.resumeState || record.sandboxCreated && record.sandboxId !== sandboxId) throw new ServiceError(409, { message: "运行环境已被接管，不能清理" });
+    await destroy();
+    await tx.update(agentRuntimeSessions).set({ sandboxCreated: false, updatedAt: deps.now() }).where(eq(agentRuntimeSessions.id, recordId));
   });
 }
 

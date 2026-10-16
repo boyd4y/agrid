@@ -1,8 +1,14 @@
 import type { HarnessV1NetworkSandboxSession, HarnessV1Skill } from "@ai-sdk/harness";
 import type { ToolSet } from "ai";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { mapServiceError } from "../services/dependencies.js";
+import type { RuntimeProvider } from "@tabdo/shared";
+import { createRailwaySandboxAdapter } from "@tabdo/agent-runtime/sandbox/railway";
+import { assertRuntimeProviderAvailable, resolveRuntimeProvider } from "../business/agent/sandbox-configuration.js";
 import type { DiskWorkspace } from "@tabdo/agent-runtime/sandbox/workspace";
 import { createHarnessAgent } from "@tabdo/agent-runtime/harness/agent";
-import { assertSandboxCompatibility, type HarnessAdapter, type NativeAgent, type NativeAgentSettings } from "@tabdo/agent-runtime/harness/types";
+import { type HarnessAdapter, type NativeAgent, type NativeAgentSettings } from "@tabdo/agent-runtime/harness/types";
 import { createPiAdapter } from "@tabdo/agent-runtime/harness/pi";
 import { createCodexAdapter } from "@tabdo/agent-runtime/harness/codex";
 import { createClaudeCodeAdapter } from "@tabdo/agent-runtime/harness/claude-code";
@@ -23,6 +29,7 @@ import { resolveNativeConfiguration, sandboxCredentials } from "./runtime-config
 export function createNativeAgent(options: {
   harness: HarnessId;
   mode: RuntimeMode;
+  provider?: RuntimeProvider;
   modelId?: string;
   piModel?: PiModelMetadata;
   instructions: string;
@@ -46,7 +53,6 @@ export function createNativeAgent(options: {
   const document =
     options.agentsDocument?.trim() ||
     "# AGENTS.md\n\n遵循 tabdo 工作区权限，使用实际工具验证结果，再向用户报告完成情况。";
-  assertSandboxCompatibility(adapter, options.mode === "sandbox");
   return createHarnessAgent(adapter, {
     ...options.lifecycle,
     tools: options.tools,
@@ -72,33 +78,55 @@ export function createNativeAgent(options: {
 export async function openNativeSandbox(options: {
   agent: NativeAgent;
   mode: RuntimeMode;
+  provider?: RuntimeProvider;
   sandboxId: string;
   hasResumeState: boolean;
+  sandboxCreated?: boolean;
   workspace?: WorkspaceSnapshot | null;
   signal?: AbortSignal;
   env?: Environment;
 }): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: DiskWorkspace }> {
-  if (options.mode === "local") {
+  const env = options.env ?? process.env;
+  const provider = options.provider ?? resolveRuntimeProvider(options.mode, undefined, env);
+  if ((options.mode === "local") !== (provider === "local")) throw new HTTPException(409, { message: "运行提供商与模式不匹配" });
+  try { assertRuntimeProviderAvailable(provider, env, options.agent.harnessId); } catch (error) { return mapServiceError(error); }
+  const localEnvironment: Record<string, string> = {
+    ...(env.LOCAL_SANDBOX_NPM_REGISTRY ? { npm_config_registry: env.LOCAL_SANDBOX_NPM_REGISTRY } : {}),
+    ...(env.LOCAL_SANDBOX_HTTPS_PROXY ? { HTTPS_PROXY: env.LOCAL_SANDBOX_HTTPS_PROXY } : {}),
+  };
+  if (provider === "local" && options.agent.harnessId !== "pi") {
+    const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: localEnvironment,
+      storageDirectory: env.LOCAL_SANDBOX_DIRECTORY || join(tmpdir(), "tabdo-local-sandboxes") });
+    const opened = options.hasResumeState || options.sandboxCreated
+      ? await adapter.resume({ sandboxId: options.sandboxId, abortSignal: options.signal })
+      : await adapter.create({ sandboxId: options.sandboxId, template: await options.agent.getSandboxTemplate(), abortSignal: options.signal });
+    // Leave installed native dependencies and journals on the same disk. Their
+    // paths stay opaque and stable across API/worker processes on this host.
+    return { sandbox: opened.session };
+  }
+  if (provider === "local") {
     if (options.hasResumeState && !options.workspace)
       throw new HTTPException(409, {
         message: "本地原生工作区快照缺失，无法恢复；请新建对话",
       });
-    const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: {},
+    const adapter = createLocalSandboxAdapter({ cwd: "/workspace", env: localEnvironment,
       createFilesystem: () => restoreWorkspace(options.workspace),
       restoreFilesystem: () => restoreWorkspace(options.workspace),
     });
     const request = { sandboxId: options.sandboxId, abortSignal: options.signal };
-    const opened = options.hasResumeState ? await adapter.resume(request) : await adapter.create(request);
+    const opened = options.hasResumeState ? await adapter.resume(request) : await adapter.create({ ...request, template: await options.agent.getSandboxTemplate() });
     return { sandbox: opened.session, fs: opened.workspace };
   }
 
-  const credentials = sandboxCredentials(options.env ?? process.env);
-  const adapter = createVercelSandboxAdapter({
-    create: { ...credentials, runtime: "node24", ports: [4000] },
-    resume: credentials,
-  });
-  const opened = options.hasResumeState
+  const adapter = provider === "e2b" ? (await import("@tabdo/agent-runtime/sandbox/e2b")).createE2BSandboxAdapter({ apiKey: env.E2B_API_KEY!, template: env.E2B_TEMPLATE,
+    timeoutMs: env.E2B_TIMEOUT_MS ? Number(env.E2B_TIMEOUT_MS) : undefined })
+    : provider === "railway" ? createRailwaySandboxAdapter({ token: env.RAILWAY_API_TOKEN!, environmentId: env.RAILWAY_SANDBOX_ENVIRONMENT_ID!,
+      checkpoint: env.RAILWAY_SANDBOX_CHECKPOINT, region: env.RAILWAY_SANDBOX_REGION,
+      idleTimeoutMinutes: env.RAILWAY_SANDBOX_IDLE_MINUTES ? Number(env.RAILWAY_SANDBOX_IDLE_MINUTES) : undefined })
+    : createVercelSandboxAdapter({ create: { ...sandboxCredentials(env), runtime: "node24", ports: [4000] }, resume: sandboxCredentials(env) });
+  const opened = options.hasResumeState || options.sandboxCreated
     ? await adapter.resume({ sandboxId: options.sandboxId, abortSignal: options.signal })
-    : await adapter.create({ sandboxId: options.sandboxId, template: await options.agent.getSandboxTemplate(), abortSignal: options.signal });
+    : await adapter.create({ ...(provider === "vercel" ? { sandboxId: options.sandboxId } : {}),
+      template: await options.agent.getSandboxTemplate(), abortSignal: options.signal });
   return { sandbox: opened.session };
 }

@@ -225,6 +225,13 @@
       "when": 1792146000000,
       "tag": "0031_sites",
       "breakpoints": false
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792168829202,
+      "tag": "0032_sandbox_providers",
+      "breakpoints": true
     }
   ]
 }

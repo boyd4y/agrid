@@ -56,13 +56,6 @@ export function resolvePiThinkingLevel(env: RuntimeEnvironment): PiThinkingLevel
 /** Validate product configuration without loading or constructing a native SDK. */
 export function resolveNativeConfiguration(options: { harness: HarnessId; mode: RuntimeMode; modelId?: string; piModel?: PiModelMetadata; env: RuntimeEnvironment }): NativeConfiguration {
   const env = options.env;
-  if (options.mode === "local" && options.harness !== "pi")
-    throw new ServiceError(400, {
-      message:
-        "本地模式目前支持 Pi；Codex 和 Claude Code 需要可暴露端口的 Sandbox 模式",
-    });
-
-
   if (options.harness === "pi") {
     const provider = resolvePiProvider(env);
     if (!provider)

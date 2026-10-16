@@ -5,7 +5,7 @@ import { createNativeAgent, openNativeSandbox } from "./runtime.js";
 import { chatRunLimits } from "./limits.js";
 import { nativeHostTools, nativeToolDenial } from "./tools.js";
 import { chatErrorText, normalizeChatToolErrors } from "../ai/errors.js";
-import { completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease, withRuntimeLease } from "./store.js";
+import { bindRuntimeSandbox, discardUninvokedSandbox, completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease, withRuntimeLease } from "./store.js";
 import { recordRunActivity, failNativeRun, runCancellationRequested } from "./runs.js";
 import { snapshotWorkspace } from "./workspace.js";
 import { saveMessageInTransaction } from "../chat/store.js";
@@ -19,7 +19,7 @@ export type { NativeRunInput, NativeRunOutput, NativeRunDurableOutput };
 export async function executeNativeRun(options: NativeRunInput, output?: NativeRunOutput, durableOutput?: NativeRunDurableOutput): Promise<void> {
   const services: NativeRunServices = {
     createNativeAgent, openNativeSandbox, nativeToolDenial, chatErrorText, normalizeChatToolErrors,
-    completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease,
+    bindRuntimeSandbox, discardUninvokedSandbox, completeRuntimeTurn, completeUninvokedPiRun, releaseRuntimeLease, renewRuntimeLease,
     recordRunActivity, failNativeRun, runCancellationRequested, snapshotWorkspace,
     registerNativeRun, questionContinuation, parkQuestionSandbox, takeQuestionSandbox,
     isOwnershipConflict: error => error instanceof HTTPException && error.status === 409,

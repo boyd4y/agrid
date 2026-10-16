@@ -22,9 +22,9 @@ export async function executeAcceptedNativeRun(executionId: string, signal?: Abo
       .where(and(eq(member.userId, loaded.profile.userId), eq(member.organizationId, loaded.actor.organizationId)));
     if (!agentMembership) throw new HTTPException(403, { message: "智能体已离开工作区" });
     const context = await resolveChatContext(loaded.execution.input.context, loaded.actor);
-    const prepared = await prepareNativeChatAgent({ actor: loaded.actor, agentId: loaded.profile.userId, context,
+    const prepared = await prepareNativeChatAgent({ actor: loaded.actor, agentId: loaded.profile.userId, context, threadId: loaded.thread.id,
       boundTableId: loaded.execution.input.boundTableId });
-    if (prepared.profile.id !== loaded.record.agentProfileId || prepared.harness !== loaded.record.harness || prepared.mode !== loaded.record.mode)
+    if (prepared.profile.id !== loaded.record.agentProfileId || prepared.harness !== loaded.record.harness || prepared.mode !== loaded.record.mode || prepared.provider !== loaded.record.provider)
       throw new HTTPException(409, { message: "原生会话运行配置已变更" });
     const toolResultContinuations = loaded.execution.input.toolResultContinuations as ToolResultPart[] | undefined;
     const messageId = toolResultContinuations ? loaded.run.assistantMessageId : loaded.run.userMessageId;
@@ -35,7 +35,7 @@ export async function executeAcceptedNativeRun(executionId: string, signal?: Abo
       harness: prepared.harness, modelId: prepared.modelId, piModel: prepared.piModel, instructions: prepared.system,
       agentsDocument: prepared.agentsDocument, tools: prepared.tools, disabledTools: prepared.disabledTools, skills: prepared.skills,
       prompt: loaded.execution.input.prompt, messages, toolResultContinuations, signal,
-      metadata: { agentId: prepared.profile.memberId, harness: prepared.harness, modelId: prepared.modelId, runtime: prepared.mode },
+      metadata: { agentId: prepared.profile.memberId, harness: prepared.harness, modelId: prepared.modelId, runtime: prepared.mode, runtimeProvider: prepared.provider },
     }, undefined, { write: chunk => appendNativeExecutionChunk(loaded, chunk) });
     return { claimed: true };
   } catch (error) {

@@ -312,3 +312,55 @@ test("expired runs become visible failures; an older checkpoint cannot replay an
   assert.equal((await listNativeRuns(threadId, actor)).length, 2);
   await releaseRuntimeLease(next);
 });
+
+test("provider identity is immutable and is persisted before a native checkpoint", async () => {
+  const { bindRuntimeSandbox } = await import("../../src/harness/store.js");
+  const threadId = await newThread(), lease = await claimRuntimeLease(threadId, actor);
+  try {
+    const record = await prepareRuntimeRecord(lease, actor, { profileId, harness: "pi", mode: "sandbox", provider: "railway" });
+    assert.equal(record.provider, "railway");assert.equal(record.sandboxCreated, false);
+    await bindRuntimeSandbox(lease, record.id, "railway-real-id");
+    const [bound] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, record.id));
+    assert.equal(bound.sandboxId, "railway-real-id");assert.equal(bound.sandboxCreated, true);assert.equal(bound.resumeState, null);
+    await bindRuntimeSandbox(lease, record.id, "railway-real-id");
+    await assert.rejects(bindRuntimeSandbox(lease, record.id, "another-resource"), /不能重新绑定/);
+    await assert.rejects(prepareRuntimeRecord(lease, actor, { profileId, harness: "pi", mode: "sandbox", provider: "e2b" }), /新建对话/);
+    await assert.rejects(prepareRuntimeRecord(lease, actor, { profileId, harness: "codex", mode: "sandbox", provider: "railway" }), /新建对话/);
+    const { resolveChatContext } = await import("../../src/chat/context.js");
+    const { resolveChatAgentConfiguration } = await import("../../src/harness/agent-admission.js");
+    const context = await resolveChatContext({ page: "ai" }, actor);
+    const prepared = await resolveChatAgentConfiguration({ actor, agentId: agentUser, threadId, context, env: { SANDBOX_PROVIDER: "e2b" } });
+    // This profile defaults to Local, so explicitly set Sandbox for the provider-default check.
+    await db.update(agentProfile).set({ persona: { defaultHarness: "pi", runtime: "sandbox" } }).where(eq(agentProfile.id, profileId));
+    const pinned = await resolveChatAgentConfiguration({ actor, agentId: agentUser, threadId, context, env: { SANDBOX_PROVIDER: "e2b" } });
+    assert.equal(pinned.provider, "railway", "deployment defaults cannot redirect an existing conversation");
+    await db.update(agentProfile).set({ persona: { defaultHarness: "pi", runtime: "sandbox", sandboxProvider: "e2b" } }).where(eq(agentProfile.id, profileId));
+    const changed = await resolveChatAgentConfiguration({ actor, agentId: agentUser, threadId, context, env: {} });
+    await assert.rejects(prepareRuntimeRecord(lease, actor, { profileId, harness: changed.harness, mode: changed.mode, provider: changed.provider }), /新建对话/);
+  } finally { await db.update(agentProfile).set({ persona: { defaultHarness: "pi", runtime: "local" } }).where(eq(agentProfile.id, profileId));await releaseRuntimeLease(lease); }
+});
+
+test("failed first startup discards only its own allocation under the current lease", async () => {
+  const { bindRuntimeSandbox, discardUninvokedSandbox } = await import("../../src/harness/store.js");
+  const threadId = await newThread(), lease = await claimRuntimeLease(threadId, actor);
+  const record = await prepareRuntimeRecord(lease, actor, { profileId, harness: "codex", mode: "local" });
+  let destroyed = 0;
+  try {
+    await bindRuntimeSandbox(lease, record.id, "startup-local-id");
+    await assert.rejects(discardUninvokedSandbox(lease, record.id, "other-id", async () => { destroyed++; }), /不能清理/);
+    assert.equal(destroyed, 0);
+    await discardUninvokedSandbox(lease, record.id, "startup-local-id", async () => { destroyed++; });
+    const [cleaned] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, record.id));
+    assert.equal(destroyed, 1);assert.equal(cleaned.sandboxCreated, false);
+    await bindRuntimeSandbox(lease, record.id, "new-startup-id");
+    await assert.rejects(discardUninvokedSandbox(lease, record.id, "new-startup-id", async () => { throw new Error("cleanup unavailable"); }), /cleanup unavailable/);
+    const [retained] = await db.select().from(agentRuntimeSessions).where(eq(agentRuntimeSessions.id, record.id));
+    assert.equal(retained.sandboxCreated, true, "cleanup failure must preserve its addressable resource identity");
+    await releaseRuntimeLease(lease);
+    const successor = await claimRuntimeLease(threadId, actor);
+    try {
+      await assert.rejects(discardUninvokedSandbox(lease, record.id, "new-startup-id", async () => { destroyed++; }), /已被其他实例接管/);
+      assert.equal(destroyed, 1, "stale owners cannot destroy a successor's environment");
+    } finally { await releaseRuntimeLease(successor); }
+  } finally { await releaseRuntimeLease(lease); }
+});

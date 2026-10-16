@@ -202,7 +202,10 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
         // A failed output barrier must not strand the native session or lease.
         // Pi stop before its first native turn may return data:{}; never commit it.
         if (session && !invocationStarted) await session.stop().catch((error) => services.logger.error("agent.session.cleanup", services.chatErrorText(error)));
-        if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => services.logger.error("agent.sandbox.stop", services.chatErrorText(error)));
+        if (sandbox && !invocationStarted && !options.record.sandboxCreated && !options.record.resumeState) {
+          await services.discardUninvokedSandbox(options.lease, options.record.id, sandbox.id, () => sandbox!.destroy())
+            .catch(error => services.logger.error("agent.sandbox.discard", { sandboxId: sandbox!.id, error: services.chatErrorText(error) }));
+        } else if (sandbox && !parkedQuestion) await Promise.resolve(sandbox.stop()).catch((error) => services.logger.error("agent.sandbox.stop", services.chatErrorText(error)));
         if (fs && !parkedQuestion) await fs.dispose().catch((error) => services.logger.error("agent.workspace.cleanup", services.chatErrorText(error)));
         await services.releaseRuntimeLease(options.lease);
       }
@@ -220,7 +223,7 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
     if (options.harness === "pi" && !hasSavedPiJournal({ ...options.record, resumeState, workspace }))
       throw new Error("会话结果未完整保存，历史消息已保留；请新建对话继续。");
     // Pi's native stop saves its own journal. Missing it must not become empty history on reload.
-    if (fs && !fs.getAllPaths().some((path) => path.endsWith(".jsonl"))) throw new Error("原生会话日志未保存，不能继续此对话；请核对已完成的数据修改");
+    if (options.harness === "pi" && fs && !fs.getAllPaths().some((path) => path.endsWith(".jsonl"))) throw new Error("原生会话日志未保存，不能继续此对话；请核对已完成的数据修改");
     const { id, ...content } = message;
     await outputWrites;
     await durableOutput?.flush?.();
@@ -306,7 +309,7 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
     signal.throwIfAborted();
     if (options.harness === "pi" && options.record.resumeState && !safeStartupState)
       throw new Error("此对话暂时无法继续，历史消息已保留；请新建对话继续。");
-    agent = services.createNativeAgent({ harness: options.harness, mode: options.record.mode, modelId: options.modelId, piModel: options.piModel,
+    agent = services.createNativeAgent({ harness: options.harness, mode: options.record.mode, provider: options.record.provider, modelId: options.modelId, piModel: options.piModel,
       instructions: options.instructions, agentsDocument: options.agentsDocument, tools, disabledTools: options.disabledTools, skills: options.skills, lifecycle,
       runtimeContext: { organizationId: options.actor.organizationId, threadId: options.lease.threadId, runId: options.run.id },
       stopWhen: limits.steps === undefined ? undefined : stepCountIs(limits.steps),
@@ -319,13 +322,14 @@ export async function executeNativeRun(services: NativeRunServices, options: Nat
     });
     let opened: Awaited<ReturnType<NativeRunServices["openNativeSandbox"]>>;
     try { opened = (options.toolResultContinuations ? services.takeQuestionSandbox(options.record.id) : undefined)
-      ?? await services.openNativeSandbox({ agent, mode: options.record.mode, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), workspace: options.record.workspace, signal }); }
+      ?? await services.openNativeSandbox({ agent, mode: options.record.mode, provider: options.record.provider, sandboxId: options.record.sandboxId, hasResumeState: Boolean(options.record.resumeState), sandboxCreated: options.record.sandboxCreated, workspace: options.record.workspace, signal }); }
     catch (error) {
       // Local restore failures describe damaged history, not a retryable submission.
       if (options.record.resumeState && options.record.mode === "local" && !signal.aborted) safeStartupState = false;
       throw error;
     }
     sandbox = opened.sandbox;fs = opened.fs;
+    await services.bindRuntimeSandbox(options.lease, options.record.id, sandbox.id);
     try { session = await agent.createSession({ sessionId: options.record.sessionId, sandboxSession: sandbox, abortSignal: signal,
       ...(options.record.resumeState ? { resumeFrom: options.record.resumeState as HarnessAgentResumeSessionState } : {}),
     }); } catch (error) {

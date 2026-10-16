@@ -16,7 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export { COLUMN_TYPES } from "@tabdo/shared";
-import type { ColumnConfig, CellValue } from "@tabdo/shared";
+import type { ColumnConfig, CellValue, SandboxProvider, RuntimeProvider } from "@tabdo/shared";
 export type { ColumnType, ColumnConfig, CellValue, SelectOption, FormulaResultType } from "@tabdo/shared";
 
 export type AgentPersona = {
@@ -27,6 +27,7 @@ export type AgentPersona = {
   skillNames?: string[];
   disabledTools?: string[];
   runtime?: "local" | "sandbox";
+  sandboxProvider?: SandboxProvider;
 };
 
 export const skills = pgTable("skills", {
@@ -369,6 +370,8 @@ export const agentRuntimeSessions = pgTable("agent_runtime_sessions", {
   agentProfileId: uuid("agent_profile_id").notNull().references(() => agentProfile.id, { onDelete: "cascade" }),
   harness: text("harness").notNull(),
   mode: text("mode").$type<"local" | "sandbox">().notNull(),
+  provider: text("provider").$type<RuntimeProvider>().notNull(),
+  sandboxCreated: boolean("sandbox_created").default(false).notNull(),
   sessionId: uuid("session_id").defaultRandom().notNull(),
   sandboxId: text("sandbox_id").notNull(),
   resumeState: jsonb("resume_state").$type<{ specificationVersion: "harness-v1"; harnessId: string; type: "resume-session"; data: unknown; continueFrom?: unknown }>(),
@@ -378,7 +381,9 @@ export const agentRuntimeSessions = pgTable("agent_runtime_sessions", {
   status: text("status").$type<"ready" | "interrupted" | "failed">().default("ready").notNull(),
   error: text("error"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (t) => [uniqueIndex("agent_runtime_thread_profile_idx").on(t.threadId, t.agentProfileId)]);
+}, (t) => [uniqueIndex("agent_runtime_thread_profile_idx").on(t.threadId, t.agentProfileId),
+  check("agent_runtime_provider_mode_check", sql`(${t.mode} = 'local' AND ${t.provider} = 'local') OR (${t.mode} = 'sandbox' AND ${t.provider} IN ('vercel', 'e2b', 'railway'))`),
+]);
 
 /** One lease per conversation also serializes runs when the selected agent changes. */
 export const agentThreadLeases = pgTable("agent_thread_leases", {

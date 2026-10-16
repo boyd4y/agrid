@@ -2,6 +2,8 @@ import { HTTPException } from "hono/http-exception";
 import * as configuration from "../business/agent/runtime-configuration.js";
 import { mapServiceError } from "../services/dependencies.js";
 import type { RuntimeEnvironment } from "./contracts.js";
+import type { RuntimeProvider } from "@tabdo/shared";
+import { assertRuntimeProviderAvailable, resolveRuntimeProvider } from "../business/agent/sandbox-configuration.js";
 export type { NativeConfiguration, PiProviderConfiguration } from "../business/agent/runtime-configuration.js";
 export function resolvePiModelId(modelId: string | undefined, env: RuntimeEnvironment) {
   try { return configuration.resolvePiModelId(modelId, env); }
@@ -20,9 +22,9 @@ export function sandboxCredentials(env: RuntimeEnvironment) {
   });
 }
 
-export function resolveNativeConfiguration(options: Parameters<typeof configuration.resolveNativeConfiguration>[0]) {
+export function resolveNativeConfiguration(options: Parameters<typeof configuration.resolveNativeConfiguration>[0] & { provider?: RuntimeProvider }) {
   try {
-    if (options.mode === "sandbox") sandboxCredentials(options.env);
+    assertRuntimeProviderAvailable(options.provider ?? resolveRuntimeProvider(options.mode, undefined, options.env), options.env, options.harness);
     return configuration.resolveNativeConfiguration(options);
   } catch (error) { return mapServiceError(error); }
 }

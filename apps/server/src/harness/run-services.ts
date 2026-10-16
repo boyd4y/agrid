@@ -6,7 +6,7 @@ import type { DiskWorkspace } from "@tabdo/agent-runtime/sandbox/workspace";
 import type { Actor } from "../business/auth/actor.js";
 import type { RuntimeLease, RuntimeRecord, RuntimeCheckpoint } from "../business/agent/runtime-store.js";
 import type { StoredMessage } from "../business/chat/store.js";
-import type { AgentRunStatus, ChatActivity } from "@tabdo/shared";
+import type { AgentRunStatus, ChatActivity, RuntimeProvider } from "@tabdo/shared";
 import type { WorkspaceSnapshot } from "../business/agent/checkpoints.js";
 import type { HarnessId } from "../business/agent/contracts.js";
 import type { PiModelMetadata, PiCompletion } from "../business/agent/model-contracts.js";
@@ -17,7 +17,7 @@ type WarmSandbox = { sandbox: HarnessV1NetworkSandboxSession; fs?: DiskWorkspace
 /** Business persistence and tool services used by the Node Harness lifecycle. */
 export interface NativeRunServices {
   createNativeAgent(options: {
-    harness: HarnessId; mode: "local" | "sandbox"; modelId?: string; piModel?: PiModelMetadata;
+    harness: HarnessId; mode: "local" | "sandbox"; provider?: RuntimeProvider; modelId?: string; piModel?: PiModelMetadata;
     instructions: string; agentsDocument?: string; tools: ToolSet; disabledTools?: readonly string[];
     skills: readonly HarnessV1Skill[]; runtimeContext?: Record<string, unknown>;
     lifecycle?: Pick<NativeAgentSettings, "onStart" | "onStepStart" | "onLanguageModelCallStart" | "onLanguageModelCallEnd" | "onToolExecutionStart" | "onToolExecutionEnd" | "onStepEnd" | "onEnd">;
@@ -25,7 +25,7 @@ export interface NativeRunServices {
     onPiMessageEnd?: (completion: PiCompletion) => void;
     consumePiContinuationInput?: () => string | undefined;
   }): NativeAgent;
-  openNativeSandbox(options: { agent: NativeAgent; mode: "local" | "sandbox"; sandboxId: string; hasResumeState: boolean; workspace?: WorkspaceSnapshot | null; signal?: AbortSignal }): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: DiskWorkspace }>;
+  openNativeSandbox(options: { agent: NativeAgent; mode: "local" | "sandbox"; provider?: RuntimeProvider; sandboxId: string; hasResumeState: boolean; sandboxCreated?: boolean; workspace?: WorkspaceSnapshot | null; signal?: AbortSignal }): Promise<{ sandbox: HarnessV1NetworkSandboxSession; fs?: DiskWorkspace }>;
   hostTools(definitions: ToolSet, signal: AbortSignal, pending: Set<Promise<unknown>>): { tools: ToolSet; failures: Map<string, string>; projectErrors(): TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>> };
   nativeToolDenial(output: unknown): string | undefined;
   chatErrorText(error: unknown): string;
@@ -39,6 +39,8 @@ export interface NativeRunServices {
   parkQuestionSandbox(runtimeId: string, opened: WarmSandbox): void;
   takeQuestionSandbox(runtimeId: string): WarmSandbox | undefined;
   snapshotWorkspace(fs: DiskWorkspace): Promise<WorkspaceSnapshot>;
+  bindRuntimeSandbox(lease: RuntimeLease, recordId: string, sandboxId: string): Promise<void>;
+  discardUninvokedSandbox(lease: RuntimeLease, recordId: string, sandboxId: string, destroy: () => PromiseLike<void>): Promise<void>;
   renewRuntimeLease(lease: RuntimeLease): Promise<boolean>;
   releaseRuntimeLease(lease: RuntimeLease): Promise<void>;
   runCancellationRequested(runId: string): Promise<boolean>;

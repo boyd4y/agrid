@@ -24,3 +24,8 @@ export const completeUninvokedPiRun = async (...args: Arguments<typeof service.c
 export async function withRuntimeLease<T>(lease: service.RuntimeLease, work: (transaction: import("../business/db/types.js").Transaction) => Promise<T>): Promise<T> {
   return businessCall(() => service.withRuntimeLease(runtimeDependencies(), lease, work));
 }
+
+export const bindRuntimeSandbox = async (...args: Arguments<typeof service.bindRuntimeSandbox>) =>
+  businessCall(() => service.bindRuntimeSandbox(runtimeDependencies(), ...args));
+export const discardUninvokedSandbox = async (...args: Arguments<typeof service.discardUninvokedSandbox>) =>
+  businessCall(() => service.discardUninvokedSandbox(runtimeDependencies(), ...args));

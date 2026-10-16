@@ -21,6 +21,7 @@ import { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease } from "..
 import { beginNativeRun } from "../harness/runs.js";
 import { HTTPException } from "hono/http-exception";
 import { questionContinuation, resumeQuestionRun } from "../harness/questions.js";
+import { resolveRuntimeProvider } from "../business/agent/sandbox-configuration.js";
 import type { NativeQuestionResultRequest } from "@tabdo/shared";
 
 export function createChatRoute() {
@@ -33,8 +34,9 @@ chatRoute.get("/status", (c) => {
     mode: anyHarnessAvailable() ? "live" : "unconfigured",
     providers,
     harnesses,
+    defaultSandboxProvider: resolveRuntimeProvider("sandbox", undefined, process.env),
     note:
-      "Chat 使用原生 HarnessAgent。Pi 支持本地虚拟工作区；Codex/Claude Code 需要 Sandbox 与对应原生协议的模型配置。未配置时返回错误，不回落离线规则。",
+      "Chat 使用原生 HarnessAgent。选择已配置的 Local、Vercel、E2B 或 Railway 运行环境，以及对应原生协议的模型配置。未配置时返回错误，不回落离线规则。",
   });
 });
 
@@ -65,8 +67,8 @@ chatRoute.post("/", async (c) => {
 
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   let lastText = "";
-  const { profile, harness, modelId, mode, disabledTools, skills, tools, agentsDocument, system, piModel } =
-    await prepareNativeChatAgent({ actor, agentId, context, validateInput: harness => {
+  const { profile, harness, modelId, mode, provider, disabledTools, skills, tools, agentsDocument, system, piModel } =
+    await prepareNativeChatAgent({ actor, agentId, context, threadId: body.id, validateInput: harness => {
       lastText = lastUser ? prepareHarnessUserPrompt({ harness, parts: lastUser.parts }) : "";
       if (body.intent === "message") {
         if (!lastUser) throw new HTTPException(400, { message: "缺少用户消息" });
@@ -77,7 +79,7 @@ chatRoute.post("/", async (c) => {
   c.req.raw.signal.throwIfAborted();
   const lease = await claimRuntimeLease(body.id, actor);
   try {
-    const record = await prepareRuntimeRecord(lease, actor, { profileId: profile.id, harness, mode });
+    const record = await prepareRuntimeRecord(lease, actor, { profileId: profile.id, harness, mode, provider });
     c.req.raw.signal.throwIfAborted();
     const pendingQuestion = questionContinuation(record);
     if (pendingQuestion && body.intent === "message") throw new HTTPException(409, { message: "智能体正在等待问题回答，请在问题卡片中选择或填写答案" });
@@ -93,7 +95,7 @@ chatRoute.post("/", async (c) => {
       // A cancelled submission before the stream starts may have raced claim.
       // Once streaming starts, HTTP disconnects no longer cancel this Run.
       signal: c.req.raw.signal.aborted ? AbortSignal.abort(new DOMException("启动已取消", "AbortError")) : undefined,
-      metadata: { agentId: profile.memberId, harness, modelId, runtime: mode },
+      metadata: { agentId: profile.memberId, harness, modelId, runtime: mode, runtimeProvider: provider },
     }), consumeSseStream: ({ stream }) => { void consumeStream({ stream }); } });
   } catch (error) {
     await releaseRuntimeLease(lease);
