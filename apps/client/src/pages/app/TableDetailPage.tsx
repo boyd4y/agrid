@@ -227,9 +227,9 @@ export function TableDetailPage() {
         description={t("deleteViewDesc", { name: deletingView ? viewLabel(deletingView.type, deletingView.name, t) : "" })}
         onConfirm={async () => { if (deletingView) await removeView(deletingView); }}
       />
-      <div className="shrink-0 border-b border-border bg-background/80 py-3 pl-4 pr-2 backdrop-blur md:pl-6 md:pr-2">
-        <div className="flex w-full flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0 flex-1">
+      <div className="@container shrink-0 border-b border-border bg-background/80 py-3 pl-4 pr-2 backdrop-blur md:pl-6 md:pr-2" data-testid="table-header">
+        <div className="flex w-full flex-col gap-3 @3xl:flex-row @3xl:items-end @3xl:justify-between">
+          <div className="min-w-0 @3xl:flex-1">
             <nav
               aria-label={t("breadcrumb")}
               className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground"
@@ -237,18 +237,19 @@ export function TableDetailPage() {
             >
               <Link
                 to="/app/tables"
-                className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 {t("tables")}
               </Link>
-              <span className="text-border">/</span>
-              <span className="truncate text-foreground">{table.name}</span>
+              <span className="shrink-0 text-border">/</span>
+              <span className="min-w-0 truncate text-foreground" title={table.name}>{table.name}</span>
             </nav>
             <div className="flex min-w-0 items-center gap-1">
               <TableIconPicker value={table.icon} onChange={(icon) => updateTableMetadata(table.id, { icon })} />
             <Input
-              className="h-auto border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+              className="h-auto min-w-0 border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+              title={table.name}
               defaultValue={table.name}
               key={table.id + table.name}
               onBlur={(e) => renameTable(e.target.value)}
@@ -258,18 +259,18 @@ export function TableDetailPage() {
             />
             </div>
             {table.description && (
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="mt-0.5 break-words text-sm text-muted-foreground">
                 {table.description}
               </p>
             )}
           </div>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5 @sm:flex-nowrap @3xl:ml-auto @3xl:max-w-[60%]" data-testid="table-toolbar">
             {activeView?.type === "board" && <BoardViewSettings key={`board-settings-${activeView.id}`} view={activeView} table={table} onUpdated={(updated) => setViews((previous) => previous.map((view) => view.id === updated.id ? updated : view))} />}
-            <Tabs value={activeViewId ?? ""} onValueChange={setActiveViewId} className="min-w-0 max-w-[min(100vw-8rem,36rem)]" data-testid="view-switcher">
-              <TabsList className="justify-start overflow-x-auto">
+            <Tabs value={activeViewId ?? ""} onValueChange={setActiveViewId} className="order-first min-w-0 basis-full @sm:order-none @sm:basis-0 @sm:flex-1 @3xl:basis-auto @3xl:flex-initial" data-testid="view-switcher">
+              <TabsList className="w-full min-w-0 justify-start overflow-x-auto">
                 {views.map((view) => {
                   const Icon = viewIcon(view.type);
-                  return <TabsTrigger key={view.id} value={view.id} id={`view-tab-${view.id}`} aria-controls={`view-panel-${table.id}`} data-testid={`view-${view.type}`} data-view-id={view.id} onContextMenu={(event) => { event.preventDefault(); setActiveViewId(view.id); setMenuViewId(view.id); }}>
+                  return <TabsTrigger className="shrink-0" key={view.id} value={view.id} id={`view-tab-${view.id}`} aria-controls={`view-panel-${table.id}`} data-testid={`view-${view.type}`} data-view-id={view.id} onContextMenu={(event) => { event.preventDefault(); setActiveViewId(view.id); setMenuViewId(view.id); }}>
                     <Icon />{viewLabel(view.type, view.name, t)}
                     {view.isDefault && <Star className="size-3 text-muted-foreground" aria-label={t("defaultView")} role="img"><title>{t("defaultView")}</title></Star>}
                   </TabsTrigger>;
