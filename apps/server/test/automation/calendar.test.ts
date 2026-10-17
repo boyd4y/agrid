@@ -21,14 +21,14 @@ import { createSiteKey, updateSiteKey } from "../../src/business/data-api/keys.j
 import { createSiteApiRoutes } from "../../src/business/http/site-api.js";
 import { createCommandsRoute } from "../../src/business/http/commands.js";
 import { createCalendarTools } from "../../src/business/agent/tools/calendar.js";
-import { acceptBookingReminder, dispatchDueBookingReminders } from "../../src/business/calendar/reminders.js";
+import { acceptBookingReminder, dispatchDueBookingReminders, readBookingReminders } from "../../src/business/calendar/reminders.js";
 import type { Actor } from "../../src/business/auth/actor.js";
 import type { CalendarCommand, CalendarCommands, AutomationRule } from "@tabdo/shared";
 const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(process.env.DATABASE_URL_UNPOOLED, url);
 const resource = createDatabase({ connectionString: url, poolMax: 8 });
 const other = createDatabase({ connectionString: url, poolMax: 2 });
-const org = randomUUID(), uid = randomUUID(), mid = randomUUID(), aid = randomUUID(), am = randomUUID(), peerId = randomUUID();
+const org = randomUUID(), uid = randomUUID(), mid = randomUUID(), aid = randomUUID(), am = randomUUID(), peerId = randomUUID(), adminId = randomUUID();
 let now = new Date("2030-03-08T00:00:00Z");
 let deps: CommandDependencies = { database: resource.db, now: () => now, uuid: randomUUID, automationQueueName: "calendar-unit" };
 const identity = { organizationId: org, actorId: uid }, caller = { kind: "member" as const, ...identity };
@@ -45,8 +45,8 @@ const sdk = (secret: string) => createClient({ url: "http://fixture.test", key: 
 const booking = async (date: string, hour = "10") => call("createBooking", { calendarId, personId, title: "Private customer", time: { start: `${date}T${hour}:00:00Z`, end: `${date}T${hour}:30:00Z`, timeZone: "UTC" }, idempotencyKey: key() });
 before(async () => {
   await resource.db.insert(organization).values({ id: org, name: "Calendar triggers", slug: org });
-  await resource.db.insert(user).values([{ id: uid, name: actor.name, email: actor.email }, { id: aid, name: "Agent", email: `${aid}@local.test`, kind: "agent" }, { id: peerId, name: "Other member", email: `${peerId}@local.test` }]);
-  await resource.db.insert(member).values([{ id: mid, organizationId: org, userId: uid, role: "owner" }, { id: am, organizationId: org, userId: aid, role: "member" }, { id: key(), organizationId: org, userId: peerId, role: "member" }]);
+  await resource.db.insert(user).values([{ id: uid, name: actor.name, email: actor.email }, { id: aid, name: "Agent", email: `${aid}@local.test`, kind: "agent" }, { id: peerId, name: "Other member", email: `${peerId}@local.test` }, { id: adminId, name: "Admin", email: `${adminId}@local.test` }]);
+  await resource.db.insert(member).values([{ id: mid, organizationId: org, userId: uid, role: "owner" }, { id: am, organizationId: org, userId: aid, role: "member" }, { id: key(), organizationId: org, userId: peerId, role: "member" }, { id: key(), organizationId: org, userId: adminId, role: "admin" }]);
   await resource.db.insert(agentProfile).values({ id: key(), userId: aid, memberId: am, organizationId: org, displayName: "Agent" });
   const spaces = await resource.db.insert(workspaces).values({ organizationId: org, name: "Other" }).returning(); secondWorkspace = spaces[0].id;
   const [first] = await resource.db.select().from(workspaces).where(and(eq(workspaces.organizationId, org), eq(workspaces.isDefault, true))); deps = { ...deps, workspaceId: first.id };
@@ -55,7 +55,7 @@ before(async () => {
   await call("setWorkingHours", { calendarId, personId, expectedVersion: 1, windows: [1,2,3,4,5,6,7].map(day => ({ day, start: "00:00", end: "24:00" })), idempotencyKey: key() });
 });
 beforeEach(() => { now = new Date("2030-03-08T00:00:00Z"); });
-after(async () => { await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await resource.db.delete(organization).where(eq(organization.id, org)); await resource.db.delete(user).where(sql`${user.id} in (${uid}, ${aid}, ${peerId})`); await other.close(); await resource.close(); });
+after(async () => { await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await resource.db.delete(organization).where(eq(organization.id, org)); await resource.db.delete(user).where(sql`${user.id} in (${uid}, ${aid}, ${peerId}, ${adminId})`); await other.close(); await resource.close(); });
 test("bounded DST projection reads authoritative cron/occurrences, exposes no private conversation and writes no predictions", async () => {
   const rule = await createAutomation(deps, { ...identity, name: "DST", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "America/New_York" }, trigger: { type: "schedule_due" }, actions: [{ type: "run_agent", agentUserId: aid, prompt: "Read" }] });
   const before = await resource.db.select().from(automationOccurrences).where(eq(automationOccurrences.automationId, rule.id));
@@ -201,4 +201,123 @@ test("reminder reason cannot bypass private run diagnostics for another member o
   const leaks = { member: JSON.stringify(peer).includes(diagnostic), keyRest: JSON.stringify(publicHistory).includes(diagnostic) };
   console.log("CALENDAR_PRIVATE_ERROR_REASON", JSON.stringify({ genericError: shared[0].error, leaks, peer, keyRest: publicHistory }));
   assert.deepEqual(leaks, { member: false, keyRest: false }, "Reminder reason must respect the same private-run visibility boundary");
+});
+
+async function privateReminderFailure(date: string) {
+  const b = await booking(date);
+  await call("setBookingReminders", { calendarId, bookingId: b.id, expectedVersion: 1, reminders: [reminder], idempotencyKey: key() });
+  now = new Date(`${date}T09:35:00Z`); await dispatchDueBookingReminders(deps);
+  const [intent] = await resource.db.select().from(bookingReminderIntents).where(eq(bookingReminderIntents.bookingId, b.id)); assert(intent.eventId);
+  const [run] = await resource.db.select().from(automationRuns).where(eq(automationRuns.eventId, intent.eventId));
+  const threadId = key(), diagnostic = `PRIVATE_DIAGNOSTIC:${key()}`;
+  await resource.db.insert(chatThreads).values({ id: threadId, userId: uid, organizationId: org, workspaceId: deps.workspaceId!, clientId: key() });
+  await resource.db.insert(automationAgentActions).values({ runId: run.id, step: 0, threadId, userMessageId: key() });
+  await resource.db.update(automationRuns).set({ status: "failed", error: diagnostic, finishedAt: now, detail: { threadId } }).where(eq(automationRuns.id, run.id));
+  const [stored] = await resource.db.select().from(bookings).where(eq(bookings.id, b.id));
+  const input = { calendarId, bookingId: b.id };
+  const read = (actorId = uid) => executeCalendar(deps, { kind: "member", organizationId: org, actorId }, "listBookingReminders", input);
+  const noViewer = () => resource.db.transaction(tx => readBookingReminders(deps, tx, stored, org));
+  return { b, intent, run, threadId, diagnostic, input, read, noViewer };
+}
+const readOnlyReminderKey = () => createSiteKey(deps, actor, { name: "Read reminder states", permissions: [],
+  calendarPermissions: grants().map(grant => ({ ...grant, canCreate: false, canUpdate: false, canCancel: false, canTriggerAgent: false })) });
+const assertAbsent = (value: unknown, secrets: string[]) => {
+  const serialized = JSON.stringify(value);
+  for (const secret of secrets) assert(!serialized.includes(secret), "Serialized reminder response leaked a private value");
+};
+
+test("reminder diagnostics preserve safe intent codes and priority while guarding accepted and pre-acceptance failures", async () => {
+  const f = await privateReminderFailure("2030-04-01"), saved = await readOnlyReminderKey();
+  const privateIntent = `PRIVATE_INTENT:${key()}`;
+  const cases = [
+    { intentReason: null, runError: f.diagnostic, ownerReason: f.diagnostic, publicReason: null },
+    { intentReason: privateIntent, runError: f.diagnostic, ownerReason: privateIntent, publicReason: null },
+    { intentReason: privateIntent, runError: null, ownerReason: privateIntent, publicReason: null },
+    { intentReason: "", runError: f.diagnostic, ownerReason: "", publicReason: null },
+    // Only intent.reason is a source of public lifecycle codes; run.error is free text.
+    { intentReason: null, runError: "deadline_expired", ownerReason: "deadline_expired", publicReason: null },
+    ...["deadline_expired", "booking_revision_changed", "reminder_authorization_revoked", "invalid_reminder_scope", "deadline_not_due"].map(code => ({ intentReason: code, runError: f.diagnostic, ownerReason: code, publicReason: code })),
+  ];
+  for (const accepted of [false, true]) for (const item of cases) {
+    await resource.db.update(bookingReminderIntents).set({ acceptedAt: accepted ? now : null, status: "failed", reason: item.intentReason }).where(eq(bookingReminderIntents.id, f.intent.id));
+    await resource.db.update(automationRuns).set({ error: item.runError }).where(eq(automationRuns.id, f.run.id));
+    const owned = await f.read(); assert.equal(owned.intents[0].reason, item.ownerReason);
+    assert.equal(owned.intents[0].threadId, accepted ? f.threadId : null);
+    const response = await app.request(`/api/calendars/${calendarId}/bookings/${f.b.id}/reminders`, { headers: { Authorization: `Bearer ${saved.secret}` } }); assert.equal(response.status, 200);
+    for (const history of [await f.read(peerId), await f.read(adminId), await f.noViewer(), await response.json()]) {
+      assert.equal(history.intents.length, 1); assert.equal(history.intents[0].reason, item.publicReason);
+      assert.equal(history.intents[0].status, "failed"); assertAbsent(history, [f.threadId, f.diagnostic, privateIntent]);
+    }
+  }
+  await resource.db.update(automations).set({ createdByUserId: peerId }).where(eq(automations.id, f.run.automationId));
+  await resource.db.update(bookingReminderIntents).set({ reason: null }).where(eq(bookingReminderIntents.id, f.intent.id));
+  await resource.db.update(automationRuns).set({ error: f.diagnostic, status: f.diagnostic }).where(eq(automationRuns.id, f.run.id));
+  assert.equal((await f.read()).intents[0].reason, f.diagnostic, "history follows the actual thread owner");
+  const peer = await f.read(peerId); assert.equal(peer.intents[0].status, "unknown"); assertAbsent(peer, [f.diagnostic, f.threadId]);
+});
+
+test("missing, foreign, mixed and unresolved reminder threads never authorize diagnostics or accepted links", async () => {
+  const f = await privateReminderFailure("2030-04-02");
+  await resource.db.update(bookingReminderIntents).set({ acceptedAt: now }).where(eq(bookingReminderIntents.id, f.intent.id));
+  const deny = async () => {
+    for (const history of [await f.read(), await f.read(peerId), await f.read(adminId), await f.noViewer()]) {
+      assert.equal(history.intents.length, 1); assert.equal(history.intents[0].reason, null);
+      assert.equal(history.intents[0].threadId, null); assert.equal(history.intents[0].runId, null); assertAbsent(history, [f.diagnostic, f.threadId]);
+    }
+  };
+  const second = key();
+  await resource.db.insert(chatThreads).values({ id: second, userId: peerId, organizationId: org, workspaceId: deps.workspaceId!, clientId: key() });
+  await resource.db.insert(automationAgentActions).values({ runId: f.run.id, step: 1, threadId: second, userMessageId: key() });
+  await deny();
+  await resource.db.delete(automationAgentActions).where(and(eq(automationAgentActions.runId, f.run.id), eq(automationAgentActions.step, 1)));
+  await resource.db.update(automationAgentActions).set({ agentRunId: key() }).where(eq(automationAgentActions.runId, f.run.id));
+  await deny();
+  await resource.db.update(automationAgentActions).set({ agentRunId: null }).where(eq(automationAgentActions.runId, f.run.id));
+  const foreignWorkspaceThread = key();
+  await resource.db.insert(chatThreads).values({ id: foreignWorkspaceThread, userId: uid, organizationId: org, workspaceId: secondWorkspace, clientId: key() });
+  await resource.db.update(automationAgentActions).set({ threadId: foreignWorkspaceThread }).where(eq(automationAgentActions.runId, f.run.id));
+  await resource.db.update(automationRuns).set({ detail: { threadId: foreignWorkspaceThread } }).where(eq(automationRuns.id, f.run.id)); await deny();
+  const otherOrg = key();
+  await resource.db.insert(organization).values({ id: otherOrg, name: "Foreign", slug: otherOrg });
+  try {
+    const [space] = await resource.db.select().from(workspaces).where(and(eq(workspaces.organizationId, otherOrg), eq(workspaces.isDefault, true)));
+    const foreignOrgThread = key();
+    await resource.db.insert(chatThreads).values({ id: foreignOrgThread, userId: uid, organizationId: otherOrg, workspaceId: space.id, clientId: key() });
+    await resource.db.update(automationAgentActions).set({ threadId: foreignOrgThread }).where(eq(automationAgentActions.runId, f.run.id));
+    await resource.db.update(automationRuns).set({ detail: { threadId: foreignOrgThread } }).where(eq(automationRuns.id, f.run.id)); await deny();
+  } finally { await resource.db.delete(organization).where(eq(organization.id, otherOrg)); }
+  await deny(); // The persistent mapping now references a deleted thread.
+  await resource.db.delete(automationAgentActions).where(eq(automationAgentActions.runId, f.run.id));
+  await resource.db.update(automationRuns).set({ ruleSnapshot: { actions: [] }, detail: {} }).where(eq(automationRuns.id, f.run.id));
+  await deny(); // Managed reminder diagnostics are private even without a usable snapshot/mapping.
+  await resource.db.delete(automationRuns).where(eq(automationRuns.id, f.run.id));
+  await resource.db.update(bookingReminderIntents).set({ reason: f.diagnostic }).where(eq(bookingReminderIntents.id, f.intent.id)); await deny();
+  await resource.db.update(bookingReminderIntents).set({ reason: "deadline_expired" }).where(eq(bookingReminderIntents.id, f.intent.id));
+  assert.equal((await f.read(peerId)).intents[0].reason, "deadline_expired", "known lifecycle state survives loss of the private run");
+});
+
+test("native, member command, SDK GraphQL and actual MCP reminder reads share diagnostic visibility", { timeout: 30000 }, async () => {
+  const f = await privateReminderFailure("2030-04-03"), saved = await readOnlyReminderKey();
+  for (const actorId of [uid, peerId, adminId]) {
+    const native = await createTableTools(deps, undefined, org, actorId).list_booking_reminders.execute(f.input, { toolCallId: key(), messages: [], context: undefined });
+    if (actorId === uid) assert(JSON.stringify(native).includes(f.diagnostic)); else assertAbsent(native, [f.diagnostic, f.threadId]);
+    const memberApp = new Hono().route("/api/commands", createCommandsRoute(async () => ({ commands: deps, identity: { database: resource.db,
+      resolveSession: async () => ({ user: { id: actorId, name: actorId, email: `${actorId}@local.test` }, session: { activeOrganizationId: org } }) }, close: async () => {} })));
+    const response = await memberApp.request("/api/commands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: "listBookingReminders", input: f.input }) });
+    assert.equal(response.status, 200); const body = await response.json();
+    if (actorId === uid) assert(JSON.stringify(body).includes(f.diagnostic)); else assertAbsent(body, [f.diagnostic, f.threadId]);
+  }
+  assertAbsent(await sdk(saved.secret).calendar.listBookingReminders(f.input), [f.diagnostic, f.threadId]);
+  const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
+  if (!server.listening) await new Promise(resolve => server.once("listening", resolve)); const address = server.address(); assert(address && typeof address !== "string");
+  try {
+    for (const secret of ["", saved.secret]) {
+      const output: { stdout: string; stderr: string } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: {
+        ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: secret, TABLE_API_KEY: "", TABDO_WORKSPACE_ID: deps.workspaceId!,
+        CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls: [{ name: "list_booking_reminders", input: f.input,
+          ...(secret ? { absent: [f.diagnostic, f.threadId] } : { includes: [f.diagnostic] }) }] }),
+      } });
+      assert.equal(JSON.parse(output.stdout).mcp, "PASS");
+    }
+  } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });

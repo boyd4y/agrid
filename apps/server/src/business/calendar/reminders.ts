@@ -5,6 +5,7 @@ import type { Transaction } from "../db/types.js";
 import { bookings, bookingReminders, bookingReminderIntents, calendars, calendarPeople, automations,
   automationEvents, automationRuns, automationAgentActions, chatThreads, member, agentProfile, userApiKeys, apiKeyCalendars } from "../db/schema.js";
 import { appendExternalAutomationEvent } from "../automation/events.js";
+import { readableRunDetails } from "../automation/run-visibility.js";
 import { CalendarError } from "./errors.js";
 
 type StoredBooking = typeof bookings.$inferSelect;
@@ -49,21 +50,35 @@ export async function replaceBookingReminders(deps: CommandDependencies, tx: Tra
   return { id: updated.id, version: updated.version, revision: updated.revision, status: updated.status };
 }
 
-export async function readBookingReminders(tx: Transaction, booking: StoredBooking, viewerId?: string) {
+// Only these platform-written intent codes are public. Execution errors remain
+// private free text even when their content happens to resemble a known code.
+const publicIntentReasons = new Set(["booking_revision_changed", "deadline_expired", "reminder_authorization_revoked", "invalid_reminder_scope", "deadline_not_due"]);
+const reminderStatuses = new Set(["pending", "queued", "running", "retrying", "waiting_input", "accepted", "completed", "failed", "skipped", "cancelled", "superseded", "unknown"]);
+
+export async function readBookingReminders(deps: CommandDependencies, tx: Transaction, booking: StoredBooking, organizationId: string, viewerId?: string) {
   const reminders = await tx.select().from(bookingReminders).where(and(eq(bookingReminders.bookingId, booking.id), eq(bookingReminders.enabled, true)));
-  const history = await tx.select({ intent: bookingReminderIntents, run: automationRuns, mapping: automationAgentActions, thread: chatThreads })
-    .from(bookingReminderIntents).leftJoin(automationRuns, eq(automationRuns.eventId, bookingReminderIntents.eventId))
+  const history = await tx.select({ intent: bookingReminderIntents, run: automationRuns, actions: automations.actions, mapping: automationAgentActions, thread: chatThreads })
+    .from(bookingReminderIntents)
+    .leftJoin(bookingReminders, eq(bookingReminders.id, bookingReminderIntents.reminderId))
+    .leftJoin(automations, and(eq(automations.id, bookingReminders.automationId), eq(automations.organizationId, organizationId), eq(automations.workspaceId, booking.workspaceId)))
+    .leftJoin(automationRuns, and(eq(automationRuns.eventId, bookingReminderIntents.eventId), eq(automationRuns.automationId, automations.id), eq(automationRuns.workspaceId, booking.workspaceId)))
     .leftJoin(automationAgentActions, and(eq(automationAgentActions.runId, automationRuns.id), eq(automationAgentActions.step, 0)))
     .leftJoin(chatThreads, eq(chatThreads.id, automationAgentActions.threadId))
-    .where(eq(bookingReminderIntents.bookingId, booking.id)).orderBy(desc(bookingReminderIntents.revision), desc(bookingReminderIntents.scheduledFor)).limit(501);
+    .where(and(eq(bookingReminderIntents.bookingId, booking.id), eq(bookingReminderIntents.workspaceId, booking.workspaceId))).orderBy(desc(bookingReminderIntents.revision), desc(bookingReminderIntents.scheduledFor)).limit(501);
   if (history.length > 500) throw new CalendarError(400, "QUERY_LIMIT", "Reminder history exceeds 500 intents");
-  const intents: BookingReminderIntent[] = history.map(({ intent, run, mapping, thread }) => ({ id: intent.id, revision: intent.revision,
-    kind: intent.kind as BookingReminder["kind"], offsetMinutes: intent.offsetMinutes, scheduledFor: intent.scheduledFor.toISOString(),
-    status: intent.acceptedAt ? run && !["queued", "running", "retrying"].includes(run.status) ? run.status : "accepted"
-      : ["superseded", "skipped", "failed"].includes(intent.status) ? intent.status : run?.status ?? intent.status,
-    reason: intent.reason ?? run?.error ?? null, acceptedAt: intent.acceptedAt?.toISOString() ?? null,
-    runId: intent.acceptedAt && viewerId && thread?.userId === viewerId ? mapping?.agentRunId ?? null : null,
-    threadId: intent.acceptedAt && viewerId && thread?.userId === viewerId && thread.workspaceId === booking.workspaceId ? thread.id : null }));
+  const readable = await readableRunDetails({ ...deps, workspaceId: booking.workspaceId }, history.flatMap(({ run, actions }) => run ? [{ run, actions, privateResult: true }] : []), organizationId, viewerId, tx);
+  const intents: BookingReminderIntent[] = history.map(({ intent, run, mapping, thread }) => {
+    const canRead = !!run && readable.has(run.id);
+    const status = intent.acceptedAt ? run && !["queued", "running", "retrying"].includes(run.status) ? run.status : "accepted"
+      : ["superseded", "skipped", "failed"].includes(intent.status) ? intent.status : run?.status ?? intent.status;
+    return { id: intent.id, revision: intent.revision,
+      kind: intent.kind as BookingReminder["kind"], offsetMinutes: intent.offsetMinutes, scheduledFor: intent.scheduledFor.toISOString(),
+      status: reminderStatuses.has(status) ? status : "unknown",
+      reason: intent.reason && publicIntentReasons.has(intent.reason) ? intent.reason : canRead ? intent.reason ?? run?.error ?? null : null,
+      acceptedAt: intent.acceptedAt?.toISOString() ?? null,
+      runId: intent.acceptedAt && canRead ? mapping?.agentRunId ?? null : null,
+      threadId: intent.acceptedAt && canRead ? thread?.id ?? null : null };
+  });
   return { bookingVersion: booking.version, revision: booking.revision, reminders: reminders.map(v => v.configuration), intents, complete: true as const };
 }
 

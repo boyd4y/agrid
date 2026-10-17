@@ -199,7 +199,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         const initial = await loadBooking(input.bookingId);
         await loadPeople([initial.personId]);
         const [booking] = await tx.select().from(bookings).where(eq(bookings.id, initial.id)).for("update");
-        if (command === "listBookingReminders") { output = await readBookingReminders(tx, booking, caller.kind === "member" ? caller.actorId : undefined); break; }
+        if (command === "listBookingReminders") { output = await readBookingReminders(deps, tx, booking, organizationId, caller.kind === "member" ? caller.actorId : undefined); break; }
         cas(booking.version, input.expectedVersion);
         if (principal && !principal.userId) fail(403, "FORBIDDEN", "A current key owner is required");
         output = await replaceBookingReminders(deps, tx, booking, input.reminders, caller.kind === "member" ? caller.actorId : principal!.userId!, principal?.id ?? null);
