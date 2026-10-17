@@ -153,3 +153,48 @@ test("REST, member commands, GraphQL and typed SDK execute the same core under l
   const memberApi = createCommandsRoute(async () => ({ commands: a, identity: { database: a.database, async resolveSession() { return { user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } } as any; } }, async close() {} }));
   const result = await memberApi.request("/", { method: "POST", headers: { "Content-Type": "application/json", "X-Workspace-Id": a.workspaceId! }, body: JSON.stringify({ command: "getDocument", input: identity() }) }); assert.equal(result.status, 200);
 });
+test("a late image receipt SQL failure rolls back its savepoint and blob while the host commits other work", async () => {
+  const doc = (await call("getDocument", identity()))!;
+  const input = { ...identity(), expectedVersion: doc.version, name: "receipt-fault.png", mimeType: "image/png" as const, base64: png, idempotencyKey: k() };
+  const functionName = `document_receipt_fault_${k().replaceAll("-", "")}`;
+  const beforeBlobs = blobs.size, beforeHistory = await call("listDocumentRevisions", identity());
+  const hostRow = k();
+  await resource.db.execute(sql.raw(`CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.key = '${input.idempotencyKey}' THEN RAISE EXCEPTION 'late document receipt fault'; END IF; RETURN NEW; END; $$`));
+  try {
+    await resource.db.execute(sql.raw(`CREATE TRIGGER "${functionName}" BEFORE UPDATE OF result ON document_receipts FOR EACH ROW EXECUTE FUNCTION "${functionName}"()`));
+    await resource.db.transaction(async tx => {
+      await assert.rejects(executeDocument(a, caller, "uploadDocumentImage", input, tx), error =>
+        error instanceof Error && error.cause instanceof Error && error.cause.message === "late document receipt fault");
+      assert.equal(blobs.size, beforeBlobs, "failed child upload is removed before the host commits");
+      assert.equal((await tx.select().from(documentReceipts).where(eq(documentReceipts.key, input.idempotencyKey))).length, 0);
+      await tx.insert(rows).values({ id: hostRow, tableId });
+    });
+    assert.equal((await other.db.select().from(rows).where(eq(rows.id, hostRow))).length, 1);
+    assert.deepEqual(await call("listDocumentRevisions", identity()), beforeHistory);
+    assert.deepEqual(await call("getDocument", identity()), doc);
+  } finally {
+    await resource.db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${functionName}" ON document_receipts`));
+    await resource.db.execute(sql.raw(`DROP FUNCTION "${functionName}"()`));
+  }
+  const retried = await call("uploadDocumentImage", input);
+  assert.equal((await call("getDocumentImage", { ...identity(), fileId: retried.fileId })).base64, png);
+  assert.deepEqual(await call("uploadDocumentImage", input, b), retried);
+  assert.equal(blobs.size, beforeBlobs + 1, "the original key retries once after the SQL fault is removed");
+});
+test("real images from another row or workspace cannot be read or linked through this document", async () => {
+  const [workspace] = await resource.db.insert(workspaces).values({ organizationId: org, name: "Private images", isDefault: false }).returning();
+  const [foreignTable] = await resource.db.insert(tables).values({ organizationId: org, workspaceId: workspace.id, name: "Other articles" }).returning();
+  const foreignDeps = { ...a, workspaceId: workspace.id };
+  const current = (await call("getDocument", identity()))!;
+  for (const target of [{ tableId, deps: a }, { tableId: foreignTable.id, deps: foreignDeps }]) {
+    const [row] = await resource.db.insert(rows).values({ tableId: target.tableId }).returning();
+    const location = { tableId: target.tableId, rowId: row.id };
+    await call("createDocument", { ...location, content: EMPTY_DOCUMENT, idempotencyKey: k() }, target.deps);
+    const image = await call("uploadDocumentImage", { ...location, expectedVersion: 1, name: "foreign.png", mimeType: "image/png", base64: png, idempotencyKey: k() }, target.deps);
+    assert.equal((await call("getDocumentImage", { ...location, fileId: image.fileId }, target.deps)).base64, png);
+    await assert.rejects(call("getDocumentImage", { ...identity(), fileId: image.fileId }), code("NOT_FOUND"));
+    const content: DocumentContent = { type: "doc", content: [{ type: "image", attrs: { fileId: image.fileId, alt: "Foreign asset" } }] };
+    await assert.rejects(call("replaceDocument", { ...identity(), expectedVersion: current.version, content, idempotencyKey: k() }), code("BAD_INPUT"));
+  }
+  assert.deepEqual(await call("getDocument", identity()), current);
+});
