@@ -15,6 +15,7 @@ import { organization, user, member, agentProfile, workspaces, bookings, booking
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import { executeCalendar } from "../../src/business/calendar/service.js";
 import { createAutomation, updateAutomation, listAutomationRuns } from "../../src/business/automation/crud.js";
+import { readableRunDetails } from "../../src/business/automation/run-visibility.js";
 import { dispatchDueSchedules } from "../../src/business/automation/schedule.js";
 import { appendExternalAutomationEvent } from "../../src/business/automation/events.js";
 import { createSiteKey, updateSiteKey } from "../../src/business/data-api/keys.js";
@@ -335,4 +336,17 @@ test("managed reminder history with incomplete action metadata stays private acr
   const leaks = { reminder: JSON.stringify(reminder).includes(f.diagnostic), generic: JSON.stringify(generic).includes(f.diagnostic), native: JSON.stringify(native).includes(f.diagnostic) };
   console.log("CALENDAR_INCOMPLETE_PRIVATE_HISTORY", JSON.stringify({ leaks, reminder, generic, native }));
   assert.deepEqual(leaks, { reminder: false, generic: false, native: false }, "Known managed agent reminders must not become public data results when historical action metadata is incomplete");
+  const [incomplete] = await resource.db.select().from(automationRuns).where(eq(automationRuns.id, f.run.id));
+  assert(!(await readableRunDetails(deps, [{ run: incomplete, actions: [], source: null }], org, peerId)).has(f.run.id), "saved managed source alone retains private classification");
+  for (const snapshot of [null, { actions: [] }, { ...f.run.ruleSnapshot, actions: undefined }]) {
+    await resource.db.update(automationRuns).set({ ruleSnapshot: snapshot }).where(eq(automationRuns.id, f.run.id));
+    for (const actorId of [uid, peerId, adminId, undefined]) {
+      const history = await listAutomationRuns(deps, { organizationId: org, actorId, automationId: f.run.automationId });
+      assert.equal(history.length, 1); assert.equal(history[0].status, "failed"); assertAbsent(history, [f.diagnostic]);
+    }
+    assertAbsent(await f.read(peerId), [f.diagnostic]);
+  }
+  await resource.db.insert(automationAgentActions).values({ runId: f.run.id, step: 0, threadId: f.threadId, userMessageId: key() });
+  assert.equal((await listAutomationRuns(deps, { organizationId: org, actorId: uid, automationId: f.run.automationId }))[0].error, f.diagnostic);
+  assert.equal((await f.read()).intents[0].reason, f.diagnostic, "verified owner still sees the result when action metadata is incomplete");
 });

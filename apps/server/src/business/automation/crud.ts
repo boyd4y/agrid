@@ -164,7 +164,7 @@ export async function listAutomationRuns(deps: CommandDependencies, input: ListA
     const rule = await ownedRule(deps, automationId, organizationId, transaction);
     if (tableId && rule.tableId !== tableId) throw new Error("自动化不属于指定表格");
   }
-  const hits = await (transaction ?? deps.database).select({ run: automationRuns, actions: automations.actions }).from(automationRuns)
+  const hits = await (transaction ?? deps.database).select({ run: automationRuns, actions: automations.actions, source: automations.source }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId)).where(and(
       and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt),
       workspaceScope(deps, organizationId, automationRuns.workspaceId),

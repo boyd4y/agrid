@@ -57,7 +57,7 @@ const reminderStatuses = new Set(["pending", "queued", "running", "retrying", "w
 
 export async function readBookingReminders(deps: CommandDependencies, tx: Transaction, booking: StoredBooking, organizationId: string, viewerId?: string) {
   const reminders = await tx.select().from(bookingReminders).where(and(eq(bookingReminders.bookingId, booking.id), eq(bookingReminders.enabled, true)));
-  const history = await tx.select({ intent: bookingReminderIntents, run: automationRuns, actions: automations.actions, mapping: automationAgentActions, thread: chatThreads })
+  const history = await tx.select({ intent: bookingReminderIntents, run: automationRuns, actions: automations.actions, source: automations.source, mapping: automationAgentActions, thread: chatThreads })
     .from(bookingReminderIntents)
     .leftJoin(bookingReminders, eq(bookingReminders.id, bookingReminderIntents.reminderId))
     .leftJoin(automations, and(eq(automations.id, bookingReminders.automationId), eq(automations.organizationId, organizationId), eq(automations.workspaceId, booking.workspaceId)))
@@ -66,7 +66,7 @@ export async function readBookingReminders(deps: CommandDependencies, tx: Transa
     .leftJoin(chatThreads, eq(chatThreads.id, automationAgentActions.threadId))
     .where(and(eq(bookingReminderIntents.bookingId, booking.id), eq(bookingReminderIntents.workspaceId, booking.workspaceId))).orderBy(desc(bookingReminderIntents.revision), desc(bookingReminderIntents.scheduledFor)).limit(501);
   if (history.length > 500) throw new CalendarError(400, "QUERY_LIMIT", "Reminder history exceeds 500 intents");
-  const readable = await readableRunDetails({ ...deps, workspaceId: booking.workspaceId }, history.flatMap(({ run, actions }) => run ? [{ run, actions, privateResult: true }] : []), organizationId, viewerId, tx);
+  const readable = await readableRunDetails({ ...deps, workspaceId: booking.workspaceId }, history.flatMap(({ run, actions, source }) => run ? [{ run, actions, source }] : []), organizationId, viewerId, tx);
   const intents: BookingReminderIntent[] = history.map(({ intent, run, mapping, thread }) => {
     const canRead = !!run && readable.has(run.id);
     const status = intent.acceptedAt ? run && !["queued", "running", "retrying"].includes(run.status) ? run.status : "accepted"

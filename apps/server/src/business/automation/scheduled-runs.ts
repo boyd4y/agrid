@@ -13,7 +13,7 @@ export async function listScheduledRuns(deps: RuntimeDependencies, taskId: strin
     .where(and(eq(automations.id, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId))));
   if (task?.source.kind !== "schedule") throw new ServiceError(404, { message: "定时任务不存在" });
   const items = await deps.database.select({
-    savedRun: automationRuns, actions: automations.actions,
+    savedRun: automationRuns, actions: automations.actions, source: automations.source,
     id: automationRuns.id, automationId: automationRuns.automationId, status: automationRuns.status,
     createdAt: automationRuns.createdAt, finishedAt: automationRuns.finishedAt, error: automationRuns.error,
     threadId: chatThreads.id, title: chatThreads.title,
@@ -28,8 +28,8 @@ export async function listScheduledRuns(deps: RuntimeDependencies, taskId: strin
     .leftJoin(chatThreads, and(eq(chatThreads.id, automationAgentActions.threadId), eq(chatThreads.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, chatThreads.workspaceId), eq(chatThreads.kind, "scheduled_task"), eq(chatThreads.userId, actor.userId), eq(chatThreads.scheduledTaskId, taskId)))
     .where(and(eq(automationRuns.automationId, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId)), or(eq(automations.createdByUserId, actor.userId), eq(chatThreads.userId, actor.userId))))
     .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit + 1).offset(offset);
-  const readable = await readableRunDetails({ ...deps, workspaceId: actor.workspaceId ?? deps.workspaceId }, items.map(item => ({ run: item.savedRun, actions: item.actions })), actor.organizationId, actor.userId);
-  return { runs: items.slice(0, limit).map(({ savedRun: _saved, actions: _actions, ...item }) => readable.has(item.id) ? item : {
+  const readable = await readableRunDetails({ ...deps, workspaceId: actor.workspaceId ?? deps.workspaceId }, items.map(item => ({ run: item.savedRun, actions: item.actions, source: item.source })), actor.organizationId, actor.userId);
+  return { runs: items.slice(0, limit).map(({ savedRun: _saved, actions: _actions, source: _source, ...item }) => readable.has(item.id) ? item : {
     ...item, error: null, threadId: null, title: null, prompt: "", preview: null, nativeStatus: null,
   }), hasMore: items.length > limit };
 }

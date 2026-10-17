@@ -6,9 +6,7 @@ import { agentRuns, automationAgentActions, automationRuns, chatThreads } from "
 import { workspaceScope } from "../tenant/workspace.js";
 
 type Run = typeof automationRuns.$inferSelect;
-export type RunHistory = { run: Run; actions: unknown;
-  /** Managed agent results stay private even if historical action metadata is missing. */
-  privateResult?: boolean };
+export type RunHistory = { run: Run; actions: unknown; source: unknown };
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const hasAgentAction = (value: unknown) => Array.isArray(value) && value.some(action => object(action).type === "run_agent");
 
@@ -21,8 +19,11 @@ export async function readableRunDetails(deps: DatabaseDependencies, history: Ru
   if (!history.length) return readable;
   const database = transaction ?? deps.database;
   const mappings = await database.select().from(automationAgentActions).where(inArray(automationAgentActions.runId, history.map(hit => hit.run.id)));
-  const references = history.map(({ run, actions, privateResult }) => {
-    const savedActions = object(run.ruleSnapshot).actions;
+  const references = history.map(({ run, actions, source }) => {
+    const saved = object(run.ruleSnapshot), savedActions = saved.actions;
+    // Calendar rules are managed agent reminders. Empty/missing action history
+    // cannot downgrade their results to public data on any reading surface.
+    const managedReminder = object(source).kind === "calendar" || object(saved.source).kind === "calendar";
     const results = Array.isArray(run.detail.actions) ? run.detail.actions : [];
     const native = mappings.filter(mapping => mapping.runId === run.id);
     const threadIds = new Set(native.map(mapping => mapping.threadId));
@@ -37,7 +38,7 @@ export async function readableRunDetails(deps: DatabaseDependencies, history: Ru
         else unresolved = true;
       }
     }
-    return { run, threadIds, agentRunIds, unresolved, private: privateResult || native.length > 0 || threadIds.size > 0 || agentRunIds.size > 0 || unresolved
+    return { run, threadIds, agentRunIds, unresolved, private: managedReminder || native.length > 0 || threadIds.size > 0 || agentRunIds.size > 0 || unresolved
       || hasAgentAction(savedActions ?? actions) || hasAgentAction(results) || run.detail.nativeStatus !== undefined };
   });
   const nativeIds = [...new Set(references.flatMap(ref => [...ref.agentRunIds]))];
