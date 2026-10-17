@@ -142,6 +142,7 @@ export const docsPages: DocsPage[] = [
           { title: "Tables, columns, and records", description: "Learn about file uploads, related records, rollups, and formulas.", href: "/docs/tables", badge: "Data" },
           { title: "Views and boards", description: "Create views, configure filters and sorts, and review records.", href: "/docs/views", badge: "Views" },
           { title: "Forms", description: "Design a data entry view over the same table.", href: "/docs/forms", badge: "Collect" },
+          { title: "Calendars and bookings", description: "Set staff hours, find open slots, and manage bookings.", href: "/docs/calendar-booking", badge: "Calendar" },
           { title: "Automations and scheduled tasks", description: "Trigger actions from table events, external events, or a schedule.", href: "/docs/automations", badge: "Actions" },
           { title: "Reports", description: "Summarize table data with metrics and charts.", href: "/docs/reports", badge: "Insights" },
           { title: "Sites", description: "Edit, preview, and publish a simple website.", href: "/docs/sites", badge: "Publish" },
@@ -213,6 +214,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         { title: "REST API", description: "Full routes, queries, and response details.", href: "/docs/rest", badge: "REST" },
         { title: "GraphQL", description: "GraphQL query and mutation reference.", href: "/docs/graphql", badge: "GraphQL" },
         { title: "TypeScript SDK", description: "Call the same data API with @tabdo/sdk.", href: "/docs/sdk", badge: "SDK" },
+        { title: "Calendar booking API", description: "Calendar grants, availability, bookings, and agent reminders.", href: "/docs/calendar-booking", badge: "Calendar" },
       ] },
     ],
   },
@@ -327,6 +329,114 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "ul", items: [
         "You can edit the form title, description, submit button label, success message, and field order. Field options are shared with the table column. Formula and rollup fields display calculated values and cannot be entered; hidden fields are not shown, and required fields are validated on submission. File and relation columns use their upload and record picker controls.",
         "Forms are currently used inside the signed-in table page. There is no public form link or separate publishing flow. A form is not a separate data store; changing or deleting a column affects other views of the table too.",
+      ] },
+    ],
+  },
+  {
+    slug: "calendar-booking",
+    sectionId: "humans",
+    title: "Calendars and bookings",
+    description: "Set staff hours and time off, find open slots, and manage bookings in the calendar or through the API.",
+    body: [
+      { type: "p", text: "Use a calendar to arrange service bookings in a workspace. Create separate calendars for different services, add staff, set working hours and temporary unavailable times, then let members, agents, or authorized applications create and manage bookings. Staff are the people providing the service; they are separate from the AI agent that performs an action." },
+      { type: "h2", text: "Set up staff availability" },
+      { type: "ol", items: [
+        "Open Calendar in the app and choose an existing calendar or create one. Set a name and display time zone.",
+        "Open staff and schedule settings. Add a staff member and choose their time zone. You can link an existing active workspace member when appropriate; avoid creating a second identity for the same person.",
+        "Set the staff member’s weekly working hours. These hours repeat in the selected time zone. Add dated unavailable periods for time off, then edit or remove them when plans change.",
+        "Review bookings in the calendar. To book, choose a staff member, duration, and available time. You can also check the next seven days for open slots before entering a booking title.",
+        "Open a booking to review, reschedule, or cancel it. Rescheduling and cancellation check the current version; if a conflict occurs, the original booking remains in place.",
+      ] },
+      { type: "h2", text: "Reminders and scheduled plans" },
+      { type: "ul", items: [
+        "Members with permission can set an existing workspace agent to run before a booking starts or at its end. Booking details show the actual run status. These are agent actions, not email or text-message notifications.",
+        "A before-start reminder is skipped after the booking starts. Rescheduling or cancelling invalidates reminders that have not been accepted. An agent action that has already started cannot always be recalled.",
+        "You can overlay scheduled tasks on the calendar to view their projected times and recorded runs. A projected time is a preview; it does not mean the task ran or reserves booking time. Open the scheduled task to edit it.",
+      ] },
+      { type: "h2", text: "Connect with the REST API" },
+      { type: "p", text: "A workspace owner/admin can create a key under Settings → API Key and grant access to each calendar separately. Booking detail, availability, create, reschedule, cancel, calendar management, and triggering an agent reminder are separate grants. Detail access does not include availability, and create access does not include detail access. Reminder setup requires both booking update and trigger-agent access. Scheduled task projections use separate per-task read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
+export PERSON_ID="00000000-0000-4000-8000-000000000002"
+
+# Find complete availability for 30-minute bookings over the next seven days
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/availability/query" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"personId":"'"$PERSON_ID"'","rangeStart":"2026-10-19T00:00:00Z","rangeEnd":"2026-10-26T00:00:00Z","durationMinutes":30,"stepMinutes":30}'
+
+# Create a booking. Use a new idempotency key for each write; on a network retry,
+# resend the original request with the same key.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"personId":"'"$PERSON_ID"'","title":"Example booking","time":{"start":"2026-10-20T09:00:00+08:00","end":"2026-10-20T09:30:00+08:00","timeZone":"Asia/Shanghai"},"idempotencyKey":"booking-create-demo-001"}'` },
+      { type: "p", text: "Availability results include a completeness marker and time zone. A query is a snapshot: the service checks staff hours, unavailable periods, and existing bookings again when you create the booking. Send RFC 3339 instants with a UTC offset and include an IANA time zone. A successful write returns the booking ID, version, revision, and status." },
+      { type: "h2", text: "Unified command endpoint and GraphQL" },
+      { type: "p", text: "You can also send the same operation to POST /api/commands with a body such as {\"command\": \"queryAvailability\", \"input\": {…}} or {\"command\": \"createBooking\", \"input\": {…}}. REST, GraphQL, and this endpoint use the same calendar grants and booking checks. Include an idempotency key in the body or send it in the Idempotency-Key header." },
+      { type: "table", headers: ["Operation", "REST path"], rows: [
+        ["List calendars (GET)", "/api/calendars"],
+        ["List / add staff (GET / POST)", "/api/calendars/:calendarId/people"],
+        ["Read / replace weekly hours (GET / POST)", "/api/calendars/:calendarId/people/:personId/hours"],
+        ["List dated unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions/query"],
+        ["Add / edit unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions"],
+        ["Remove unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions/:exceptionId/remove"],
+        ["Query availability (POST)", "/api/calendars/:calendarId/availability/query"],
+        ["Query bookings (POST)", "/api/calendars/:calendarId/bookings/query"],
+        ["Get a booking (GET)", "/api/calendars/:calendarId/bookings/:bookingId"],
+        ["Create a booking (POST)", "/api/calendars/:calendarId/bookings"],
+        ["Reschedule (POST)", "/api/calendars/:calendarId/bookings/:bookingId/reschedule"],
+        ["Cancel (POST)", "/api/calendars/:calendarId/bookings/:bookingId/cancel"],
+        ["Batch create / reschedule / cancel (POST)", "/api/calendars/:calendarId/bookings/batch"],
+        ["Set / read reminders (POST / GET)", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
+        ["Query scheduled task times (POST)", "/api/schedules/occurrences/query"],
+      ] },
+      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → API Key." },
+      { type: "p", text: "The batch route accepts 1–100 create, reschedule, or cancel operations and applies them together. If one operation fails validation or conflicts, the batch is rolled back." },
+      { type: "code", lang: "bash", code: `# Reschedule. Use the latest booking version you have read.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
+
+# Only confirmed bookings can have reminders. Rescheduling above returns version 2.
+# Reminder setup requires booking update and the "trigger agent" grant. An empty
+# reminders array removes reminders that have not been accepted.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"Prepare the information needed for this booking.","maxLatenessMinutes":60}]}'
+
+# Reminder setup returns version 3. Cancel the still-confirmed booking using it.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":3,"idempotencyKey":"booking-cancel-demo-001"}'` },
+      { type: "code", lang: "graphql", code: `query FindSlots($input: JSON!) {
+  queryAvailability(input: $input)
+}` },
+      { type: "code", lang: "bash", code: `curl -s -X POST "$TABDO_API_URL/api/graphql" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"query":"query FindSlots($input: JSON!) { queryAvailability(input: $input) }","variables":{"input":{"calendarId":"'"$CALENDAR_ID"'","personId":"'"$PERSON_ID"'","rangeStart":"2026-10-19T00:00:00Z","rangeEnd":"2026-10-26T00:00:00Z","durationMinutes":30,"stepMinutes":30}}}'` },
+      { type: "p", text: "Use createBooking(input: $input) for a write. The GraphQL endpoint is POST /api/graphql. Send the key in the Authorization: Bearer <API key> header." },
+      { type: "h2", text: "Reminders and MCP tools" },
+      { type: "p", text: "In a connected Tabdo MCP client with the required grants, use calendar tools such as query_availability, create_booking, reschedule_booking, and cancel_booking. Manage schedules with create_calendar_person, set_working_hours, and set_availability_exception. Configure and review reminders with set_booking_reminders and list_booking_reminders; query the scheduled-task projection with query_scheduled_occurrences. Calendar tools follow the grants for their target calendar; scheduled task projections require separate read access to the selected tasks." },
+      { type: "p", text: "To set reminders, provide the booking’s current expectedVersion, an idempotency key, and up to 10 reminder rules. For before_start, offsetMinutes is the number of minutes before the start; at_end uses 0. Each rule names an existing workspace agent and its prompt. The result shows reminder configuration and actual run status. A run link is shown only to someone allowed to view that conversation." },
+      { type: "h2", text: "Limits, permissions, and troubleshooting" },
+      { type: "ul", items: [
+        "Workspace members can view and manage bookings according to their workspace access. Only owners/admins can manage calendars, staff, working hours, and unavailable periods. An API key only accesses calendars you grant; creating a booking does not grant access to customer details. Calendar grants do not grant access to scheduled tasks.",
+        "Bookings and staff are isolated by workspace; busy times from another workspace are not combined. A staff member can have only one booking at a time. Supported booking states are confirmed and cancelled. Recurring booking series, guest self-service, payments, and external calendar sync are not available.",
+        "Availability results contain open time slots, not booking titles or customer details. Booking detail requires its own read grant.",
+        "Booking queries cover up to 93 days and 500 items. Availability queries cover up to 31 days and 5,000 slots. Results do not use a cursor; exceeding a query budget returns an explicit error. Results are not silently truncated and missing time is never treated as available.",
+        "Rescheduling, cancellation, and schedule changes require the current expectedVersion. On VERSION_CONFLICT, reload the booking or schedule and review the latest version. On RESOURCE_CONFLICT or OUTSIDE_AVAILABILITY, query availability again.",
+        "Writes require an idempotency key. If a request is interrupted, retry the same input with the same key; do not reuse a key for different data. A cancelled booking cannot be restored, but you can create another booking.",
+        "If you receive FORBIDDEN, ask an owner/admin to check that the key has the required grant for the target calendar. If you receive QUERY_LIMIT, narrow the date range. Future bookings must be resolved before a calendar or staff member can be archived; booking history is retained.",
+      ] },
+      { type: "cards", items: [
+        { title: "Automations and scheduled tasks", description: "Create scheduled tasks and review their run history.", href: "/docs/automations", badge: "Automation" },
+        { title: "HTTP API", description: "Learn API key basics and REST and GraphQL access.", href: "/docs/api-quickstart", badge: "API" },
       ] },
     ],
   },
