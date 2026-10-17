@@ -1,3 +1,4 @@
+import { CalendarError } from "../calendar/errors.js";
 import { listScheduledRuns, getScheduledRunThread } from "../automation/scheduled-runs.js";
 import { z } from "zod";
 import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA } from "@tabdo/shared";
@@ -42,7 +43,7 @@ automationsRoute.get("/tables/:tableId/automations", async (c) => {
     });
     return c.json(list);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -60,7 +61,7 @@ automationsRoute.post("/tables/:tableId/automations", async (c) => {
     });
     return c.json(rule, 201);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -77,7 +78,7 @@ automationsRoute.patch("/automations/:id", async (c) => {
     });
     return c.json(rule);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -111,7 +112,7 @@ automationsRoute.get("/tables/:tableId/automation-runs", async (c) => {
     });
     return c.json(list);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 

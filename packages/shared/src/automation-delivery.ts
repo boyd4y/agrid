@@ -1,16 +1,16 @@
 /** Persisted protocol shared by outbox, publisher and execution receipt. */
-export type AutomationDelivery = Readonly<{ protocol: 1; eventId: string; generation: number }>;
+export type AutomationDelivery = Readonly<{ protocol: 1 | 2; eventId: string; generation: number }>;
 
 const eventIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function parseAutomationDelivery(input: unknown): AutomationDelivery {
   if (typeof input !== "object" || input === null) throw new Error("Invalid automation delivery");
-  if (!("protocol" in input) || input.protocol !== 1 || !("eventId" in input)
+  if (!("protocol" in input) || (input.protocol !== 1 && input.protocol !== 2) || !("eventId" in input)
     || typeof input.eventId !== "string" || !eventIdPattern.test(input.eventId)
     || !("generation" in input) || typeof input.generation !== "number"
     || !Number.isSafeInteger(input.generation) || input.generation < 0) {
     throw new Error("Invalid automation delivery");
   }
-  return Object.freeze({ protocol: 1, eventId: input.eventId, generation: input.generation });
+  return Object.freeze({ protocol: input.protocol, eventId: input.eventId, generation: input.generation });
 }
 
 /** Application identity, not a provider message ID or provider dedup guarantee. */

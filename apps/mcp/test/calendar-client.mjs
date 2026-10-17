@@ -9,6 +9,18 @@ try {
   await client.connect(transport);
   const catalog = await client.listTools();
   for (const name of ['query_availability', 'create_booking', 'reschedule_booking', 'cancel_booking', 'batch_bookings', 'set_working_hours']) assert(catalog.tools.some(tool => tool.name === name));
+  if (input.calls) {
+    for (const item of input.calls) {
+      const result = await client.callTool({ name: item.name, arguments: item.input });
+      assert(!result.isError, JSON.stringify(result));
+      const value = JSON.parse(result.content[0].text);
+      for (const [field, expected] of Object.entries(item.expect ?? {})) {
+        const actual = field.split('.').reduce((current, key) => current[key], value);
+        assert.deepEqual(actual, expected, item.name + '.' + field);
+      }
+    }
+    console.log(JSON.stringify({ mcp: 'PASS', operations: input.calls.length }));
+  } else {
   const result = await client.callTool({ name: 'query_availability', arguments: input.availability });
   assert(!result.isError, JSON.stringify(result));
   const availability = JSON.parse(result.content[0].text);
@@ -22,4 +34,5 @@ try {
   const cancelled = await client.callTool({ name: 'cancel_booking', arguments: { calendarId: input.booking.calendarId, bookingId: booking.id, expectedVersion: booking.version, idempotencyKey: crypto.randomUUID() } });
   assert.equal(JSON.parse(cancelled.content[0].text).status, 'cancelled');
   console.log(JSON.stringify({ mcp: 'PASS', tools: catalog.tools.length, bookingId: booking.id }));
+  }
 } finally { await client.close(); }

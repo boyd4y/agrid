@@ -18,7 +18,7 @@ import { ScheduleFields } from "./ScheduleFields";
 import { AUTOMATION_SOURCE_ICONS } from "./automation-sources";
 
 export function validAutomationSource(source: AutomationSource) {
-  return source.kind === "table" ? Boolean(source.tableId) : source.kind === "agentmail" ? Boolean(source.connectionId && source.inboxId) : source.kind === "webhook" ? Boolean(source.endpointId) : Boolean(source.cron.trim() && source.timeZone.trim());
+  return source.kind === "table" ? Boolean(source.tableId) : source.kind === "agentmail" ? Boolean(source.connectionId && source.inboxId) : source.kind === "webhook" ? Boolean(source.endpointId) : source.kind === "calendar" ? false : Boolean(source.cron.trim() && source.timeZone.trim());
 }
 
 type Choice = { id: string; name: string; description?: string | null; icon?: string | null };

@@ -5,7 +5,9 @@
     "enter_status": "When status becomes",
     "webhook_received": "When a webhook arrives",
     "message_received": "When a message arrives",
-    "schedule_due": "When the schedule is due"
+    "schedule_due": "When the schedule is due",
+    "booking_reminder_due": "Before booking start",
+    "booking_due": "At booking end"
   },
   "actions": {
     "update_field": "Update field",
@@ -139,7 +141,8 @@
       "table": "Table",
       "agentmail": "Mail",
       "webhook": "Webhook",
-      "schedule": "Schedule"
+      "schedule": "Schedule",
+      "calendar": "Booking reminder"
     },
     "commands": {
       "addRow": "Create record",

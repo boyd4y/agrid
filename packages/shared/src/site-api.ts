@@ -3,7 +3,7 @@ import type { CellValue, ColumnType, SelectOption } from "./types.js";
 import type { FilterCondition, FilterLogic } from "./filters.js";
 
 export type TablePermission = { tableId: string; canRead: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean };
-export type ApiKeyInput = { name: string; permissions: TablePermission[]; calendarPermissions?: CalendarPermission[] };
+export type ApiKeyInput = { name: string; permissions: TablePermission[]; calendarPermissions?: CalendarPermission[]; schedulePermissions?: import("./calendar.js").SchedulePermission[] };
 export type ApiKeyInfo = ApiKeyInput & { id: string; prefix: string; createdAt: string };
 export type SiteKeyInput = ApiKeyInput;
 export type SiteKeyInfo = ApiKeyInfo;

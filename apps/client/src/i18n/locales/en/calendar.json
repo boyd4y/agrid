@@ -67,7 +67,7 @@
   "slotCount": "Found {{count}} available slots",
   "moreSlots": "Show more slots",
   "calendarGrants": "Calendar permissions",
-  "calendarGrantsHint": "Grant each calendar explicitly. Create does not include reading details; availability excludes customer information. Table permissions remain separate.",
+  "calendarGrantsHint": "Grant each calendar explicitly. Create does not include reading details; availability excludes customer information. Table permissions remain separate. Setting agent reminders requires both booking update and agent trigger permissions.",
   "calendarScope": "{{count}} calendars",
   "errors": {
     "BAD_INPUT": "Check the dates, time zone and input format.",
@@ -78,7 +78,7 @@
     "OUTSIDE_AVAILABILITY": "This time is outside working hours or overlaps time off. Choose another time.",
     "IDEMPOTENCY_MISMATCH": "This request key was used for different input. Start a new action.",
     "RANGE_TOO_LARGE": "Use a smaller date range.",
-    "QUERY_LIMIT": "The result exceeds the limit. Use a smaller range for complete results.",
+    "QUERY_LIMIT": "Query limit exceeded. Reduce the date range or select fewer plans.",
     "ARCHIVED": "The calendar or person is archived. Choose an active record.",
     "INVALID_STATE": "The appointment status or linked membership changed. Refresh and try again.",
     "FUTURE_BOOKINGS": "Reschedule or cancel unfinished appointments before archiving.",
@@ -90,7 +90,8 @@
     "canCreate": "Create",
     "canUpdate": "Reschedule",
     "canCancel": "Cancel",
-    "canManage": "Manage"
+    "canManage": "Manage",
+    "canTriggerAgent": "Trigger agent reminders"
   },
   "days": {
     "1": "Monday",
@@ -110,5 +111,66 @@
   "confirmCancellation": "Confirm cancellation",
   "cancelling": "Cancelling…",
   "confirmArchive": "Confirm archive",
-  "archiving": "Archiving…"
+  "archiving": "Archiving…",
+  "reminders": {
+    "title": "Agent reminders",
+    "boundary": "Reminders trigger an agent; they do not send email or SMS. Before-start reminders skip after the booking starts or the lateness window expires; at-end reminders skip after that window. Rescheduling, cancelling or removing reminders invalidates unaccepted intents. Accepted runs may continue.",
+    "refresh": "Refresh reminder status",
+    "item": "Reminder {{index}}",
+    "remove": "Remove reminder {{index}}",
+    "kind": "Trigger time",
+    "before_start": "Before start",
+    "at_end": "At booking end",
+    "offset": "Minutes before start",
+    "agent": "Agent",
+    "pickAgent": "Choose an enterprise agent",
+    "noAgents": "Create an agent in your enterprise first.",
+    "prompt": "Task instructions",
+    "promptHint": "Wrap fields such as event.booking.title or event.booking.start in double braces. The agent runs in the booking’s original workspace.",
+    "lateness": "Maximum lateness in minutes",
+    "add": "Add reminder",
+    "save": "Save reminders",
+    "none": "No reminders configured. Saving an empty list revokes unaccepted reminders.",
+    "history": "Execution history",
+    "revision": "Booking revision {{revision}}",
+    "acceptedAt": "Accepted at {{at}}; later cancellation may not stop this run.",
+    "openRun": "Open run",
+    "status": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "Running",
+      "retrying": "Retrying",
+      "accepted": "Accepted",
+      "completed": "Completed",
+      "failed": "Failed",
+      "skipped": "Skipped",
+      "superseded": "Superseded",
+      "cancelled": "Cancelled",
+      "waiting_input": "Waiting for input",
+      "unknown": "Unknown"
+    },
+    "reasons": {
+      "booking_revision_changed": "Booking or reminder settings changed; the old intent is superseded.",
+      "deadline_expired": "The reminder window expired; skipped.",
+      "reminder_authorization_revoked": "Creator, agent membership or original key permissions were revoked.",
+      "invalid_reminder_scope": "Invalid reminder scope.",
+      "deadline_not_due": "This reminder is not due yet."
+    }
+  },
+  "plans": {
+    "title": "Scheduled plan",
+    "hint": "Edits change the original rule for subsequent triggers. Predicted points do not reserve staff time or prove execution. Missed points during downtime may coalesce into one run. Disabling prevents new starts; in-flight agents may continue.",
+    "overlay": "Show scheduled plans",
+    "legend": "Predicted and recorded points; no booking occupancy",
+    "planned": "Predicted",
+    "occurred": "Recorded",
+    "delayed": "This point is delayed; check the actual execution record.",
+    "enabled": "Enable original rule",
+    "reload": "Reload rule",
+    "grants": "Scheduled plan grants",
+    "grantHint": "Grant each rule explicitly. Calendar grants do not authorize plans or private conversations. Update grants only allow timing, name and enabled changes.",
+    "canRead": "Read plan",
+    "canUpdate": "Update plan",
+    "scope": "{{count}} scheduled plan grants"
+  }
 }

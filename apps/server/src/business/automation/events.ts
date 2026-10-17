@@ -43,25 +43,27 @@ export async function appendAutomationEvent(deps: CommandDependencies, tx: Trans
 export type ExternalAutomationEvent = {
   id: string;
   organizationId: string;
+  workspaceId?: string;
   source: import("@tabdo/shared").AutomationSource;
-  type: "webhook_received" | "message_received" | "schedule_due";
+  type: "webhook_received" | "message_received" | "schedule_due" | "booking_reminder_due" | "booking_due";
   occurredAt: string;
   data: Record<string, unknown>;
   traceId: string;
 };
-export type ExternalEventSnapshot = { protocol: 2; event: ExternalAutomationEvent; actorId: null; traceId: string };
+export type ExternalEventSnapshot = { protocol: 2 | 3; event: ExternalAutomationEvent; actorId: null; traceId: string };
 export type AnyEventSnapshot = EventSnapshot | ExternalEventSnapshot;
 
 export function eventBindingContext(snapshot: AnyEventSnapshot): Record<string, unknown> {
   if (snapshot.protocol === 1) return { ...snapshot.event, row: snapshot.row, cells: snapshot.row.cells, traceId: snapshot.traceId,
     source: { kind: "table", tableId: snapshot.event.tableId } };
   return { ...snapshot.event.data, id: snapshot.event.id, source: snapshot.event.source, type: snapshot.event.type,
-    occurredAt: snapshot.event.occurredAt, traceId: snapshot.traceId };
+    occurredAt: snapshot.event.occurredAt, traceId: snapshot.traceId, ...(snapshot.event.source.kind === "calendar" ? { workspaceId: snapshot.event.workspaceId } : {}) };
 }
-function sameSource(a: import("@tabdo/shared").AutomationSource, b: import("@tabdo/shared").AutomationSource) {
+export function sameSource(a: import("@tabdo/shared").AutomationSource, b: import("@tabdo/shared").AutomationSource) {
   if (a.kind !== b.kind) return false;
   if (a.kind === "webhook" && b.kind === "webhook") return a.endpointId === b.endpointId;
   if (a.kind === "agentmail" && b.kind === "agentmail") return a.connectionId === b.connectionId && a.inboxId === b.inboxId;
+  if (a.kind === "calendar" && b.kind === "calendar") return a.calendarId === b.calendarId && a.bookingId === b.bookingId && a.reminderId === b.reminderId;
   return a.kind === "schedule" && b.kind === "schedule" && a.cron === b.cron && a.timeZone === b.timeZone;
 }
 export function eventConditionsMatch(rule: AutomationRule, context: Record<string, unknown>): boolean {
@@ -82,20 +84,21 @@ export function eventConditionsMatch(rule: AutomationRule, context: Record<strin
 }
 /** Called by verified delivery and schedule transactions, never before authentication. */
 export async function appendExternalAutomationEvent(deps: CommandDependencies, tx: Transaction, event: ExternalAutomationEvent, selectedRules?: AutomationRule[]) {
+  if (event.source.kind === "calendar" && !event.workspaceId) throw new Error("Calendar events require an explicit workspace");
   const rawRules = selectedRules ?? await tx.select().from(automations).where(and(eq(automations.organizationId, event.organizationId),
     eq(automations.enabled, true), isNull(automations.deletedAt))) as unknown as AutomationRule[];
-  const snapshot: ExternalEventSnapshot = { protocol: 2, event, actorId: null, traceId: event.traceId };
+  const snapshot: ExternalEventSnapshot = { protocol: event.source.kind === "calendar" ? 3 : 2, event, actorId: null, traceId: event.traceId };
   const context = eventBindingContext(snapshot);
   const needsBody = event.source.kind === "agentmail" && (event.data.message as Record<string, unknown> | undefined)?.bodyMissing;
-  const rules = rawRules.filter(rule => rule.organizationId === event.organizationId && sameSource(rule.source, event.source)
+  const rules = rawRules.filter(rule => rule.organizationId === event.organizationId && (event.source.kind !== "calendar" || rule.workspaceId === event.workspaceId) && sameSource(rule.source, event.source)
     && rule.trigger.type === event.type && (needsBody || eventConditionsMatch(rule, context)));
   if (!rules.length) return null;
-  await tx.insert(automationEvents).values({ id: event.id, organizationId: event.organizationId, tableId: null, rowId: null,
+  await tx.insert(automationEvents).values({ id: event.id, organizationId: event.organizationId, workspaceId: event.workspaceId ?? null, tableId: null, rowId: null,
     rowVersion: null, expectedVersion: null, snapshot: snapshot as unknown as Record<string, unknown>, status: "matched" });
   await tx.insert(automationRuns).values(rules.map(rule => ({ automationId: rule.id, workspaceId: rule.workspaceId, tableId: null, rowId: null, eventId: event.id,
     ruleVersion: rule.version, ruleSnapshot: rule as unknown as Record<string, unknown>, status: "queued", triggerType: rule.trigger.type,
     detail: { eventType: event.type, source: event.source, traceId: event.traceId } })));
-  await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, payload: { protocol: 1, eventId: event.id, generation: 0 } });
+  await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, payload: { protocol: event.source.kind === "calendar" ? 2 : 1, eventId: event.id, generation: 0 } });
   deps.wakeAfterCommit?.(tx, { kind: "outbox" });
   return event.id;
 }

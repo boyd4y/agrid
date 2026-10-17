@@ -1,3 +1,4 @@
+import { CalendarError } from "../calendar/errors.js";
 import { assertCommandReferences } from "../tenant/references.js";
 import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
@@ -28,9 +29,10 @@ function mapRun(row: typeof automationRuns.$inferSelect): AutomationRun {
     createdAt: row.createdAt, finishedAt: row.finishedAt,
     threadId: typeof row.detail.threadId === "string" ? row.detail.threadId : null };
 }
-async function ownedRule(deps: CommandDependencies, id: string, organizationId?: string, tx: Transaction | CommandDependencies["database"] = deps.database) {
+async function ownedRule(deps: CommandDependencies, id: string, organizationId?: string, tx: Transaction | CommandDependencies["database"] = deps.database, lock = false) {
   if (!organizationId) throw new Error("缺少工作区上下文");
-  const [rule] = await tx.select().from(automations).where(and(eq(automations.id, id), and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt)));
+  const query = tx.select().from(automations).where(and(eq(automations.id, id), and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt)));
+  const [rule] = await (lock ? query.for("update") : query);
   if (!rule) throw new Error("自动化不存在");
   return rule;
 }
@@ -38,6 +40,7 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
   const source = rule.source;
   validateAutomationActionReferences(rule.actions);
   if (!source || (source.kind === "table" && !source.tableId)) throw new Error("请选择自动化来源");
+  if (source.kind === "calendar") throw new CalendarError(400, "BAD_INPUT", "Manage reminder rules through setBookingReminders");
   if (new Set(rule.conditions.map(condition => condition.id)).size !== rule.conditions.length) throw new Error("条件标识不能重复");
   if (new Set(rule.eventConditions.map(condition => condition.id)).size !== rule.eventConditions.length) throw new Error("事件条件标识不能重复");
   if (source.kind === "table") {
@@ -56,7 +59,7 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
     for (const action of rule.actions) if (action.type === "update_field" && !cols.some(col => col.id === action.columnId)) throw new Error("动作字段不存在");
   } else {
     if (rule.conditions.length || rule.actions.some(action => action.type === "update_field")) throw new Error("事件来源请使用事件条件与数据操作动作");
-    const expected = { webhook: "webhook_received", agentmail: "message_received", schedule: "schedule_due" }[source.kind];
+    const expected = { webhook: "webhook_received", agentmail: "message_received", schedule: "schedule_due", calendar: "booking_due" }[source.kind];
     if (rule.trigger.type !== expected) throw new Error("来源与触发器不匹配");
     if (source.kind === "webhook") {
       const [endpoint] = await tx.select().from(webhookEndpoints).where(and(eq(webhookEndpoints.id, source.endpointId), eq(webhookEndpoints.organizationId, organizationId), isNull(webhookEndpoints.deletedAt)));
@@ -65,7 +68,7 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
       const [connection] = await tx.select().from(integrationConnections).where(and(eq(integrationConnections.id, source.connectionId), eq(integrationConnections.organizationId, organizationId), isNull(integrationConnections.deletedAt)));
       const endpoints = await tx.select().from(webhookEndpoints).where(and(eq(webhookEndpoints.connectionId, source.connectionId), eq(webhookEndpoints.organizationId, organizationId), isNull(webhookEndpoints.deletedAt)));
       if (!connection || !endpoints.some(endpoint => endpoint.kind === "agentmail" && endpoint.inboxIds.includes(source.inboxId))) throw new Error("请先为此邮箱注册接收事件");
-    } else schedulePreview(source.cron, source.timeZone, deps.now());
+    } else if (source.kind === "schedule") schedulePreview(source.cron, source.timeZone, deps.now());
   }
   for (const condition of rule.eventConditions) {
     // Syntax and prototype checks do not require a live event value.
@@ -88,7 +91,7 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
 }
 export async function listWorkspaceAutomations(deps: CommandDependencies, organizationId: string, offset = 0, limit = 100, kind?: "event" | "schedule") {
   const hits = await deps.database.select({ rule: automations, sourceName: tables.name }).from(automations).leftJoin(tables, eq(tables.id, automations.tableId))
-    .where(and(and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt), kind === "schedule" ? sql`${automations.source}->>'kind' = 'schedule'` : kind === "event" ? sql`${automations.source}->>'kind' <> 'schedule'` : undefined)).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
+    .where(and(and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt), sql`${automations.source}->>'kind' <> 'calendar'`, kind === "schedule" ? sql`${automations.source}->>'kind' = 'schedule'` : kind === "event" ? sql`${automations.source}->>'kind' <> 'schedule'` : undefined)).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
   return { rules: hits.slice(0, limit).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > limit };
 }
 export async function getWorkspaceAutomation(deps: CommandDependencies, id: string, organizationId: string) {
@@ -101,7 +104,7 @@ export async function listAutomations(deps: CommandDependencies, input: ListAuto
   const { tableId, offset, limit } = AUTOMATION_LIST_SCHEMA.parse({ tableId: input.tableId, offset: input.offset, limit: input.limit });
   if (tableId) await requireTableInOrg(deps, tableId, organizationId, transaction);
   return (await (transaction ?? deps.database).select().from(automations).where(and(and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)),
-    tableId ? eq(automations.tableId, tableId) : undefined, isNull(automations.deletedAt)))
+    tableId ? eq(automations.tableId, tableId) : undefined, isNull(automations.deletedAt), sql`${automations.source}->>'kind' <> 'calendar'`))
     .orderBy(asc(automations.createdAt), asc(automations.id)).limit(limit ?? 100).offset(offset ?? 0)).map(mapRule);
 }
 export async function createAutomation(deps: CommandDependencies, input: CreateAutomationInput & OrgScoped, transaction?: Transaction) {
@@ -123,9 +126,11 @@ export async function createAutomation(deps: CommandDependencies, input: CreateA
 }
 export async function updateAutomation(deps: CommandDependencies, input: UpdateAutomationInput & OrgScoped, transaction?: Transaction) {
   const { automationId, organizationId, actorId, ...wire } = input;
-  const body = AUTOMATION_UPDATE_SCHEMA.parse(wire);
+  const { expectedVersion, ...body } = AUTOMATION_UPDATE_SCHEMA.parse(wire);
   return inTransaction(deps, transaction, async tx => {
-    const existing = await ownedRule(deps, automationId, organizationId, tx);
+    const existing = await ownedRule(deps, automationId, organizationId, tx, true);
+    if (existing.source.kind === "calendar") throw new CalendarError(400, "BAD_INPUT", "Manage reminder rules through setBookingReminders");
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) throw new CalendarError(409, "VERSION_CONFLICT", "The rule changed; refresh before editing");
     const rule = { ...mapRule(existing), ...body };
     if (rule.source.kind !== existing.source.kind || (existing.source.kind === "table" && rule.source.kind === "table" && rule.source.tableId !== existing.source.tableId)) throw new Error("已保存自动化的来源类型不可更改");
     if (body.enabled !== false) await validateRule(deps, tx, rule, existing.organizationId);
@@ -137,7 +142,8 @@ export async function updateAutomation(deps: CommandDependencies, input: UpdateA
 }
 export async function deleteAutomation(deps: CommandDependencies, { automationId, organizationId }: DeleteAutomationInput & OrgScoped, transaction?: Transaction) {
   return inTransaction(deps, transaction, async tx => {
-    await ownedRule(deps, automationId, organizationId, tx);
+    const rule = await ownedRule(deps, automationId, organizationId, tx);
+    if (rule.source.kind === "calendar") throw new CalendarError(400, "BAD_INPUT", "Manage reminder rules through setBookingReminders");
     const [row] = await tx.update(automations).set({ deletedAt: deps.now(), enabled: false }).where(eq(automations.id, automationId)).returning();
     await syncSchedule(deps, tx, mapRule(row));return { ok: true as const };
   });
@@ -181,9 +187,10 @@ export async function replayAutomationRun(deps: CommandDependencies, runId: stri
     await tx.update(automationEvents).set({ status: "matched", error: null, finishedAt: null,
       generation: sql`${automationEvents.generation} + 1`, fence: sql`${automationEvents.fence} + 1`, updatedAt: deps.now() }).where(eq(automationEvents.id, event.id));
     const generation = event.generation + 1;
-    await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, generation, payload: { protocol: 1, eventId: event.id, generation } }).onConflictDoUpdate({
+    const protocol = event.snapshot.protocol === 3 ? 2 as const : 1 as const;
+    await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, generation, payload: { protocol, eventId: event.id, generation } }).onConflictDoUpdate({
       target: [automationOutbox.eventId, automationOutbox.queue], set: { status: "pending", generation,
-        payload: { protocol: 1, eventId: event.id, generation }, claimToken: null, claimUntil: null, availableAt: sql`now()`, publishedAt: null, attempts: 0, lastError: null } });
+        payload: { protocol, eventId: event.id, generation }, claimToken: null, claimUntil: null, availableAt: sql`now()`, publishedAt: null, attempts: 0, lastError: null } });
     deps.wakeAfterCommit?.(tx, { kind: "outbox" });
     return { ok: true as const };
   });

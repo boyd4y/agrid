@@ -27,3 +27,9 @@ export const cancelBooking = (deps: CommandDependencies, input: CalendarCommands
 export const queryAvailability = (deps: CommandDependencies, input: CalendarCommands["queryAvailability"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "queryAvailability", input, tx);
 export const checkBookingConflicts = (deps: CommandDependencies, input: CalendarCommands["checkBookingConflicts"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "checkBookingConflicts", input, tx);
 export const batchBookings = (deps: CommandDependencies, input: CalendarCommands["batchBookings"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "batchBookings", input, tx);
+
+export const queryScheduledOccurrences = (deps: CommandDependencies, input: CalendarCommands["queryScheduledOccurrences"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "queryScheduledOccurrences", input, tx);
+
+export const setBookingReminders = (deps: CommandDependencies, input: CalendarCommands["setBookingReminders"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "setBookingReminders", input, tx);
+
+export const listBookingReminders = (deps: CommandDependencies, input: CalendarCommands["listBookingReminders"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "listBookingReminders", input, tx);
