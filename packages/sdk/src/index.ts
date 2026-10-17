@@ -141,6 +141,7 @@ export function createClient(options: ClientOptions) {
     };
   }
   return { graphql, table, blogs: blogApi, calendar: calendarApi, documents: documentApi,
+    queryCalendarView: (input: import("@tabdo/shared").QueryCalendarViewInput, request?: RequestOptions) => graphql<{ queryCalendarView: import("@tabdo/shared").CalendarViewResult }>("query CalendarView($input: JSON!) { queryCalendarView(input: $input) }", { input }, request).then(value => value.queryCalendarView),
     updateAutomation: (input: import("@tabdo/shared").UpdateAutomationInput & { expectedVersion: number }, request?: RequestOptions) => graphql<{ updateAutomation: Pick<import("@tabdo/shared").AutomationRule, "name" | "enabled" | "source" | "version"> & { automationId: string } }>("mutation UpdateAutomation($input: JSON!) { updateAutomation(input: $input) }", { input }, request).then(value => value.updateAutomation), async tables(request?: RequestOptions): Promise<SiteTable[]> {
     return (await graphql<{ tables: SiteTable[] }>(`query Tables { tables { id name description columns { ${columnFields} } } }`, {}, request)).tables;
   } };

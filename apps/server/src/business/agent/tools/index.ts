@@ -1,3 +1,4 @@
+import { CREATE_CALENDAR_VIEW_SCHEMA, UPDATE_CALENDAR_VIEW_SCHEMA, QUERY_CALENDAR_VIEW_SCHEMA } from "@tabdo/shared";
 import { createBlogTools } from "./blogs.js";
 import { createDocumentTools } from "./documents.js";
 import { createCalendarTools } from "./calendar.js";
@@ -442,7 +443,7 @@ export function createTableTools(
     }),
 
     list_views: tool({
-      description: "列出表格的视图（grid/board/form）",
+      description: "列出表格的视图（grid/board/form/calendar）",
       inputSchema: zodSchema(z.object({ tableId: z.string().uuid() })),
       execute: async ({ tableId }) => cmds.listViews(dependencies(), { tableId, ...org }, currentTransaction()),
     }),
@@ -643,7 +644,10 @@ export function createTableTools(
     }),
 
 
-    rename_view: tool({ description: "重命名任意表格、看板或表单视图，不改变其配置。", inputSchema: zodSchema(RENAME_VIEW_SCHEMA), execute: async (input) => cmds.renameView(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    create_calendar_view: tool({ description: "创建原记录全天日历视图；按字段ID映射起始date、可选结束date、文本标题与person。endMode=inclusive包含结束当天，exclusive不包含。不是预约，不防重。", inputSchema: zodSchema(CREATE_CALENDAR_VIEW_SCHEMA), execute: async (input) => cmds.createCalendarView(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    update_calendar_view: tool({ description: "替换日历日期映射，可修复已删除或改类型的字段映射。只接受本表未隐藏的date/text/person字段。", inputSchema: zodSchema(UPDATE_CALENDAR_VIEW_SCHEMA), execute: async (input) => cmds.updateCalendarView(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    query_calendar_view: tool({ description: "查询全天日历，范围[rangeStart,rangeEnd)，返回完整跨窗重叠、独立诊断和稳定分页。items.end始终排他，hasMore时继续cursor。编辑用update_cells带expectedVersion一次更新原起止字段。", inputSchema: zodSchema(QUERY_CALENDAR_VIEW_SCHEMA), execute: async (input) => cmds.queryCalendarView(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    rename_view: tool({ description: "重命名任意表格、看板、表单或日历视图，不改变其配置。", inputSchema: zodSchema(RENAME_VIEW_SCHEMA), execute: async (input) => cmds.renameView(dependencies(), { ...input, ...org }, currentTransaction()) }),
     set_default_view: tool({ description: "设置表格唯一默认视图，整个工作区共享。", inputSchema: zodSchema(SET_DEFAULT_VIEW_SCHEMA), execute: async (input) => cmds.setDefaultView(dependencies(), { ...input, ...org }, currentTransaction()) }),
     update_board_view: tool({ description: "更新看板分组单选字段、卡片显示字段（visibleColumnIds按显示顺序）及hideEmpty、density（comfortable宽松/compact精简）；标题始终显示，人员和日期固定在页脚。", inputSchema: zodSchema(UPDATE_BOARD_VIEW_SCHEMA), execute: async (input) => cmds.updateBoardView(dependencies(), { ...input, ...org }, currentTransaction()) }),
 

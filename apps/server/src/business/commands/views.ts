@@ -68,7 +68,7 @@ function asFormConfig(raw: unknown): FormViewConfig {
   };
 }
 
-function toTableView(row: typeof tableViews.$inferSelect): TableView {
+export function toTableView(row: typeof tableViews.$inferSelect): TableView {
   return {
     id: row.id,
     tableId: row.tableId,
@@ -82,7 +82,7 @@ function toTableView(row: typeof tableViews.$inferSelect): TableView {
   };
 }
 
-async function requireViewInOrg(deps: CommandDependencies, viewId: string, organizationId?: string, transaction?: Transaction) {
+export async function requireViewInOrg(deps: CommandDependencies, viewId: string, organizationId?: string, transaction?: Transaction) {
   const orgId = requireOrgId(organizationId);
   const [view] = await (transaction ?? deps.database).select().from(tableViews).where(eq(tableViews.id, viewId));
   if (!view) throw new Error(`视图不存在: ${viewId}`);
@@ -90,7 +90,7 @@ async function requireViewInOrg(deps: CommandDependencies, viewId: string, organ
   return view;
 }
 
-async function loadColumns(deps: CommandDependencies, tableId: string, query: CommandDependencies["database"] | Transaction = deps.database) {
+export async function loadColumns(deps: CommandDependencies, tableId: string, query: CommandDependencies["database"] | Transaction = deps.database) {
   return query
     .select()
     .from(columns)
@@ -115,13 +115,13 @@ function defaultFieldsFromColumns(
     }));
 }
 
-async function lockTable(deps: CommandDependencies, tx: Transaction, tableId: string) {
+export async function lockTable(deps: CommandDependencies, tx: Transaction, tableId: string) {
   const [table] = await tx.select({ id: tables.id }).from(tables).where(eq(tables.id, tableId)).for("update");
   if (!table) throw new Error("表格不存在");
 }
 
 /** All operations that can change the default serialize on the same parent row. */
-async function insertView(deps: CommandDependencies, tableId: string, values: Omit<typeof tableViews.$inferInsert, "tableId" | "sortOrder" | "isDefault">, transaction?: Transaction) {
+export async function insertView(deps: CommandDependencies, tableId: string, values: Omit<typeof tableViews.$inferInsert, "tableId" | "sortOrder" | "isDefault">, transaction?: Transaction) {
   return inTransaction(deps, transaction, async (tx) => {
     await lockTable(deps, tx, tableId);
     const siblings = await tx.select({ sortOrder: tableViews.sortOrder, isDefault: tableViews.isDefault }).from(tableViews).where(eq(tableViews.tableId, tableId));

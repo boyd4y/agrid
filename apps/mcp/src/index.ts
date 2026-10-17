@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CREATE_CALENDAR_VIEW_SCHEMA, UPDATE_CALENDAR_VIEW_SCHEMA, QUERY_CALENDAR_VIEW_SCHEMA } from "@tabdo/shared";
 import { BLOG_TOOLS, BLOG_SCHEMAS } from "@tabdo/shared";
 import { DOCUMENT_TOOLS, DOCUMENT_SCHEMAS } from "@tabdo/shared";
 /**
@@ -85,7 +86,10 @@ server.registerTool("delete_automation", { description: "删除自动化并停�
 server.registerTool("list_automations", { description: "分页列出工作区所有来源自动化，tableId可选筛选。", inputSchema: AUTOMATION_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listAutomations", input)));
 server.registerTool("list_automation_runs", { description: "查看工作区自动化执行结果，可按任意来源automationId或tableId筛选，最多200条。", inputSchema: AUTOMATION_RUN_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listAutomationRuns", input)));
 
-server.registerTool("rename_view", { description: "重命名表格、看板或表单视图。", inputSchema: RENAME_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("renameView", input)));
+server.registerTool("create_calendar_view", { description: "创建表格全天日历映射，起始date必选，结束date、text标题、person可选；endMode inclusive含结束当天/exclusive排他。不是预约防重。", inputSchema: CREATE_CALENDAR_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("createCalendarView", input)));
+server.registerTool("update_calendar_view", { description: "替换日历字段映射，修复删除或改类型后的映射。", inputSchema: UPDATE_CALENDAR_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("updateCalendarView", input)));
+server.registerTool("query_calendar_view", { description: "按YYYY-MM-DD的[rangeStart,rangeEnd)查询全天重叠记录，items.end排他，按hasMore/cursor分页。编辑使用update_cells和expectedVersion。", inputSchema: QUERY_CALENDAR_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("queryCalendarView", input)));
+server.registerTool("rename_view", { description: "重命名表格、看板、表单或日历视图。", inputSchema: RENAME_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("renameView", input)));
 server.registerTool("set_default_view", { description: "设置表格唯一默认视图。", inputSchema: SET_DEFAULT_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("setDefaultView", input)));
 server.registerTool("update_board_view", { description: "更新看板显示设置：分组、显示字段及顺序、隐藏空值、宽松或精简密度。标题在顶部，人员和日期在页脚。", inputSchema: UPDATE_BOARD_VIEW_SCHEMA.shape }, async (input) => textResult(await callCommand("updateBoardView", input)));
 
@@ -332,7 +336,7 @@ server.registerTool(
 server.registerTool(
   "list_views",
   {
-    description: "列出表格视图 grid/board/form（→ listViews）",
+    description: "列出表格视图 grid/board/form/calendar（→ listViews）",
     inputSchema: { tableId: z.string() },
   },
   async ({ tableId }) => textResult(await callCommand("listViews", { tableId }))

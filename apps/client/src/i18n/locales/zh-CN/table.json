@@ -345,5 +345,42 @@
     "loading": "加载文件…"
   },
   "openRecord": "打开",
-  "rowNumber": "第 {{number}} 行"
+  "rowNumber": "第 {{number}} 行",
+  "calendarView": {
+    "name": "日历",
+    "add": "添加日历",
+    "mapping": "日期映射",
+    "mappingHint": "选择本表的日期、标题和负责人字段。",
+    "startColumnId": "起始日期（必选）",
+    "endColumnId": "结束日期",
+    "titleColumnId": "标题字段",
+    "personColumnId": "负责人字段",
+    "chooseStart": "选择起始日期字段",
+    "none": "不映射",
+    "unavailableField": "字段已删除、隐藏或改类型",
+    "endMode": "结束日期含义",
+    "inclusive": "包含结束当天",
+    "exclusive": "不包含结束当天（排他）",
+    "endHint": "例如 10月1日到3日：包含时显示3天，排他时显示2天。空结束日期显示1天。",
+    "previous": "上个月",
+    "next": "下个月",
+    "today": "今天",
+    "display": "日历显示方式",
+    "month": "月",
+    "agenda": "议程",
+    "description": "全天日期记录，与原表共享数据；不检测预约冲突。拖动更改日期，也可打开记录编辑。",
+    "retry": "重试",
+    "repair": "日期映射已失效。打开「日期映射」重新选择字段。",
+    "issues": {
+      "missing": "字段已删除，请重新选择",
+      "type": "字段类型已改变，请重新选择",
+      "hidden": "字段已隐藏，请重新选择",
+      "invalid_config": "配置无效，请重新选择字段"
+    },
+    "excluded": "全表有 {{count}} 条记录未显示",
+    "diagnosticCounts": "空起始：{{emptyStart}}；无效起始：{{invalidStart}}；无效结束：{{invalidEnd}}；结束不晚于起始：{{reversed}}。",
+    "empty": "此范围没有日期记录",
+    "partial": "已加载 {{count}} 条，还有记录未加载",
+    "loadMore": "加载更多记录"
+  }
 }

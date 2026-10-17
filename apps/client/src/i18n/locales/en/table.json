@@ -345,5 +345,42 @@
     "loading": "Loading files…"
   },
   "openRecord": "Open",
-  "rowNumber": "Row {{number}}"
+  "rowNumber": "Row {{number}}",
+  "calendarView": {
+    "name": "Calendar",
+    "add": "Add calendar",
+    "mapping": "Date mapping",
+    "mappingHint": "Choose this table’s date, title and assignee fields.",
+    "startColumnId": "Start date (required)",
+    "endColumnId": "End date",
+    "titleColumnId": "Title field",
+    "personColumnId": "Assignee field",
+    "chooseStart": "Choose a start date field",
+    "none": "Not mapped",
+    "unavailableField": "Field deleted, hidden or retyped",
+    "endMode": "End date meaning",
+    "inclusive": "Include the end day",
+    "exclusive": "Exclude the end day",
+    "endHint": "October 1–3 spans 3 days when inclusive, 2 when exclusive. An empty end date spans 1 day.",
+    "previous": "Previous month",
+    "next": "Next month",
+    "today": "Today",
+    "display": "Calendar display",
+    "month": "Month",
+    "agenda": "Agenda",
+    "description": "All-day records share the original table’s data. Booking conflicts are not checked. Drag to change dates or open a record to edit.",
+    "retry": "Retry",
+    "repair": "Date mapping needs repair. Open Date mapping to choose fields again.",
+    "issues": {
+      "missing": "Field deleted; choose another field",
+      "type": "Field type changed; choose another field",
+      "hidden": "Field hidden; choose another field",
+      "invalid_config": "Invalid configuration; choose fields again"
+    },
+    "excluded": "{{count}} records in the table are not displayed",
+    "diagnosticCounts": "Empty start: {{emptyStart}}; invalid start: {{invalidStart}}; invalid end: {{invalidEnd}}; end not after start: {{reversed}}.",
+    "empty": "No dated records in this range",
+    "partial": "Loaded {{count}} records; more are available",
+    "loadMore": "Load more records"
+  }
 }

@@ -1,3 +1,4 @@
+import { siteQueryCalendarView } from "../data-api/calendar-views.js";
 import { blogTransportInput } from "../blogs/transport.js";
 import { BLOG_COMMANDS, BLOG_READ_COMMANDS, type BlogCommand } from "@tabdo/shared";
 import { executeBlog } from "../blogs/service.js";
@@ -45,7 +46,7 @@ export const siteSchemaSDL = /* GraphQL */ `
   input SortInput { columnId: ID!, direction: SortDirection! }
   input RowsInput { cursor: String, limit: Int = 50, filters: [FilterInput!], filterLogic: FilterLogic, sort: SortInput, includeTotal: Boolean }
   type Table { id: ID!, name: String!, description: String, columns: [Column!]!, rows(options: RowsInput): RowsPage!, row(id: ID!): Row }
-  type Query { ${blogQueries} ${documentQueries} ${calendarQueries} tables: [Table!]!, table(id: ID!): Table }
+  type Query { queryCalendarView(input: JSON!): JSON! ${blogQueries} ${documentQueries} ${calendarQueries} tables: [Table!]!, table(id: ID!): Table }
   type CreateRowPayload { id: ID!, createdAt: String! }
   type UpdateRowPayload { id: ID!, updatedAt: String!, version: Int! }
   type DeleteRowPayload { id: ID! }
@@ -158,6 +159,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
   const schema = createSchema<GraphContext>({ typeDefs: siteSchemaSDL, resolvers: {
     JSON: new GraphQLScalarType({ name: "JSON", serialize: value => value, parseValue: value => value, parseLiteral: (node, variables) => valueFromASTUntyped(node, variables) }),
     Query: {
+      queryCalendarView: safe((_root: unknown, args: { input: { limit?: number } }, ctx: GraphContext) => { charge(ctx, args.input?.limit ?? 100); return siteQueryCalendarView(ctx.scope.commands, ctx, args.input); }),
       ...Object.fromEntries(BLOG_READ_COMMANDS.map(name => [name, blogResolver(name)])),
       ...Object.fromEntries(DOCUMENT_READ_COMMANDS.map(name => [name, documentResolver(name)])),
       ...Object.fromEntries(CALENDAR_READ_COMMANDS.map(name => [name, calendarResolver(name)])),

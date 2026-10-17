@@ -385,6 +385,9 @@ export const api = {
     );
   },
 
+  createCalendarView: async (input: import("@tabdo/shared").CreateCalendarViewInput) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "createCalendarView", input }) })).result,
+  updateCalendarView: async (input: import("@tabdo/shared").UpdateCalendarViewInput) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "updateCalendarView", input }) })).result,
+  queryCalendarView: async (input: import("@tabdo/shared").QueryCalendarViewInput, signal?: AbortSignal) => (await request<{ result: import("@tabdo/shared").CalendarViewResult }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "queryCalendarView", input }), signal, errorToast: false })).result,
   listViews: async (tableId: string) => {
     const r = await request<{ ok: boolean; result: TableView[] }>("/api/commands", {
       method: "POST",

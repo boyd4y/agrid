@@ -1,8 +1,9 @@
+import type { CalendarViewConfig } from "./calendar-view.js";
 import { z } from "zod";
 
-/** Table views (grid / board / form) — form config is view metadata over the same columns/rows. */
+/** Table views (grid / board / form / calendar) — form config is view metadata over the same columns/rows. */
 
-export const VIEW_TYPES = ["grid", "board", "form"] as const;
+export const VIEW_TYPES = ["grid", "board", "form", "calendar"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
 
 export const FORM_LAYOUT_MODES = ["classic", "focus"] as const;
@@ -101,7 +102,7 @@ export type UpdateBoardViewInput = z.infer<typeof UPDATE_BOARD_VIEW_SCHEMA>;
 
 export type GridViewConfig = Record<string, never>;
 
-export type ViewConfig = FormViewConfig | BoardViewConfig | GridViewConfig | Record<string, unknown>;
+export type ViewConfig = FormViewConfig | BoardViewConfig | CalendarViewConfig | GridViewConfig | Record<string, unknown>;
 
 export type TableView = {
   id: string;
