@@ -1,4 +1,4 @@
-import { NiGrid, NiChevronRight } from "@/components/icons";
+import { NiChevronRight } from "@/components/icons";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Field, FieldLabel, FieldGroup } from "@tabdo/ui/components/field";
 import { Input } from "@tabdo/ui/components/input";
 import { useWorkspace } from "@/context/WorkspaceContext";
+import { TabdoLogo } from "@/components/brand/TabdoLogo";
+import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
@@ -22,14 +24,21 @@ export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   }
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button variant="ghost" disabled={busy} aria-busy={busy} className={cn("w-full justify-between", collapsed && "px-0")} aria-label={t("workspaces.switch", { name: current.name })} title={current.name} data-testid="workspace-switcher">
-        <NiGrid />{!collapsed && <><span className="flex-1 truncate text-left">{busy ? t("workspaces.switching") : current.name}</span><NiChevronRight className="rotate-90" /></>}
+      <DropdownMenuTrigger asChild><Button variant="ghost" disabled={busy} aria-busy={busy} className={cn("h-11 min-w-0 flex-1 justify-start gap-2 px-1", collapsed && "size-10 flex-none justify-center")} aria-label={t("workspaces.switch", { name: current.name })} title={current.name} data-testid="workspace-switcher">
+        <TabdoLogo showWordmark={false} className="shrink-0" markClassName="size-8" />
+        {!collapsed && <>
+          <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+            <span className="text-sm font-semibold tracking-tight">{BRAND.name}</span>
+            <span className="w-full truncate text-left text-xs text-muted-foreground">{busy ? t("workspaces.switching") : current.name}</span>
+          </span>
+          <NiChevronRight className="rotate-90" />
+        </>}
         {busy && <span role="status" className="sr-only">{t("workspaces.switching")}</span>}
       </Button></DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64 max-w-[calc(100vw-1rem)]">
         <DropdownMenuLabel>{t("workspaces.enterpriseWorkspaces")}</DropdownMenuLabel>
         <DropdownMenuGroup>{workspaces.map(item => <DropdownMenuItem key={item.id} onSelect={() => { if (item.id !== current.id) void run(() => switchWorkspace(item.id)); }}>
-          <span className="flex-1 truncate">{item.name}</span>{item.id === current.id && <Check aria-label={t("workspaces.current")} />}
+          <span className="min-w-0 flex-1 truncate" title={item.name}>{item.name}</span>{item.id === current.id && <Check aria-label={t("workspaces.current")} />}
         </DropdownMenuItem>)}</DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup><DropdownMenuItem onSelect={() => { setName(""); setError(undefined); setOpen(true); }}><Plus />{t("workspaces.create")}</DropdownMenuItem></DropdownMenuGroup>

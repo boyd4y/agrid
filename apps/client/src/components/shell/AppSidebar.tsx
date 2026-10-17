@@ -17,8 +17,6 @@ import { MemberAvatar } from "@/components/members/MemberAvatar";
 import { useAuth } from "@/hooks/useAuth";
 import { authClient } from "@/lib/auth-client";
 import type { TableMeta } from "@/types/table";
-import { TabdoLogo } from "@/components/brand/TabdoLogo";
-import { BRAND } from "@/lib/brand";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTranslation } from "react-i18next";
 import { APP_NAVIGATION } from "./app-navigation";
@@ -133,31 +131,16 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
     >
       <div
         className={cn(
-          "flex h-14 items-center gap-2 border-b border-border px-3",
+          "flex h-14 shrink-0 items-center gap-1 border-b border-border px-2",
           sidebarCollapsed && "justify-center px-2"
         )}
       >
-        <Link to="/app" className="flex min-w-0 items-center gap-2.5" title={BRAND.name}>
-          <TabdoLogo
-            showWordmark={false}
-            markClassName="h-8 w-8"
-          />
-          {!sidebarCollapsed && (
-            <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-semibold tracking-tight text-foreground">
-                {BRAND.name}
-              </div>
-              <div className="truncate text-[10px] text-muted-foreground">
-                {t("shell.workspace")}
-              </div>
-            </div>
-          )}
-        </Link>
+        <WorkspaceSwitcher collapsed={sidebarCollapsed} />
         {!sidebarCollapsed && (
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto size-7"
+            className="size-7 shrink-0"
             onClick={toggleSidebar}
             title={t("shell.collapseSidebarHint", { mod })}
             aria-label={t("shell.collapseSidebar")}
@@ -167,7 +150,6 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
         )}
       </div>
 
-      <div className="px-2 pt-2"><WorkspaceSwitcher collapsed={sidebarCollapsed} /></div>
       <nav
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2"
         data-testid="sidebar-upper"
