@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 import { createDatabase } from "../../src/business/db/factory.js";
 import { organization, user, member, workspaces, tables, columns, rows, documentImages, fileObjects, sites, siteRevisions, blogPreviews, blogReceipts, blogStorageGarbage } from "../../src/business/db/schema.js";
 import { executeBlog, type BlogCaller } from "../../src/business/blogs/service.js";
@@ -192,6 +193,32 @@ test("public person author labels are fixed, checked as source dependencies and 
     const published = await publish(await build(blog)), html = await (await page(published, "articles/article-0.html")).text();
     assert(html.includes("Renamed public author")); assert(!html.includes(uid)); assert(!html.includes(actor.email));
   } finally { await resource.db.update(user).set({ name: actor.name }).where(eq(user.id, uid)); }
+});
+
+test("anonymous published HTML never retains access_token or api_key hyperlink credentials", async () => {
+  const { saved, ids } = await fixture(1);
+  const secrets = { accessToken: `PRIVATE_OAUTH_${k()}`, apiKey: `PRIVATE_API_${k()}`, knownToken: `PRIVATE_TOKEN_${k()}` };
+  const link = (text: string, href: string) => ({ type: "text" as const, text, marks: [{ type: "link" as const, attrs: { href } }] });
+  await executeDocument(a, who as any, "replaceDocument", { tableId, rowId: ids[0], expectedVersion: 1, content: { type: "doc", content: [{ type: "paragraph", content: [
+    link("OAuth download", `https://files.example.test/download?access_token=${secrets.accessToken}`),
+    link("API download", `https://files.example.test/download?api_key=${secrets.apiKey}`),
+    link("Known token control", `https://files.example.test/download?token=${secrets.knownToken}`),
+    link("Public search", "https://example.test/search?q=release"),
+  ] }] }, idempotencyKey: k() });
+  const published = await publish(await build(saved));
+  const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
+  if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
+  const address = server.address(); assert(address && typeof address !== "string");
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/s/${published.id}/v/${published.publishedRevisionId}/articles/article-0.html`);
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert(html.includes('href="https://example.test/search?q=release"'), "ordinary public links remain usable");
+    assert(!html.includes(secrets.knownToken), "the existing token guard remains effective");
+    const leaks = { accessToken: html.includes(secrets.accessToken), apiKey: html.includes(secrets.apiKey) };
+    console.log("BLOG_ANONYMOUS_CREDENTIAL_LINKS", JSON.stringify(leaks));
+    assert.deepEqual(leaks, { accessToken: false, apiKey: false }, "Public snapshots must strip credential-bearing links, not just the exact token query key");
+  } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
 
 test("upload and transaction failures are recoverable using durable plans and exclusive-create storage", async () => {
