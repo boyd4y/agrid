@@ -12,6 +12,7 @@ import { createDatabase } from "../../src/business/db/factory.js";
 import { organization, user, member, workspaces, tables, columns, rows, documentImages, fileObjects, sites, siteRevisions, blogPreviews, blogReceipts, blogStorageGarbage } from "../../src/business/db/schema.js";
 import { executeBlog, type BlogCaller } from "../../src/business/blogs/service.js";
 import { BlogError } from "../../src/business/blogs/errors.js";
+import { isPublicBlogLink } from "../../src/business/blogs/public-links.js";
 import { blogStorageKey, collectBlogStorage } from "../../src/business/blogs/storage.js";
 import { executeDocument } from "../../src/business/documents/service.js";
 import { createStorageAdapter } from "../../src/storage/adapter.js";
@@ -219,6 +220,25 @@ test("anonymous published HTML never retains access_token or api_key hyperlink c
     console.log("BLOG_ANONYMOUS_CREDENTIAL_LINKS", JSON.stringify(leaks));
     assert.deepEqual(leaks, { accessToken: false, apiKey: false }, "Public snapshots must strip credential-bearing links, not just the exact token query key");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+});
+
+test("credential URL variants lose the entire link mark in both share previews and public snapshots", async () => {
+  const { saved, ids } = await fixture(1);
+  const variants = ["%41ccess%5FToken", "%61pi%5Fkey", "API-KEY", "refreshToken", "client_secret", "X-Amz-Credential"];
+  const links = variants.map((name, i) => ({ href: `https://example.test/download?${name}=PRIVATE_VARIANT_${i}`, marker: `PRIVATE_VARIANT_${i}` }));
+  links.push({ href: "https://example.test/#access_token=PRIVATE_FRAGMENT", marker: "PRIVATE_FRAGMENT" });
+  const content: DocumentContent = { type: "doc", content: [{ type: "paragraph", content: links.map(({ href }, i) => ({ type: "text", text: `Retained label ${i}.`, marks: [{ type: "bold" }, { type: "link", attrs: { href } }] })) }] };
+  const userinfo = "https://name:PRIVATE_USERINFO@example.test/download";
+  assert.equal(isPublicBlogLink(userinfo), false);
+  await assert.rejects(executeDocument(a, who as any, "replaceDocument", { tableId, rowId: ids[0], expectedVersion: 1, content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Userinfo", marks: [{ type: "link", attrs: { href: userinfo } }] }] }] }, idempotencyKey: k() }));
+  await executeDocument(a, who as any, "replaceDocument", { tableId, rowId: ids[0], expectedVersion: 1, content, idempotencyKey: k() });
+  const built = await build(saved), preview = await call("createBlogPreview", { siteId: saved.id, buildId: built.revisionId, idempotencyKey: k() });
+  const previewResponse = await app.request(new URL("articles/article-0.html", preview.url).href); assert.equal(previewResponse.status, 200);
+  const previewHtml = await previewResponse.text(), published = await publish(built), publicHtml = await (await page(published, "articles/article-0.html")).text();
+  for (const html of [previewHtml, publicHtml]) for (const [{ marker }, i] of links.map((value, i) => [value, i] as const)) {
+    assert(!html.includes(marker)); assert(html.includes(`<strong>Retained label ${i}.</strong>`), "retain text and other marks without any original link attributes");
+  }
+  for (const href of ["https://example.test/search?q=release", "https://example.test/guide#section-two", "mailto:editor@example.test"]) assert(isPublicBlogLink(href));
 });
 
 test("upload and transaction failures are recoverable using durable plans and exclusive-create storage", async () => {

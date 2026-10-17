@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, timestamp, integer, jsonb, boolean, index, uniqueIndex, foreignKey, check } from "drizzle-orm/pg-core";
 import { organization, user, userApiKeys } from "@tabdo/auth/schema";
+import { automations, automationEvents } from "./schema.js";
 import { workspaces } from "./workspaces-schema.js";
 import type { WorkingWindow } from "@tabdo/shared";
 
@@ -32,7 +33,7 @@ export const bookings = pgTable("bookings", {
   status: text("status").$type<"confirmed" | "cancelled">().notNull().default("confirmed"), version: integer("version").notNull().default(1), revision: integer("revision").notNull().default(1),
   // A reference only; ordinary row CRUD never owns booking state. Resolve it under live table grants.
   linkedRowId: uuid("linked_row_id"),
-}, t => [foreignKey({ columns: [t.calendarId, t.workspaceId], foreignColumns: [calendars.id, calendars.workspaceId] }).onDelete("cascade"),
+}, t => [uniqueIndex("bookings_scope_key").on(t.id, t.workspaceId), foreignKey({ columns: [t.calendarId, t.workspaceId], foreignColumns: [calendars.id, calendars.workspaceId] }).onDelete("cascade"),
   foreignKey({ columns: [t.personId, t.workspaceId], foreignColumns: [calendarPeople.id, calendarPeople.workspaceId] }).onDelete("cascade"),
   index("bookings_person_range_idx").on(t.personId, t.start, t.end), index("bookings_calendar_range_idx").on(t.calendarId, t.start, t.id),
   check("bookings_time_check", sql`${t.end} > ${t.start}`), check("bookings_status_check", sql`${t.status} IN ('confirmed', 'cancelled')`)]);
@@ -44,5 +45,34 @@ export const calendarReceipts = pgTable("calendar_receipts", {
 export const apiKeyCalendars = pgTable("api_key_calendars", {
   keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }), calendarId: uuid("calendar_id").notNull().references(() => calendars.id, { onDelete: "cascade" }),
   canRead: boolean("can_read").notNull().default(false), canReadAvailability: boolean("can_read_availability").notNull().default(false),
-  canCreate: boolean("can_create").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false), canCancel: boolean("can_cancel").notNull().default(false), canManage: boolean("can_manage").notNull().default(false),
-}, t => [uniqueIndex("api_key_calendars_key_calendar_idx").on(t.keyId, t.calendarId), check("api_key_calendars_capability", sql`${t.canRead} OR ${t.canReadAvailability} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canCancel} OR ${t.canManage}`)]);
+  canCreate: boolean("can_create").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false), canCancel: boolean("can_cancel").notNull().default(false), canManage: boolean("can_manage").notNull().default(false), canTriggerAgent: boolean("can_trigger_agent").notNull().default(false),
+}, t => [uniqueIndex("api_key_calendars_key_calendar_idx").on(t.keyId, t.calendarId), check("api_key_calendars_capability", sql`${t.canRead} OR ${t.canReadAvailability} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canCancel} OR ${t.canManage} OR ${t.canTriggerAgent}`)]);
+
+export const bookingReminders = pgTable("booking_reminders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  bookingId: uuid("booking_id").notNull(),
+  createdByUserId: text("created_by_user_id").notNull().references(() => user.id, { onDelete: "restrict" }),
+  // Keep the original key ID even after deletion, so a deleted key cannot regain authority.
+  keyId: uuid("key_id"),
+  configuration: jsonb("configuration").$type<import("@tabdo/shared").BookingReminder>().notNull(),
+  automationId: uuid("automation_id").notNull().references(() => automations.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(true),
+}, t => [index("booking_reminders_booking_idx").on(t.bookingId), uniqueIndex("booking_reminders_scope_key").on(t.id, t.bookingId, t.workspaceId),
+  foreignKey({ columns: [t.bookingId, t.workspaceId], foreignColumns: [bookings.id, bookings.workspaceId] }).onDelete("cascade")]);
+export const bookingReminderIntents = pgTable("booking_reminder_intents", {
+  id: uuid("id").defaultRandom().primaryKey(), workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  bookingId: uuid("booking_id").notNull(),
+  reminderId: uuid("reminder_id").notNull(),
+  revision: integer("revision").notNull(), kind: text("kind").notNull(), offsetMinutes: integer("offset_minutes").notNull(),
+  scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("pending"), reason: text("reason"),
+  eventId: uuid("event_id").references(() => automationEvents.id, { onDelete: "set null" }), acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+}, t => [foreignKey({ columns: [t.bookingId, t.workspaceId], foreignColumns: [bookings.id, bookings.workspaceId] }).onDelete("cascade"),
+  foreignKey({ columns: [t.reminderId, t.bookingId, t.workspaceId], foreignColumns: [bookingReminders.id, bookingReminders.bookingId, bookingReminders.workspaceId] }).onDelete("cascade"),
+  check("booking_reminder_intents_revision", sql`${t.revision} > 0`),
+  check("booking_reminder_intents_kind", sql`(${t.kind} = 'before_start' AND ${t.offsetMinutes} > 0 AND ${t.offsetMinutes} <= 43200) OR (${t.kind} = 'at_end' AND ${t.offsetMinutes} = 0)`),
+  uniqueIndex("booking_reminder_intents_key").on(t.bookingId, t.revision, t.kind, t.offsetMinutes),
+  index("booking_reminder_intents_due_idx").on(t.scheduledFor).where(sql`${t.status} = 'pending'`),
+  index("booking_reminder_intents_booking_idx").on(t.bookingId, t.revision),
+  check("booking_reminder_intents_status", sql`${t.status} IN ('pending','queued','accepted','skipped','superseded','failed')`)]);

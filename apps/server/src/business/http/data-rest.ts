@@ -1,6 +1,8 @@
 import { isBlogCommand, blogTransportInput } from "../blogs/transport.js";
 import { executeBlog } from "../blogs/service.js";
 import { BlogError } from "../blogs/errors.js";
+import { updateScheduledAutomation } from "../calendar/schedules.js";
+import { CALENDAR_READ_COMMANDS } from "@tabdo/shared";
 import { DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
 import { executeDocument } from "../documents/service.js";
 import { DocumentError } from "../documents/errors.js";
@@ -76,6 +78,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
     if (isBlogCommand(command)) return { ok: true, command, result: await executeBlog(deps, { kind: "key", secret: context.secret }, command, blogTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
+    if (command === "updateAutomation") return { ok: true, command, result: await updateScheduledAutomation(deps, context.secret, args) };
     if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
@@ -95,7 +98,11 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     }
     return { ok: true, command, result };
   }));
-  const calendar = (command: import("@tabdo/shared").CalendarCommand, argumentsFor: (input: Input) => Record<string, unknown>) => handle(!["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts"].includes(command), input => executeCalendar(input.scope.commands, { kind: "key", secret: input.context.secret }, command, calendarTransportInput(command, argumentsFor(input), input.c.req.header("Idempotency-Key"))));
+  const calendar = (command: import("@tabdo/shared").CalendarCommand, argumentsFor: (input: Input) => Record<string, unknown>) => handle(!CALENDAR_READ_COMMANDS.includes(command), input => executeCalendar(input.scope.commands, { kind: "key", secret: input.context.secret }, command, calendarTransportInput(command, argumentsFor(input), input.c.req.header("Idempotency-Key"))));
+  route.post("/schedules/occurrences/query", calendar("queryScheduledOccurrences", ({ body }) => body));
+  route.patch("/automations/:id", handle(true, ({ scope, context, c, body }) => updateScheduledAutomation(scope.commands, context.secret, { ...body, automationId: c.req.param("id") })));
+  route.get("/calendars/:id/bookings/:bookingId/reminders", calendar("listBookingReminders", ({ c }) => ({ calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
+  route.post("/calendars/:id/bookings/:bookingId/reminders", calendar("setBookingReminders", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
   route.get("/calendars", calendar("listCalendars", ({ c }) => ({ includeArchived: c.req.query("includeArchived") === "true" })));
   route.post("/calendars", calendar("createCalendar", ({ body }) => body));
   route.get("/calendars/:id", calendar("getCalendar", ({ c }) => ({ calendarId: c.req.param("id") })));

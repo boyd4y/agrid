@@ -1,3 +1,4 @@
+import { CalendarError } from "../calendar/errors.js";
 import { listScheduledRuns, getScheduledRunThread } from "../automation/scheduled-runs.js";
 import { z } from "zod";
 import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA } from "@tabdo/shared";
@@ -42,7 +43,7 @@ automationsRoute.get("/tables/:tableId/automations", async (c) => {
     });
     return c.json(list);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -60,7 +61,7 @@ automationsRoute.post("/tables/:tableId/automations", async (c) => {
     });
     return c.json(rule, 201);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -77,7 +78,7 @@ automationsRoute.patch("/automations/:id", async (c) => {
     });
     return c.json(rule);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -111,7 +112,7 @@ automationsRoute.get("/tables/:tableId/automation-runs", async (c) => {
     });
     return c.json(list);
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : "失败" }, 400);
+    return c.json({ error: e instanceof Error ? e.message : "失败", ...(e instanceof CalendarError ? { code: e.code } : {}) }, e instanceof CalendarError ? e.status as 400 : 400);
   }
 });
 
@@ -125,7 +126,7 @@ automationsRoute.post("/automations", async c => {
 automationsRoute.get("/automations/:id/runs", async c => {
   const scope = await requireActorOrg(c);
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
-  try { return c.json(await crud.listRuleRuns(c.get("resources").commands, z.uuid().parse(c.req.param("id")), scope.organizationId)); }
+  try { return c.json(await crud.listRuleRuns(c.get("resources").commands, z.uuid().parse(c.req.param("id")), scope.organizationId, 50, scope.actor.userId)); }
   catch (error) { return c.json({ error: error instanceof Error ? error.message : "自动化不存在" }, 404); }
 });
 automationsRoute.post("/automations/schedule-preview", async c => {

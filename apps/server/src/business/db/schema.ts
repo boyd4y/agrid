@@ -318,7 +318,7 @@ export const automationOutbox = pgTable("automation_outbox", {
   id: uuid("id").defaultRandom().primaryKey(),
   eventId: uuid("event_id").notNull().references(() => automationEvents.id, { onDelete: "cascade" }),
   queue: text("queue").notNull(),
-  payload: jsonb("payload").$type<{ protocol: 1; eventId: string; generation: number }>().notNull(),
+  payload: jsonb("payload").$type<import("@tabdo/shared").AutomationDelivery>().notNull(),
   status: text("status").default("pending").notNull(),
   generation: integer("generation").default(0).notNull(),
   claimToken: uuid("claim_token"),
@@ -540,7 +540,13 @@ export const apiKeyTables = pgTable("api_key_tables", {
 
 export { sites, siteRevisions, sitePreviews } from "./sites-schema.js";
 
-export { calendars, calendarPeople, availabilityExceptions, bookings, calendarReceipts, apiKeyCalendars } from "./calendar-schema.js";
+export { calendars, calendarPeople, availabilityExceptions, bookings, calendarReceipts, apiKeyCalendars, bookingReminders, bookingReminderIntents } from "./calendar-schema.js";
+
+export const apiKeySchedules = pgTable("api_key_schedules", {
+  keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }),
+  automationId: uuid("automation_id").notNull().references(() => automations.id, { onDelete: "cascade" }),
+  canRead: boolean("can_read").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false),
+}, t => [uniqueIndex("api_key_schedules_key_rule_idx").on(t.keyId, t.automationId), check("api_key_schedules_capability", sql`${t.canRead} OR ${t.canUpdate}`)]);
 
 export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
 

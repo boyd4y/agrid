@@ -51,3 +51,10 @@ html, body, #root { height: 100%; }
   --fc-monarch-strong-border: var(--border);
   font-size: 0.8125rem;
 }
+
+.tabdo-booking-calendar .tabdo-schedule-point {
+  --fc-event-bg-color: var(--muted);
+  --fc-event-text-color: var(--muted-foreground);
+  --fc-event-border-color: var(--border);
+  border-style: dashed;
+}

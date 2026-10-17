@@ -1,3 +1,4 @@
+import { dispatchDueBookingReminders } from "../../business/calendar/reminders.js";
 import { startWorkerService, closeResources } from "@tabdo/worker/runtime";
 import type { QueuePublisher, QueueTransport } from "@tabdo/queue";
 import type { AutomationDelivery } from "@tabdo/shared";
@@ -40,6 +41,7 @@ export function createAutomationService(options: {
   }
   async function schedules() {
     await dispatchDueSchedules();
+    await dispatchDueBookingReminders(deps);
     await outbox();
     await arm("schedules", await nextScheduleDeadline(deps));
   }

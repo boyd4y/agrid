@@ -26,6 +26,8 @@ const write = { idempotencyKey: key };
 const change = { ...scope, expectedVersion: version, ...write };
 const range = { rangeStart: instant, rangeEnd: instant };
 const validRange = (value: { rangeStart: string; rangeEnd: string }, days: number) => Date.parse(value.rangeEnd) > Date.parse(value.rangeStart) && Date.parse(value.rangeEnd) - Date.parse(value.rangeStart) <= days * 86400000;
+export const bookingReminderSchema = z.strictObject({ kind: z.enum(["before_start", "at_end"]), offsetMinutes: z.number().int().min(0).max(43200), agentUserId: z.string().min(1).max(200), prompt: z.string().trim().min(1).max(30000), maxLatenessMinutes: z.number().int().min(1).max(1440).default(60) }).refine(v => v.kind === "before_start" ? v.offsetMinutes > 0 : v.offsetMinutes === 0, "Before-start requires a positive offset; at-end uses zero");
+export const scheduledOccurrenceQuerySchema = z.strictObject({ ...range, automationIds: z.array(id).min(1).max(100).optional(), limit: z.number().int().min(1).max(1000).default(500) }).refine(v => validRange(v, 93), "Use a range of at most 93 days");
 const bookingCreate = z.strictObject({ kind: z.literal("create"), personId: id, title: name, time: bookingTimeSchema, linkedRowId: id.optional() });
 const bookingReschedule = z.strictObject({ kind: z.literal("reschedule"), bookingId: id, expectedVersion: version, time: bookingTimeSchema });
 const bookingCancel = z.strictObject({ kind: z.literal("cancel"), bookingId: id, expectedVersion: version });
@@ -52,14 +54,17 @@ export const CALENDAR_SCHEMAS = {
   cancelBooking: z.strictObject({ ...scope, bookingId: id, expectedVersion: version, ...write }),
   queryAvailability: z.strictObject({ ...person, ...range, durationMinutes: z.number().int().min(1).max(1440), stepMinutes: z.number().int().min(1).max(1440).default(30) }).refine(v => validRange(v, 31), "Use a range of at most 31 days"),
   checkBookingConflicts: z.strictObject({ ...person, time: bookingTimeSchema }),
+  queryScheduledOccurrences: scheduledOccurrenceQuerySchema,
+  setBookingReminders: z.strictObject({ ...scope, bookingId: id, expectedVersion: version, reminders: z.array(bookingReminderSchema).max(10).refine(all => new Set(all.map(v => `${v.kind}:${v.offsetMinutes}`)).size === all.length, "Duplicate reminder offsets"), ...write }),
+  listBookingReminders: z.strictObject({ ...scope, bookingId: id }),
   batchBookings: z.strictObject({ ...scope, operations: z.array(z.discriminatedUnion("kind", [bookingCreate, bookingReschedule, bookingCancel])).min(1).max(100), ...write }),
 } as const;
-export const CALENDAR_COMMANDS = ["listCalendars", "getCalendar", "createCalendar", "updateCalendar", "archiveCalendar", "listCalendarPeople", "getCalendarPerson", "createCalendarPerson", "updateCalendarPerson", "archiveCalendarPerson", "getWorkingHours", "setWorkingHours", "listAvailabilityExceptions", "setAvailabilityException", "removeAvailabilityException", "queryBookings", "getBooking", "createBooking", "rescheduleBooking", "cancelBooking", "queryAvailability", "checkBookingConflicts", "batchBookings"] as const satisfies readonly (keyof typeof CALENDAR_SCHEMAS)[];
+export const CALENDAR_COMMANDS = ["listCalendars", "getCalendar", "createCalendar", "updateCalendar", "archiveCalendar", "listCalendarPeople", "getCalendarPerson", "createCalendarPerson", "updateCalendarPerson", "archiveCalendarPerson", "getWorkingHours", "setWorkingHours", "listAvailabilityExceptions", "setAvailabilityException", "removeAvailabilityException", "queryBookings", "getBooking", "createBooking", "rescheduleBooking", "cancelBooking", "queryAvailability", "checkBookingConflicts", "batchBookings", "queryScheduledOccurrences", "setBookingReminders", "listBookingReminders"] as const satisfies readonly (keyof typeof CALENDAR_SCHEMAS)[];
 export type CalendarCommand = typeof CALENDAR_COMMANDS[number];
 export type CalendarCommands = { [K in CalendarCommand]: z.input<typeof CALENDAR_SCHEMAS[K]> };
 export type CalendarParsed<K extends CalendarCommand> = z.output<typeof CALENDAR_SCHEMAS[K]>;
-export const CALENDAR_READ_COMMANDS: readonly CalendarCommand[] = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts"];
-export const calendarPermissionSchema = z.strictObject({ calendarId: id, canRead: z.boolean(), canReadAvailability: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canCancel: z.boolean(), canManage: z.boolean() }).refine(v => v.canRead || v.canReadAvailability || v.canCreate || v.canUpdate || v.canCancel || v.canManage);
+export const CALENDAR_READ_COMMANDS: readonly CalendarCommand[] = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"];
+export const calendarPermissionSchema = z.strictObject({ calendarId: id, canRead: z.boolean(), canReadAvailability: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canCancel: z.boolean(), canManage: z.boolean(), canTriggerAgent: z.boolean().optional() }).refine(v => v.canRead || v.canReadAvailability || v.canCreate || v.canUpdate || v.canCancel || v.canManage || v.canTriggerAgent);
 export type CalendarPermission = z.infer<typeof calendarPermissionSchema>;
 export type Calendar = { id: string; workspaceId: string; name: string; timeZone: string; version: number; archived: boolean };
 export type CalendarPerson = { id: string; name: string; timeZone: string; userId: string | null; version: number; archived: boolean; windows: WorkingWindow[] };
@@ -67,7 +72,16 @@ export type AvailabilityException = { id: string; personId: string; date: string
 export type Booking = { id: string; calendarId: string; personId: string; title: string; start: string; end: string; timeZone: string; status: "confirmed" | "cancelled"; version: number; revision: number; linkedRowId: string | null };
 export type BookingReceipt = Pick<Booking, "id" | "version" | "revision" | "status">;
 export type CompleteCalendarPage<T> = { items: T[]; complete: true; limit: number };
+export type BookingReminder = z.output<typeof bookingReminderSchema>;
+export type BookingReminderIntent = { id: string; revision: number; kind: BookingReminder["kind"]; offsetMinutes: number; scheduledFor: string; status: string; reason: string | null; acceptedAt: string | null; runId: string | null; threadId: string | null };
+export type ScheduledOccurrence = { automationId: string; ruleVersion: number; name: string; enabled: boolean; cron: string; scheduledFor: string; timeZone: string; projection: "planned" | "occurred"; delayed: boolean; status: string | null; threadId: string | null };
+export type SchedulePermission = { automationId: string; canRead: boolean; canUpdate: boolean };
+export const schedulePermissionSchema = z.strictObject({ automationId: id, canRead: z.boolean(), canUpdate: z.boolean() }).refine(v => v.canRead || v.canUpdate);
 export type CalendarResults = {
+  queryScheduledOccurrences: CompleteCalendarPage<ScheduledOccurrence>;
+  setBookingReminders: BookingReceipt;
+  listBookingReminders: { bookingVersion: number; revision: number; reminders: BookingReminder[]; intents: BookingReminderIntent[]; complete: true };
+
   listCalendars: CompleteCalendarPage<Calendar>; getCalendar: Calendar; createCalendar: Calendar; updateCalendar: Calendar; archiveCalendar: Calendar;
   listCalendarPeople: CompleteCalendarPage<CalendarPerson>; getCalendarPerson: CalendarPerson; createCalendarPerson: CalendarPerson; updateCalendarPerson: CalendarPerson; archiveCalendarPerson: CalendarPerson;
   getWorkingHours: { personId: string; version: number; timeZone: string; windows: WorkingWindow[] }; setWorkingHours: CalendarPerson;
@@ -80,6 +94,9 @@ export type CalendarResults = {
 
 /** Explicit public tool registrations shared by MCP and the native tool catalog. */
 export const CALENDAR_TOOLS = {
+  query_scheduled_occurrences: { command: "queryScheduledOccurrences", description: "只读投影当前工作区cron计划与实际occurrence，最多93天/1000点；预测不代表执行，不占预约资源。Key需独立计划授权。" },
+  set_booking_reminders: { command: "setBookingReminders", description: "按预约expectedVersion整体替换最多10项智能体提醒，空数组撤销。before_start正offsetMinutes，at_end为0；改期/取消使未接受旧提醒失效。已接受运行不保证撤回。" },
+  list_booking_reminders: { command: "listBookingReminders", description: "读取预约提醒配置与真实持久执行状态，只有对话所有者获得运行链接。" },
   list_calendars: { command: "listCalendars", description: "列出当前工作区可访问的日历，超出500项请缩小范围。" },
   get_calendar: { command: "getCalendar", description: "读取日历详情。" },
   create_calendar: { command: "createCalendar", description: "创建工作区日历；需owner/admin管理权。" },

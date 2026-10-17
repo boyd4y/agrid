@@ -25,3 +25,9 @@ export const cancelBooking = (...args: Args<typeof implementation.cancelBooking>
 export const queryAvailability = (...args: Args<typeof implementation.queryAvailability>) => businessCall(() => implementation.queryAvailability(commandDependencies(), ...args));
 export const checkBookingConflicts = (...args: Args<typeof implementation.checkBookingConflicts>) => businessCall(() => implementation.checkBookingConflicts(commandDependencies(), ...args));
 export const batchBookings = (...args: Args<typeof implementation.batchBookings>) => businessCall(() => implementation.batchBookings(commandDependencies(), ...args));
+
+export const queryScheduledOccurrences = (...args: Args<typeof implementation.queryScheduledOccurrences>) => businessCall(() => implementation.queryScheduledOccurrences(commandDependencies(), ...args));
+
+export const setBookingReminders = (...args: Args<typeof implementation.setBookingReminders>) => businessCall(() => implementation.setBookingReminders(commandDependencies(), ...args));
+
+export const listBookingReminders = (...args: Args<typeof implementation.listBookingReminders>) => businessCall(() => implementation.listBookingReminders(commandDependencies(), ...args));

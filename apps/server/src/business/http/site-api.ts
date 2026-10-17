@@ -2,6 +2,7 @@ import { blogTransportInput } from "../blogs/transport.js";
 import { BLOG_COMMANDS, BLOG_READ_COMMANDS, type BlogCommand } from "@tabdo/shared";
 import { executeBlog } from "../blogs/service.js";
 import { BlogError } from "../blogs/errors.js";
+import { updateScheduledAutomation } from "../calendar/schedules.js";
 import { DOCUMENT_COMMANDS, DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
 import { executeDocument } from "../documents/service.js";
 import { documentTransportInput } from "../documents/transport.js";
@@ -50,6 +51,7 @@ export const siteSchemaSDL = /* GraphQL */ `
   type DeleteRowPayload { id: ID! }
   type Mutation {
     ${blogMutations.map(name => `${name}(input: JSON!): JSON!`).join("\n")}
+    updateAutomation(input: JSON!): JSON!
     ${documentMutations.map(name => `${name}(input: JSON!): JSON!`).join("\n")}
     ${calendarMutations.map(name => `${name}(input: JSON!): JSON!`).join("\n")}
     createRow(tableId: ID!, cells: JSON!): CreateRowPayload!
@@ -68,7 +70,7 @@ const boundedQuery: ValidationRule = context => ({ Document(node) {
       if (depth > 16 || fields > 1000 || roots > 20) { exceeded = true; return; }
       for (const selection of set.selections) {
         if (selection.kind === Kind.FIELD) {
-          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow", ...calendarMutations, ...documentMutations, ...blogMutations].includes(selection.name.value)) creates++; }
+          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow", ...calendarMutations, ...documentMutations, ...blogMutations, "updateAutomation"].includes(selection.name.value)) creates++; }
           if (fields > 1000 || roots > 20) { exceeded = true; return; }
           if (selection.selectionSet) walk(selection.selectionSet, depth + 1, path);
         } else if (selection.kind === Kind.INLINE_FRAGMENT) walk(selection.selectionSet, depth, path);
@@ -149,7 +151,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
     return executeDocument(ctx.scope.commands, { kind: "key", secret: ctx.secret }, command, documentTransportInput(command, args.input, ctx.idempotencyKey));
   });
   const calendarResolver = (command: CalendarCommand) => safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => {
-    charge(ctx, command === "queryBookings" ? 500 : 0);
+    charge(ctx, command === "queryBookings" ? 500 : command === "queryScheduledOccurrences" ? 1000 : command === "listBookingReminders" ? 500 : 0);
     if (!CALENDAR_READ_COMMANDS.includes(command)) await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
     return executeCalendar(ctx.scope.commands, { kind: "key", secret: ctx.secret }, command, calendarTransportInput(command, args.input, ctx.idempotencyKey));
   });
@@ -171,7 +173,8 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
         charge(ctx, 1); return data.siteRow(ctx.scope.commands, ctx, table.id, args.id);
       }),
     },
-    Mutation: { ...Object.fromEntries(blogMutations.map(name => [name, blogResolver(name)])), ...Object.fromEntries(documentMutations.map(name => [name, documentResolver(name)])), ...Object.fromEntries(calendarMutations.map(name => [name, calendarResolver(name)])), createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
+    Mutation: { ...Object.fromEntries(blogMutations.map(name => [name, blogResolver(name)])),
+      updateAutomation: safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => { charge(ctx, 0); await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" }); return updateScheduledAutomation(ctx.scope.commands, ctx.secret, args.input); }), ...Object.fromEntries(documentMutations.map(name => [name, documentResolver(name)])), ...Object.fromEntries(calendarMutations.map(name => [name, calendarResolver(name)])), createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
       keys.requireSiteTable(ctx.principal, args.tableId, "create");
       await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
       return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells);

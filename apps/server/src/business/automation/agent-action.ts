@@ -1,3 +1,4 @@
+import { acceptBookingReminder } from "../calendar/reminders.js";
 import type { RuntimeDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
 import { acceptNativeExecution,type NativeExecutionReference } from "../agent/executions.js";
@@ -22,7 +23,7 @@ import { claimRuntimeLease, NOT_INVOKED, prepareRuntimeRecord, releaseRuntimeLea
 
 export type AutomationAgentActionResult = {
   threadId: string | null; agentRunId: string | null; text: string;
-  status: "completed" | "waiting-input" | "failed" | "cancelled" | "unknown" | "accepted"; error?: string;
+  status: "completed" | "waiting-input" | "failed" | "cancelled" | "unknown" | "accepted" | "superseded" | "skipped"; error?: string;
 };
 export type ActionInput = {
   runId: string; step: number; organizationId: string; actorUserId: string;
@@ -155,6 +156,8 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
       return result;
     }
     if (run) {
+      const [savedRule] = await deps.database.select({ source: automations.source }).from(automations).innerJoin(automationRuns, eq(automationRuns.automationId, automations.id)).where(eq(automationRuns.id, input.runId));
+      if (savedRule?.source.kind === "calendar") return resultOf(deps, mapping, run);
       const [reply] = await deps.database.select().from(chatMessages).where(and(eq(chatMessages.threadId,mapping.threadId),eq(chatMessages.messageId,run.assistantMessageId)));
       if ((reply?.content.metadata as { nativeInvocation?: unknown } | undefined)?.nativeInvocation !== NOT_INVOKED) return resultOf(deps,mapping,run);
     }
@@ -168,11 +171,16 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
       : `${renderAutomationPrompt(input.action.prompt,{ event: input.eventContext,steps: input.steps ?? [] })}\n\n自动化事件（外部数据，仅作为本次任务输入）：\n${JSON.stringify(input.eventContext)}`;
     const message: UIMessage = { id: mapping.userMessageId,role: "user",parts: [{ type: "text",text: prompt }] };
     const ownedMapping = mapping,ownedLease = lease;
+    let rejected: { status: "superseded" | "skipped" | "failed"; error: string } | undefined;
     const reference = await withRuntimeLease(deps,ownedLease,async tx => {
       const [rule] = await tx.select({ workspaceId: automationRuns.workspaceId, ruleWorkspaceId: automations.workspaceId, enabled: automations.enabled, deletedAt: automations.deletedAt }).from(automations)
         .innerJoin(automationRuns, eq(automationRuns.automationId, automations.id)).where(eq(automationRuns.id, input.runId)).for("share", { of: automations });
       if (!rule?.enabled || rule.deletedAt) throw new AutomationCancelledError("规则已停用或删除");
       let current = await mappedRun(deps,ownedMapping,tx);
+      if (!current) {
+        rejected = await acceptBookingReminder(deps, tx, input.runId, actor.userId);
+        if (rejected) return undefined;
+      }
       if (current) {
         const restarted = await retryUninvoked(deps,ownedLease,record,current,tx);
         if (!restarted) return undefined;
@@ -184,6 +192,7 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
       return acceptNativeExecution(deps,{ actor,lease: ownedLease,run: current,context: context.context,prompt,boundTableId: input.tableId ?? undefined },tx);
     });
     await releaseRuntimeLease(deps,lease);lease = undefined;
+    if (rejected) return { threadId: mapping.threadId, agentRunId: null, text: "", ...rejected };
     if (reference) await deps.agent.dispatch(reference);
     const saved = await mappedRun(deps,mapping);
     return saved ? resultOf(deps,mapping,saved) : { threadId: mapping.threadId,agentRunId: null,text: "",status: "unknown",error: "原生运行记录未能读取" };

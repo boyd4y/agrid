@@ -1,4 +1,5 @@
 export * from "./documents.js";
+import * as documentCommands from "./documents.js";
 export * from "./calendar.js";
 import * as calendarCommands from "./calendar.js";
 import * as implementation from "../business/commands/index.js";
@@ -91,6 +92,7 @@ import { recomputeAllFormulasForTable } from "./formulas.js";
 import * as viewCmds from "./views.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 export const commands = {
+  ...documentCommands,
   ...calendarCommands,
   batchSetRelations,
   batchAddRelations,

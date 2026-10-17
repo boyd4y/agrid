@@ -108,16 +108,23 @@ try {
   const { Client } = await import(require.resolve('@modelcontextprotocol/sdk/client/index.js'));
   const { StdioClientTransport } = await import(require.resolve('@modelcontextprotocol/sdk/client/stdio.js'));
   const calendar = await command('createCalendar', { name: '正文 Key 兼容日历', timeZone: 'UTC', idempotencyKey: crypto.randomUUID() });
+  const agent = (await api('/members/agents', { name: '正文 Key 兼容助手', persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local' } })).member; fixture.users.push(agent.userId);
+  const plan = await command('createAutomation', { name: '正文 Key 兼容计划', source: { kind: 'schedule', cron: '0 10 * * *', timeZone: 'UTC' }, trigger: { type: 'schedule_due' }, actions: [{ type: 'run_agent', agentUserId: agent.userId, prompt: 'Read only' }] });
+  const scheduleGrants = [{ automationId: plan.id, canRead: true, canUpdate: false }];
   const oldTableGrants = [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }];
-  const oldCalendarGrants = [{ calendarId: calendar.id, canRead: false, canReadAvailability: true, canCreate: false, canUpdate: false, canCancel: false, canManage: false }];
-  const key = await api('/user/api-keys', { name: 'Document MCP', permissions: oldTableGrants, calendarPermissions: oldCalendarGrants, documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canReadHistory: false, canRestore: false, canUpload: false }] });
+  const oldCalendarGrants = [{ calendarId: calendar.id, canRead: true, canReadAvailability: true, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canTriggerAgent: false }];
+  const key = await api('/user/api-keys', { name: 'Document MCP', schedulePermissions: scheduleGrants, permissions: oldTableGrants, calendarPermissions: oldCalendarGrants, documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canReadHistory: false, canRestore: false, canUpload: false }] });
   const transport = new StdioClientTransport({ command: 'pnpm', args: ['--filter', '@tabdo/mcp', 'exec', 'tsx', 'src/index.ts'], cwd: new URL('../../../../', import.meta.url).pathname, env: { PATH: process.env.PATH, TABDO_API_URL: fixture.base, TABDO_API_KEY: key.secret } });
   const client = new Client({ name: 'document-browser-smoke', version: '1.0.0' });
   try {
-    await client.connect(transport); const tools = await client.listTools(); assert(tools.tools.some(t => t.name === 'replace_document'));
-    const read = await client.callTool({ name: 'get_document', arguments: identity }); assert(!read.isError); const value = JSON.parse(read.content[0].text);
-    const replaced = await client.callTool({ name: 'replace_document', arguments: { ...identity, expectedVersion: value.version, content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'MCP stdio persisted' }] }] }, idempotencyKey: crypto.randomUUID() } }); assert(!replaced.isError); assert(JSON.stringify((await command('getDocument', identity)).content).includes('MCP stdio persisted'));
-    const denied = await client.callTool({ name: 'list_document_revisions', arguments: identity }); assert.equal(denied.isError, true);
+    console.log('stage MCP connect'); await client.connect(transport); console.log('stage MCP list tools'); const tools = await client.listTools(); assert(tools.tools.some(t => t.name === 'replace_document')); assert(tools.tools.some(t => t.name === 'list_booking_reminders'));
+    console.log('stage MCP read calendar'); const calendarRead = await client.callTool({ name: 'get_calendar', arguments: { calendarId: calendar.id } }); assert(!calendarRead.isError); assert.equal(JSON.parse(calendarRead.content[0].text).id, calendar.id);
+    console.log('stage MCP read plan');
+    const rangeStart = new Date().toISOString(), rangeEnd = new Date(Date.now() + 86400000).toISOString();
+    const projected = await client.callTool({ name: 'query_scheduled_occurrences', arguments: { automationIds: [plan.id], rangeStart, rangeEnd } }); assert(!projected.isError); assert.equal(JSON.parse(projected.content[0].text).items.length, 1);
+    console.log('stage MCP read document'); const read = await client.callTool({ name: 'get_document', arguments: identity }); assert(!read.isError); const value = JSON.parse(read.content[0].text);
+    console.log('stage MCP replace document'); const replaced = await client.callTool({ name: 'replace_document', arguments: { ...identity, expectedVersion: value.version, content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'MCP stdio persisted' }] }] }, idempotencyKey: crypto.randomUUID() } }); assert(!replaced.isError); assert(JSON.stringify((await command('getDocument', identity)).content).includes('MCP stdio persisted'));
+    console.log('stage MCP denied history'); const denied = await client.callTool({ name: 'list_document_revisions', arguments: identity }); assert.equal(denied.isError, true);
   } finally { await client.close(); }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(frontend + '/app/settings?tab=api-keys');
@@ -130,7 +137,11 @@ try {
   assert.equal(updatedKey.documentPermissions[0].canReadHistory, true);
   assert.deepEqual(updatedKey.permissions, oldTableGrants);
   assert.deepEqual(updatedKey.calendarPermissions, oldCalendarGrants);
+  assert.deepEqual(updatedKey.schedulePermissions, scheduleGrants);
   await page.reload(); await page.getByRole('button', { name: '编辑 Document MCP', exact: true }).click();
   assert(await page.getByRole('dialog').getByRole('checkbox', { name: '文章 · 读取历史', exact: true }).isChecked());
+  await page.getByRole('dialog').evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).waitFor();
+  await page.screenshot({ path: artifact('key-capabilities-bottom.png'), fullPage: false, animations: 'disabled' });
   assert.deepEqual(errors, []); console.log('PASS documents: Chinese composition, formatting/paste, private images, autosave, refresh, old response, second-client conflict draft, history, light/dark/mobile and real MCP stdio');
 } catch (error) { await page.screenshot({ path: artifact("documents-failure.png"), fullPage: true }).catch(() => {}); console.error(await page.locator("[data-document-file], [data-private-source]").evaluateAll(elements => elements.map(el => ({ html: el.outerHTML, natural: el.naturalWidth }))).catch(() => [])); console.error(await page.locator("body").innerText().catch(() => "no page")); throw error; } finally { await fixture.close(); await rm(imageDirectory, { recursive: true, force: true }); }

@@ -94,19 +94,35 @@ try {
   assert.equal((await fetch(blog.publicUrl + `articles/${withdrawn.slug}.html`)).status, 404);
   assert.equal((await fetch(blog.publicUrl + `v/${oldRevision}/articles/${withdrawn.slug}.html`)).status, 404);
   assert.equal((await fetch(blog.publicUrl + `articles/${remaining.slug}.html`)).status, 200);
+  // Exercise all five independent grant families in the integrated UI and real API clients.
+  const calendar = await command('createCalendar', { name: '博客编辑日历', timeZone: 'UTC', idempotencyKey: request() });
+  const plan = await command('createAutomation', { name: '博客编辑计划', source: { kind: 'schedule', cron: '0 10 * * *', timeZone: 'UTC' }, trigger: { type: 'schedule_due' }, actions: [{ type: 'command', command: 'addRow', input: { tableId: table.id } }] });
+  const calendarPermissions = [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canTriggerAgent: true }];
+  const schedulePermissions = [{ automationId: plan.id, canRead: true, canUpdate: false }];
+  const rangeStart = new Date(), rangeEnd = new Date(rangeStart.getTime() + 3 * 86400000);
+  const occurrenceInput = { automationIds: [plan.id], rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString() };
   // MCP stdio uses the public capability API; read permission cannot publish.
-  const key = await api('/user/api-keys', { name: 'Blog MCP', permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }], blogPermissions: [{ tableId: table.id, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }] });
+  const key = await api('/user/api-keys', { name: 'Blog MCP', calendarPermissions, schedulePermissions, permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }], blogPermissions: [{ tableId: table.id, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }] });
   const require = createRequire(new URL('../../../mcp/package.json', import.meta.url)), { Client } = await import(require.resolve('@modelcontextprotocol/sdk/client/index.js')), { StdioClientTransport } = await import(require.resolve('@modelcontextprotocol/sdk/client/stdio.js'));
+  const { createClient } = await import(new URL('../../../../packages/sdk/dist/index.js', import.meta.url));
+  const sdk = createClient({ url: base, key: key.secret });
+  assert.equal((await sdk.blogs.getBlog({ siteId })).id, siteId);
+  const originalDocument = await command('getDocument', { tableId: table.id, rowId: remaining.rowId });
+  assert.equal((await sdk.documents.getDocument({ tableId: table.id, rowId: remaining.rowId })).id, originalDocument.id);
+  assert.equal((await sdk.calendar.getCalendar({ calendarId: calendar.id })).id, calendar.id);
+  assert((await sdk.calendar.queryScheduledOccurrences(occurrenceInput)).items.length);
   const client = new Client({ name: 'blog-smoke', version: '1' });
   try {
     await client.connect(new StdioClientTransport({ command: 'pnpm', args: ['--filter', '@tabdo/mcp', 'exec', 'tsx', 'src/index.ts'], cwd: new URL('../../../../', import.meta.url).pathname, env: { PATH: process.env.PATH, TABDO_API_URL: base, TABDO_API_KEY: key.secret } }));
-    assert((await client.listTools()).tools.some(t => t.name === 'publish_blog'));
+    const catalog = (await client.listTools()).tools;
+    for (const name of ['publish_blog', 'get_document', 'get_calendar', 'query_scheduled_occurrences', 'set_booking_reminders']) assert(catalog.some(t => t.name === name));
+    for (const [name, args] of [['get_document', { tableId: table.id, rowId: remaining.rowId }], ['get_calendar', { calendarId: calendar.id }], ['query_scheduled_occurrences', occurrenceInput]]) assert(!(await client.callTool({ name, arguments: args })).isError, name);
     assert(!(await client.callTool({ name: 'get_blog', arguments: { siteId } })).isError);
     assert((await client.callTool({ name: 'unpublish_blog', arguments: { siteId, expectedVersion: recalled.version, expectedPublishedRevisionId: recalled.publishedRevisionId, idempotencyKey: request() } })).isError);
   } finally { await client.close(); }
   await page.goto(frontend + '/app/settings?tab=api-keys'); await page.getByRole('button', { name: '编辑 Blog MCP', exact: true }).click();
   await page.getByRole('dialog').getByRole('checkbox', { name: '团队手记 · 构建与分享预览', exact: true }).check(); await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  const edited = (await api('/user/api-keys')).keys.find(v => v.id === key.key.id); assert.deepEqual(edited.permissions, key.key.permissions); assert.deepEqual(edited.documentPermissions, key.key.documentPermissions); assert.equal(edited.blogPermissions[0].canBuild, true);
+  const edited = (await api('/user/api-keys')).keys.find(v => v.id === key.key.id); assert.deepEqual(edited.permissions, key.key.permissions); assert.deepEqual(edited.documentPermissions, key.key.documentPermissions); assert.deepEqual(edited.calendarPermissions, key.key.calendarPermissions); assert.deepEqual(edited.schedulePermissions, key.key.schedulePermissions); assert.equal(edited.blogPermissions[0].canBuild, true);
   await page.goto(frontend + `/app/sites/${siteId}`); await page.getByRole('button', { name: '撤下整站', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: '确认操作', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' }); assert.equal((await fetch(blog.publicUrl)).status, 404);
   // Boundary copy must wrap in the static reader, including without JavaScript.
   await command('updateCell', { rowId: articles[1].row.id, columnId: category.id, value: 'W'.repeat(80), expectedVersion: 1 });
@@ -128,6 +144,6 @@ try {
   await page.keyboard.press('ArrowLeft');
   await page.getByLabel('Default public author name', { exact: true }).waitFor();
   await page.screenshot({ path: artifact('blog-settings-390-en-dark.png'), fullPage: true });
-  assert.deepEqual(errors, []); console.log('PASS blogs: UI template/mapping/explicit selection/preview/publish/update/recall; anonymous no-JS HTML; 1440/390 light/dark; MCP and key preservation');
+  assert.deepEqual(errors, []); console.log('PASS blogs: UI template/mapping/explicit selection/preview/publish/update/recall; anonymous no-JS HTML; 1440/390 light/dark; MCP/SDK calendar+documents+blogs and five-family key preservation');
 } catch (error) { await page.screenshot({ path: artifact('blogs-failure.png'), fullPage: true }).catch(() => {}); console.error(await page.locator('body').innerText().catch(() => 'no page')); throw error; }
 finally { await visitor?.close(); await fixture.close(); await rm(directory, { recursive: true, force: true }); }

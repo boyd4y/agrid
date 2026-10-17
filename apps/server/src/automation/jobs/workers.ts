@@ -17,13 +17,14 @@ export function startAutomationWorker(hooks: { beforeAction?: (eventId: string) 
     stalledInterval: positiveInt("WORKER_STALLED_MS", 30000),
     async handle(job, context) {
       const { protocol, eventId, generation } = job.body;
-      if (protocol !== 1 || typeof eventId !== "string" || !Number.isSafeInteger(generation) || generation < 0) {
+      if ((protocol !== 1 && protocol !== 2) || typeof eventId !== "string" || !Number.isSafeInteger(generation) || generation < 0) {
         throw new TaskPermanentError("Invalid job protocol");
       }
       let fence: number | undefined;
       try {
         const [event] = await getDatabase().select().from(automationEvents).where(eq(automationEvents.id, eventId));
         if (!event || event.finishedAt || event.generation !== generation) return;
+        if ((event.snapshot.protocol === 3 ? 2 : 1) !== protocol) throw new PermanentError("Automation delivery/event protocol mismatch");
         const lease = await context.acquireLease(rowLeaseKeys(event.organizationId, event.rowId ?? event.id));
         fence = await claimExecution(eventId, generation);
         if (fence === undefined) return;

@@ -12,6 +12,7 @@ import { renderDocumentHtml } from "../documents/renderer.js";
 import { renderBlogFiles } from "./renderer.js";
 import { blogStorageKey, collectBlogStorage } from "./storage.js";
 import { BlogError } from "./errors.js";
+import { isPublicBlogLink } from "./public-links.js";
 export type BlogCaller = { kind: "member" | "native"; organizationId: string; actorId: string } | { kind: "key"; secret: string };
 function fail(status: number, code: ConstructorParameters<typeof BlogError>[1], message: string): never { throw new BlogError(status, code, message); }
 export function canonicalBlogValue(value: unknown): string {
@@ -243,8 +244,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           if (selectedImages.length !== approved.size) fail(400, "BAD_INPUT", "Selected image does not belong to this document");
           const publicMarks = (node: DocumentNode) => node.marks?.filter(mark => {
             if (mark.type !== "link") return true;
-            const url = new URL(mark.attrs.href);
-            return !/\/(?:api\/)?(?:site-files|files)\//.test(url.pathname) && ![...url.searchParams.keys()].some(key => /^(?:key|token|auth|authorization|signature|x-amz-.+)$/i.test(key)) && !/(?:tab_(?:pub_)?|agt_)[A-Za-z0-9_-]{20,}/.test(mark.attrs.href);
+            return isPublicBlogLink(mark.attrs.href);
           });
           const selectedContent = (node: DocumentNode): DocumentNode[] => {
             if (node.type === "image" && !approved.has(String(node.attrs!.fileId))) return [];

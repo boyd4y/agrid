@@ -9,7 +9,7 @@ export const AUTOMATION_TRIGGERS = [
   "enter_status",
   "webhook_received",
   "message_received",
-  "schedule_due",
+  "schedule_due", "booking_reminder_due", "booking_due",
 ] as const;
 
 export type AutomationTriggerType = (typeof AUTOMATION_TRIGGERS)[number];
@@ -18,6 +18,8 @@ export type AutomationTrigger =
   | { type: "webhook_received" }
   | { type: "message_received" }
   | { type: "schedule_due" }
+  | { type: "booking_reminder_due" }
+  | { type: "booking_due" }
   | { type: "row_created" }
   | {
       type: "field_changed";
@@ -101,6 +103,8 @@ export const AUTOMATION_TRIGGER_LABELS: Record<AutomationTriggerType, string> = 
   webhook_received: "当收到 Webhook 时",
   message_received: "当收到邮件时",
   schedule_due: "按时间计划",
+  booking_reminder_due: "预约开始前",
+  booking_due: "预约到期",
 };
 
 export const AUTOMATION_ACTION_LABELS: Record<AutomationActionType, string> = {
@@ -123,6 +127,7 @@ export type CreateAutomationInput = {
 
 export type UpdateAutomationInput = {
   automationId: string;
+  expectedVersion?: number;
   source?: AutomationSource;
   eventConditions?: AutomationEventCondition[];
   name?: string;

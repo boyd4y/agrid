@@ -52,7 +52,7 @@ async function scopeValid(deps: AutomationExecutionDependencies, tx: Transaction
   if (actorId) {
     const [membership] = await tx.select().from(member).where(and(eq(member.organizationId, event.organizationId), eq(member.userId, actorId))).for("share");
     if (!membership) { await finishEvent(deps, tx, event, "cancelled", "自动化执行者已不在工作区");return null; }
-  } else if (snapshot.protocol === 2) throw new PermanentError("请由工作区成员重新保存此自动化以设置执行者");
+  } else if (snapshot.protocol !== 1) throw new PermanentError("请由工作区成员重新保存此自动化以设置执行者");
   if (snapshot.protocol === 1) {
     const [table] = await tx.select().from(tables).where(eq(tables.id, snapshot.event.tableId)).for("share");
     if (!table || table.organizationId !== event.organizationId || table.workspaceId !== run.workspaceId) { await finishEvent(deps, tx, event, "cancelled", "来源表格已删除");return null; }
@@ -107,6 +107,7 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
   let hydrated: AnyEventSnapshot | undefined;
   if (initial && !initial.finishedAt) {
     const saved = initial.snapshot as unknown as AnyEventSnapshot;
+    if (![1, 2, 3].includes(saved.protocol)) throw new PermanentError("Unsupported automation event protocol");
     if (saved.protocol === 2 && saved.event.source.kind === "agentmail" && (saved.event.data.message as Record<string, unknown> | undefined)?.bodyMissing && !(saved.event.data.message as Record<string, unknown> | undefined)?.bodyHydrated) {
       if (!deps.hydrateAgentMailEvent) throw new PermanentError("邮件正文服务未配置");
       const enriched = await deps.hydrateAgentMailEvent(saved.event);
@@ -152,7 +153,7 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
     if (hydrated) await tx.update(automationEvents).set({ snapshot: hydrated as unknown as Record<string, unknown> }).where(eq(automationEvents.id, id));
     if (!action) { await tx.update(automationRuns).set({ status: "completed", finishedAt: deps.now() }).where(eq(automationRuns.id, run.id));return "continue"; }
     const steps = await stepsOf(deps, tx, run.id), context = eventBindingContext(snapshot);
-    if (snapshot.protocol === 2 && run.nextStep === 0 && !eventConditionsMatch(rule, context)) {
+    if (snapshot.protocol !== 1 && run.nextStep === 0 && !eventConditionsMatch(rule, context)) {
       await tx.update(automationRuns).set({ status: "skipped", finishedAt: deps.now(), detail: { ...run.detail, reason: "事件条件未满足" } }).where(eq(automationRuns.id, run.id));
       return "continue";
     }
@@ -219,10 +220,11 @@ export async function reconcileNativeAutomations(deps: AutomationExecutionDepend
       inArray(automationRuns.status, ["running", "waiting_input", "unknown"]), isNull(automationRuns.finishedAt))).returning();
     if (!changed.length) return;
     const generation = event.generation + 1;
+    const protocol = event.snapshot.protocol === 3 ? 2 as const : 1 as const;
     await tx.update(automationEvents).set({ status: "matched", generation, updatedAt: deps.now() }).where(eq(automationEvents.id, event.id));
-    await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, generation, payload: { protocol: 1, eventId: event.id, generation } })
+    await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, generation, payload: { protocol, eventId: event.id, generation } })
       .onConflictDoUpdate({ target: [automationOutbox.eventId, automationOutbox.queue], set: { status: "pending", generation,
-        payload: { protocol: 1, eventId: event.id, generation }, availableAt: deps.now(), claimToken: null, claimUntil: null, attempts: 0, publishedAt: null } });
+        payload: { protocol, eventId: event.id, generation }, availableAt: deps.now(), claimToken: null, claimUntil: null, attempts: 0, publishedAt: null } });
     deps.wakeAfterCommit?.(tx, { kind: "outbox" });
     });
   }

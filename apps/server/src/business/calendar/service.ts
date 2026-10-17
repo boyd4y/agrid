@@ -1,3 +1,5 @@
+import { queryScheduledOccurrences } from "./schedules.js";
+import { replaceBookingReminders, readBookingReminders, syncBookingReminders } from "./reminders.js";
 import { and, asc, eq, gt, inArray, lt } from "drizzle-orm";
 import { sha256 } from "@tabdo/core/crypto";
 import { CALENDAR_SCHEMAS, CALENDAR_READ_COMMANDS, type CalendarCommand, type CalendarCommands, type CalendarResults, type CalendarPermission } from "@tabdo/shared";
@@ -40,6 +42,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
   const parsed = CALENDAR_SCHEMAS[command].safeParse(raw);
   if (!parsed.success) fail(400, "BAD_INPUT", parsed.error.issues[0]?.message ?? "Invalid calendar input");
   // The command switch narrows each schema below. No transport supplies trusted scope.
+  if (command === "queryScheduledOccurrences") return queryScheduledOccurrences(deps, caller, parsed.data, transaction) as Promise<CalendarResults[K]>;
   const input = parsed.data as Record<string, any>;
   const read = CALENDAR_READ_COMMANDS.includes(command);
   const result = await calendarTransaction(deps, transaction, async tx => {
@@ -78,6 +81,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
       } else if (permission === "canManage" && !manager) fail(403, "FORBIDDEN", "Only owners and admins can manage calendars and working hours");
     };
     const permissions: Partial<Record<CalendarCommand, keyof Omit<CalendarPermission, "calendarId">>> = {
+      setBookingReminders: "canUpdate",
       createBooking: "canCreate", rescheduleBooking: "canUpdate", cancelBooking: "canCancel",
       queryAvailability: "canReadAvailability", checkBookingConflicts: "canReadAvailability",
     };
@@ -88,6 +92,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
       if (!grant) fail(404, "NOT_FOUND", "Calendar not found");
       if (!grant.canRead && !grant.canReadAvailability && !grant.canManage) fail(403, "FORBIDDEN", "Reading service configuration is not granted");
     } else if (command !== "listCalendars" && command !== "batchBookings") authorize(permission);
+    if (command === "setBookingReminders" && principal) authorize("canTriggerAgent");
     const serializePerson = (person: Person) => ({ ...publicPerson(person), userId: principal && !principal.calendarPermissions.get(calendar!.id)?.canRead && !principal.calendarPermissions.get(calendar!.id)?.canManage ? null : person.userId });
     if (command === "batchBookings") for (const operation of input.operations) authorize(operation.kind === "create" ? "canCreate" : operation.kind === "reschedule" ? "canUpdate" : "canCancel");
 
@@ -190,6 +195,16 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         } else [output] = await tx.insert(availabilityExceptions).values({ personId: person.id, date: input.date, intervals: input.intervals }).returning();
         await validateFuture(person); break;
       }
+      case "setBookingReminders": case "listBookingReminders": {
+        const initial = await loadBooking(input.bookingId);
+        await loadPeople([initial.personId]);
+        const [booking] = await tx.select().from(bookings).where(eq(bookings.id, initial.id)).for("update");
+        if (command === "listBookingReminders") { output = await readBookingReminders(deps, tx, booking, organizationId, caller.kind === "member" ? caller.actorId : undefined); break; }
+        cas(booking.version, input.expectedVersion);
+        if (principal && !principal.userId) fail(403, "FORBIDDEN", "A current key owner is required");
+        output = await replaceBookingReminders(deps, tx, booking, input.reminders, caller.kind === "member" ? caller.actorId : principal!.userId!, principal?.id ?? null);
+        break;
+      }
       case "queryBookings": {
         const found = await tx.select().from(bookings).where(and(eq(bookings.calendarId, calendar!.id), lt(bookings.start, new Date(input.rangeEnd)), gt(bookings.end, new Date(input.rangeStart)), input.personId ? eq(bookings.personId, input.personId) : undefined, input.includeCancelled ? undefined : eq(bookings.status, "confirmed"))).orderBy(asc(bookings.start), asc(bookings.id)).limit(501);
         page(found); output = page(await Promise.all(found.map(serializeBooking))); break;
@@ -256,6 +271,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         for (const booking of changed) {
           if (initial.has(booking.id)) await tx.update(bookings).set(booking).where(eq(bookings.id, booking.id));
           else await tx.insert(bookings).values(booking);
+          await syncBookingReminders(deps, tx, booking);
         }
         output = command === "batchBookings" ? { receipts: changed.map(receipt) } : receipt(changed[0]); break;
       }

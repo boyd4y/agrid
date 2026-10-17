@@ -5,7 +5,9 @@
     "enter_status": "进入状态时",
     "webhook_received": "收到 Webhook",
     "message_received": "收到邮件",
-    "schedule_due": "到达计划时间"
+    "schedule_due": "到达计划时间",
+    "booking_reminder_due": "预约开始前",
+    "booking_due": "预约到期"
   },
   "actions": {
     "update_field": "更新字段",
@@ -139,7 +141,8 @@
       "table": "表格",
       "agentmail": "邮件",
       "webhook": "Webhook",
-      "schedule": "定时"
+      "schedule": "定时",
+      "calendar": "预约提醒"
     },
     "commands": {
       "addRow": "新建记录",

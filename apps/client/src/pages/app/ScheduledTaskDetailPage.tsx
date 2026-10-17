@@ -43,7 +43,7 @@ export function ScheduledTaskDetailPage() {
     savingRef.current = true; setSaving(true); setError(null);
     try {
       const data = { name: name.trim(), source, enabled, trigger: { type: "schedule_due" as const }, conditions: [], eventConditions: [], conditionLogic: "and" as const, actions: [{ type: "run_agent" as const, agentUserId, prompt: prompt.trim() }] };
-      const saved = rule ? await api.updateAutomation(rule.id, data) : await api.createSourceAutomation(data);
+      const saved = rule ? await api.updateAutomation(rule.id, { ...data, expectedVersion: rule.version }) : await api.createSourceAutomation(data);
       notifyDataChanged(); navigate(`/app/schedules/${saved.id}`);
     } catch (error) { setError(error instanceof Error ? error.message : t("saveFailed")); }
     finally { savingRef.current = false; setSaving(false); }

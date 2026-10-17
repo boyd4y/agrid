@@ -48,7 +48,7 @@ export function createClient(options: ClientOptions) {
   }
   // Aborting transport does not cancel a server transaction. Retry the same input/key to read its receipt.
   async function calendarCommand<K extends CalendarCommand>(command: K, input: CalendarCommands[K], request?: RequestOptions): Promise<CalendarResults[K]> {
-    const read = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts"].includes(command);
+    const read = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"].includes(command);
     const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
@@ -86,6 +86,9 @@ export function createClient(options: ClientOptions) {
     getDocumentImage: (input: DocumentCommands["getDocumentImage"], request?: RequestOptions) => documentCommand("getDocumentImage", input, request),
   };
   const calendarApi = {
+    queryScheduledOccurrences: (input: CalendarCommands["queryScheduledOccurrences"], request?: RequestOptions) => calendarCommand("queryScheduledOccurrences", input, request),
+    setBookingReminders: (input: CalendarCommands["setBookingReminders"], request?: RequestOptions) => calendarCommand("setBookingReminders", input, request),
+    listBookingReminders: (input: CalendarCommands["listBookingReminders"], request?: RequestOptions) => calendarCommand("listBookingReminders", input, request),
     listCalendars: (input: CalendarCommands["listCalendars"], request?: RequestOptions) => calendarCommand("listCalendars", input, request),
     getCalendar: (input: CalendarCommands["getCalendar"], request?: RequestOptions) => calendarCommand("getCalendar", input, request),
     createCalendar: (input: CalendarCommands["createCalendar"], request?: RequestOptions) => calendarCommand("createCalendar", input, request),
@@ -137,7 +140,8 @@ export function createClient(options: ClientOptions) {
       },
     };
   }
-  return { graphql, table, blogs: blogApi, calendar: calendarApi, documents: documentApi, async tables(request?: RequestOptions): Promise<SiteTable[]> {
+  return { graphql, table, blogs: blogApi, calendar: calendarApi, documents: documentApi,
+    updateAutomation: (input: import("@tabdo/shared").UpdateAutomationInput & { expectedVersion: number }, request?: RequestOptions) => graphql<{ updateAutomation: Pick<import("@tabdo/shared").AutomationRule, "name" | "enabled" | "source" | "version"> & { automationId: string } }>("mutation UpdateAutomation($input: JSON!) { updateAutomation(input: $input) }", { input }, request).then(value => value.updateAutomation), async tables(request?: RequestOptions): Promise<SiteTable[]> {
     return (await graphql<{ tables: SiteTable[] }>(`query Tables { tables { id name description columns { ${columnFields} } } }`, {}, request)).tables;
   } };
 }
