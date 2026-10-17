@@ -8,7 +8,9 @@ import type { RuntimeDependencies } from "../../src/business/dependencies.js";
 import type { Actor } from "../../src/business/auth/actor.js";
 import { user, organization, member, agentProfile, chatThreads } from "../../src/business/db/schema.js";
 import { claimRuntimeLease, releaseRuntimeLease, renewRuntimeLease, prepareRuntimeRecord } from "../../src/business/agent/runtime-store.js";
-import { beginNativeRun, listNativeRuns, requestRunCancellation, runCancellationRequested } from "../../src/business/agent/runs.js";
+import { beginNativeRun, listNativeRuns, listNativeRunEvents, requestRunCancellation, runCancellationRequested } from "../../src/business/agent/runs.js";
+import { createWorkspace } from "../../src/business/commands/workspace.js";
+import { listThreads } from "../../src/business/services/threads.js";
 import { acceptNativeExecution, recoverAcceptedNativeExecution, claimNativeExecution, appendNativeExecutionChunk, readNativeExecutionOutput, settleNativeExecution } from "../../src/business/agent/executions.js";
 import { requireThread, loadMessages } from "../../src/business/chat/store.js";
 
@@ -52,6 +54,20 @@ test("Run/lease/receipt services operate without resource scope and preserve dur
     ]);
     const page = await readNativeExecutionOutput(deps, { executionId: reference.executionId, actor, expected: reference, limit: 500 });
     assert.deepEqual(page.events.map(event => event.cursor), [1, 2, 3]);assert.equal(page.terminal, false);
+    const workspaceB = await createWorkspace({ ...deps, automationQueueName: "agrid-queue-test-workspace-run" }, { organizationId: org, actorId: owner, name: "Other execution scope" });
+    const depsB = { ...deps, workspaceId: workspaceB.id }, actorB = { ...actor, workspaceId: workspaceB.id };
+    for (const after of [0, page.events[0].cursor]) {
+      await assert.rejects(readNativeExecutionOutput(depsB, { executionId: reference.executionId, actor: actorB, after }), status(404));
+      await assert.rejects(readNativeExecutionOutput(depsB, { executionId: reference.executionId, actor: actorB, after, expected: reference }), status(404));
+    }
+    await assert.rejects(listThreads(depsB, actorB, thread.id), status(404));
+    await assert.rejects(loadMessages(depsB, thread.id, actorB), status(404));
+    await assert.rejects(listNativeRuns(depsB, thread.id, actorB), status(404));
+    await assert.rejects(listNativeRunEvents(depsB, thread.id, run.id, actorB), status(404));
+    await assert.rejects(requestRunCancellation(depsB, thread.id, run.id, actorB), status(404));
+    await assert.rejects(claimRuntimeLease(depsB, thread.id, actorB), status(404));
+    assert.equal(await runCancellationRequested(deps, run.id), false);
+    assert.deepEqual(await readNativeExecutionOutput(deps, { executionId: reference.executionId, actor, expected: reference, limit: 500 }), page);
     await assert.rejects(readNativeExecutionOutput(deps, { executionId: reference.executionId, actor, expected: { ...reference, runId: randomUUID() } }), status(404));
     await requestRunCancellation(deps, thread.id, run.id, actor);
     assert(await runCancellationRequested(deps, run.id));
