@@ -97,6 +97,7 @@ try {
   f.users.push(agent.userId); modelBTable = bTable.id;
   await page.goto(frontend + '/app?workspace=' + a.id);
   await page.getByTestId('workspace-switcher').waitFor();
+  await page.getByTestId('chat-toolbar').getByText('Workspace fixture agent', { exact: true }).waitFor();
   console.log('native: submitting A task');
   const composer = page.getByRole('textbox').last();
   await composer.fill('Run the workspace isolation fixture'); await composer.press('Enter');

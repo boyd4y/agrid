@@ -25,6 +25,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<{ owner: string; current: Workspace; workspaces: Workspace[] }>();
   const [error, setError] = useState<string>();
   const [retry, setRetry] = useState(0);
+  const [recovering, setRecovering] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setError(undefined);
@@ -53,7 +54,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       navigate({ pathname: location.pathname, search: params.toString(), hash: location.hash }, { replace: true });
     }
   }, [state, owner, explicit, location.pathname, location.search, location.hash, navigate]);
-  if (error) return <div className="flex h-full flex-col items-center justify-center gap-4" role="alert"><p>{error}</p><Button onClick={() => setRetry(value => value + 1)}>{t("workspaces.retry")}</Button><Button variant="ghost" onClick={() => window.location.assign("/app")}>{t("workspaces.openDefault")}</Button></div>;
+  async function openDefaultWorkspace() {
+    setRecovering(true);
+    try {
+      // Omitting the selector resolves the enterprise default on the server,
+      // independently of this tab's URL and remembered selection.
+      const { workspace } = await command<{ workspace: Workspace }>("getWorkspace");
+      window.location.assign(`/app?workspace=${encodeURIComponent(workspace.id)}`);
+    } catch {
+      setError(t("workspaces.unavailable"));
+      setRecovering(false);
+    }
+  }
+  if (error) return <div className="flex h-full flex-col items-center justify-center gap-4" role="alert" aria-busy={recovering}><p>{error}</p><Button disabled={recovering} onClick={() => setRetry(value => value + 1)}>{t("workspaces.retry")}</Button><Button variant="ghost" disabled={recovering} onClick={() => void openDefaultWorkspace()}>{t(recovering ? "workspaces.loading" : "workspaces.openDefault")}</Button></div>;
   if (!ready || !state) return <div className="flex h-full items-center justify-center text-muted-foreground" role="status">{t("workspaces.loading")}</div>;
   async function switchWorkspace(id: string) {
     await command("getWorkspace", {}, id);

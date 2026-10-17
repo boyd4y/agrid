@@ -111,6 +111,22 @@ try {
   // The recovery action promises the default workspace, even when the remembered selection is B.
   await page.goto(frontend + '/app?workspace=malformed-selector');
   await page.getByRole('alert').waitFor();
+  let defaultRequests = 0;
+  const failRecovery = async route => {
+    if (route.request().postDataJSON()?.command !== 'getWorkspace') return route.fallback();
+    defaultRequests++;
+    assert.equal(route.request().headers()['x-workspace-id'], undefined, 'Default resolution must not reuse a remembered selector');
+    return route.fulfill({ status: 503, json: { error: 'Acceptance default recovery failure' } });
+  };
+  await page.route('**/api/commands', failRecovery);
+  const openDefault = () => page.getByRole('button', { name: /进入默认工作区|Open default workspace/ });
+  await openDefault().click();
+  await eventually(() => openDefault().isEnabled());
+  assert.equal(defaultRequests, 1);
+  assert.equal(new URL(page.url()).searchParams.get('workspace'), 'malformed-selector');
+  assert.equal(await page.getByTestId('workspace-switcher').count(), 0);
+  await page.unroute('**/api/commands', failRecovery);
+  console.log('PASS: failed default resolution preserves the error page and allows retry without trusting remembered B');
   await page.getByRole('button', { name: /进入默认工作区|Open default workspace/ }).click();
   await page.getByTestId('workspace-switcher').waitFor();
   await page.waitForURL(url => url.searchParams.has('workspace'));
