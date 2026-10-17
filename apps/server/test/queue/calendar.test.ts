@@ -20,11 +20,17 @@ import { redisOptions } from "../../src/automation/jobs/config.js";
 import { runAutomationAgentAction } from "../../src/business/automation/agent-action.js";
 import { prepareNativeChatAgent } from "../../src/harness/preparation.js";
 import { discardQuestionSandbox } from "../../src/harness/question-sandboxes.js";
+import { createSiteKey, updateSiteKey, deleteSiteKey } from "../../src/business/data-api/keys.js";
+import type { Actor } from "../../src/business/auth/actor.js";
+import { createTableTools } from "../../src/business/agent/tools/index.js";
+import { Hono } from "hono";
+import { createAutomationsRoute } from "../../src/business/http/automations.js";
+import { requireThread } from "../../src/business/chat/store.js";
 import type { AutomationRule, BookingReminder, CalendarCommand, CalendarCommands } from "@tabdo/shared";
 assert(new URL(process.env.DATABASE_URL!).pathname.endsWith("_queue_test")); assert.equal(process.env.DATABASE_URL, process.env.DATABASE_URL_UNPOOLED);
 assert.equal(new URL(process.env.REDIS_URL!).port, "16381"); assert(process.env.QUEUE_PREFIX?.startsWith("agrid-queue-test-0045"));
 for (const name of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CODEX_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[name] = "";
-const org = randomUUID(), uid = randomUUID(), aid = randomUUID(), am = randomUUID();
+const org = randomUUID(), uid = randomUUID(), aid = randomUUID(), am = randomUUID(), peerId = randomUUID();
 let workspaceId: string, otherWorkspaceId: string, calendarId: string, marker = "";
 const caller = { kind: "member" as const, organizationId: org, actorId: uid };
 const children: ChildProcess[] = [], failures: unknown[] = [];
@@ -80,8 +86,8 @@ async function status(eventId: string) { return (await db.select().from(automati
 const count = (name: string, space = workspaceId) => db.select().from(tables).where(and(eq(tables.workspaceId, space), eq(tables.name, name))).then(v => v.length);
 before(async () => {
   await db.insert(organization).values({ id: org, name: "Calendar queue", slug: org });
-  await db.insert(user).values([{ id: uid, name: "Owner", email: `${uid}@local.test` }, { id: aid, name: "Agent", email: `${aid}@local.test`, kind: "agent" }]);
-  await db.insert(member).values([{ id: randomUUID(), userId: uid, organizationId: org, role: "owner" }, { id: am, userId: aid, organizationId: org, role: "member" }]);
+  await db.insert(user).values([{ id: uid, name: "Owner", email: `${uid}@local.test` }, { id: aid, name: "Agent", email: `${aid}@local.test`, kind: "agent" }, { id: peerId, name: "Other member", email: `${peerId}@local.test` }]);
+  await db.insert(member).values([{ id: randomUUID(), userId: uid, organizationId: org, role: "owner" }, { id: am, userId: aid, organizationId: org, role: "member" }, { id: randomUUID(), userId: peerId, organizationId: org, role: "member" }]);
   await db.insert(agentProfile).values({ id: randomUUID(), organizationId: org, memberId: am, userId: aid, displayName: "Reminder agent", persona: { defaultHarness: "pi", defaultModel: "local-test", runtime: "local", skillNames: [] } });
   const [first] = await db.select().from(workspaces).where(eq(workspaces.organizationId, org)); workspaceId = first.id;
   otherWorkspaceId = (await db.insert(workspaces).values({ organizationId: org, name: "Foreground switched" }).returning())[0].id;
@@ -95,7 +101,7 @@ after(async () => {
   const sessions = await db.select({ id: agentRuntimeSessions.id }).from(agentRuntimeSessions).innerJoin(chatThreads, eq(chatThreads.id, agentRuntimeSessions.threadId)).where(eq(chatThreads.organizationId, org));
   await Promise.all(sessions.map(v => discardQuestionSandbox(v.id)));
   provider.closeAllConnections(); await new Promise<void>(resolve => provider.close(() => resolve()));
-  await db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await db.delete(organization).where(eq(organization.id, org)); await db.delete(user).where(inArray(user.id, [uid, aid]));
+  await db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await db.delete(organization).where(eq(organization.id, org)); await db.delete(user).where(inArray(user.id, [uid, aid, peerId]));
   try { await relay?.close(); await queue.close(); await waitForRedisReady(redis); const keys = await redis.keys(`${process.env.QUEUE_PREFIX}:*`); if (keys.length) await redis.del(...keys); }
   finally { redis.disconnect(); await client.end(); }
 });
@@ -142,6 +148,40 @@ test("durable acceptance survives lost dispatch/restart; cancellation after acce
   try { await relay.tick(); await eventually(async () => !!(await status(intent.eventId!)).finishedAt); assert.equal(await count(f.marker), 1); const mapping = await db.select().from(automationAgentActions).where(eq(automationAgentActions.runId, run.id)); assert.equal(mapping[0].agentRunId, result.agentRunId); console.log("CALENDAR_ACCEPTANCE_RECOVERED", result.agentRunId); }
   finally { await stop(worker.child); }
 });
+test("a claimed reminder cannot start the native agent after its original Key is narrowed or deleted", { timeout: 60000 }, async () => {
+  const [owner] = await db.select().from(member).where(and(eq(member.organizationId, org), eq(member.userId, uid)));
+  const actor: Actor = { kind: "human", userId: uid, memberId: owner.id, organizationId: org,
+    workspaceId, role: "owner", name: "Owner", email: `${uid}@local.test` };
+  const grant = { calendarId, canRead: true, canReadAvailability: false, canCreate: false,
+    canUpdate: true, canCancel: false, canManage: false, canTriggerAgent: true };
+  for (const change of ["narrow", "delete"] as const) {
+    const f = await fixture();
+    const saved = await createSiteKey(commandDependencies(), actor, { name: `Reminder ${change}`, permissions: [], calendarPermissions: [grant] });
+    await executeCalendar({ ...commandDependencies(), workspaceId }, { kind: "key", secret: saved.secret }, "setBookingReminders", {
+      calendarId, bookingId: f.booking.id, expectedVersion: 2, reminders: [f.reminder], idempotencyKey: randomUUID(),
+    });
+    const intent = await due(f.booking.id); assert(intent.eventId);
+    const callsBefore = modelCalls;
+    const worker = await startChild(intent.eventId, "BEFORE");
+    try {
+      await relay.tick(); await eventually(async () => worker.output().includes("CALENDAR_FAULT_BEFORE"));
+      if (change === "narrow") await updateSiteKey(commandDependencies(), actor, saved.key.id, {
+        name: "Read only", permissions: [], calendarPermissions: [{ ...grant, canUpdate: false, canTriggerAgent: false }],
+      });
+      else await deleteSiteKey(commandDependencies(), actor, saved.key.id);
+      await stop(worker.child, "SIGKILL"); const replacement = await startChild();
+      try {
+        await eventually(async () => !!(await status(intent.eventId!)).finishedAt);
+        const history = await call("listBookingReminders", { calendarId, bookingId: f.booking.id });
+        const rejected = history.intents.find(item => item.id === intent.id); assert(rejected);
+        assert.equal(rejected.status, "failed"); assert.equal(rejected.reason, "reminder_authorization_revoked");
+        assert.equal(rejected.acceptedAt, null); assert.equal(rejected.runId, null);
+        assert.equal(await count(f.marker), 0); assert.equal(modelCalls, callsBefore);
+        console.log("CALENDAR_KEY_REVOKED_BEFORE_ACCEPTANCE", change, intent.id);
+      } finally { await stop(replacement.child); }
+    } finally { await stop(worker.child, "SIGKILL"); }
+  }
+});
 test("committed native effect and receipt survive worker SIGKILL without replay", { timeout: 60000 }, async () => {
   const f = await fixture(); const intent = await due(f.booking.id); assert(intent.eventId);
   const worker = await startChild(intent.eventId, "AFTER");
@@ -151,6 +191,40 @@ test("committed native effect and receipt survive worker SIGKILL without replay"
     try { await eventually(async () => !!(await status(intent.eventId!)).finishedAt); assert.equal(await count(f.marker), 1); }
     finally { await stop(replacement.child); }
   } finally { await stop(worker.child, "SIGKILL"); }
+});
+test("another member cannot retrieve a private reminder turn or its answer through generic native run history", { timeout: 60000 }, async () => {
+  const f = await fixture(); const intent = await due(f.booking.id); assert(intent.eventId);
+  const worker = await startChild();
+  try {
+    await relay.tick(); await eventually(async () => !!(await status(intent.eventId!)).finishedAt);
+    assert.equal(await count(f.marker), 1);
+    const ownerHistory = await call("listBookingReminders", { calendarId, bookingId: f.booking.id });
+    const privateThread = ownerHistory.intents[0].threadId; assert(privateThread);
+    const peer = { kind: "member" as const, organizationId: org, actorId: peerId };
+    const peerHistory = await executeCalendar({ ...commandDependencies(), workspaceId }, peer, "listBookingReminders", { calendarId, bookingId: f.booking.id });
+    assert.equal(peerHistory.intents[0].threadId, null); assert.equal(peerHistory.intents[0].runId, null);
+    const [run] = await db.select().from(automationRuns).where(eq(automationRuns.eventId, intent.eventId));
+    const tools = createTableTools({ ...commandDependencies(), workspaceId }, undefined, org, peerId);
+    const exposed = await tools.list_automation_runs.execute({ limit: 200 }, { toolCallId: randomUUID(), messages: [], context: undefined });
+    console.log("CALENDAR_OTHER_MEMBER_GENERIC_HISTORY", JSON.stringify(exposed));
+    const [peerMember] = await db.select().from(member).where(and(eq(member.organizationId, org), eq(member.userId, peerId)));
+    const peerActor: Actor = { kind: "human", userId: peerId, memberId: peerMember.id, organizationId: org,
+      workspaceId, role: "member", name: "Other member", email: `${peerId}@local.test` };
+    await assert.rejects(requireThread(commandDependencies(), privateThread, peerActor), /不存在|无权|not found/i);
+    const app = new Hono().route("/api", createAutomationsRoute(async () => ({
+      commands: { ...commandDependencies(), workspaceId }, identity: { database: db,
+        resolveSession: async () => ({ user: { id: peerId, name: peerActor.name, email: peerActor.email }, session: { activeOrganizationId: org } }) },
+      close: async () => {},
+    })));
+    const response = await app.request(`/api/automations/${run.automationId}/runs`);
+    assert.equal(response.status, 200); const rest = await response.json();
+    console.log("CALENDAR_OTHER_MEMBER_REST_HISTORY", JSON.stringify(rest));
+    const privateData = (value: unknown) => ({ thread: JSON.stringify(value).includes(privateThread),
+      answer: JSON.stringify(value).includes("Calendar reminder completed.") });
+    assert.deepEqual({ native: privateData(exposed), rest: privateData(rest) }, {
+      native: { thread: false, answer: false }, rest: { thread: false, answer: false },
+    }, "Generic run history must enforce the same private-turn boundary as booking reminder history");
+  } finally { await stop(worker.child); }
 });
 test("unknown event protocol fails durably instead of acknowledging and silently dropping the reminder", { timeout: 60000 }, async () => {
   const f = await fixture(); const intent = await due(f.booking.id); assert(intent.eventId);
