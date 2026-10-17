@@ -92,6 +92,18 @@ test("cross-workspace relations and report widgets roll back; independent roots 
   await assert.rejects(reports.getReport(b, report.id, org), /报告不存在/);
   await assert.rejects(reports.saveReport(b, { name: "Bad widget", description: "", columns: 2, widgets: [{ id: randomUUID(), type: "metric", title: "secret", width: "full", query: { tableId: tableA, metric: "count", valueColumnId: null } }] }, org), /来源表格/);
 });
+test("form and board configuration cannot persist hidden field references from another workspace", async () => {
+  const form = await commands.createFormView(a, { ...scope, tableId: tableA, name: "Local form", fields: [{ columnId: columnA }] });
+  const original = await commands.getView(a, { ...scope, viewId: form.id });
+  await assert.rejects(commands.updateFormView(a, { ...scope, viewId: form.id, name: "Must not save",
+    config: { fields: [{ columnId: columnA }, { columnId: columnB }] } }), /列不属于该表/);
+  assert.deepEqual(await commands.getView(a, { ...scope, viewId: form.id }), original);
+  await assert.rejects(commands.setFormFields(a, { ...scope, viewId: form.id, fields: [{ columnId: columnB }] }), /列不属于该表/);
+  const before = await commands.listViews(a, { ...scope, tableId: tableA });
+  await assert.rejects(commands.createFormView(a, { ...scope, tableId: tableA, name: "Cross form", fields: [{ columnId: columnB }] }), /列不属于该表/);
+  await assert.rejects(commands.createBoardView(a, { ...scope, tableId: tableA, name: "Cross board", config: { visibleColumnIds: [columnB] } }), /不属于该表/);
+  assert.deepEqual(await commands.listViews(a, { ...scope, tableId: tableA }), before);
+});
 test("private chat client IDs and file metadata/bytes cannot escape workspace", async () => {
   const threadA = await threads.createThread(a, actor, { clientId: "same-client", context: { page: "ai" } });
   const threadB = await threads.createThread(b, { ...actor, workspaceId: b.workspaceId }, { clientId: "same-client", context: { page: "ai" } });

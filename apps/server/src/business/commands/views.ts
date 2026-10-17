@@ -311,6 +311,12 @@ export async function updateFormView(deps: CommandDependencies, {
 }: UpdateFormViewInput & OrgScoped, transaction?: Transaction): Promise<ResolvedFormView> {
   const view = await requireViewInOrg(deps, viewId, organizationId, transaction);
   if (view.type !== "form") throw new Error("仅支持更新表单视图");
+  if (config?.fields) {
+    const colIds = new Set((await loadColumns(deps, view.tableId, transaction)).map(column => column.id));
+    for (const field of config.fields) {
+      if (!colIds.has(field.columnId)) throw new Error(`列不属于该表: ${field.columnId}`);
+    }
+  }
   const prev = asFormConfig(view.config);
   const next: FormViewConfigJson = {
     ...prev,
