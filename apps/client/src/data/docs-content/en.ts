@@ -279,6 +279,36 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         tone: "warn",
         text: "Files can be viewed and downloaded only by workspace members with access. To add a file through an API, upload it in tabdo first.",
       },
+      { type: "cards", items: [
+        { title: "Use record bodies", description: "Enable a body, write long-form content, and review its history.", href: "/docs/record-documents", badge: "Body" },
+        { title: "Document API", description: "Read and update bodies with REST, GraphQL, or MCP.", href: "/docs/document-api", badge: "API" },
+      ] },
+    ],
+  },
+  {
+    slug: "record-documents",
+    sectionId: "humans",
+    title: "Use record bodies",
+    description: "Add a separate body to a record and write, illustrate, and restore it in the visual editor.",
+    body: [
+      { type: "p", text: "Record bodies hold long-form text and images without using table fields or loading with the table row list. Keep properties such as title and status in the table; the body is saved separately." },
+      { type: "ol", items: [
+        "Open a table and open a record. In its details, choose Body. If the record does not have one yet, choose Enable body to start writing.",
+        "Write in the visual body editor. Use headings, lists, quotes, code blocks, and links. Choose Upload image to add an image; pasted external images are not uploaded automatically. The editor shows saving, saved, unsaved, failed, or conflict status.",
+        "On a version conflict, the editor retains a draft in the current browser tab. Use View server version to compare, or export the local draft. Decide what to keep before loading the server version and continuing. If the browser cannot retain the draft, keep the tab open and retry saving.",
+        "Choose History to review earlier versions. Open a version to preview it; restoring saves its content as a new version and leaves the previous history unchanged.",
+        "A connected and authorized tabdo agent or MCP client can read, create, or replace a record body when its body tools are available. Image and history access also require their matching permissions. For REST or GraphQL access, see Document API.",
+      ] },
+      { type: "h2", text: "Formatting, images, and limits" },
+      { type: "ul", items: [
+        "Supported formatting includes paragraphs, level 1–3 headings, bullet and numbered lists, quotes, code blocks, horizontal rules, line breaks, bold, italic, strike, inline code, safe links, and images. Links must be full http, https, or mailto URLs.",
+        "A body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Supported image types are PNG, JPEG, WebP, and GIF. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
+        "Unsaved drafts stay in the current browser tab. They are not a cross-device backup; confirm a body is saved before closing the tab, and export a draft you need to keep during a conflict.",
+      ] },
+      { type: "cards", items: [
+        { title: "Document API", description: "Review permissions, read/write examples, history, and image routes.", href: "/docs/document-api", badge: "API" },
+        { title: "Publish a blog", description: "Publish explicitly selected record bodies as blog articles.", href: "/docs/blogging", badge: "Blog" },
+      ] },
     ],
   },
   {
@@ -422,7 +452,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       ] },
       { type: "h2", text: "Content and access" },
       { type: "ul", items: [
-        "A blog can include up to 20 selected articles. Document content is limited to 4 MiB. Each article can use up to 20 selected images; a blog can use up to 60 image assets, up to 5 MiB each and 30 MiB total. Supported image types are PNG, JPEG, WebP, and GIF.",
+        "A document body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Generated HTML across a blog has a separate 4 MiB total budget. A blog can include up to 20 selected articles and up to 60 image assets, each up to 5 MiB and 30 MiB total. Supported image types are PNG, JPEG, WebP, and GIF.",
         "Public content includes the mapped fields, selected articles, their document bodies, and selected images. Author names are public; email addresses and internal member IDs are not included. Do not put secrets or private information in public fields, document content, or links.",
         "A published blog is a snapshot. Changes to source records or documents do not update it. Before building again, confirm the selected records, images, and public fields are still correct.",
         "Withdrawing an article blocks its old blog paths and images. Readers may still have copies they downloaded, copied, or cached elsewhere; those copies cannot be recalled remotely. Withdraw an article before deleting its source when needed.",
@@ -436,6 +466,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       ] },
       { type: "cards", items: [
         { title: "Blog API", description: "Read and manage blogs with REST, GraphQL, or available MCP tools.", href: "/docs/blog-api", badge: "API" },
+        { title: "Use record bodies", description: "Learn about the editor, save status, conflict drafts, and history recovery.", href: "/docs/record-documents", badge: "Body" },
       ] },
     ],
   },
@@ -587,7 +618,7 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
-      { type: "p", text: "Create a blog with saveBlog. This configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. Then call buildBlog. Use the siteId, version, and publishedRevisionId from getBlog as the version preconditions for publication. Successful REST commands return { ok, command, result }." },
+      { type: "p", text: "Create a blog with saveBlog. This configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. Successful REST commands return { ok, command, result }. The BlogDetail site ID field is id: read it as result.id in REST or data.saveBlog.id in GraphQL after saveBlog; after getBlog, use result.id in REST or data.getBlog.id in GraphQL." },
       { type: "code", lang: "json", code: `{
   "command": "saveBlog",
   "input": {
@@ -609,7 +640,15 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
     }
   }
 }` },
-      { type: "p", text: "For the first publication, set expectedPublishedRevisionId to null. When updating a published blog, send the current publishedRevisionId from getBlog. Use the buildId from the current build manifest." },
+      { type: "p", text: "Use result.id from a successful saveBlog response (data.saveBlog.id in GraphQL) as siteId, and pass its version to buildBlog. After building, read siteId from result.id (data.buildBlog.id in GraphQL) and buildId from result.revisionId. Use expectedVersion and expectedPublishedRevisionId from that build result for publishBlog. For the first publication, expectedPublishedRevisionId is null; before updating a published blog, read and confirm its current publication state." },
+      { type: "code", lang: "json", code: `{
+  "command": "buildBlog",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 1,
+    "idempotencyKey": "build-blog-example-1"
+  }
+}` },
       { type: "code", lang: "json", code: `{
   "command": "publishBlog",
   "input": {
@@ -638,6 +677,91 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
       { type: "cards", items: [
         { title: "Publish a blog", description: "Follow the full workflow from document writing to publishing and withdrawal.", href: "/docs/blogging", badge: "Guide" },
         { title: "Authentication", description: "Learn about API key creation, table grants, and access boundaries.", href: "/docs/auth", badge: "Permissions" },
+      ] },
+    ],
+  },
+  {
+    slug: "document-api",
+    sectionId: "reference",
+    title: "Document API",
+    description: "Read, create, replace, and restore record bodies with REST, GraphQL, or MCP.",
+    body: [
+      { type: "p", text: "Document endpoints read one record body on demand and do not include body content in table row queries. API keys need separate document permissions; table CRUD grants, blog grants, and document grants are independent." },
+      { type: "h2", text: "Grant the minimum permissions" },
+      { type: "ol", items: [
+        "Ask a workspace owner or admin to configure document permissions for the content table under Settings → API Key. canRead reads the current body, images, and safe rendering; canCreate creates a body; canUpdate replaces a body; canReadHistory reads revisions; canRestore restores a revision and also requires canReadHistory; canUpload uploads images.",
+        "Grant only the operations a caller needs. Create permission does not include body or history reads. Document access does not grant table CRUD, blog publishing, or other workspace permissions.",
+        "Send Authorization: Bearer tab_… and keep the key out of URLs and public websites. Every write command needs a 1–200 character idempotencyKey; it can also be sent in the Idempotency-Key header. Reuse the same value when retrying the same request.",
+      ] },
+      { type: "h2", text: "REST command examples" },
+      { type: "p", text: "POST /api/commands accepts { command, input } and returns { ok, command, result }. The example reads a body, then shows the shapes for create and replace. Substitute table and row UUIDs that the key is authorized to access. createDocument returns a version receipt only; it does not grant read access, so call getDocument separately if you need the content." },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+
+# Read; result is null if this row has no body yet
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"command":"getDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002"}}'
+
+# Create on a row that does not have a body
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: create-body-example-1" \\
+  -d '{"command":"createDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","idempotencyKey":"create-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"A first draft."}]}]}}}'
+
+# Replace after reading the current version
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: replace-body-example-1" \\
+  -d '{"command":"replaceDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","expectedVersion":1,"idempotencyKey":"replace-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"An updated draft."}]}]}}}'` },
+      { type: "p", text: "REST success data is in result. getDocument returns { id, tableId, rowId, version, content, updatedAt } or null. For replaceDocument, use the current version you just read as expectedVersion. An old version returns 409 VERSION_CONFLICT; read and compare the new version rather than overwriting it. Write idempotency keys must be 1–200 characters. REST command bodies are limited to 8 MiB." },
+      { type: "h2", text: "REST paths and GraphQL" },
+      { type: "table", headers: ["Operation", "REST path", "Minimum document grant"], rows: [
+        ["Read / create / replace", "GET/POST/PUT /api/tables/{tableId}/rows/{rowId}/document", "canRead / canCreate / canUpdate"],
+        ["List history / read revision", "GET /api/tables/{tableId}/rows/{rowId}/document/revisions?limit=&beforeVersion=; GET /api/tables/{tableId}/rows/{rowId}/document/revisions/{version}", "canReadHistory"],
+        ["Restore history", "POST /api/tables/{tableId}/rows/{rowId}/document/restore", "canRestore + canReadHistory"],
+        ["Safe rendering", "GET /api/tables/{tableId}/rows/{rowId}/document/render?version=", "canRead; older version also needs canReadHistory"],
+        ["Upload / read image", "POST /api/tables/{tableId}/rows/{rowId}/document/images; GET /api/tables/{tableId}/rows/{rowId}/document/images/{fileId}", "canUpload / canRead"],
+      ] },
+      { type: "p", text: "GraphQL is available at POST /api/graphql. Use getDocument(input: JSON!) to read. Use mutations for createDocument, replaceDocument, restoreDocumentRevision, uploadDocumentImage, and other writes. Send Authorization: Bearer tab_…; for writes, send Idempotency-Key and the same idempotencyKey in input. Ordinary GraphQL request bodies are limited to 128 KiB; a single uploadDocumentImage mutation can use an 8 MiB body budget." },
+      { type: "code", lang: "graphql", code: `query ReadBody($input: JSON!) {
+  getDocument(input: $input)
+}
+
+mutation ReplaceBody($input: JSON!) {
+  replaceDocument(input: $input)
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "query ReadBody($input: JSON!) { getDocument(input: $input) }",
+  "variables": { "input": { "tableId": "00000000-0000-4000-8000-000000000001", "rowId": "00000000-0000-4000-8000-000000000002" } }
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "mutation ReplaceBody($input: JSON!) { replaceDocument(input: $input) }",
+  "variables": { "input": {
+    "tableId": "00000000-0000-4000-8000-000000000001",
+    "rowId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 1,
+    "idempotencyKey": "replace-body-example-2",
+    "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "An updated draft." }] }] }
+  } }
+}` },
+      { type: "h2", text: "Images, history, and content limits" },
+      { type: "ul", items: [
+        "Content uses restricted schemaVersion 1 JSON, not arbitrary HTML. Supported nodes include paragraphs, level 1–3 headings, lists, quotes, code blocks, horizontal rules, line breaks, and images. Supported marks are bold, italic, strike, code, and safe links. Links must use a full http, https, or mailto URL. Unknown nodes, properties, or invalid structures are rejected.",
+        "The complete serialized body JSON is limited to 64 KiB, 4,000 nodes, 12 levels, and 20 referenced images. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
+        "Call uploadDocumentImage first with base64 data without a data URL prefix, the current expectedVersion, file name, PNG/JPEG/WebP/GIF MIME type, and an idempotency key. Put the returned fileId in an image node's attrs.fileId and its alt text in attrs.alt, then save with replaceDocument. Images belong to one body and cannot be referenced from another record.",
+        "getDocumentImage returns base64 only for an image in the authorized body. renderDocument returns safe HTML and a private asset list; relative image paths are not public download links. Do not place private file URLs, keys, or tokens in body content.",
+        "listDocumentRevisions returns 20 items by default, up to 50; use nextBeforeVersion to request older history. getDocumentRevision reads one version. restoreDocumentRevision takes the historical version, current expectedVersion, and a new idempotency key; restoration creates a new version.",
+      ] },
+      { type: "h2", text: "MCP tools and errors" },
+      { type: "p", text: "Clients connected to tabdo MCP can use get_document, create_document, replace_document, list_document_revisions, get_document_revision, restore_document_revision, render_document, upload_document_image, and get_document_image. For example, read with get_document({ tableId, rowId }); for a replacement, pass tableId, rowId, the current expectedVersion, restricted JSON content, and idempotencyKey. Tools use the same per-table document permissions and version checks; provide only the access a caller needs." },
+      { type: "p", text: "Common errors: FORBIDDEN means the operation is not granted; NOT_FOUND means the body or image is missing or outside the authorized scope; VERSION_CONFLICT means a newer body exists; IDEMPOTENCY_MISMATCH means a retry key was reused with different input; BAD_INPUT or ATTACHMENT_LIMIT means the content structure or image budget is invalid. On a version conflict, read the latest version and compare it with the local draft." },
+      { type: "cards", items: [
+        { title: "Use record bodies", description: "Review editing, conflict drafts, images, and history recovery.", href: "/docs/record-documents", badge: "Guide" },
+        { title: "Publish a blog", description: "Select and explicitly publish a snapshot of record bodies.", href: "/docs/blogging", badge: "Blog" },
       ] },
     ],
   },
