@@ -1,3 +1,4 @@
+import { CALENDAR_TOOLS } from "@tabdo/shared";
 import { type AgentToolCatalog, type AgentToolCatalogItem } from "@tabdo/shared";
 import type { ToolSet } from "ai";
 import type { HarnessId } from "../ai/model.js";
@@ -7,6 +8,7 @@ const harnesses: HarnessId[] = ["pi", "codex", "claude"];
 // Definitions only: no runtime, credentials, or tool execution during catalog reads.
 const platformTools: ToolSet = createTableTools();
 function group(id: string) {
+  if (Object.hasOwn(CALENDAR_TOOLS, id)) return "日历与预约";
   if (id.includes("site")) return "站点";
   if (id.includes("report")) return "报告";
   if (id.includes("automation")) return "自动化";

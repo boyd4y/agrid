@@ -10,7 +10,8 @@
     "settings": "Settings",
     "integrations": "Integrations",
     "schedules": "Scheduled tasks",
-    "sites": "Sites"
+    "sites": "Sites",
+    "calendar": "Calendar"
   },
   "shell": {
     "workspace": "Workspace",

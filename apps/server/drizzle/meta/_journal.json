@@ -239,6 +239,13 @@
       "when": 1792209614400,
       "tag": "0033_enterprise_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792224550982,
+      "tag": "0034_calendar_bookings",
+      "breakpoints": true
     }
   ]
 }

@@ -538,3 +538,5 @@ export const apiKeyTables = pgTable("api_key_tables", {
   check("api_key_tables_capability", sql`${t.canRead} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canDelete}`)]);
 
 export { sites, siteRevisions, sitePreviews } from "./sites-schema.js";
+
+export { calendars, calendarPeople, availabilityExceptions, bookings, calendarReceipts, apiKeyCalendars } from "./calendar-schema.js";

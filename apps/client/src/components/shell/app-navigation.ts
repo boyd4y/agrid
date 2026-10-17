@@ -1,11 +1,12 @@
 import { NiBook, NiBot, NiGrid, NiUsers, NiZap } from "@/components/icons";
-import { ChartNoAxesCombined, MessageSquare, Settings, Plug, CalendarClock, Globe } from "lucide-react";
+import { ChartNoAxesCombined, MessageSquare, Settings, Plug, CalendarClock, CalendarDays, Globe } from "lucide-react";
 
 /** Sidebar and page headers share the same menu keys and icon components. Labels come from i18n `app:nav.*`. */
 export const APP_NAVIGATION = {
   ai: { to: "/app", labelKey: "nav.ai", icon: MessageSquare },
   tables: { to: "/app/tables", labelKey: "nav.tables", icon: NiGrid },
   automations: { to: "/app/automations", labelKey: "nav.automations", icon: NiZap },
+  calendar: { to: "/app/calendar", labelKey: "nav.calendar", icon: CalendarDays },
   schedules: { to: "/app/schedules", labelKey: "nav.schedules", icon: CalendarClock },
   sites: { to: "/app/sites", labelKey: "nav.sites", icon: Globe },
   reports: { to: "/app/reports", labelKey: "nav.reports", icon: ChartNoAxesCombined },

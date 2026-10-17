@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Copy, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ApiKeyInfo, ApiKeyInput, TablePermission } from "@tabdo/shared";
+import type { ApiKeyInfo, ApiKeyInput, CalendarPermission, TablePermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
@@ -19,13 +19,15 @@ import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { groupPermissionTables, operations, summarizePermissions, type ApiKeyTable } from "@/components/settings/api-key-permissions";
 
-const blank = (): ApiKeyInput => ({ name: "", permissions: [] });
+const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [] });
 
 export function ApiKeysSettings() {
   const { t } = useTranslation(["app", "common"]);
   const text = (key: string, values?: Record<string, string | number>) => t(`settings.apiKeys.${key}`, values);
   const id = useId();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<ApiKeyTable[]>([]);
+  const [calendars, setCalendars] = useState<{ id: string; name: string; workspaceName: string }[]>([]);
+  const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage"] as const;
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
   const [secret, setSecret] = useState(""), [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
@@ -42,14 +44,14 @@ export function ApiKeysSettings() {
       setCanManage(allowed);
       if (!allowed) return;
       const saved = await api.listApiKeys(controller.signal);
-      if (!controller.signal.aborted) { setKeys(saved.keys); setTables(saved.tables); }
+      if (!controller.signal.aborted) { setKeys(saved.keys); setTables(saved.tables); setCalendars(saved.calendars); }
     })().catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [revision]);
 
   function edit(key?: ApiKeyInfo) {
-    setInput(key ? { name: key.name, permissions: key.permissions.map(p => ({ ...p })) } : blank());
+    setInput(key ? { name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })) } : blank());
     setSecret(""); setFormError(""); setEditor({ key });
   }
   function close() { if (busy.current) return; setEditor(null); setSecret(""); setFormError(""); }
@@ -78,13 +80,19 @@ export function ApiKeysSettings() {
       return { ...current, permissions: [...current.permissions.filter(p => p.tableId !== tableId), ...(operations.some(op => grant[op]) ? [grant] : [])] };
     });
   }
+  function toggleCalendar(calendarId: string, operation: typeof calendarOperations[number], checked: boolean) {
+    setInput(current => {
+      const grant: CalendarPermission = { calendarId, canRead: false, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, ...current.calendarPermissions?.find(p => p.calendarId === calendarId), [operation]: checked };
+      return { ...current, calendarPermissions: [...(current.calendarPermissions ?? []).filter(p => p.calendarId !== calendarId), ...(calendarOperations.some(op => grant[op]) ? [grant] : [])] };
+    });
+  }
   function permissionRow(tableId: string, name: string, label: string) {
     return <div key={tableId} className="grid grid-cols-[minmax(0,1fr)_repeat(4,2rem)] items-center gap-1 border-b p-2 text-sm last:border-b-0 hover:bg-muted focus-within:bg-muted sm:grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)]">
       <span className="min-w-0 break-words" title={name}>{name}</span>
       {operations.map(op => <label key={op} className="flex min-h-8 cursor-pointer items-center justify-center rounded-sm hover:bg-accent"><Checkbox aria-label={`${label} · ${text(`operations.${op}`)}`} disabled={saving} checked={input.permissions.find(p => p.tableId === tableId)?.[op] ?? false} onCheckedChange={checked => toggle(tableId, op, checked === true)} /></label>)}
     </div>;
   }
-  const create = canManage && <Button size="sm" disabled={!tables.length} onClick={() => edit()}><Plus className="hidden sm:block" data-icon="inline-start" />{text("create")}</Button>;
+  const create = canManage && <Button size="sm" disabled={!tables.length && !calendars.length} onClick={() => edit()}><Plus className="hidden sm:block" data-icon="inline-start" />{text("create")}</Button>;
   return <section className="flex min-w-0 flex-col gap-6" data-testid="api-keys-settings">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-2"><CardTitle>{text("title")}</CardTitle><CardDescription>{text("description")}</CardDescription></div>
@@ -93,7 +101,7 @@ export function ApiKeysSettings() {
     {loading ? <p role="status" className="py-5 text-sm text-muted-foreground">{t("common:loading")}</p>
       : error ? <ListErrorState title={text("loadFailed")} onRetry={() => setRevision(value => value + 1)} />
       : !canManage ? <p className="py-5 text-sm text-muted-foreground">{text("adminOnly")}</p>
-      : !keys.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("emptyTitle")} description={text(tables.length ? "emptyDescription" : "noTables")} action={create} />
+      : !keys.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("emptyTitle")} description={text(tables.length || calendars.length ? "emptyDescription" : "noTables")} action={create} />
       : <><ul className="border-y border-border" aria-label={text("title")}>
         {pagination.items.map(key => {
           const scope = summarizePermissions(key.permissions, tables);
@@ -106,6 +114,7 @@ export function ApiKeysSettings() {
                 </span>
                 <span className="flex shrink-0 flex-col gap-1 text-xs text-muted-foreground">
                   <span>{scope.tableCount ? text("scopeSummary", { workspaces: text("workspaceCount", { count: scope.workspaceCount }), tables: text("tableCount", { count: scope.tableCount }) }) : text("noAuthorizedTables")}</span>
+                  {!!key.calendarPermissions?.length && <span>{t("calendar:calendarScope", { count: key.calendarPermissions.length })}</span>}
                   {scope.unavailableCount > 0 && <span>{text("unavailableSummary", { count: scope.unavailableCount })}</span>}
                 </span>
               </span>
@@ -134,9 +143,12 @@ export function ApiKeysSettings() {
                 {input.permissions.filter(grant => !tables.some(table => table.id === grant.tableId)).map(grant => permissionRow(grant.tableId, `${text("removedTable")} (${grant.tableId})`, `${text("removedTable")} (${grant.tableId})`))}
               </div>
             </FieldSet>
+            <FieldSet className="gap-3"><FieldLegend variant="label">{t("calendar:calendarGrants")}</FieldLegend><FieldDescription>{t("calendar:calendarGrantsHint")}</FieldDescription>
+              {calendars.map(calendar => <div key={calendar.id} className="flex flex-col gap-2 rounded-md border p-3"><span className="break-words text-sm font-medium">{calendar.workspaceName} / {calendar.name}</span><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{calendarOperations.map(operation => <label key={operation} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} aria-label={`${calendar.name} · ${t(`calendar:grants.${operation}`)}`} checked={input.calendarPermissions?.find(p => p.calendarId === calendar.id)?.[operation] ?? false} onCheckedChange={checked => toggleCalendar(calendar.id, operation, checked === true)} />{t(`calendar:grants.${operation}`)}</label>)}</div></div>)}
+            </FieldSet>
           </FieldGroup>
           {formError && <FieldError role="alert">{formError}</FieldError>}
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
         </form>}
       </DialogContent>
     </Dialog>

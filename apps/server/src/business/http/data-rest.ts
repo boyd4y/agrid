@@ -1,3 +1,6 @@
+import { executeCalendar } from "../calendar/service.js";
+import { CalendarError } from "../calendar/errors.js";
+import { isCalendarCommand, calendarTransportInput } from "../calendar/transport.js";
 import { Hono, type Context, type Next } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
@@ -15,7 +18,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.use("*", async (c, next) => {
     const headers = c.req.header("Access-Control-Request-Headers") ?? "";
     if (keys.requestApiKey(c.req.raw) || c.req.method === "OPTIONS" && /authorization|x-tabdo-key/i.test(headers))
-      return cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key"] })(c, next);
+      return cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key", "Idempotency-Key"] })(c, next);
     return next();
   });
   route.use("*", (c, next) => keys.requestApiKey(c.req.raw) ? bodyLimit({ maxSize: 128 * 1024 })(c, next) : next());
@@ -38,7 +41,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       c.header("Cache-Control", "private, no-store");
       return c.json(await fn({ scope, context, c, body }), status);
     } catch (error) {
-      if (error instanceof ServiceError) return c.json({ error: error.message }, error.status as 400);
+      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof CalendarError ? { code: error.code } : {}) }, error.status as 400);
       if (error instanceof z.ZodError) return c.json({ error: "Invalid request data" }, 400);
       return c.json({ error: "Request could not be completed" }, 500);
     } finally { try { await scope?.close(); } catch { /* Committed responses survive cleanup failures. */ } }
@@ -63,6 +66,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     const { scope, context, body } = input, command = z.string().parse(body.command), args = z.record(z.string(), z.unknown()).parse(body.input ?? {});
     if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
+    if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
     let result: unknown;
     if (command === "listTables") result = await data.siteTables(deps, context);
@@ -80,5 +84,29 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     }
     return { ok: true, command, result };
   }));
+  const calendar = (command: import("@tabdo/shared").CalendarCommand, argumentsFor: (input: Input) => Record<string, unknown>) => handle(!["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts"].includes(command), input => executeCalendar(input.scope.commands, { kind: "key", secret: input.context.secret }, command, calendarTransportInput(command, argumentsFor(input), input.c.req.header("Idempotency-Key"))));
+  route.get("/calendars", calendar("listCalendars", ({ c }) => ({ includeArchived: c.req.query("includeArchived") === "true" })));
+  route.post("/calendars", calendar("createCalendar", ({ body }) => body));
+  route.get("/calendars/:id", calendar("getCalendar", ({ c }) => ({ calendarId: c.req.param("id") })));
+  route.patch("/calendars/:id", calendar("updateCalendar", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.post("/calendars/:id/archive", calendar("archiveCalendar", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.get("/calendars/:id/people", calendar("listCalendarPeople", ({ c }) => ({ calendarId: c.req.param("id"), includeArchived: c.req.query("includeArchived") === "true" })));
+  route.post("/calendars/:id/people", calendar("createCalendarPerson", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.get("/calendars/:id/people/:personId", calendar("getCalendarPerson", ({ c }) => ({ calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.patch("/calendars/:id/people/:personId", calendar("updateCalendarPerson", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.post("/calendars/:id/people/:personId/archive", calendar("archiveCalendarPerson", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.get("/calendars/:id/people/:personId/hours", calendar("getWorkingHours", ({ c }) => ({ calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.post("/calendars/:id/people/:personId/hours", calendar("setWorkingHours", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.post("/calendars/:id/people/:personId/exceptions/query", calendar("listAvailabilityExceptions", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.post("/calendars/:id/people/:personId/exceptions", calendar("setAvailabilityException", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), personId: c.req.param("personId") })));
+  route.post("/calendars/:id/people/:personId/exceptions/:exceptionId/remove", calendar("removeAvailabilityException", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), personId: c.req.param("personId"), exceptionId: c.req.param("exceptionId") })));
+  route.post("/calendars/:id/bookings/query", calendar("queryBookings", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.get("/calendars/:id/bookings/:bookingId", calendar("getBooking", ({ c }) => ({ calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
+  route.post("/calendars/:id/bookings", calendar("createBooking", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.post("/calendars/:id/bookings/:bookingId/reschedule", calendar("rescheduleBooking", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
+  route.post("/calendars/:id/bookings/:bookingId/cancel", calendar("cancelBooking", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
+  route.post("/calendars/:id/availability/query", calendar("queryAvailability", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.post("/calendars/:id/conflicts/check", calendar("checkBookingConflicts", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.post("/calendars/:id/bookings/batch", calendar("batchBookings", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
   return route;
 }

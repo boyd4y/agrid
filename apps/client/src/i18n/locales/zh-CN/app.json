@@ -10,7 +10,8 @@
     "settings": "设置",
     "integrations": "集成",
     "schedules": "定时任务",
-    "sites": "站点"
+    "sites": "站点",
+    "calendar": "日历"
   },
   "shell": {
     "workspace": "工作区",

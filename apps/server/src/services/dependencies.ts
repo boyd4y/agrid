@@ -1,3 +1,4 @@
+import { CalendarError } from "../business/calendar/errors.js";
 import { siteCapabilities } from "../sites/capabilities.js";
 import { createSystemServices } from "@tabdo/core/services";
 import { HTTPException } from "hono/http-exception";
@@ -25,7 +26,7 @@ export function mapServiceError(error: unknown): never {
   if (error instanceof ServiceError) {
     const status = error.status as ContentfulStatusCode;
     throw new HTTPException(status, { message: error.message, cause: error.cause,
-      res: Response.json({ error: error.message }, { status }) });
+      res: Response.json({ error: error.message, ...(error instanceof CalendarError ? { code: error.code } : {}) }, { status }) });
   }
   throw error;
 }

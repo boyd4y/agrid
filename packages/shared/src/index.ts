@@ -26,3 +26,5 @@ export * from "./site-api.js";
 
 export * from "./sites.js";
 export * from "./runtime.js";
+
+export * from "./calendar.js";

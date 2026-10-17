@@ -1,3 +1,4 @@
+import { CALENDAR_COMMANDS, type CalendarCommands, type CalendarResults } from "./calendar.js";
 import type { SiteCommands, SiteResults } from "./sites.js";
 import type { BatchAddColumnsInput, BatchUpdateColumnsInput, BatchDeleteColumnsInput, BatchColumnsResult, BatchDeleteColumnsResult } from "./batch-columns.js";
 import type { BatchRelationsInput, BatchRelationsResult } from "./batch-relations.js";
@@ -39,6 +40,7 @@ import type {
 
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
+  ...CALENDAR_COMMANDS,
   "getWorkspace", "listWorkspaces", "createWorkspace", "listMembers",
   "listSites", "getSite", "saveSite", "restoreSiteRevision", "publishSite", "unpublishSite", "deleteSite",
   "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
@@ -163,7 +165,7 @@ export type ReorderColumnsInput = {
 
 export type Workspace = { id: string; organizationId: string; name: string; isDefault: boolean; createdAt: string | Date };
 
-export type CommandInputMap = SiteCommands & RelationCommands & {
+export type CommandInputMap = CalendarCommands & SiteCommands & RelationCommands & {
   listWorkspaces: Record<string, never>;
   createWorkspace: { name: string };
   batchAddColumns: BatchAddColumnsInput;
@@ -214,7 +216,7 @@ export type CommandInputMap = SiteCommands & RelationCommands & {
   setFormChrome: SetFormChromeInput;
 };
 
-export type CommandResultMap = SiteResults & RelationResults & {
+export type CommandResultMap = CalendarResults & SiteResults & RelationResults & {
   listWorkspaces: Workspace[];
   createWorkspace: Workspace;
   batchAddColumns: BatchColumnsResult;

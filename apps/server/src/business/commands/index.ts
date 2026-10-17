@@ -1,3 +1,5 @@
+export * from "./calendar.js";
+import * as calendarCommands from "./calendar.js";
 /** Shared command registry. Implementations depend on modules, never on this registry. */
 export * from "./rows.js";
 import { listTables, getTable, createTable, updateCell, updateCells, updateCellsInTransaction, setRelation, addRelation, removeRelation, addRow, batchAddRows, prepareBatchRowWrites, batchUpdateRows, deleteRow, batchDeleteRows, deleteTable, reorderColumns, queryRows, setStatus, moveCard } from "./rows.js";
@@ -43,6 +45,7 @@ export { getRow, queryRelationRecords } from "./relations.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 
 export const commands = {
+  ...calendarCommands,
   batchSetRelations,
   batchAddRelations,
   batchRemoveRelations,

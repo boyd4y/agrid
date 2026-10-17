@@ -145,6 +145,10 @@
     "sites": {
       "name": "站点",
       "description": "创建自定义页面，保存版本、预览和发布。"
+    },
+    "calendar": {
+      "name": "日历与预约",
+      "description": "按成员权限查询空档、预约、改期和取消。"
     }
   },
   "partlyEnabled": "部分开启",

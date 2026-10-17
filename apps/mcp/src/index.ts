@@ -6,7 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { COLUMN_TYPES, MEMBER_LIST_SCHEMA, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
+import { CALENDAR_TOOLS, CALENDAR_SCHEMAS, COLUMN_TYPES, MEMBER_LIST_SCHEMA, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
 import { callCommand, textResult } from "./client.js";
 
 const cellValue = z.union([
@@ -46,6 +46,13 @@ const server = new McpServer({
   name: "tabdo",
   version: "0.1.0",
 });
+
+for (const [name, definition] of Object.entries(CALENDAR_TOOLS)) {
+  server.registerTool(name, { description: definition.description, inputSchema: CALENDAR_SCHEMAS[definition.command].shape }, async (input: Record<string, unknown>) => {
+    try { return textResult(await callCommand(definition.command, CALENDAR_SCHEMAS[definition.command].parse(input))); }
+    catch (error) { return { ...textResult({ ok: false, error: { code: (error as { code?: string }).code ?? "REQUEST_FAILED", message: error instanceof Error ? error.message : "Calendar request failed" } }), isError: true }; }
+  });
+}
 
 server.registerTool("get_workspace", { description: "获取当前工作区与执行成员身份", inputSchema: {} }, async () => textResult(await callCommand("getWorkspace", {})));
 server.registerTool("list_members", { description: "查询工作区成员和智能体；支持姓名/邮箱搜索、kind筛选和分页。负责人person填userId；智能体动作agentUserId用kind=agent的userId，不用成员id或姓名。", inputSchema: MEMBER_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listMembers", input)));

@@ -1,3 +1,4 @@
+import { createCalendarTools } from "./calendar.js";
 import { createSiteTools } from "./sites.js";
 import { getSite } from "../../sites/service.js";
 import type { CommandDependencies } from "../../dependencies.js";
@@ -51,6 +52,7 @@ export function createTableTools(
   return {
     ...createReportTools(deps, organizationId, transaction),
     ...createSiteTools(deps, organizationId, actorId, transaction),
+    ...createCalendarTools(deps, organizationId, actorId, transaction),
     ...createBatchTools(deps, defaultTableId, organizationId, actorId, transaction),
     get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow(dependencies(), {...input,...org}, currentTransaction())}),
     query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords(dependencies(), {...input,...org}, currentTransaction())}),

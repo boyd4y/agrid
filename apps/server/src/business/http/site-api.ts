@@ -1,3 +1,7 @@
+import { CALENDAR_COMMANDS, CALENDAR_READ_COMMANDS, type CalendarCommand } from "@tabdo/shared";
+import { executeCalendar } from "../calendar/service.js";
+import { calendarTransportInput } from "../calendar/transport.js";
+import { CalendarError } from "../calendar/errors.js";
 import { createDataRestRoutes } from "./data-rest.js";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -12,6 +16,8 @@ import * as keys from "../data-api/keys.js";
 import * as data from "../data-api/data.js";
 import { downloadFile } from "../services/files.js";
 
+const calendarQueries = CALENDAR_READ_COMMANDS.map(name => `${name}(input: JSON!): JSON!`).join("\n");
+const calendarMutations = CALENDAR_COMMANDS.filter(name => !CALENDAR_READ_COMMANDS.includes(name));
 export const siteSchemaSDL = /* GraphQL */ `
   scalar JSON
   type SelectOption { id: ID!, label: String!, color: String }
@@ -26,11 +32,12 @@ export const siteSchemaSDL = /* GraphQL */ `
   input SortInput { columnId: ID!, direction: SortDirection! }
   input RowsInput { cursor: String, limit: Int = 50, filters: [FilterInput!], filterLogic: FilterLogic, sort: SortInput, includeTotal: Boolean }
   type Table { id: ID!, name: String!, description: String, columns: [Column!]!, rows(options: RowsInput): RowsPage!, row(id: ID!): Row }
-  type Query { tables: [Table!]!, table(id: ID!): Table }
+  type Query { ${calendarQueries} tables: [Table!]!, table(id: ID!): Table }
   type CreateRowPayload { id: ID!, createdAt: String! }
   type UpdateRowPayload { id: ID!, updatedAt: String!, version: Int! }
   type DeleteRowPayload { id: ID! }
   type Mutation {
+    ${calendarMutations.map(name => `${name}(input: JSON!): JSON!`).join("\n")}
     createRow(tableId: ID!, cells: JSON!): CreateRowPayload!
     updateRow(tableId: ID!, rowId: ID!, cells: JSON!, expectedVersion: Int): UpdateRowPayload!
     deleteRow(tableId: ID!, rowId: ID!): DeleteRowPayload!
@@ -47,7 +54,7 @@ const boundedQuery: ValidationRule = context => ({ Document(node) {
       if (depth > 16 || fields > 1000 || roots > 20) { exceeded = true; return; }
       for (const selection of set.selections) {
         if (selection.kind === Kind.FIELD) {
-          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow"].includes(selection.name.value)) creates++; }
+          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow", ...calendarMutations].includes(selection.name.value)) creates++; }
           if (fields > 1000 || roots > 20) { exceeded = true; return; }
           if (selection.selectionSet) walk(selection.selectionSet, depth + 1, path);
         } else if (selection.kind === Kind.INLINE_FRAGMENT) walk(selection.selectionSet, depth, path);
@@ -63,7 +70,7 @@ const boundedQuery: ValidationRule = context => ({ Document(node) {
   }
 } });
 
-type GraphContext = data.SiteContext & { scope: RequestScope; ip: string; budget: { rows: number; queries: number } };
+type GraphContext = data.SiteContext & { scope: RequestScope; ip: string; idempotencyKey?: string; budget: { rows: number; queries: number } };
 function charge(context: GraphContext, rows: number) {
   context.budget.rows -= rows; context.budget.queries--;
   if (context.budget.rows < 0 || context.budget.queries < 0) throw new GraphQLError("Query exceeds the site API limits", { extensions: { code: "QUERY_TOO_COMPLEX" } });
@@ -75,7 +82,7 @@ function publicError(error: unknown, scope?: RequestScope): never {
   if (error instanceof GraphQLError) throw error;
   if (error instanceof ZodError) throw new GraphQLError("Invalid request data", { extensions: { code: "BAD_USER_INPUT" } });
   if (error instanceof ServiceError) {
-    const code = ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
+    const code = error instanceof CalendarError ? error.code : ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
     throw new GraphQLError(error.message, { extensions: { code, http: { status: error.status } } });
   }
   observe(scope, "site-api.request", error);
@@ -96,13 +103,19 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
   const route = new Hono();
   // This public surface never uses cookies and never inherits management CORS.
   for (const path of ["/graphql", "/site-files/*"]) {
-    route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key"], maxAge: 600 }));
+    route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key", "Idempotency-Key"], maxAge: 600 }));
     route.use(path, async (c, next) => { c.header("Cache-Control", "private, no-store"); c.header("Referrer-Policy", "no-referrer"); await next(); });
   }
   route.use("/graphql", bodyLimit({ maxSize: 128 * 1024, onError: c => c.json({ errors: [{ message: "Request body too large", extensions: { code: "PAYLOAD_TOO_LARGE" } }] }, 413) }));
+  const calendarResolver = (command: CalendarCommand) => safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => {
+    charge(ctx, command === "queryBookings" ? 500 : 0);
+    if (!CALENDAR_READ_COMMANDS.includes(command)) await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
+    return executeCalendar(ctx.scope.commands, { kind: "key", secret: ctx.secret }, command, calendarTransportInput(command, args.input, ctx.idempotencyKey));
+  });
   const schema = createSchema<GraphContext>({ typeDefs: siteSchemaSDL, resolvers: {
     JSON: new GraphQLScalarType({ name: "JSON", serialize: value => value, parseValue: value => value, parseLiteral: (node, variables) => valueFromASTUntyped(node, variables) }),
     Query: {
+      ...Object.fromEntries(CALENDAR_READ_COMMANDS.map(name => [name, calendarResolver(name)])),
       tables: safe((_root: unknown, _args: unknown, ctx: GraphContext) => data.siteTables(ctx.scope.commands, ctx)),
       table: safe((_root: unknown, args: { id: string }, ctx: GraphContext) => data.siteTable(ctx.scope.commands, ctx, args.id)),
     },
@@ -115,7 +128,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
         charge(ctx, 1); return data.siteRow(ctx.scope.commands, ctx, table.id, args.id);
       }),
     },
-    Mutation: { createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
+    Mutation: { ...Object.fromEntries(calendarMutations.map(name => [name, calendarResolver(name)])), createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
       keys.requireSiteTable(ctx.principal, args.tableId, "create");
       await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
       return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells);
@@ -147,7 +160,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
       const ip = options.clientIp?.(c) ?? "unknown";
       if (!scope.siteRateLimit) throw new ServiceError(503, { message: "Site API rate limiting is unavailable" });
       await scope.siteRateLimit({ keyId: principal.id, ip, kind: "read" });
-      return await yoga.fetch(c.req.raw, { principal, secret, baseUrl: publicUrl?.origin ?? new URL(c.req.url).origin, scope, ip, budget: { rows: 1000, queries: 30 } });
+      return await yoga.fetch(c.req.raw, { principal, secret, idempotencyKey: c.req.header("Idempotency-Key"), baseUrl: publicUrl?.origin ?? new URL(c.req.url).origin, scope, ip, budget: { rows: 1000, queries: 30 } });
     } catch (error) {
       try { publicError(error, scope); } catch (mapped) {
         const fault = mapped as GraphQLError;

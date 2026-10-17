@@ -29,10 +29,11 @@ export async function callCommand(
     ok?: boolean;
     result?: unknown;
     error?: string;
+    code?: string;
   };
 
   if (!res.ok || data.error) {
-    throw new Error(data.error || `HTTP ${res.status}`);
+    throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { code: data.code, status: res.status });
   }
   return data.result;
 }

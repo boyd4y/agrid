@@ -179,6 +179,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
             titleHint={t("shell.automationsHint")}
             activeMatch={(pathname) => pathname.includes("/automations")}
           />
+          <NavItem {...nav("calendar")} collapsed={sidebarCollapsed} />
           <NavItem {...nav("schedules")} collapsed={sidebarCollapsed} />
           <NavItem {...nav("reports")} collapsed={sidebarCollapsed} />
           <NavItem {...nav("sites")} collapsed={sidebarCollapsed} />

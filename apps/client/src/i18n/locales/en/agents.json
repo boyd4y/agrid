@@ -145,6 +145,10 @@
     "sites": {
       "name": "Sites",
       "description": "Create custom pages, save versions, preview and publish."
+    },
+    "calendar": {
+      "name": "Calendars and appointments",
+      "description": "Find availability, book, reschedule and cancel with member permissions."
     }
   },
   "partlyEnabled": "Partly enabled",

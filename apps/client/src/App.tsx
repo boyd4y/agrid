@@ -22,6 +22,7 @@ import { SchedulesPage } from "@/pages/app/SchedulesPage";
 import { ScheduledTaskRunsPage, ScheduledRunChatPage, ScheduledTasksEmpty } from "@/pages/app/ScheduledTaskRunsPage";
 import { ScheduledTaskDetailPage } from "@/pages/app/ScheduledTaskDetailPage";
 import { AutomationDetailPage } from "@/pages/app/AutomationDetailPage";
+const CalendarPage = lazy(() => import("@/pages/app/CalendarPage").then(module => ({ default: module.CalendarPage })));
 const ReportsPage = lazy(() => import("@/pages/app/ReportsPage").then((module) => ({ default: module.ReportsPage })));
 const ReportDetailPage = lazy(() => import("@/pages/app/ReportDetailPage").then((module) => ({ default: module.ReportDetailPage })));
 import { MembersPage } from "@/pages/app/MembersPage";
@@ -65,6 +66,7 @@ export default function App() {
         >
           <Route index element={<WorkspaceHomePage />} />
           <Route path="tables" element={<TablesPage />} />
+          <Route path="calendar" element={<Suspense fallback={null}><CalendarPage /></Suspense>} />
           <Route path="sites" element={<Suspense fallback={null}><SitesPage /></Suspense>} />
           <Route path="sites/:siteId" element={<Suspense fallback={null}><SiteDetailPage /></Suspense>} />
           <Route path="integrations" element={<Navigate to="/app/settings?tab=agentmail" replace />} />

@@ -12,3 +12,42 @@ html, body, #root { height: 100%; }
   --tabdo-yellow: #c29343;
   --tabdo-yellow-soft: #f1e3b7;
 }
+
+/* Standard FullCalendar palette follows the same semantic tokens in both themes. */
+.tabdo-booking-calendar {
+  --fc-monarch-primary: var(--primary);
+  --fc-monarch-primary-foreground: var(--primary-foreground);
+  --fc-monarch-primary-over: var(--primary);
+  --fc-monarch-primary-down: var(--primary);
+  --fc-monarch-secondary: var(--secondary);
+  --fc-monarch-secondary-foreground: var(--secondary-foreground);
+  --fc-monarch-secondary-over: var(--accent);
+  --fc-monarch-secondary-down: var(--accent);
+  --fc-monarch-tertiary: var(--primary);
+  --fc-monarch-tertiary-foreground: var(--primary-foreground);
+  --fc-monarch-tertiary-over: var(--primary);
+  --fc-monarch-tertiary-down: var(--primary);
+  --fc-monarch-event: var(--primary);
+  --fc-monarch-event-contrast: var(--primary-foreground);
+  --fc-monarch-highlight: var(--accent);
+  --fc-monarch-now: var(--destructive);
+  --fc-monarch-selected: var(--foreground);
+  --fc-monarch-selected-foreground: var(--background);
+  --fc-monarch-selected-over: var(--foreground);
+  --fc-monarch-selected-down: var(--foreground);
+  --fc-monarch-outline: var(--ring);
+  --fc-monarch-popover: var(--popover);
+  --fc-monarch-popover-foreground: var(--popover-foreground);
+  --fc-monarch-background: var(--background);
+  --fc-monarch-faint: var(--muted);
+  --fc-monarch-muted: var(--muted);
+  --fc-monarch-strong: var(--accent);
+  --fc-monarch-stronger: var(--accent);
+  --fc-monarch-strongest: var(--accent);
+  --fc-monarch-foreground: var(--foreground);
+  --fc-monarch-faint-foreground: var(--muted-foreground);
+  --fc-monarch-muted-foreground: var(--muted-foreground);
+  --fc-monarch-border: var(--border);
+  --fc-monarch-strong-border: var(--border);
+  font-size: 0.8125rem;
+}

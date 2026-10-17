@@ -1,4 +1,4 @@
-import { Globe } from "lucide-react";
+import { Globe, CalendarDays } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ChevronRight, Wrench, Loader2, RefreshCw, Table2, ClipboardList, ChartColumn, Zap } from "lucide-react";
 import type { AgentToolCatalogItem } from "@tabdo/shared";
@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { groupAgentTools, setAgentToolGroup } from "./tool-groups";
 
 const capabilityIcons: Record<string, typeof Wrench> = {
-  sites: Globe, tables: Table2, forms: ClipboardList, reports: ChartColumn, automations: Zap,
+  calendar: CalendarDays, sites: Globe, tables: Table2, forms: ClipboardList, reports: ChartColumn, automations: Zap,
   other: Wrench,
 };
 

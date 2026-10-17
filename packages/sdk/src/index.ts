@@ -1,3 +1,4 @@
+import type { CalendarCommand, CalendarCommands, CalendarResults } from "@tabdo/shared";
 import type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteCreateReceipt } from "@tabdo/shared";
 export type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteFile, SiteCreateReceipt } from "@tabdo/shared";
 
@@ -43,6 +44,37 @@ export function createClient(options: ClientOptions) {
     if (result.data === undefined || result.data === null) throw new TabdoApiError("Missing API response data", "INVALID_RESPONSE", response.status);
     return result.data;
   }
+  // Aborting transport does not cancel a server transaction. Retry the same input/key to read its receipt.
+  async function calendarCommand<K extends CalendarCommand>(command: K, input: CalendarCommands[K], request?: RequestOptions): Promise<CalendarResults[K]> {
+    const read = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts"].includes(command);
+    const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
+    return result[command];
+  }
+  const calendarApi = {
+    listCalendars: (input: CalendarCommands["listCalendars"], request?: RequestOptions) => calendarCommand("listCalendars", input, request),
+    getCalendar: (input: CalendarCommands["getCalendar"], request?: RequestOptions) => calendarCommand("getCalendar", input, request),
+    createCalendar: (input: CalendarCommands["createCalendar"], request?: RequestOptions) => calendarCommand("createCalendar", input, request),
+    updateCalendar: (input: CalendarCommands["updateCalendar"], request?: RequestOptions) => calendarCommand("updateCalendar", input, request),
+    archiveCalendar: (input: CalendarCommands["archiveCalendar"], request?: RequestOptions) => calendarCommand("archiveCalendar", input, request),
+    listCalendarPeople: (input: CalendarCommands["listCalendarPeople"], request?: RequestOptions) => calendarCommand("listCalendarPeople", input, request),
+    getCalendarPerson: (input: CalendarCommands["getCalendarPerson"], request?: RequestOptions) => calendarCommand("getCalendarPerson", input, request),
+    createCalendarPerson: (input: CalendarCommands["createCalendarPerson"], request?: RequestOptions) => calendarCommand("createCalendarPerson", input, request),
+    updateCalendarPerson: (input: CalendarCommands["updateCalendarPerson"], request?: RequestOptions) => calendarCommand("updateCalendarPerson", input, request),
+    archiveCalendarPerson: (input: CalendarCommands["archiveCalendarPerson"], request?: RequestOptions) => calendarCommand("archiveCalendarPerson", input, request),
+    getWorkingHours: (input: CalendarCommands["getWorkingHours"], request?: RequestOptions) => calendarCommand("getWorkingHours", input, request),
+    setWorkingHours: (input: CalendarCommands["setWorkingHours"], request?: RequestOptions) => calendarCommand("setWorkingHours", input, request),
+    listAvailabilityExceptions: (input: CalendarCommands["listAvailabilityExceptions"], request?: RequestOptions) => calendarCommand("listAvailabilityExceptions", input, request),
+    setAvailabilityException: (input: CalendarCommands["setAvailabilityException"], request?: RequestOptions) => calendarCommand("setAvailabilityException", input, request),
+    removeAvailabilityException: (input: CalendarCommands["removeAvailabilityException"], request?: RequestOptions) => calendarCommand("removeAvailabilityException", input, request),
+    queryBookings: (input: CalendarCommands["queryBookings"], request?: RequestOptions) => calendarCommand("queryBookings", input, request),
+    getBooking: (input: CalendarCommands["getBooking"], request?: RequestOptions) => calendarCommand("getBooking", input, request),
+    createBooking: (input: CalendarCommands["createBooking"], request?: RequestOptions) => calendarCommand("createBooking", input, request),
+    rescheduleBooking: (input: CalendarCommands["rescheduleBooking"], request?: RequestOptions) => calendarCommand("rescheduleBooking", input, request),
+    cancelBooking: (input: CalendarCommands["cancelBooking"], request?: RequestOptions) => calendarCommand("cancelBooking", input, request),
+    queryAvailability: (input: CalendarCommands["queryAvailability"], request?: RequestOptions) => calendarCommand("queryAvailability", input, request),
+    checkBookingConflicts: (input: CalendarCommands["checkBookingConflicts"], request?: RequestOptions) => calendarCommand("checkBookingConflicts", input, request),
+    batchBookings: (input: CalendarCommands["batchBookings"], request?: RequestOptions) => calendarCommand("batchBookings", input, request),
+  };
   function table(tableId: string) {
     return {
       async columns(request?: RequestOptions): Promise<SiteColumn[]> {
@@ -70,7 +102,7 @@ export function createClient(options: ClientOptions) {
       },
     };
   }
-  return { graphql, table, async tables(request?: RequestOptions): Promise<SiteTable[]> {
+  return { graphql, table, calendar: calendarApi, async tables(request?: RequestOptions): Promise<SiteTable[]> {
     return (await graphql<{ tables: SiteTable[] }>(`query Tables { tables { id name description columns { ${columnFields} } } }`, {}, request)).tables;
   } };
 }

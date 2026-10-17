@@ -1,3 +1,5 @@
+import calendarZh from "./locales/zh-CN/calendar.json";
+import calendarEn from "./locales/en/calendar.json";
 import sitesZh from "./locales/zh-CN/sites.json";
 import sitesEn from "./locales/en/sites.json";
 import i18n from "i18next";
@@ -87,6 +89,7 @@ void i18n.use(initReactI18next).init({
   resources: {
     "zh-CN": {
       sites: sitesZh,
+      calendar: calendarZh,
       icons: iconsZh,
       common: commonZh,
       errors: errorsZh,
@@ -105,6 +108,7 @@ void i18n.use(initReactI18next).init({
     },
     en: {
       sites: sitesEn,
+      calendar: calendarEn,
       icons: iconsEn,
       common: commonEn,
       errors: errorsEn,
