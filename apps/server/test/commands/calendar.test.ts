@@ -3,7 +3,7 @@ import { before, after, test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, workspaces, bookings, calendarPeople, calendarReceipts } from "../../src/business/db/schema.js";
+import { organization, user, member, workspaces, bookings, calendarPeople, calendarReceipts, availabilityExceptions } from "../../src/business/db/schema.js";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import { executeCalendar, type CalendarCaller } from "../../src/business/calendar/service.js";
 import { CalendarError } from "../../src/business/calendar/errors.js";
@@ -12,6 +12,9 @@ import type { CalendarCommand, CalendarCommands, WorkingWindow } from "@tabdo/sh
 import { createSiteKey, updateSiteKey, deleteSiteKey } from "../../src/business/data-api/keys.js";
 import type { Actor } from "../../src/business/auth/actor.js";
 import { openIntervals, parseBookingTime } from "../../src/business/calendar/time.js";
+import { createCalendarTools } from "../../src/business/agent/tools/calendar.js";
+import { nativeHostTools } from "../../src/harness/tools.js";
+import { getToolTransaction } from "../../src/ai/execution-context.js";
 
 const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test"));
@@ -213,4 +216,25 @@ test("migration constraints reject cross-workspace allocations and calendar scop
   await assert.rejects(resource.db.insert(bookings).values({ workspaceId: a.workspaceId!, calendarId, personId: person.id, title: "Forged", start: new Date("2030-01-07T09:00:00Z"), end: new Date("2030-01-07T09:30:00Z"), timeZone: "UTC" }));
   const { calendars } = await import("../../src/business/db/schema.js");
   await assert.rejects(resource.db.update(calendars).set({ workspaceId: b.workspaceId }).where(eq(calendars.id, calendarId)));
+});
+
+test("a rejected native booking leaves no receipt and retries keep returning the conflict", async () => {
+  const native = nativeHostTools(createCalendarTools(a, org, agentId, getToolTransaction), operation => resource.db.transaction(tx => operation(tx)), { userId: agentId, organizationId: org });
+  const failedKey = k();
+  const input = { calendarId, personId, title: "Native conflicting request", time: time("09:00", "09:30"), idempotencyKey: failedKey };
+  const invoke = () => native.tools.create_booking.execute!(input, { toolCallId: k(), messages: [], context: undefined }) as Promise<any>;
+  const first = await invoke(), retry = await invoke();
+  const receipts = await resource.db.select().from(calendarReceipts).where(and(eq(calendarReceipts.workspaceId, a.workspaceId!), eq(calendarReceipts.key, failedKey)));
+  assert.deepEqual({ firstCode: first?.error?.code, retryCode: retry?.error?.code ?? null, receipts: receipts.length }, { firstCode: "RESOURCE_CONFLICT", retryCode: "RESOURCE_CONFLICT", receipts: 0 }, "a failed member-agent request must not become a null successful receipt on retry");
+});
+
+test("a rejected native time-off tool rolls back its exception and receipt inside the host transaction", async () => {
+  const native = nativeHostTools(createCalendarTools(a, org, uid, getToolTransaction), operation => resource.db.transaction(tx => operation(tx)), { userId: uid, organizationId: org });
+  const failedKey = k();
+  const before = await resource.db.select().from(availabilityExceptions).where(eq(availabilityExceptions.personId, personId));
+  const output = await native.tools.set_availability_exception.execute!({ calendarId, personId, date: "2030-01-07", intervals: [{ start: "09:00", end: "09:30" }], idempotencyKey: failedKey }, { toolCallId: k(), messages: [], context: undefined }) as any;
+  assert.equal(output.error.code, "RESOURCE_CONFLICT");
+  const after = await resource.db.select().from(availabilityExceptions).where(eq(availabilityExceptions.personId, personId));
+  const receipts = await resource.db.select().from(calendarReceipts).where(and(eq(calendarReceipts.workspaceId, a.workspaceId!), eq(calendarReceipts.key, failedKey)));
+  assert.deepEqual({ exceptions: after.length, receipts: receipts.length }, { exceptions: before.length, receipts: 0 }, "a structured tool error must not commit invalid time off or an unfinished idempotency receipt");
 });
