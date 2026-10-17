@@ -26,8 +26,21 @@ try {
   const drag = async (hours) => {
     // Raw mouse coordinates do not scroll the target into view. A refreshed
     // calendar mounts before its initial time-grid scroll has settled.
-    await event.evaluate(el => el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
     await event.hover();
+    await event.evaluate(async (el, distance) => {
+      let previousY, stableFrames = 0;
+      for (let frame = 0; frame < 120; frame++) {
+        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const rect = el.getBoundingClientRect(), x = rect.x + rect.width / 2, y = rect.y + Math.min(rect.height / 2, 10);
+        const hit = document.elementFromPoint(x, y)?.closest('[data-booking-id]') === el
+          && !!document.elementFromPoint(x, y + distance)?.closest('.tabdo-booking-calendar');
+        stableFrames = hit && rect.y === previousY ? stableFrames + 1 : 0;
+        if (stableFrames >= 4) return;
+        previousY = rect.y;
+      }
+      throw new Error('The complete drag path did not settle inside the calendar');
+    }, hourPixels * hours);
     const source = await event.boundingBox();
     const hit = await page.evaluate(({ x, y, distance }) => ({
       sourceId: document.elementFromPoint(x, y)?.closest('[data-booking-id]')?.getAttribute('data-booking-id'),
