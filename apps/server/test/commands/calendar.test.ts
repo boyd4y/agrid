@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { before, after, test } from "node:test";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, workspaces, bookings, calendarPeople, calendarReceipts, availabilityExceptions } from "../../src/business/db/schema.js";
+import { organization, user, member, workspaces, bookings, calendars, calendarPeople, calendarReceipts, availabilityExceptions } from "../../src/business/db/schema.js";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import { executeCalendar, type CalendarCaller } from "../../src/business/calendar/service.js";
 import { CalendarError } from "../../src/business/calendar/errors.js";
@@ -237,4 +237,89 @@ test("a rejected native time-off tool rolls back its exception and receipt insid
   const after = await resource.db.select().from(availabilityExceptions).where(eq(availabilityExceptions.personId, personId));
   const receipts = await resource.db.select().from(calendarReceipts).where(and(eq(calendarReceipts.workspaceId, a.workspaceId!), eq(calendarReceipts.key, failedKey)));
   assert.deepEqual({ exceptions: after.length, receipts: receipts.length }, { exceptions: before.length, receipts: 0 }, "a structured tool error must not commit invalid time off or an unfinished idempotency receipt");
+});
+
+test("handled native failures isolate every write family while the host commits legitimate work", async () => {
+  const calendar = await call("createCalendar", { name: "Host savepoints", timeZone: "Asia/Shanghai", idempotencyKey: k() });
+  const targetCalendar = calendar.id;
+  const person = await call("createCalendarPerson", { calendarId: targetCalendar, name: "Savepoint person", timeZone: "Asia/Shanghai", idempotencyKey: k() });
+  await call("setWorkingHours", { calendarId: targetCalendar, personId: person.id, windows, expectedVersion: 1, idempotencyKey: k() });
+  const first = await call("createBooking", { calendarId: targetCalendar, personId: person.id, title: "Preserved", time: time("09:00", "09:30"), idempotencyKey: k() });
+  const second = await call("createBooking", { calendarId: targetCalendar, personId: person.id, title: "Blocking", time: time("10:00", "10:30"), idempotencyKey: k() });
+  const rest = await call("setAvailabilityException", { calendarId: targetCalendar, personId: person.id, date: "2030-01-07", intervals: [{ start: "13:00", end: "13:30" }], idempotencyKey: k() });
+  const p = { calendarId: targetCalendar, personId: person.id };
+  const cases = [
+    { tool: "update_calendar", input: { calendarId: targetCalendar, name: "Must not change", timeZone: "UTC", expectedVersion: 9 }, code: "VERSION_CONFLICT" },
+    { tool: "archive_calendar", input: { calendarId: targetCalendar, expectedVersion: 1 }, code: "FUTURE_BOOKINGS" },
+    { tool: "create_calendar_person", input: { calendarId: targetCalendar, name: "Duplicate binding", userId: uid, timeZone: "UTC" }, code: "RESOURCE_CONFLICT" },
+    { tool: "update_calendar_person", input: { ...p, name: "Must not change", timeZone: "America/New_York", expectedVersion: 2 }, code: "RESOURCE_CONFLICT" },
+    { tool: "archive_calendar_person", input: { ...p, expectedVersion: 2 }, code: "FUTURE_BOOKINGS" },
+    { tool: "set_working_hours", input: { ...p, expectedVersion: 2, windows: [] }, code: "RESOURCE_CONFLICT" },
+    { tool: "set_availability_exception", input: { ...p, exceptionId: rest.id, expectedVersion: 1, date: rest.date, intervals: [{ start: "09:00", end: "09:30" }] }, code: "RESOURCE_CONFLICT" },
+    { tool: "remove_availability_exception", input: { ...p, exceptionId: rest.id, expectedVersion: 9 }, code: "VERSION_CONFLICT" },
+    { tool: "reschedule_booking", input: { calendarId: targetCalendar, bookingId: first.id, expectedVersion: 1, time: time("10:00", "10:30") }, code: "RESOURCE_CONFLICT" },
+    { tool: "cancel_booking", input: { calendarId: targetCalendar, bookingId: first.id, expectedVersion: 9 }, code: "VERSION_CONFLICT" },
+    { tool: "batch_bookings", input: { calendarId: targetCalendar, operations: [{ kind: "cancel", bookingId: first.id, expectedVersion: 1 }, { kind: "create", personId: person.id, title: "Conflict", time: time("10:00", "10:30") }] }, code: "RESOURCE_CONFLICT" },
+  ].map(item => ({ ...item, input: { ...item.input, idempotencyKey: k() } }));
+  const retryInput = { ...p, title: "Retry after failure", time: time("09:00", "09:30"), idempotencyKey: k() };
+  let beforeId = "", afterId = "", retryId = "";
+  await resource.db.transaction(async outer => {
+    // These operations share the actual host transaction, including its member checks.
+    const native = nativeHostTools(createCalendarTools(a, org, uid, getToolTransaction), operation => operation(outer), { userId: uid, organizationId: org });
+    const invoke = (name: string, input: unknown) => native.tools[name].execute!(input, { toolCallId: k(), messages: [], context: undefined }) as Promise<any>;
+    beforeId = (await invoke("create_booking", { ...p, title: "Host before", time: time("11:00", "11:30"), idempotencyKey: k() })).id;
+    for (const item of cases) assert.equal((await invoke(item.tool, item.input)).error.code, item.code, item.tool);
+    assert.equal((await invoke("create_booking", retryInput)).error.code, "RESOURCE_CONFLICT");
+    await invoke("cancel_booking", { calendarId: targetCalendar, bookingId: first.id, expectedVersion: 1, idempotencyKey: k() });
+    const retried = await invoke("create_booking", retryInput);
+    assert(retried.id, "the original failed key can succeed once the conflict is removed"); retryId = retried.id;
+    assert.deepEqual(await invoke("create_booking", retryInput), retried, "the successful retry now has a complete receipt");
+    afterId = (await invoke("create_booking", { ...p, title: "Host after", time: time("12:00", "12:30"), idempotencyKey: k() })).id;
+  });
+  // A separate connection reads only after the host really committed.
+  const saved = await other.db.select().from(bookings).where(eq(bookings.calendarId, targetCalendar));
+  assert.equal(saved.length, 5);
+  assert(saved.some(item => item.id === beforeId)); assert(saved.some(item => item.id === afterId)); assert(saved.some(item => item.id === retryId));
+  assert.equal(saved.find(item => item.id === first.id)?.version, 2); assert.equal(saved.find(item => item.id === first.id)?.status, "cancelled");
+  assert.equal(saved.find(item => item.id === second.id)?.version, 1);
+  assert.equal(saved.find(item => item.id === first.id)?.start.toISOString(), "2030-01-07T01:00:00.000Z");
+  const [unchangedPerson] = await other.db.select().from(calendarPeople).where(eq(calendarPeople.id, person.id));
+  assert.equal(unchangedPerson.name, person.name); assert.equal(unchangedPerson.timeZone, person.timeZone); assert.equal(unchangedPerson.version, 2); assert.deepEqual(unchangedPerson.windows, windows); assert(!unchangedPerson.archived);
+  const [unchangedRest] = await other.db.select().from(availabilityExceptions).where(eq(availabilityExceptions.id, rest.id));
+  assert.deepEqual(unchangedRest, rest);
+  const receipts = await other.db.select().from(calendarReceipts).where(eq(calendarReceipts.workspaceId, a.workspaceId!));
+  for (const item of cases) assert(!receipts.some(row => row.key === item.input.idempotencyKey), item.tool);
+  assert(!receipts.some(row => row.result === null), "committed host work contains no unfinished receipt");
+});
+
+test("late database failure rolls back a nested batch's actual writes and leaves the host usable", async () => {
+  const person = await call("createCalendarPerson", { calendarId, name: "Late batch failure", timeZone: "Asia/Shanghai", idempotencyKey: k() });
+  await call("setWorkingHours", { calendarId, personId: person.id, windows, expectedVersion: 1, idempotencyKey: k() });
+  const first = await create("14:00", "14:30", { personId: person.id }), second = await create("15:00", "15:30", { personId: person.id });
+  const failedKey = k(), trigger = `calendar_receipt_fault_${k().replaceAll("-", "")}`;
+  await resource.db.execute(sql.raw(`CREATE FUNCTION ${trigger}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.key = '${failedKey}' THEN RAISE EXCEPTION 'Fixture final receipt failure'; END IF; RETURN NEW; END $$`));
+  try {
+    await resource.db.execute(sql.raw(`CREATE TRIGGER ${trigger} BEFORE UPDATE ON calendar_receipts FOR EACH ROW EXECUTE FUNCTION ${trigger}()`));
+    await resource.db.transaction(async outer => {
+      const input = { calendarId, idempotencyKey: failedKey, operations: [
+        { kind: "cancel" as const, bookingId: first.id, expectedVersion: 1 },
+        { kind: "reschedule" as const, bookingId: second.id, expectedVersion: 1, time: time("16:00", "16:30") },
+        { kind: "create" as const, personId: person.id, title: "Rolled back insert", time: time("13:00", "13:30") },
+      ] };
+      await assert.rejects(executeCalendar(a, caller, "batchBookings", input, outer), /Failed query/);
+      await assert.rejects(cmds.createCalendar(a, { ...scope, name: trigger, timeZone: "UTC", idempotencyKey: failedKey }, outer), /Failed query/);
+      const accepted = await cmds.createBooking(a, { ...scope, calendarId, personId: person.id, title: "Host survives SQL failure", time: time("12:00", "12:30"), idempotencyKey: k() }, outer);
+      assert(accepted.id);
+    });
+    const saved = await other.db.select().from(bookings).where(eq(bookings.personId, person.id));
+    assert.equal(saved.length, 3);
+    assert.equal(saved.find(item => item.id === first.id)?.status, "confirmed"); assert.equal(saved.find(item => item.id === first.id)?.version, 1);
+    assert.equal(saved.find(item => item.id === second.id)?.start.toISOString(), "2030-01-07T07:00:00.000Z"); assert.equal(saved.find(item => item.id === second.id)?.version, 1);
+    assert(!saved.some(item => item.title === "Rolled back insert"));
+    assert.equal((await other.db.select().from(calendarReceipts).where(eq(calendarReceipts.key, failedKey))).length, 0);
+    assert.equal((await other.db.select().from(calendars).where(eq(calendars.name, trigger))).length, 0);
+  } finally {
+    await resource.db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${trigger} ON calendar_receipts`));
+    await resource.db.execute(sql.raw(`DROP FUNCTION ${trigger}()`));
+  }
 });

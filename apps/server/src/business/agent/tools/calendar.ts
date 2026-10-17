@@ -12,6 +12,7 @@ export function createCalendarTools(deps: CommandDependencies | (() => CommandDe
     execute: async input => {
       if (!organizationId || !actorId) throw new Error("Current workspace membership is required");
       try { return await executeCalendar(typeof deps === "function" ? deps() : deps, { kind: "member", organizationId, actorId }, definition.command, input, typeof transaction === "function" ? transaction() : transaction); }
+      // executeCalendar has already rolled back its command transaction/savepoint here.
       catch (error) { if (error instanceof CalendarError) return { ok: false, error: { code: error.code, message: error.message } }; throw error; }
     },
   })]));

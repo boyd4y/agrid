@@ -26,6 +26,15 @@ const receipt = (booking: StoredBooking) => ({ id: booking.id, version: booking.
 const publicCalendar = ({ organizationId: _, ...calendar }: typeof calendars.$inferSelect) => calendar;
 const publicPerson = ({ workspaceId: _, ...person }: Person) => person;
 
+/** Keep a handled command failure local to the caller's transaction. Drizzle's
+ * nested transaction is a same-connection savepoint: rollback finishes before a
+ * native tool can turn the error into a normal result, and the host lease/member
+ * checks and any earlier successful work remain in the enclosing transaction.
+ */
+function calendarTransaction<T>(deps: CommandDependencies, transaction: Transaction | undefined, work: (tx: Transaction) => Promise<T>) {
+  return inTransaction(deps, transaction, tx => transaction ? tx.transaction(work) : work(tx));
+}
+
 /** The single core for UI, keys, REST, GraphQL, SDK, MCP and native host tools. */
 export async function executeCalendar<K extends CalendarCommand>(deps: CommandDependencies, caller: CalendarCaller, command: K, raw: unknown, transaction?: Transaction): Promise<CalendarResults[K]> {
   const parsed = CALENDAR_SCHEMAS[command].safeParse(raw);
@@ -33,7 +42,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
   // The command switch narrows each schema below. No transport supplies trusted scope.
   const input = parsed.data as Record<string, any>;
   const read = CALENDAR_READ_COMMANDS.includes(command);
-  const result = await inTransaction(deps, transaction, async tx => {
+  const result = await calendarTransaction(deps, transaction, async tx => {
     let principal: SitePrincipal | undefined, organizationId: string, principalId: string, manager = false;
     if (caller.kind === "key") {
       principal = await resolveSiteKey(tx, caller.secret, true);
