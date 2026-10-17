@@ -1,3 +1,4 @@
+import { DocumentError } from "../business/documents/errors.js";
 import { CalendarError } from "../business/calendar/errors.js";
 import { siteCapabilities } from "../sites/capabilities.js";
 import { createSystemServices } from "@tabdo/core/services";
@@ -12,6 +13,7 @@ import type { CommandDependencies, RuntimeDependencies } from "../business/depen
 export function runtimeDependencies(): RuntimeDependencies {
   const { database, background } = requirePlatformResources();
   return { database: database.db, ...createSystemServices(),
+    afterRollback: (tx, key, effect) => database.afterRollback(tx, key, effect),
     afterCommit: (tx, key, effect) => database.afterCommit(tx, key, effect),
     ...(background ? { wakeAfterCommit: (tx, wakeup) => database.afterCommit(tx,
       `${wakeup.kind}:${"threadId" in wakeup ? wakeup.threadId : ""}`, () => background.notify(wakeup)) } satisfies Pick<RuntimeDependencies, "wakeAfterCommit"> : {}),
@@ -26,7 +28,7 @@ export function mapServiceError(error: unknown): never {
   if (error instanceof ServiceError) {
     const status = error.status as ContentfulStatusCode;
     throw new HTTPException(status, { message: error.message, cause: error.cause,
-      res: Response.json({ error: error.message, ...(error instanceof CalendarError ? { code: error.code } : {}) }, { status }) });
+      res: Response.json({ error: error.message, ...(error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, { status }) });
   }
   throw error;
 }

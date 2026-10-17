@@ -2,6 +2,7 @@ import { z } from "zod";
 
 /** Configurable platform wire IDs. Native tool availability belongs to the Harness. */
 export const PLATFORM_TOOL_IDS = [
+  "get_document", "create_document", "replace_document", "list_document_revisions", "get_document_revision", "restore_document_revision", "render_document", "upload_document_image", "get_document_image",
   "list_calendars", "get_calendar", "create_calendar", "update_calendar", "archive_calendar", "list_calendar_people", "get_calendar_person", "create_calendar_person", "update_calendar_person", "archive_calendar_person", "get_working_hours", "set_working_hours", "list_availability_exceptions", "set_availability_exception", "remove_availability_exception", "query_bookings", "get_booking", "create_booking", "reschedule_booking", "cancel_booking", "query_availability", "check_booking_conflicts", "batch_bookings",
   "list_sites", "get_site", "save_site", "publish_site", "unpublish_site",
   "batch_add_rows", "batch_update_rows", "batch_delete_rows",

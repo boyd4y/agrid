@@ -94,7 +94,7 @@ export const tables = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("tables_org_idx").on(t.organizationId), index("tables_workspace_idx").on(t.workspaceId, t.createdAt), index("tables_org_name_lookup").on(t.workspaceId, sql`public.tabdo_name_key(${t.name})`)]
+  (t) => [uniqueIndex("tables_scope_key").on(t.id, t.workspaceId, t.organizationId), index("tables_org_idx").on(t.organizationId), index("tables_workspace_idx").on(t.workspaceId, t.createdAt), index("tables_org_name_lookup").on(t.workspaceId, sql`public.tabdo_name_key(${t.name})`)]
 );
 
 export const columns = pgTable(
@@ -145,6 +145,7 @@ export const rows = pgTable(
   },
   (t) => [
     index("rows_table_sort_id_idx").on(t.tableId, t.sortOrder, t.id),
+    uniqueIndex("rows_scope_key").on(t.id, t.tableId),
   ]
 );
 
@@ -540,3 +541,5 @@ export const apiKeyTables = pgTable("api_key_tables", {
 export { sites, siteRevisions, sitePreviews } from "./sites-schema.js";
 
 export { calendars, calendarPeople, availabilityExceptions, bookings, calendarReceipts, apiKeyCalendars } from "./calendar-schema.js";
+
+export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";

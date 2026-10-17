@@ -9,6 +9,7 @@ export type DatabaseDependencies = Readonly<{
   workspaceId?: string;
 }>;
 export type RuntimeDependencies = DatabaseDependencies & SystemServices & Readonly<{
+  afterRollback?(transaction: Transaction, key: string, effect: () => void | Promise<void>): void;
   afterCommit?(transaction: Transaction, key: string, effect: () => void): void;
   wakeAfterCommit?(transaction: Transaction, wakeup: BackgroundWakeup): void;
 }>;

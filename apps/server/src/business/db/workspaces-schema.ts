@@ -8,7 +8,7 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
   isDefault: boolean("is_default").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, t => [index("workspaces_org_idx").on(t.organizationId),
+}, t => [uniqueIndex("workspaces_scope_key").on(t.id, t.organizationId), index("workspaces_org_idx").on(t.organizationId),
   uniqueIndex("workspaces_default_idx").on(t.organizationId).where(sql`${t.isDefault} = true`)]);
 
 /** NULL is filled and validated by the database trigger for legacy seed callers. */

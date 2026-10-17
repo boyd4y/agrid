@@ -1,3 +1,4 @@
+export * from "./documents.js";
 export * from "./calendar.js";
 import * as calendarCommands from "./calendar.js";
 import * as implementation from "../business/commands/index.js";
