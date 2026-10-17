@@ -17,7 +17,7 @@ try {
   const a = await command('createBooking', { calendarId: calendar.id, personId: person.id, title: '拖拽预约', time: time(10), idempotencyKey: key() });
   const b = await command('createBooking', { calendarId: calendar.id, personId: person.id, title: '冲突预约', time: time(11), idempotencyKey: key() });
   await page.goto(frontend + '/app/calendar');
-  await page.getByRole('radio', { name: '日', exact: true }).click();
+  await page.getByRole('combobox', { name: '日历视图', exact: true }).click(); await page.getByRole('option', { name: '日', exact: true }).click();
   const event = page.locator(`[data-booking-id="${a.id}"]`), blocker = page.locator(`[data-booking-id="${b.id}"]`);
   await event.waitFor(); await blocker.waitFor();
   const bounds = await event.boundingBox(), occupied = await blocker.boundingBox();

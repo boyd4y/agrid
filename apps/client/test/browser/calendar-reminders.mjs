@@ -22,7 +22,7 @@ try {
   const start = new Date(Math.ceil(Date.now() / 3600000) * 3600000 + 2 * 3600000).toISOString();
   const booking = await command('createBooking', { calendarId: calendar.id, personId: person.id, title: '提醒设置预约', time: { start, end: new Date(Date.parse(start) + 1800000).toISOString(), timeZone: 'UTC' }, idempotencyKey: key() });
   await page.goto(frontend + '/app/calendar');
-  await page.getByRole('radio', { name: '议程', exact: true }).click();
+  await page.getByRole('combobox', { name: '日历视图', exact: true }).click(); await page.getByRole('option', { name: '议程', exact: true }).click();
   const event = page.locator(`[data-booking-id="${booking.id}"]`);
   await event.waitFor(); await event.click();
   const sheet = page.getByRole('dialog');
@@ -73,7 +73,7 @@ try {
   await page.screenshot({ path: f.artifact('reminders-revoked-light.png'), fullPage: false });
   await sheet.getByRole('button', { name: '关闭', exact: true }).click(); await sheet.waitFor({ state: 'hidden' });
   await page.evaluate(() => { localStorage.setItem('table-theme', 'dark'); localStorage.setItem('tabdo.locale', 'en'); }); await page.reload();
-  await page.getByRole('radio', { name: 'Agenda', exact: true }).click(); await event.waitFor(); await event.click();
+  await page.getByRole('combobox', { name: 'Calendar view', exact: true }).click(); await page.getByRole('option', { name: 'Agenda', exact: true }).click(); await event.waitFor(); await event.click();
   await sheet.getByRole('heading', { name: 'Agent reminders', exact: true }).waitFor(); await sheet.getByRole('heading', { name: 'Execution history', exact: true }).waitFor();
   await sheet.getByTestId("booking-reminders").evaluate(element => element.scrollIntoView({ block: "start", behavior: "instant" }));
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));

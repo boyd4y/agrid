@@ -15,8 +15,8 @@ html, body, #root { height: 100%; }
 
 /* Standard FullCalendar palette follows the same semantic tokens in both themes. */
 .tabdo-booking-calendar {
-  --fc-monarch-primary: var(--primary);
-  --fc-monarch-primary-foreground: var(--primary-foreground);
+  --fc-monarch-primary: var(--foreground);
+  --fc-monarch-primary-foreground: var(--background);
   --fc-monarch-primary-over: var(--primary);
   --fc-monarch-primary-down: var(--primary);
   --fc-monarch-secondary: var(--secondary);
@@ -58,3 +58,22 @@ html, body, #root { height: 100%; }
   --fc-event-border-color: var(--border);
   border-style: dashed;
 }
+
+/* Month entries use compact rows; the calendar engine owns placement and overflow. */
+.tabdo-booking-calendar .tabdo-booking-event {
+  --fc-monarch-event: var(--accent);
+  --fc-monarch-event-contrast: var(--accent-foreground);
+}
+.tabdo-event-content {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  gap: 0.375rem;
+  align-items: baseline;
+  padding-inline: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.tabdo-event-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.tabdo-event-time { flex-shrink: 0; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.tabdo-other-month { color: var(--muted-foreground); }

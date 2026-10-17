@@ -17,11 +17,12 @@ try {
   await page.getByRole('combobox', { name: '服务人员', exact: true }).click();
   await page.getByRole('option', { name: person.name, exact: true }).click();
 
+  await page.getByRole('combobox', { name: '日历视图', exact: true }).click(); await page.getByRole('option', { name: '周', exact: true }).click();
   const month = responseFor('queryBookings', input => Date.parse(input.rangeEnd) - Date.parse(input.rangeStart) >= 28 * 86400000);
-  await page.getByRole('radio', { name: '月', exact: true }).click();
+  await page.getByRole('combobox', { name: '日历视图', exact: true }).click(); await page.getByRole('option', { name: '月', exact: true }).click();
   const monthInput = (await month).request().postDataJSON().input;
   assert(Date.parse(monthInput.rangeEnd) - Date.parse(monthInput.rangeStart) >= 28 * 86400000);
-  assert.equal(await page.getByRole('radio', { name: '月', exact: true }).getAttribute('aria-checked'), 'true');
+  assert.equal(await page.getByRole('combobox', { name: '日历视图', exact: true }).innerText(), '月');
   await page.screenshot({ path: f.artifact('calendar-month.png'), fullPage: true });
 
   await page.getByRole('button', { name: '人员与排班', exact: true }).click();
@@ -54,7 +55,9 @@ try {
 
   await page.getByRole('combobox', { name: '服务人员', exact: true }).click();
   await page.getByRole('option', { name: person.name, exact: true }).click();
-  await page.getByRole('button', { name: '查未来7天空档', exact: true }).click();
+  await page.getByRole('button', { name: '新建预约', exact: true }).click();
+  await sheet.getByRole('button', { name: '选择可约时间', exact: true }).click();
+  await sheet.getByRole('button', { name: '查未来7天空档', exact: true }).click();
   await page.getByRole('status').filter({ hasText: /找到 \d+ 个可约时段/ }).waitFor();
   await page.getByRole('button', { name: /GMT/ }).first().click();
   await sheet.getByLabel('预约标题', { exact: true }).fill('UI空档预约');
