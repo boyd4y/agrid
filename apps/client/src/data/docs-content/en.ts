@@ -143,6 +143,7 @@ export const docsPages: DocsPage[] = [
           { title: "Views and boards", description: "Create views, configure filters and sorts, and review records.", href: "/docs/views", badge: "Views" },
           { title: "Forms", description: "Design a data entry view over the same table.", href: "/docs/forms", badge: "Collect" },
           { title: "Calendars and bookings", description: "Set staff hours, find open slots, and manage bookings.", href: "/docs/calendar-booking", badge: "Calendar" },
+          { title: "Table calendar views", description: "Display date records as all-day calendar items.", href: "/docs/table-calendar", badge: "Views" },
           { title: "Automations and scheduled tasks", description: "Trigger actions from table events, external events, or a schedule.", href: "/docs/automations", badge: "Actions" },
           { title: "Reports", description: "Summarize table data with metrics and charts.", href: "/docs/reports", badge: "Insights" },
           { title: "Sites", description: "Edit, preview, and publish a simple website.", href: "/docs/sites", badge: "Publish" },
@@ -215,6 +216,8 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         { title: "GraphQL", description: "GraphQL query and mutation reference.", href: "/docs/graphql", badge: "GraphQL" },
         { title: "TypeScript SDK", description: "Call the same data API with @tabdo/sdk.", href: "/docs/sdk", badge: "SDK" },
         { title: "Calendar booking API", description: "Calendar grants, availability, bookings, and agent reminders.", href: "/docs/calendar-booking", badge: "Calendar" },
+        { title: "Calendar event subscriptions API", description: "Subscribe to booking and schedule changes and verify signed deliveries.", href: "/docs/calendar-events", badge: "API" },
+        { title: "Table calendar API", description: "Map date columns and query all-day records.", href: "/docs/table-calendar", badge: "API" },
       ] },
     ],
   },
@@ -284,6 +287,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "cards", items: [
         { title: "Use record bodies", description: "Enable a body, write long-form content, and review its history.", href: "/docs/record-documents", badge: "Body" },
         { title: "Document API", description: "Read and update bodies with REST, GraphQL, or MCP.", href: "/docs/document-api", badge: "API" },
+        { title: "Table calendar views", description: "Display date records as all-day items and edit the original rows.", href: "/docs/table-calendar", badge: "View" },
       ] },
     ],
   },
@@ -371,10 +375,10 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "p", text: "Use a calendar to arrange service bookings in a workspace. Create separate calendars for different services, add staff, set working hours and temporary unavailable times, then let members, agents, or authorized applications create and manage bookings. Staff are the people providing the service; they are separate from the AI agent that performs an action." },
       { type: "h2", text: "Set up staff availability" },
       { type: "ol", items: [
-        "Open Calendar in the app and choose an existing calendar or create one. Set a name and display time zone.",
-        "Open staff and schedule settings. Add a staff member and choose their time zone. You can link an existing active workspace member when appropriate; avoid creating a second identity for the same person.",
+        "Open Calendar in the app. On desktop, switch calendars from the list beside the schedule; on a narrow screen, first choose Calendars. Use the plus beside the list title to create a calendar, then set its name and display time zone.",
+        "Choose People and hours from the target calendar’s more menu. Add a staff member and choose their time zone. You can link an existing active workspace member when appropriate; avoid creating a second identity for the same person.",
         "Set the staff member’s weekly working hours. These hours repeat in the selected time zone. Add dated unavailable periods for time off, then edit or remove them when plans change.",
-        "Review bookings in the calendar. To book, choose a staff member, duration, and available time. You can also check the next seven days for open slots before entering a booking title.",
+        "Click New appointment in the schedule toolbar, choose a service person and duration, expand Choose an available time, then click Find availability for 7 days to run the query. Select a slot, enter an appointment title, and click Confirm appointment. If the calendar has no staff, follow the page prompt for an owner/admin to add one or contact an administrator.",
         "Open a booking to review, reschedule, or cancel it. Rescheduling and cancellation check the current version; if a conflict occurs, the original booking remains in place.",
       ] },
       { type: "h2", text: "Reminders and scheduled plans" },
@@ -466,7 +470,155 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/c
       ] },
       { type: "cards", items: [
         { title: "Automations and scheduled tasks", description: "Create scheduled tasks and review their run history.", href: "/docs/automations", badge: "Automation" },
+        { title: "Calendar event subscriptions", description: "Receive booking and schedule changes and inspect delivery status.", href: "/docs/calendar-events", badge: "API" },
+        { title: "Table calendar views", description: "View dated table records without creating bookings.", href: "/docs/table-calendar", badge: "View" },
         { title: "HTTP API", description: "Learn API key basics and REST and GraphQL access.", href: "/docs/api-quickstart", badge: "API" },
+      ] },
+    ],
+  },
+  {
+    slug: "table-calendar",
+    sectionId: "humans",
+    title: "Table calendar views",
+    description: "Map date columns to an all-day calendar and view or edit the original records.",
+    body: [
+      { type: "p", text: "A table calendar view arranges existing records by date. It is useful for plans, content, and other dated items. It remains a view of the original table: records and dates stay in the table. It does not create service bookings, check staff availability, or prevent overlapping dates." },
+      { type: "h2", text: "Create and configure a view" },
+      { type: "ol", items: [
+        "Open a table, click the plus beside the view switcher, and choose Calendar view.",
+        "In mapping settings, choose the required start date column. You can also map an end date, a text title, and a person column. Hidden columns are not offered.",
+        "If you map an end date, choose whether the end day is included. After saving, records appear in the all-day area on their mapped dates. Select a record to open the original row; Enter and Space can also open it from the calendar.",
+        "Change the displayed date range as needed. Drag a record to change its mapped dates in the original row; select a record to open it. If a version conflict occurs, review the latest row before deciding whether to try again.",
+      ] },
+      { type: "p", text: "A connected, authorized MCP client can also use create_calendar_view and update_calendar_view to configure the mapping, and query_calendar_view to read the projection. Creation takes a table ID, an optional name, and a config with startColumnId (required), endColumnId, titleColumnId, personColumnId, and endMode (inclusive or exclusive). Pass column IDs, not column names. API keys cannot create or update view configuration." },
+      { type: "code", lang: "json", code: `{
+  "tableId": "00000000-0000-4000-8000-000000000001",
+  "name": "Task calendar",
+  "config": {
+    "startColumnId": "00000000-0000-4000-8000-000000000002",
+    "endColumnId": null,
+    "titleColumnId": "00000000-0000-4000-8000-000000000003",
+    "personColumnId": null,
+    "endMode": "inclusive"
+  }
+}` },
+      { type: "h2", text: "Query through the API" },
+      { type: "p", text: "REST, GraphQL, and POST /api/commands can query the same calendar projection. The key, host, and IDs below are fictional placeholders. Ask a workspace owner/admin to create a data key and grant read access to the target table. The key can query mapped records, but that read grant cannot create or update view configuration." },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+export VIEW_ID="00000000-0000-4000-8000-000000000001"
+
+# The start date is inclusive and the end date is exclusive
+curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"rangeStart":"2026-10-01","rangeEnd":"2026-11-01","limit":100}'` },
+      { type: "code", lang: "graphql", code: `query Calendar($input: JSON!) {
+  queryCalendarView(input: $input)
+}` },
+      { type: "p", text: "The response includes items, hasMore, nextCursor, limit, and diagnostics. Each item contains only rowId, version, start, end, title, and person. The end is always the next exclusive date. The response does not include the entire row or infer a title from an unmapped field." },
+      { type: "code", lang: "json", code: `{
+  "items": [
+    { "rowId": "row_example", "version": 3, "start": "2026-10-20", "end": "2026-10-22", "title": "Review preparation", "person": "Alex" }
+  ],
+  "nextCursor": null,
+  "hasMore": false,
+  "limit": 100,
+  "diagnostics": { "mapping": [], "emptyStart": 0, "invalidStart": 0, "invalidEnd": 0, "reversed": 0 }
+}` },
+      { type: "h2", text: "Fields, ranges, and permissions" },
+      { type: "ul", items: [
+        "Date columns are stored as YYYY-MM-DD, without a time or time zone. A start date is required; an end date is optional. Without an end date, a record occupies one day. The default treats the end day as inclusive; choose exclusive when the end day should not appear as occupied. The API always returns an exclusive end.",
+        "The calendar shows records that overlap the requested date range. rangeStart is inclusive and rangeEnd is exclusive. The page size defaults to 100 and is capped at 200; use the cursor to continue. A cursor is tied to its view configuration and date range. Start a new query after changing either.",
+        "Calculated columns cannot be mapped as dates. If a column is hidden, deleted, or changed to an incompatible type, the view shows a mapping diagnostic. Repair the mapping to continue. diagnostics counts empty start dates, invalid dates, and end dates earlier than the start to help find records that are not shown.",
+        "A table read grant on an API key allows calendar projection queries; it does not grant view management. Results do not include full row contents. To edit an original row, grant table update access separately and use the existing row API with the latest version. Table calendar views do not provide booking conflict checks, staff schedules, availability, or booking states.",
+      ] },
+      { type: "cards", items: [
+        { title: "Tables, columns & rows", description: "Learn about date columns and editing original records.", href: "/docs/tables", badge: "Data" },
+        { title: "Calendars and bookings", description: "Set staff schedules and manage service bookings.", href: "/docs/calendar-booking", badge: "Bookings" },
+      ] },
+    ],
+  },
+  {
+    slug: "calendar-events",
+    sectionId: "humans",
+    title: "Calendar outbound event subscriptions API",
+    description: "Subscribe to booking and schedule changes, verify signed deliveries, and handle retries.",
+    body: [
+      { type: "p", text: "Outbound event subscriptions send booking or schedule changes from a granted calendar to your HTTPS receiver. Use them to let your own application know when something changes in tabdo. They are not two-way sync with Google, Outlook, or another calendar, and they do not send email or text messages." },
+      { type: "h2", text: "Set up permissions and a receiver" },
+      { type: "ol", items: [
+        "Create or edit an API key under Settings → API Key. An owner/admin grants subscription, delivery-read, and subscription-management permissions separately for the target calendar. Creating a subscription also requires read access to that calendar. New keys have none of these grants by default.",
+        "Prepare a publicly reachable HTTPS receiver on the standard port 443. The URL cannot include a username, password, or fragment. Your receiver must retain the original request bytes to verify the signature.",
+        "Create a subscription with POST /api/calendars/{calendarId}/subscriptions. Choose a name, receiver URL, and event types. The successful response displays a signing secret once; save it securely because its plaintext cannot be read again.",
+      ] },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
+
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Booking receiver","endpoint":"https://receiver.example.com/events","eventTypes":["booking.created","booking.rescheduled","booking.cancelled"],"idempotencyKey":"calendar-subscription-demo-001"}'` },
+      { type: "p", text: "The response contains the subscription configuration and a secret returned only on this creation. If you did not save it, rotate the secret and save the new value. Secrets are not returned by list or history calls or by replaying an idempotent response." },
+      { type: "h2", text: "Verify the signature and process events" },
+      { type: "p", text: "Each delivery includes X-Tabdo-Event-Id, X-Tabdo-Delivery-Id, and X-Tabdo-Signature headers. The signature format is t=<Unix seconds>,v1=<hex>; v1 is HMAC-SHA256(secret, timestamp + '.' + raw request body). Calculate the signature over the original body before parsing JSON. Enforce an acceptable timestamp window and compare signatures in constant time." },
+      { type: "code", lang: "json", code: `{
+  "protocol": 1,
+  "eventId": "00000000-0000-4000-8000-000000000010",
+  "workspaceId": "00000000-0000-4000-8000-000000000011",
+  "calendarId": "00000000-0000-4000-8000-000000000001",
+  "type": "booking.created",
+  "aggregateId": "00000000-0000-4000-8000-000000000012",
+  "aggregateVersion": 1,
+  "occurredAt": "2026-10-20T01:00:00.000Z",
+  "deliveryId": "00000000-0000-4000-8000-000000000013"
+}` },
+      { type: "p", text: "Events include only event, calendar, workspace, and target-record IDs, type, version, and occurrence time. They do not include a booking title, customer details, staff name, or reminder prompt. Use a separately authorized calendar API to read details. Deduplicate by deliveryId or eventId and process possible out-of-order events by aggregateVersion. Versions may have gaps when you filter event types." },
+      { type: "h2", text: "Manage subscriptions and deliveries" },
+      { type: "table", headers: ["Operation", "REST path", "Permission"], rows: [
+        ["Create subscription (POST)", "/api/calendars/:calendarId/subscriptions", "Subscribe + calendar read"],
+        ["List subscriptions (POST)", "/api/calendars/:calendarId/subscriptions/query", "Subscribe"],
+        ["Read / update (GET / PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Subscribe / manage subscription"],
+        ["Pause / resume (PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Manage subscription"],
+        ["Rotate secret (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/rotate-secret", "Manage subscription"],
+        ["Revoke (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/revoke", "Manage subscription"],
+        ["Query deliveries (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/query", "Read deliveries"],
+        ["Read delivery and attempts (GET)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId", "Read deliveries"],
+        ["Retry a failed delivery (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "Manage subscription + calendar read + subscribe"],
+      ] },
+      { type: "code", lang: "bash", code: `# Explicitly retry a deadletter delivery for the current active subscription version
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCRIPTION_ID/deliveries/$DELIVERY_ID/retry" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":1,"idempotencyKey":"calendar-delivery-retry-001"}'
+
+# Pause: send the full configuration, current subscription version, and idempotency key
+curl -s -X PATCH "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCRIPTION_ID" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Booking receiver","endpoint":"https://receiver.example.com/events","eventTypes":["booking.created","booking.rescheduled","booking.cancelled"],"status":"paused","expectedVersion":1,"idempotencyKey":"calendar-subscription-pause-001"}'
+
+# Revoke permanently, using the latest version
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCRIPTION_ID/revoke" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":2,"idempotencyKey":"calendar-subscription-revoke-001"}'
+
+` },
+      { type: "p", text: "An API key can access only the subscriptions it created. Provide an idempotency key for writes such as create, update, revoke, rotate, and retry. Update, revoke, rotate, and retry also require the latest expectedVersion. Creating a subscription requires subscribe and calendar-read grants; retry also requires manage-subscription. Delivery-history access is a separate grant; subscription management does not include it automatically. POST /api/commands accepts the matching command names, such as createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and listCalendarDeliveries. GraphQL queries are listCalendarSubscriptions, getCalendarSubscription, listCalendarDeliveries, and getCalendarDelivery; mutations are createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and retryCalendarDelivery. Each takes a JSON input. A connected, authorized MCP client can use the snake_case calendar subscription tools. The new JavaScript SDK methods have not been published to npm/CDN; use REST, GraphQL, or an already configured MCP connection." },
+      { type: "h2", text: "Delivery status, limits, and troubleshooting" },
+      { type: "ul", items: [
+        "Supported events are booking.created, booking.rescheduled, booking.cancelled, booking.reminders_changed, calendar.updated, calendar.archived, person.created, person.updated, person.archived, working_hours.updated, availability_exception.created, availability_exception.updated, and availability_exception.removed. Booking events go to subscriptions on their calendar; shared staff and schedule changes may notify related calendars in the workspace.",
+        "Deliveries may be duplicated or arrive out of order, so receivers must deduplicate them. The service makes a limited number of automatic retries. After retries are exhausted, the status is deadletter; inspect each attempt and explicitly retry if appropriate. A retry keeps the original eventId and deliveryId and does not run the booking action again.",
+        "Delivery records can be pending, delivering, succeeded, deadletter, or skipped. Details list each attempt, completion time, and HTTP status; they do not expose the receiver response body or signing secret.",
+        "Events are not backfilled while a subscription is paused. Updating its configuration, rotating its secret, or revoking it skips unfinished deliveries for the old configuration. Resuming does not replay events from the paused period. A request already processed by your receiver cannot be recalled.",
+        "A calendar can have up to 100 non-revoked subscriptions. Lists default to 25 items per page and allow up to 100; continue with nextCursor. The receiver URL must resolve publicly to an HTTPS service. Private-network addresses, IP literals, and redirects are not supported.",
+        "If create or retry returns FORBIDDEN, ask an owner/admin to check that the key has both subscribe and calendar-read grants; retry also needs manage-subscription. Querying delivery history requires the separate delivery-read grant. If a secret is lost, rotate it and save the new one. For deadletter deliveries, check receiver availability and the HTTP status before retrying a delivery for the current active subscription version.",
+      ] },
+      { type: "cards", items: [
+        { title: "Calendars and bookings", description: "Configure staff, availability, and bookings.", href: "/docs/calendar-booking", badge: "Calendar" },
+        { title: "HTTP API", description: "Learn API key, REST, and GraphQL basics.", href: "/docs/api-quickstart", badge: "API" },
       ] },
     ],
   },
