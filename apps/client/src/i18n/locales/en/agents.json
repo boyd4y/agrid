@@ -149,6 +149,10 @@
     "calendar": {
       "name": "Calendars and appointments",
       "description": "Find availability, book, reschedule and cancel with member permissions."
+    },
+    "documents": {
+      "name": "Record bodies",
+      "description": "Read and write record bodies, history and private images."
     }
   },
   "partlyEnabled": "Partly enabled",

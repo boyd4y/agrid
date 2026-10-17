@@ -1,4 +1,8 @@
 import { updateScheduledAutomation } from "../calendar/schedules.js";
+import { DOCUMENT_COMMANDS, DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
+import { executeDocument } from "../documents/service.js";
+import { documentTransportInput } from "../documents/transport.js";
+import { DocumentError } from "../documents/errors.js";
 import { CALENDAR_COMMANDS, CALENDAR_READ_COMMANDS, type CalendarCommand } from "@tabdo/shared";
 import { executeCalendar } from "../calendar/service.js";
 import { calendarTransportInput } from "../calendar/transport.js";
@@ -8,7 +12,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { createSchema, createYoga } from "graphql-yoga";
-import { GraphQLError, GraphQLScalarType, Kind, valueFromASTUntyped, type ValidationRule, type SelectionSetNode, type FragmentDefinitionNode } from "graphql";
+import { GraphQLError, GraphQLScalarType, Kind, parse, valueFromASTUntyped, type ValidationRule, type SelectionSetNode, type FragmentDefinitionNode } from "graphql";
 import { ZodError } from "zod";
 import type { RequestScope, RequestScopeResolver } from "./request.js";
 import { createRequestRoute, requireActorOrg } from "./request.js";
@@ -17,6 +21,8 @@ import * as keys from "../data-api/keys.js";
 import * as data from "../data-api/data.js";
 import { downloadFile } from "../services/files.js";
 
+const documentQueries = DOCUMENT_READ_COMMANDS.map(name => `${name}(input: JSON!): JSON${name === "getDocument" ? "" : "!"}`).join("\n");
+const documentMutations = DOCUMENT_COMMANDS.filter(name => !DOCUMENT_READ_COMMANDS.includes(name));
 const calendarQueries = CALENDAR_READ_COMMANDS.map(name => `${name}(input: JSON!): JSON!`).join("\n");
 const calendarMutations = CALENDAR_COMMANDS.filter(name => !CALENDAR_READ_COMMANDS.includes(name));
 export const siteSchemaSDL = /* GraphQL */ `
@@ -33,12 +39,13 @@ export const siteSchemaSDL = /* GraphQL */ `
   input SortInput { columnId: ID!, direction: SortDirection! }
   input RowsInput { cursor: String, limit: Int = 50, filters: [FilterInput!], filterLogic: FilterLogic, sort: SortInput, includeTotal: Boolean }
   type Table { id: ID!, name: String!, description: String, columns: [Column!]!, rows(options: RowsInput): RowsPage!, row(id: ID!): Row }
-  type Query { ${calendarQueries} tables: [Table!]!, table(id: ID!): Table }
+  type Query { ${documentQueries} ${calendarQueries} tables: [Table!]!, table(id: ID!): Table }
   type CreateRowPayload { id: ID!, createdAt: String! }
   type UpdateRowPayload { id: ID!, updatedAt: String!, version: Int! }
   type DeleteRowPayload { id: ID! }
   type Mutation {
     updateAutomation(input: JSON!): JSON!
+    ${documentMutations.map(name => `${name}(input: JSON!): JSON!`).join("\n")}
     ${calendarMutations.map(name => `${name}(input: JSON!): JSON!`).join("\n")}
     createRow(tableId: ID!, cells: JSON!): CreateRowPayload!
     updateRow(tableId: ID!, rowId: ID!, cells: JSON!, expectedVersion: Int): UpdateRowPayload!
@@ -56,7 +63,7 @@ const boundedQuery: ValidationRule = context => ({ Document(node) {
       if (depth > 16 || fields > 1000 || roots > 20) { exceeded = true; return; }
       for (const selection of set.selections) {
         if (selection.kind === Kind.FIELD) {
-          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow", ...calendarMutations, "updateAutomation"].includes(selection.name.value)) creates++; }
+          fields++; if (depth === 1) { roots++; if (["createRow", "updateRow", "deleteRow", ...calendarMutations, ...documentMutations, "updateAutomation"].includes(selection.name.value)) creates++; }
           if (fields > 1000 || roots > 20) { exceeded = true; return; }
           if (selection.selectionSet) walk(selection.selectionSet, depth + 1, path);
         } else if (selection.kind === Kind.INLINE_FRAGMENT) walk(selection.selectionSet, depth, path);
@@ -84,7 +91,7 @@ function publicError(error: unknown, scope?: RequestScope): never {
   if (error instanceof GraphQLError) throw error;
   if (error instanceof ZodError) throw new GraphQLError("Invalid request data", { extensions: { code: "BAD_USER_INPUT" } });
   if (error instanceof ServiceError) {
-    const code = error instanceof CalendarError ? error.code : ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
+    const code = error instanceof CalendarError || error instanceof DocumentError ? error.code : ({ 400: "BAD_USER_INPUT", 401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 409: "CONFLICT", 429: "RATE_LIMITED", 503: "SERVICE_UNAVAILABLE" } as Record<number, string>)[error.status] ?? "INTERNAL_SERVER_ERROR";
     throw new GraphQLError(error.message, { extensions: { code, http: { status: error.status } } });
   }
   observe(scope, "site-api.request", error);
@@ -108,7 +115,29 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
     route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key", "Idempotency-Key"], maxAge: 600 }));
     route.use(path, async (c, next) => { c.header("Cache-Control", "private, no-store"); c.header("Referrer-Policy", "no-referrer"); await next(); });
   }
-  route.use("/graphql", bodyLimit({ maxSize: 128 * 1024, onError: c => c.json({ errors: [{ message: "Request body too large", extensions: { code: "PAYLOAD_TOO_LARGE" } }] }, 413) }));
+  route.use("/graphql", bodyLimit({ maxSize: 8 * 1024 * 1024, onError: c => c.json({ errors: [{ message: "Request body too large", extensions: { code: "PAYLOAD_TOO_LARGE" } }] }, 413) }));
+  route.use("/graphql", async (c, next) => {
+    if (c.req.method === "POST") {
+      const text = await c.req.raw.clone().text();
+      if (new TextEncoder().encode(text).byteLength > 128 * 1024) {
+        let imageOnly = false;
+        try {
+          const body = JSON.parse(text);
+          if (typeof body.query === "string" && body.query.length <= 8192) {
+            const definitions = parse(body.query).definitions, operation = definitions[0];
+            imageOnly = definitions.length === 1 && operation.kind === Kind.OPERATION_DEFINITION && operation.operation === "mutation" && operation.selectionSet.selections.length === 1 && operation.selectionSet.selections[0].kind === Kind.FIELD && operation.selectionSet.selections[0].name.value === "uploadDocumentImage";
+          }
+        } catch { /* The normal GraphQL parser reports malformed small requests. */ }
+        if (!imageOnly) return c.json({ errors: [{ message: "Request body too large", extensions: { code: "PAYLOAD_TOO_LARGE" } }] }, 413);
+      }
+    }
+    return next();
+  });
+  const documentResolver = (command: DocumentCommand) => safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => {
+    charge(ctx, 0);
+    if (!DOCUMENT_READ_COMMANDS.includes(command)) await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
+    return executeDocument(ctx.scope.commands, { kind: "key", secret: ctx.secret }, command, documentTransportInput(command, args.input, ctx.idempotencyKey));
+  });
   const calendarResolver = (command: CalendarCommand) => safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => {
     charge(ctx, command === "queryBookings" ? 500 : command === "queryScheduledOccurrences" ? 1000 : command === "listBookingReminders" ? 500 : 0);
     if (!CALENDAR_READ_COMMANDS.includes(command)) await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
@@ -117,6 +146,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
   const schema = createSchema<GraphContext>({ typeDefs: siteSchemaSDL, resolvers: {
     JSON: new GraphQLScalarType({ name: "JSON", serialize: value => value, parseValue: value => value, parseLiteral: (node, variables) => valueFromASTUntyped(node, variables) }),
     Query: {
+      ...Object.fromEntries(DOCUMENT_READ_COMMANDS.map(name => [name, documentResolver(name)])),
       ...Object.fromEntries(CALENDAR_READ_COMMANDS.map(name => [name, calendarResolver(name)])),
       tables: safe((_root: unknown, _args: unknown, ctx: GraphContext) => data.siteTables(ctx.scope.commands, ctx)),
       table: safe((_root: unknown, args: { id: string }, ctx: GraphContext) => data.siteTable(ctx.scope.commands, ctx, args.id)),
@@ -131,7 +161,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
       }),
     },
     Mutation: {
-      updateAutomation: safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => { charge(ctx, 0); await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" }); return updateScheduledAutomation(ctx.scope.commands, ctx.secret, args.input); }), ...Object.fromEntries(calendarMutations.map(name => [name, calendarResolver(name)])), createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
+      updateAutomation: safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => { charge(ctx, 0); await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" }); return updateScheduledAutomation(ctx.scope.commands, ctx.secret, args.input); }), ...Object.fromEntries(documentMutations.map(name => [name, documentResolver(name)])), ...Object.fromEntries(calendarMutations.map(name => [name, calendarResolver(name)])), createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown }, ctx: GraphContext) => {
       keys.requireSiteTable(ctx.principal, args.tableId, "create");
       await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
       return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells);

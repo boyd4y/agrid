@@ -85,7 +85,8 @@ try {
   await sheet.getByRole('button', { name: 'Close', exact: true }).click(); await sheet.waitFor({ state: 'hidden' });
   await page.setViewportSize({ width: 1600, height: 1000 });
   const table = await api('/tables', { name: 'Reminder key table' });
-  const record = await api('/user/api-keys', { name: 'Plan grants', permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: true, canCancel: false, canManage: false, canTriggerAgent: true }], schedulePermissions: [{ automationId: rule.id, canRead: false, canUpdate: true }] });
+  const documentGrants = [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }];
+  const record = await api('/user/api-keys', { documentPermissions: documentGrants, name: 'Plan grants', permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: true, canCancel: false, canManage: false, canTriggerAgent: true }], schedulePermissions: [{ automationId: rule.id, canRead: false, canUpdate: true }] });
   await page.goto(frontend + '/app/settings?tab=api-keys');
   await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
   const readPlan = page.getByRole('checkbox', { name: /已编辑原计划 · Read plan$/ });
@@ -93,8 +94,17 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const keyRecord = (await api('/user/api-keys')).keys.find(item => item.id === record.key.id);
   assert.deepEqual(keyRecord.schedulePermissions, [{ automationId: rule.id, canRead: true, canUpdate: true }]);
+  assert.deepEqual(keyRecord.documentPermissions, documentGrants);
   assert(keyRecord.calendarPermissions[0].canTriggerAgent); assert.equal(keyRecord.permissions[0].tableId, table.id); assert(keyRecord.permissions[0].canRead);
   await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
+  const keyDialog = page.getByRole('dialog');
+  await keyDialog.getByRole('checkbox', { name: 'Reminder key table · Read history', exact: true }).check();
+  await keyDialog.getByRole('button', { name: 'Save', exact: true }).click(); await keyDialog.waitFor({ state: 'hidden' });
+  const afterDocumentEdit = (await api('/user/api-keys')).keys.find(item => item.id === record.key.id);
+  assert.deepEqual(afterDocumentEdit.documentPermissions, [{ ...documentGrants[0], canReadHistory: true }]);
+  for (const family of ['permissions', 'calendarPermissions', 'schedulePermissions']) assert.deepEqual(afterDocumentEdit[family], keyRecord[family]);
+  await page.reload(); await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
+  assert(await keyDialog.getByRole('checkbox', { name: 'Reminder key table · Read history', exact: true }).isChecked());
   await page.getByRole('dialog').getByText('Scheduled plan grants', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: f.artifact('schedule-key-grants-dark-en.png'), fullPage: false });
   assert.deepEqual(f.errors, []);

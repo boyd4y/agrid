@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, RefreshCw, Save, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@tabdo/ui/components/button";
@@ -17,6 +17,8 @@ import { ColumnTypeIcon } from "./ColumnTypeIcon";
 import type { RelatedRecord, RowData, ColumnDef, CellValue } from "@/types/table";
 import { useTranslation } from "react-i18next";
 
+const DocumentEditor = lazy(() => import("@/components/documents/DocumentEditor"));
+
 type RecordData = RowData & { columns: ColumnDef[] };
 /** Board and relation navigation use one private, tenant-checked record editor. */
 export function RelatedRecordPanel() {
@@ -24,6 +26,7 @@ export function RelatedRecordPanel() {
   const [stack, setStack] = useState<RelatedRecord[]>([]), [row, setRow] = useState<RecordData | null>(null);
   const [draft, setDraft] = useState<Record<string, CellValue>>({}), [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false), [saving, setSaving] = useState(false), [stale, setStale] = useState(false), [revision, setRevision] = useState(0);
+  const [documentOpen, setDocumentOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<Set<string>>(new Set());
   const members = useMemberOptions(), wide = useMediaQuery("(min-width: 1024px)");
   const { aiOpen, setAiOpen, setRecordSheetOpen } = useAppShell();
@@ -31,18 +34,18 @@ export function RelatedRecordPanel() {
   const current = useRef(record?.id), request = useRef(0), draftRef = useRef(draft), savingRef = useRef(saving);
   current.current = record?.id; draftRef.current = draft; savingRef.current = saving;
   const reset = () => { request.current++; setDraft({}); setError(null); setStale(false); setRow(null); };
-  const close = () => { if (!savingRef.current) { reset(); setStack([]); } };
+  const close = () => { if (!savingRef.current && !documentOpen) { reset(); setStack([]); } };
   useEffect(() => { setRecordSheetOpen(visible); return () => setRecordSheetOpen(false); }, [visible, setRecordSheetOpen]);
   useEffect(() => {
     const open = (event: Event) => {
       const next = (event as CustomEvent<RelatedRecord>).detail;
-      if (!next?.id || !next.tableId || savingRef.current) return;
+      if (!next?.id || !next.tableId || savingRef.current || documentOpen) return;
       if (next.id !== current.current) { reset(); setStack((previous) => [...previous, next]); }
       if (!wide) setAiOpen(false);
     };
     window.addEventListener("tabdo:open-record", open);
     return () => window.removeEventListener("tabdo:open-record", open);
-  }, [wide, setAiOpen]);
+  }, [wide, setAiOpen, documentOpen]);
   useEffect(() => subscribeDataChanges((change) => {
     if (!record || !(change.all || change.tableIds.includes(record.tableId))) return;
     if (Object.keys(draftRef.current).length || savingRef.current) setStale(true);
@@ -82,8 +85,12 @@ export function RelatedRecordPanel() {
   };
   const titleColumn = row?.columns.find((column) => column.name === "标题" /* seed */) ?? row?.columns.find((column) => column.type === "text");
   const title = titleColumn && row ? String(row.cells[titleColumn.id] ?? record?.title ?? t("untitled")) : record?.title || t("record");
-  return <Sheet open={visible} modal={false} onOpenChange={(open) => { if (!open) close(); }}>
-    <SheetContent data-testid="related-record-panel" onPointerDownOutside={(event) => { if (savingRef.current) event.preventDefault(); }} onFocusOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (savingRef.current) event.preventDefault(); }}>
+  return <><Sheet open={visible} modal={false} onOpenChange={(open) => { if (!open) close(); }}>
+    <SheetContent data-testid="related-record-panel" onPointerDownOutside={(event) => {
+      const target = event.detail.originalEvent.target;
+      // Let an explicit record trigger handle navigation without an outside-dismiss race.
+      if (savingRef.current || documentOpen || target instanceof Element && target.closest("[data-record-trigger]")) event.preventDefault();
+    }} onFocusOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (savingRef.current || documentOpen) event.preventDefault(); }}>
       <SheetHeader>
         <div className="flex items-center gap-2">
           {stack.length > 1 && <Button variant="ghost" size="icon" aria-label={t("backToPrevRecord")} disabled={saving} onClick={() => { reset(); setStack((previous) => previous.slice(0, -1)); }}><ArrowLeft /></Button>}
@@ -93,6 +100,7 @@ export function RelatedRecordPanel() {
         </div>
         <SheetDescription>{t("recordSheetDesc")}</SheetDescription>
       </SheetHeader>
+      {record && row && <div className="border-b px-4 pb-3"><Button variant="outline" size="sm" disabled={saving} onClick={() => setDocumentOpen(true)}>{t("documents:open")}</Button></div>}
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <FieldGroup>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -115,5 +123,5 @@ export function RelatedRecordPanel() {
         <Button disabled={saving || pendingFiles.size > 0 || !row || !Object.keys(draft).length} onClick={() => void save()}><Save />{saving ? t("saving") : t("saveChanges")}</Button>
       </SheetFooter>
     </SheetContent>
-  </Sheet>;
+  </Sheet>{documentOpen && record && <Suspense fallback={null}><DocumentEditor key={record.id} tableId={record.tableId} rowId={record.id} title={title} onClose={() => setDocumentOpen(false)} /></Suspense>}</>;
 }

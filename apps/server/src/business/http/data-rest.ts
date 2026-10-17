@@ -1,5 +1,9 @@
 import { updateScheduledAutomation } from "../calendar/schedules.js";
 import { CALENDAR_READ_COMMANDS } from "@tabdo/shared";
+import { DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
+import { executeDocument } from "../documents/service.js";
+import { DocumentError } from "../documents/errors.js";
+import { isDocumentCommand, documentTransportInput } from "../documents/transport.js";
 import { executeCalendar } from "../calendar/service.js";
 import { CalendarError } from "../calendar/errors.js";
 import { isCalendarCommand, calendarTransportInput } from "../calendar/transport.js";
@@ -20,21 +24,23 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.use("*", async (c, next) => {
     const headers = c.req.header("Access-Control-Request-Headers") ?? "";
     if (keys.requestApiKey(c.req.raw) || c.req.method === "OPTIONS" && /authorization|x-tabdo-key/i.test(headers))
-      return cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key", "Idempotency-Key"] })(c, next);
+      return cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key", "Idempotency-Key"] })(c, next);
     return next();
   });
-  route.use("*", (c, next) => keys.requestApiKey(c.req.raw) ? bodyLimit({ maxSize: 128 * 1024 })(c, next) : next());
+  route.use("*", (c, next) => keys.requestApiKey(c.req.raw) ? bodyLimit({ maxSize: 8 * 1024 * 1024 })(c, next) : next());
   type Input = { scope: RequestScope; context: data.SiteContext; c: Context; body: Record<string, unknown> };
   const handle = (write: boolean, fn: (input: Input) => Promise<unknown>, status: 200 | 201 = 200) => async (c: Context, next: Next) => {
     const secret = keys.requestApiKey(c.req.raw); if (!secret) return next();
     let scope: RequestScope | undefined;
     try {
-      if (Number(c.req.header("Content-Length")) > 128 * 1024) throw new ServiceError(413, { message: "Request body too large" });
+      if (Number(c.req.header("Content-Length")) > 8 * 1024 * 1024) throw new ServiceError(413, { message: "Request body too large" });
       const raw = ["GET", "DELETE"].includes(c.req.method) ? "" : await c.req.text();
-      if (new TextEncoder().encode(raw).byteLength > 128 * 1024) throw new ServiceError(413, { message: "Request body too large" });
+      if (new TextEncoder().encode(raw).byteLength > 8 * 1024 * 1024) throw new ServiceError(413, { message: "Request body too large" });
       let body: Record<string, unknown> = {};
       try { body = raw ? z.record(z.string(), z.unknown()).parse(JSON.parse(raw)) : {}; }
       catch { throw new ServiceError(400, { message: "Invalid request data" }); }
+      const imageUpload = c.req.method === "POST" && (body.command === "uploadDocumentImage" && c.req.path.endsWith("/commands") || /\/document\/images$/.test(c.req.path));
+      if (new TextEncoder().encode(raw).byteLength > 128 * 1024 && !imageUpload) throw new ServiceError(413, { message: "Request body too large" });
       scope = await acquire(c.req.raw);
       const principal = await keys.resolveSiteKey(scope.commands.database, secret);
       if (!scope.siteRateLimit) throw new ServiceError(503, { message: "API rate limiting is unavailable" });
@@ -43,7 +49,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       c.header("Cache-Control", "private, no-store");
       return c.json(await fn({ scope, context, c, body }), status);
     } catch (error) {
-      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof CalendarError ? { code: error.code } : {}) }, error.status as 400);
+      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, error.status as 400);
       if (error instanceof z.ZodError) return c.json({ error: "Invalid request data" }, 400);
       return c.json({ error: "Request could not be completed" }, 500);
     } finally { try { await scope?.close(); } catch { /* Committed responses survive cleanup failures. */ } }
@@ -69,6 +75,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
     if (command === "updateAutomation") return { ok: true, command, result: await updateScheduledAutomation(deps, context.secret, args) };
+    if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
     let result: unknown;
@@ -115,5 +122,16 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.post("/calendars/:id/availability/query", calendar("queryAvailability", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
   route.post("/calendars/:id/conflicts/check", calendar("checkBookingConflicts", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
   route.post("/calendars/:id/bookings/batch", calendar("batchBookings", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  const document = (command: DocumentCommand, extra: (input: Input) => Record<string, unknown> = () => ({})) => handle(!DOCUMENT_READ_COMMANDS.includes(command), input => executeDocument(input.scope.commands, { kind: "key", secret: input.context.secret }, command, documentTransportInput(command, { ...input.body, ...extra(input), tableId: input.c.req.param("tableId"), rowId: input.c.req.param("rowId") }, input.c.req.header("Idempotency-Key"))));
+  const documentPath = "/tables/:tableId/rows/:rowId/document";
+  route.get(documentPath, document("getDocument"));
+  route.post(documentPath, document("createDocument"));
+  route.put(documentPath, document("replaceDocument"));
+  route.get(`${documentPath}/revisions`, document("listDocumentRevisions", ({ c }) => ({ ...(c.req.query("beforeVersion") ? { beforeVersion: Number(c.req.query("beforeVersion")) } : {}), ...(c.req.query("limit") ? { limit: Number(c.req.query("limit")) } : {}) })));
+  route.get(`${documentPath}/revisions/:version`, document("getDocumentRevision", ({ c }) => ({ version: Number(c.req.param("version")) })));
+  route.post(`${documentPath}/restore`, document("restoreDocumentRevision"));
+  route.get(`${documentPath}/render`, document("renderDocument", ({ c }) => c.req.query("version") ? { version: Number(c.req.query("version")) } : {}));
+  route.post(`${documentPath}/images`, document("uploadDocumentImage"));
+  route.get(`${documentPath}/images/:fileId`, document("getDocumentImage", ({ c }) => ({ fileId: c.req.param("fileId") })));
   return route;
 }

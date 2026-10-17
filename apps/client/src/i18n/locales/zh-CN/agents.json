@@ -149,6 +149,10 @@
     "calendar": {
       "name": "日历与预约",
       "description": "按成员权限查询空档、预约、改期和取消。"
+    },
+    "documents": {
+      "name": "记录正文",
+      "description": "读写独立正文、管理历史与私有图片。"
     }
   },
   "partlyEnabled": "部分开启",

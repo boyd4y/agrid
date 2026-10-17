@@ -1,3 +1,5 @@
+import * as documentCommands from "./documents.js";
+export * from "./documents.js";
 export * from "./calendar.js";
 import * as calendarCommands from "./calendar.js";
 /** Shared command registry. Implementations depend on modules, never on this registry. */
@@ -45,6 +47,7 @@ export { getRow, queryRelationRecords } from "./relations.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 
 export const commands = {
+  ...documentCommands,
   ...calendarCommands,
   batchSetRelations,
   batchAddRelations,

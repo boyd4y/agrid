@@ -1,5 +1,6 @@
 import { useMemberOptions } from "@/hooks/useMemberOptions";
 import { ColumnTypeIcon } from "./ColumnTypeIcon";
+import { openRelatedRecord } from "./RelationPicker";
 import { RelationColumnConfig } from "./RelationColumnConfig";
 import {
   useCallback,
@@ -138,13 +139,15 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
     [sortedCols],
   );
 
+  const titleColumn = sortedCols.find(column => column.name === "标题") ?? sortedCols.find(column => column.type === "text");
+
   const hiddenCols = useMemo(
     () => sortedCols.filter((c) => c.config?.hidden),
     [sortedCols],
   );
 
   const totalWidth = useMemo(() => {
-    return 48 + visibleCols.reduce((s, c) => s + c.width, 0) + 44;
+    return 96 + visibleCols.reduce((s, c) => s + c.width, 0) + 44;
   }, [visibleCols]);
 
   const rowVirtualizer = useVirtualizer({
@@ -431,7 +434,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
             className="flex h-9 min-w-max text-sm font-medium text-muted-foreground"
             style={{ width: totalWidth }}
           >
-            <div className="flex w-12 shrink-0 items-center justify-center text-muted-foreground">
+            <div className="sticky left-0 flex w-24 shrink-0 items-center justify-center border-r border-border bg-background text-muted-foreground">
               #
             </div>
             {visibleCols.map((col) => (
@@ -615,6 +618,7 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
           >
             {virtualItems.map((vi) => {
               const row = windowed.getRow(vi.index);
+              const rowTitle = String(titleColumn && row ? row.cells[titleColumn.id] ?? "" : "").trim() || t("rowNumber", { number: vi.index + 1 });
               return (
                 <div
                   key={vi.key}
@@ -625,20 +629,30 @@ export function DataTable({ table, onChange, refreshToken }: Props) {
                     width: totalWidth,
                   }}
                 >
-                  <div className="group flex w-12 shrink-0 items-center justify-center gap-1 text-xs text-muted-foreground">
+                  <div className="group sticky left-0 z-10 flex w-24 shrink-0 items-center justify-between gap-1 border-r border-border bg-background px-1 text-xs text-muted-foreground">
                     {row ? (
                       <>
-                        <span className="group-hover:hidden">
+                        <span className="w-5 text-center group-hover:hidden group-focus-within:hidden">
                           {vi.index + 1}
                         </span>
                         <button
                           type="button"
-                          className="hidden rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:inline-flex"
+                          className="hidden rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:inline-flex group-focus-within:inline-flex"
                           title={t("deleteRow")}
                           onClick={() => setDeleteTarget({ kind: "row", row })}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          data-record-trigger
+                          data-testid={`open-grid-record-${row.id}`}
+                          aria-label={t("openRecordNamed", { title: rowTitle })}
+                          onClick={() => openRelatedRecord({ id: row.id, tableId: table.id, title: rowTitle })}
+                        >
+                          {t("openRecord")}
+                        </Button>
                       </>
                     ) : (
                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/50" />

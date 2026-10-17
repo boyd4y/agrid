@@ -11,7 +11,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createClient } from "@tabdo/sdk";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, agentProfile, workspaces, bookings, bookingReminderIntents, bookingReminders, automations, automationOccurrences, automationSchedules, automationEvents, automationRuns, automationAgentActions, chatThreads } from "../../src/business/db/schema.js";
+import { organization, user, member, agentProfile, workspaces, tables, rows, bookings, bookingReminderIntents, bookingReminders, automations, automationOccurrences, automationSchedules, automationEvents, automationRuns, automationAgentActions, chatThreads } from "../../src/business/db/schema.js";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import { executeCalendar } from "../../src/business/calendar/service.js";
 import { createAutomation, updateAutomation, listAutomationRuns } from "../../src/business/automation/crud.js";
@@ -19,12 +19,12 @@ import { readableRunDetails } from "../../src/business/automation/run-visibility
 import { dispatchDueSchedules } from "../../src/business/automation/schedule.js";
 import { appendExternalAutomationEvent } from "../../src/business/automation/events.js";
 import { createSiteKey, updateSiteKey } from "../../src/business/data-api/keys.js";
-import { createSiteApiRoutes } from "../../src/business/http/site-api.js";
+import { createSiteApiRoutes, createSiteKeysRoute } from "../../src/business/http/site-api.js";
 import { createCommandsRoute } from "../../src/business/http/commands.js";
 import { createCalendarTools } from "../../src/business/agent/tools/calendar.js";
 import { acceptBookingReminder, dispatchDueBookingReminders, readBookingReminders } from "../../src/business/calendar/reminders.js";
 import type { Actor } from "../../src/business/auth/actor.js";
-import type { CalendarCommand, CalendarCommands, AutomationRule } from "@tabdo/shared";
+import { EMPTY_DOCUMENT, type ApiKeyInput, type CalendarCommand, type CalendarCommands, type AutomationRule } from "@tabdo/shared";
 const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(process.env.DATABASE_URL_UNPOOLED, url);
 const resource = createDatabase({ connectionString: url, poolMax: 8 });
@@ -57,6 +57,54 @@ before(async () => {
 });
 beforeEach(() => { now = new Date("2030-03-08T00:00:00Z"); });
 after(async () => { await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await resource.db.delete(organization).where(eq(organization.id, org)); await resource.db.delete(user).where(sql`${user.id} in (${uid}, ${aid}, ${peerId}, ${adminId})`); await other.close(); await resource.close(); });
+test("one Key preserves independent table, calendar, schedule and document grants across HTTP edits and shared SDK/native execution", async () => {
+  const [table] = await resource.db.insert(tables).values({ organizationId: org, workspaceId: deps.workspaceId!, name: "Combined capabilities" }).returning();
+  const [row] = await resource.db.insert(rows).values({ tableId: table.id }).returning();
+  const rule = await createAutomation(deps, { ...identity, name: "Combined plan", source: { kind: "schedule", cron: "0 10 * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" }, actions: [{ type: "run_agent", agentUserId: aid, prompt: "Private" }] });
+  const management = createSiteKeysRoute(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => ({ user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } }) }, close: async () => {} }));
+  let input: ApiKeyInput = { name: "All four", permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], calendarPermissions: grants(), schedulePermissions: [{ automationId: rule.id, canRead: true, canUpdate: true }], documentPermissions: [{ tableId: table.id, canRead: true, canCreate: true, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }] };
+  const response = await management.request("/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+  assert.equal(response.status, 201);
+  const saved = await response.json(), client = sdk(saved.secret), location = { tableId: table.id, rowId: row.id };
+  await client.documents.createDocument({ ...location, content: EMPTY_DOCUMENT, idempotencyKey: key() });
+  assert.deepEqual((await client.documents.getDocument(location))!.content, EMPTY_DOCUMENT);
+  assert.equal((await client.calendar.getCalendar({ calendarId })).id, calendarId);
+  assert((await client.calendar.queryScheduledOccurrences({ ...range, automationIds: [rule.id] })).items.length);
+  assert.equal((await client.table(table.id).get(row.id))!.id, row.id);
+  const restDocument = await app.request("/api/commands", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${saved.secret}` }, body: JSON.stringify({ command: "getDocument", input: location }) });
+  assert.equal(restDocument.status, 200); assert.deepEqual((await restDocument.json()).result.content, EMPTY_DOCUMENT);
+  const mixedMutation = await app.request("/api/graphql", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${saved.secret}` }, body: JSON.stringify({ query: "mutation($doc:JSON!,$plan:JSON!){createDocument(input:$doc) updateAutomation(input:$plan)}", variables: { doc: { ...location, content: EMPTY_DOCUMENT, idempotencyKey: key() }, plan: { automationId: rule.id, name: "Must not update", expectedVersion: rule.version } } }) });
+  assert.equal((await mixedMutation.json()).errors[0].extensions.code, "QUERY_TOO_COMPLEX");
+  const tools = createTableTools(deps, table.id, org, uid);
+  assert.deepEqual((await tools.get_document.execute(location, { toolCallId: key(), messages: [] })).content, EMPTY_DOCUMENT);
+  assert.equal((await tools.get_calendar.execute({ calendarId }, { toolCallId: key(), messages: [] })).id, calendarId);
+  assert((await tools.query_scheduled_occurrences.execute({ ...range, automationIds: [rule.id] }, { toolCallId: key(), messages: [] })).items.length);
+  // Each edit changes one family and sends back every other family unchanged.
+  for (const change of [
+    { documentPermissions: [{ ...input.documentPermissions![0], canReadHistory: true }] },
+    { schedulePermissions: [{ ...input.schedulePermissions![0], canUpdate: false }] },
+    { calendarPermissions: [{ ...input.calendarPermissions![0], canTriggerAgent: false }] },
+    { permissions: [{ ...input.permissions[0], canCreate: true }] },
+  ]) {
+    input = { ...input, ...change };
+    const edited = await management.request(`/${saved.key.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    assert.equal(edited.status, 200);
+    const listed = (await (await management.request("/")).json()).keys.find((value: { id: string }) => value.id === saved.key.id);
+    for (const family of ["permissions", "documentPermissions", "schedulePermissions", "calendarPermissions"] as const) assert.deepEqual(listed[family], input[family]);
+  }
+  const rejectedEdit = await management.request(`/${saved.key.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, permissions: [], documentPermissions: [{ ...input.documentPermissions![0], tableId: key() }] }) });
+  assert.equal(rejectedEdit.status, 400);
+  const unchanged = (await (await management.request("/")).json()).keys.find((value: { id: string }) => value.id === saved.key.id);
+  for (const family of ["permissions", "documentPermissions", "schedulePermissions", "calendarPermissions"] as const) assert.deepEqual(unchanged[family], input[family], "An invalid grant rolls back the entire edit");
+  await assert.rejects(client.updateAutomation({ automationId: rule.id, name: "Denied", expectedVersion: rule.version }), (error: any) => error.code === "FORBIDDEN");
+  // A document-only Key cannot read table records, calendars, or schedules.
+  const isolated = await createSiteKey(deps, actor, { name: "Document only", permissions: [], documentPermissions: input.documentPermissions });
+  const documentOnly = sdk(isolated.secret);
+  assert.equal((await documentOnly.documents.getDocument(location))!.version, 1);
+  await assert.rejects(documentOnly.table(table.id).get(row.id));
+  await assert.rejects(documentOnly.calendar.getCalendar({ calendarId }));
+  await assert.rejects(documentOnly.calendar.queryScheduledOccurrences({ ...range, automationIds: [rule.id] }));
+});
 test("bounded DST projection reads authoritative cron/occurrences, exposes no private conversation and writes no predictions", async () => {
   const rule = await createAutomation(deps, { ...identity, name: "DST", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "America/New_York" }, trigger: { type: "schedule_due" }, actions: [{ type: "run_agent", agentUserId: aid, prompt: "Read" }] });
   const before = await resource.db.select().from(automationOccurrences).where(eq(automationOccurrences.automationId, rule.id));

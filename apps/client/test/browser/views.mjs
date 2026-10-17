@@ -74,7 +74,7 @@ try {
   await page.locator(`[data-view-id="${grid.id}"]`).getByRole('img', { name: '默认视图' }).waitFor();
   await page.reload(); await page.locator(`[data-view-id="${grid.id}"][data-state="active"]`).waitFor();
   assert.equal(await page.getByTitle('操作选项', { exact: true }).count(), 1, 'one merged view/table actions trigger');
-  await page.getByTestId(`view-menu-${grid.id}`).click(); await page.getByRole('menuitem', { name: '更改表格图标', exact: true }).click(); await page.getByLabel('选择表格图标').getByRole('button', { name: '产品', exact: true }).click(); await page.getByLabel('选择表格图标').waitFor({ state: 'hidden' }); await page.keyboard.press('Escape'); assert.equal((await api(`/tables/${table.id}`)).icon, 'Rocket');
+  await page.getByTestId(`view-menu-${grid.id}`).click(); await page.getByRole('menuitem', { name: '更改表格图标', exact: true }).click(); await page.getByLabel('选择表格图标').getByRole('button', { name: '启动', exact: true }).click(); await page.getByLabel('选择表格图标').waitFor({ state: 'hidden' }); await page.keyboard.press('Escape'); assert.equal((await api(`/tables/${table.id}`)).icon, 'Rocket');
   await page.getByTestId(`view-menu-${grid.id}`).click(); await page.getByRole('menuitem', { name: '置顶到工作区', exact: true }).click(); await page.getByRole('menu').waitFor({ state: 'hidden' }); assert.equal((await api(`/tables/${table.id}`)).pinned, true);
   await page.getByTestId(`view-menu-${grid.id}`).click(); await page.getByRole('menuitem', { name: '删除表格', exact: true }).click(); await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click(); await page.getByRole('alertdialog').waitFor({ state: 'hidden' }); assert.equal((await api(`/tables/${table.id}`)).id, table.id);
   await page.screenshot({ path: artifact('views-toolbar.png') });

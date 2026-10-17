@@ -1,3 +1,4 @@
+import { createDocumentTools } from "./documents.js";
 import { createCalendarTools } from "./calendar.js";
 import { createSiteTools } from "./sites.js";
 import { getSite } from "../../sites/service.js";
@@ -52,6 +53,7 @@ export function createTableTools(
   return {
     ...createReportTools(deps, organizationId, transaction),
     ...createSiteTools(deps, organizationId, actorId, transaction),
+    ...createDocumentTools(deps, organizationId, actorId, transaction),
     ...createCalendarTools(deps, organizationId, actorId, transaction),
     ...createBatchTools(deps, defaultTableId, organizationId, actorId, transaction),
     get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow(dependencies(), {...input,...org}, currentTransaction())}),

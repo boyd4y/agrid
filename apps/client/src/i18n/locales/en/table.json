@@ -343,5 +343,7 @@
     "multiple": "Allow multiple files",
     "unavailable": "File unavailable · Retry",
     "loading": "Loading files…"
-  }
+  },
+  "openRecord": "Open",
+  "rowNumber": "Row {{number}}"
 }

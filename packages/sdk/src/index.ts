@@ -1,3 +1,4 @@
+import type { DocumentCommand, DocumentCommands, DocumentResults } from "@tabdo/shared";
 import type { CalendarCommand, CalendarCommands, CalendarResults } from "@tabdo/shared";
 import type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteCreateReceipt } from "@tabdo/shared";
 export type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteFile, SiteCreateReceipt } from "@tabdo/shared";
@@ -50,6 +51,22 @@ export function createClient(options: ClientOptions) {
     const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
+  async function documentCommand<K extends DocumentCommand>(command: K, input: DocumentCommands[K], request?: RequestOptions): Promise<DocumentResults[K]> {
+    const read = ["getDocument", "listDocumentRevisions", "getDocumentRevision", "renderDocument", "getDocumentImage"].includes(command);
+    const result = await graphql<Record<K, DocumentResults[K]>>(`${read ? "query" : "mutation"} DocumentCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
+    return result[command];
+  }
+  const documentApi = {
+    getDocument: (input: DocumentCommands["getDocument"], request?: RequestOptions) => documentCommand("getDocument", input, request),
+    createDocument: (input: DocumentCommands["createDocument"], request?: RequestOptions) => documentCommand("createDocument", input, request),
+    replaceDocument: (input: DocumentCommands["replaceDocument"], request?: RequestOptions) => documentCommand("replaceDocument", input, request),
+    listDocumentRevisions: (input: DocumentCommands["listDocumentRevisions"], request?: RequestOptions) => documentCommand("listDocumentRevisions", input, request),
+    getDocumentRevision: (input: DocumentCommands["getDocumentRevision"], request?: RequestOptions) => documentCommand("getDocumentRevision", input, request),
+    restoreDocumentRevision: (input: DocumentCommands["restoreDocumentRevision"], request?: RequestOptions) => documentCommand("restoreDocumentRevision", input, request),
+    renderDocument: (input: DocumentCommands["renderDocument"], request?: RequestOptions) => documentCommand("renderDocument", input, request),
+    uploadDocumentImage: (input: DocumentCommands["uploadDocumentImage"], request?: RequestOptions) => documentCommand("uploadDocumentImage", input, request),
+    getDocumentImage: (input: DocumentCommands["getDocumentImage"], request?: RequestOptions) => documentCommand("getDocumentImage", input, request),
+  };
   const calendarApi = {
     queryScheduledOccurrences: (input: CalendarCommands["queryScheduledOccurrences"], request?: RequestOptions) => calendarCommand("queryScheduledOccurrences", input, request),
     setBookingReminders: (input: CalendarCommands["setBookingReminders"], request?: RequestOptions) => calendarCommand("setBookingReminders", input, request),
@@ -105,7 +122,7 @@ export function createClient(options: ClientOptions) {
       },
     };
   }
-  return { graphql, table, calendar: calendarApi,
+  return { graphql, table, calendar: calendarApi, documents: documentApi,
     updateAutomation: (input: import("@tabdo/shared").UpdateAutomationInput & { expectedVersion: number }, request?: RequestOptions) => graphql<{ updateAutomation: Pick<import("@tabdo/shared").AutomationRule, "name" | "enabled" | "source" | "version"> & { automationId: string } }>("mutation UpdateAutomation($input: JSON!) { updateAutomation(input: $input) }", { input }, request).then(value => value.updateAutomation), async tables(request?: RequestOptions): Promise<SiteTable[]> {
     return (await graphql<{ tables: SiteTable[] }>(`query Tables { tables { id name description columns { ${columnFields} } } }`, {}, request)).tables;
   } };

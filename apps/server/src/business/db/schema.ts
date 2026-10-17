@@ -94,7 +94,7 @@ export const tables = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("tables_org_idx").on(t.organizationId), index("tables_workspace_idx").on(t.workspaceId, t.createdAt), index("tables_org_name_lookup").on(t.workspaceId, sql`public.tabdo_name_key(${t.name})`)]
+  (t) => [uniqueIndex("tables_scope_key").on(t.id, t.workspaceId, t.organizationId), index("tables_org_idx").on(t.organizationId), index("tables_workspace_idx").on(t.workspaceId, t.createdAt), index("tables_org_name_lookup").on(t.workspaceId, sql`public.tabdo_name_key(${t.name})`)]
 );
 
 export const columns = pgTable(
@@ -145,6 +145,7 @@ export const rows = pgTable(
   },
   (t) => [
     index("rows_table_sort_id_idx").on(t.tableId, t.sortOrder, t.id),
+    uniqueIndex("rows_scope_key").on(t.id, t.tableId),
   ]
 );
 
@@ -546,3 +547,5 @@ export const apiKeySchedules = pgTable("api_key_schedules", {
   automationId: uuid("automation_id").notNull().references(() => automations.id, { onDelete: "cascade" }),
   canRead: boolean("can_read").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false),
 }, t => [uniqueIndex("api_key_schedules_key_rule_idx").on(t.keyId, t.automationId), check("api_key_schedules_capability", sql`${t.canRead} OR ${t.canUpdate}`)]);
+
+export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
