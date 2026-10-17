@@ -20,7 +20,7 @@ export type ReportWidget = WidgetBase & (
   | { type: "text"; content: string }
 );
 export type ReportPageConfig = { name: string; description: string; columns: 1 | 2; widgets: ReportWidget[] };
-export type Report = ReportPageConfig & { id: string; organizationId: string; version: number; createdAt: string | Date; updatedAt: string | Date };
+export type Report = ReportPageConfig & { id: string; organizationId: string; workspaceId: string; version: number; createdAt: string | Date; updatedAt: string | Date };
 export type ReportData = { points: { key: string; label: string; value: number | null; records: number }[]; totalRows: number; truncated: boolean; metricLabel: string; sourceName: string };
 export type ReportMetricData = { value: number | null; totalRows: number; sourceName: string; metricLabel: string };
 export type ReportWidgetResult = { id: string; data: ReportData | ReportMetricData | null; error: string | null };

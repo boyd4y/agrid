@@ -1,3 +1,4 @@
+import { workspaceColumn } from "./workspaces-schema.js";
 import { pgTable, uuid, text, integer, jsonb, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { organization, user } from "@tabdo/auth/schema";
 import type { SiteSourceFile } from "@tabdo/shared";
@@ -5,11 +6,12 @@ import type { SiteSourceFile } from "@tabdo/shared";
 export const sites = pgTable("sites", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  workspaceId: workspaceColumn(),
   name: text("name").notNull(), version: integer("version").notNull().default(1),
   publishedRevisionId: uuid("published_revision_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, t => [index("sites_org_updated_idx").on(t.organizationId, t.updatedAt)]);
+}, t => [index("sites_org_updated_idx").on(t.organizationId, t.updatedAt), index("sites_workspace_updated_idx").on(t.workspaceId, t.updatedAt)]);
 export const siteRevisions = pgTable("site_revisions", {
   id: uuid("id").defaultRandom().primaryKey(), siteId: uuid("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
   version: integer("version").notNull(), files: jsonb("files").$type<SiteSourceFile[]>().notNull(),

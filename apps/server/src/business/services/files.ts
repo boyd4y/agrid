@@ -1,3 +1,4 @@
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { ObjectStorage } from "@tabdo/storage";
@@ -14,8 +15,8 @@ export type FileCapabilities = Readonly<{
 export type FileDependencies = RuntimeDependencies & FileCapabilities & Readonly<{ logger?: { error(event: string, error: unknown): void } }>;
 const uuid = z.uuid();
 export const invalidFileId = (id: string) => !uuid.safeParse(id).success;
-export async function ownedFileColumn(database: Database, organizationId: string, tableId: string, columnId: string, lock = false) {
-  const query = database.select().from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, organizationId)));
+export async function ownedFileColumn(database: Database, organizationId: string, tableId: string, columnId: string, lock = false, workspaceId?: string) {
+  const query = database.select().from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, organizationId), workspaceScope({ workspaceId }, organizationId, tables.workspaceId)));
   const [table] = await (lock ? query.for("update") : query);
   if (!table) throw new ServiceError(404, { message: "表格不存在" });
   const [column] = await database.select().from(columns).where(and(eq(columns.id, columnId), eq(columns.tableId, table.id)));
@@ -31,13 +32,14 @@ function assertCount(column: typeof columns.$inferSelect, count: number) {
   if (column.config.file?.multiple === false && count > 1) throw new ServiceError(400, { message: "此字段仅允许一个文件" });
 }
 export async function uploadFiles(deps: FileDependencies, organizationId: string, tableId: string, columnId: string, files: File[]) {
-  const column = await ownedFileColumn(deps.database, organizationId, tableId, columnId);
+  const column = await ownedFileColumn(deps.database, organizationId, tableId, columnId, false, deps.workspaceId);
   if (!files.length) throw new ServiceError(400, { message: "请选择文件" });
   if (files.length > deps.limits.maxFiles) throw new ServiceError(400, { message: `每次最多上传 ${deps.limits.maxFiles} 个文件` });
   assertCount(column, files.length);
   if (files.some(file => file.size > deps.limits.maxFileBytes)) throw new ServiceError(413, { message: `单个文件最大 ${deps.limits.maxFileBytes} 字节` });
   const adapter = deps.storage();
-  const records = files.map(file => { const id = deps.uuid(); return { id, name: fileName(file.name), size: file.size, mimeType: mimeType(file.type), organizationId, tableId, columnId, storageDriver: adapter.driver, storageKey: `${id.slice(0, 2)}/${id}` }; });
+  const workspaceId = (await requireWorkspace(deps, organizationId)).id;
+  const records = files.map(file => { const id = deps.uuid(); return { id, name: fileName(file.name), size: file.size, mimeType: mimeType(file.type), organizationId, workspaceId, tableId, columnId, storageDriver: adapter.driver, storageKey: `${id.slice(0, 2)}/${id}` }; });
   const attempted: string[] = [];
   try {
     for (let index = 0; index < files.length; index++) {
@@ -45,7 +47,7 @@ export async function uploadFiles(deps: FileDependencies, organizationId: string
       await adapter.put(record.storageKey, new Uint8Array(await files[index].arrayBuffer()), record.mimeType);
     }
     const saved = await deps.database.transaction(async tx => {
-      const current = await ownedFileColumn(tx, organizationId, tableId, columnId, true);
+      const current = await ownedFileColumn(tx, organizationId, tableId, columnId, true, deps.workspaceId);
       assertCount(current, files.length);
       return tx.insert(fileObjects).values(records).returning();
     });
@@ -60,14 +62,14 @@ export async function uploadFiles(deps: FileDependencies, organizationId: string
 }
 export async function listFiles(deps: RuntimeDependencies, organizationId: string, ids: string[]) {
   if (ids.length > 100 || ids.some(invalidFileId) || new Set(ids).size !== ids.length) throw new ServiceError(400, { message: "文件 ID 参数不正确" });
-  const found = await deps.database.select().from(fileObjects).where(and(eq(fileObjects.organizationId, organizationId), inArray(fileObjects.id, ids)));
+  const found = await deps.database.select().from(fileObjects).where(and(and(eq(fileObjects.organizationId, organizationId), workspaceScope(deps, organizationId, fileObjects.workspaceId)), inArray(fileObjects.id, ids)));
   if (found.length !== ids.length) throw new ServiceError(404, { message: "文件不存在" });
   const byId = new Map(found.map(record => [record.id, record]));
   return { files: ids.map(id => storedFile(byId.get(id)!)) };
 }
 export async function downloadFile(deps: FileDependencies, organizationId: string, id: string) {
   if (invalidFileId(id)) throw new ServiceError(404, { message: "文件不存在" });
-  const [record] = await deps.database.select().from(fileObjects).where(and(eq(fileObjects.id, id), eq(fileObjects.organizationId, organizationId)));
+  const [record] = await deps.database.select().from(fileObjects).where(and(eq(fileObjects.id, id), and(eq(fileObjects.organizationId, organizationId), workspaceScope(deps, organizationId, fileObjects.workspaceId))));
   if (!record) throw new ServiceError(404, { message: "文件不存在" });
   try { return { record, body: await deps.storage(record.storageDriver).open(record.storageKey) }; }
   catch (error) {

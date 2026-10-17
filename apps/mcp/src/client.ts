@@ -16,6 +16,7 @@ export async function callCommand(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  if (process.env.TABDO_WORKSPACE_ID) headers["X-Workspace-Id"] = process.env.TABDO_WORKSPACE_ID;
   if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
 
   const res = await fetch(`${API_URL}/api/commands`, {

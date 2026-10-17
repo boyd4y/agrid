@@ -271,3 +271,37 @@ test("table predicates and schedule deadlines reach a real native agent through 
     for (const key of keys) { if (saved[key] === undefined) delete process.env[key];else process.env[key] = saved[key]; }
   }
 });
+
+test("same-enterprise workspaces keep queued table events and schedules in their original scope", async () => {
+  const commands = await import("../../src/business/commands/index.js");
+  const { workspaces } = await import("../../src/db/schema.js");
+  const base = commandDependencies();
+  const [a] = await db.select().from(workspaces).where(and(eq(workspaces.organizationId, org), eq(workspaces.isDefault, true)));
+  const [b] = await db.insert(workspaces).values({ organizationId: org, name: "Second workspace" }).returning();
+  const boundA = { ...base, workspaceId: a.id }, boundB = { ...base, workspaceId: b.id };
+  const first = await commands.createTable(boundA, { ...scope, name: "Workspace worker binding" });
+  const second = await commands.createTable(boundB, { ...scope, name: "Workspace worker binding" });
+  const firstTitle = (await commands.getTable(boundA, { ...scope, tableId: first.id })).columns[0].id;
+  const secondTitle = (await commands.getTable(boundB, { ...scope, tableId: second.id })).columns[0].id;
+  await commands.createAutomation(boundA, { ...scope, name: "Original workspace trigger", tableId: first.id,
+    trigger: { type: "row_created" }, actions: [{ type: "update_field", columnId: firstTitle, value: "completed in A" }] });
+  const unchanged = await commands.addRow(boundB, { ...scope, tableId: second.id, cells: { [secondTitle]: "unchanged B" } });
+  const queued = await commands.addRow(boundA, { ...scope, tableId: first.id });
+  // The next foreground invocation is B before the worker starts/reloads persisted events.
+  assert.equal((await commands.listTables(boundB, scope))[0].id, second.id);
+  service = createAutomationService({ closeDatabase: false }); await service.ready;
+  try {
+    await eventually(() => finished(queued.id));
+    assert.equal((await commands.getRow(boundA, { ...scope, rowId: queued.id })).cells[firstTitle], "completed in A");
+    assert.equal((await commands.getRow(boundB, { ...scope, rowId: unchanged.id })).cells[secondTitle], "unchanged B");
+    const schedule = await commands.createAutomation(boundA, { ...scope, name: "Original workspace schedule",
+      source: { kind: "schedule", cron: "0 * * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" },
+      actions: [{ type: "command", command: "addRow", input: { tableId: first.id, cells: { [firstTitle]: "scheduled in A" } } }] });
+    await deadline(schedule.id, new Date(Date.now() + 200));
+    await eventually(async () => (await db.select().from(automationRuns).where(and(eq(automationRuns.automationId, schedule.id), eq(automationRuns.status, "completed")))).length === 1);
+    const [run] = await db.select().from(automationRuns).where(eq(automationRuns.automationId, schedule.id));
+    assert.equal(run.workspaceId, a.id);
+    assert.equal((await commands.queryRows(boundB, { ...scope, tableId: second.id })).rows.length, 1);
+    assert((await commands.queryRows(boundA, { ...scope, tableId: first.id })).rows.some(row => row.cells[firstTitle] === "scheduled in A"));
+  } finally { await service.close(); service = undefined; }
+});

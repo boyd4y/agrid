@@ -61,7 +61,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.delete("/tables/:id/rows/:rowId", handle(true, ({ scope, context, c }) => data.siteDeleteRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!)));
   route.post("/commands", handle(true, async input => {
     const { scope, context, body } = input, command = z.string().parse(body.command), args = z.record(z.string(), z.unknown()).parse(body.input ?? {});
-    if (["organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
+    if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
     if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
     let result: unknown;

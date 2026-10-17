@@ -35,7 +35,9 @@ export function createRequestRoute(acquire: RequestScopeResolver) {
     c.set("resourceResolver", acquire);
     c.set("resources", scope);
     try {
-      c.set("resolvedActor", await resolveActor(c.req.raw, scope.identity));
+      const actor = await resolveActor(c.req.raw, scope.identity);
+      c.set("resolvedActor", actor);
+      if (actor?.workspaceId) c.set("resources", { ...scope, commands: { ...scope.commands, workspaceId: actor.workspaceId } });
       await next();
     } finally { await scope.close(); }
   });

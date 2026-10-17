@@ -26,10 +26,10 @@ export async function appendAutomationEvent(deps: CommandDependencies, tx: Trans
   if (!matched.length) return;
   const id = deps.uuid();
   const snapshot: EventSnapshot = { protocol: 1, event, row, columns, actorId: actorId ?? null, traceId: id };
-  await tx.insert(automationEvents).values({ id, organizationId, tableId: event.tableId,
+  await tx.insert(automationEvents).values({ id, organizationId, workspaceId: matched[0].workspaceId, tableId: event.tableId,
     rowId: event.rowId, rowVersion: row.version ?? 1, expectedVersion: row.version ?? 1,
     status: "matched", snapshot: snapshot as unknown as Record<string, unknown> });
-  await tx.insert(automationRuns).values(matched.map((rule) => ({ automationId: rule.id,
+  await tx.insert(automationRuns).values(matched.map((rule) => ({ automationId: rule.id, workspaceId: rule.workspaceId,
     tableId: event.tableId, rowId: event.rowId, eventId: id, ruleVersion: rule.version,
     ruleSnapshot: rule as unknown as Record<string, unknown>, status: "queued",
     triggerType: (rule.trigger as AutomationRule["trigger"]).type,
@@ -92,7 +92,7 @@ export async function appendExternalAutomationEvent(deps: CommandDependencies, t
   if (!rules.length) return null;
   await tx.insert(automationEvents).values({ id: event.id, organizationId: event.organizationId, tableId: null, rowId: null,
     rowVersion: null, expectedVersion: null, snapshot: snapshot as unknown as Record<string, unknown>, status: "matched" });
-  await tx.insert(automationRuns).values(rules.map(rule => ({ automationId: rule.id, tableId: null, rowId: null, eventId: event.id,
+  await tx.insert(automationRuns).values(rules.map(rule => ({ automationId: rule.id, workspaceId: rule.workspaceId, tableId: null, rowId: null, eventId: event.id,
     ruleVersion: rule.version, ruleSnapshot: rule as unknown as Record<string, unknown>, status: "queued", triggerType: rule.trigger.type,
     detail: { eventType: event.type, source: event.source, traceId: event.traceId } })));
   await tx.insert(automationOutbox).values({ eventId: event.id, queue: deps.automationQueueName, payload: { protocol: 1, eventId: event.id, generation: 0 } });

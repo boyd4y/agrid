@@ -1,3 +1,5 @@
+import { assertCommandReferences } from "../tenant/references.js";
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 import { eq, asc, desc, and, isNull, sql } from "drizzle-orm";
 
@@ -13,14 +15,14 @@ import { schedulePreview, syncSchedule } from "./schedule.js";
 
 type OrgScoped = { organizationId?: string; actorId?: string };
 export function mapRule(row: typeof automations.$inferSelect): AutomationRule {
-  return { id: row.id, organizationId: row.organizationId, createdByUserId: row.createdByUserId, source: row.source,
+  return { id: row.id, organizationId: row.organizationId, workspaceId: row.workspaceId, createdByUserId: row.createdByUserId, source: row.source,
     eventConditions: row.eventConditions, tableId: row.tableId, name: row.name, enabled: row.enabled, version: row.version,
     trigger: row.trigger as AutomationRule["trigger"], conditions: row.conditions as AutomationRule["conditions"],
     conditionLogic: row.conditionLogic as AutomationRule["conditionLogic"], actions: row.actions as AutomationRule["actions"],
     createdAt: row.createdAt, updatedAt: row.updatedAt };
 }
 function mapRun(row: typeof automationRuns.$inferSelect): AutomationRun {
-  return { id: row.id, automationId: row.automationId, tableId: row.tableId, rowId: row.rowId,
+  return { id: row.id, workspaceId: row.workspaceId, automationId: row.automationId, tableId: row.tableId, rowId: row.rowId,
     status: row.status as AutomationRun["status"], eventId: row.eventId, attempts: row.attempts, nextStep: row.nextStep,
     triggerType: row.triggerType as AutomationRun["triggerType"], detail: row.detail, error: row.error,
     createdAt: row.createdAt, finishedAt: row.finishedAt,
@@ -28,7 +30,7 @@ function mapRun(row: typeof automationRuns.$inferSelect): AutomationRun {
 }
 async function ownedRule(deps: CommandDependencies, id: string, organizationId?: string, tx: Transaction | CommandDependencies["database"] = deps.database) {
   if (!organizationId) throw new Error("缺少工作区上下文");
-  const [rule] = await tx.select().from(automations).where(and(eq(automations.id, id), eq(automations.organizationId, organizationId), isNull(automations.deletedAt)));
+  const [rule] = await tx.select().from(automations).where(and(eq(automations.id, id), and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt)));
   if (!rule) throw new Error("自动化不存在");
   return rule;
 }
@@ -39,7 +41,7 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
   if (new Set(rule.conditions.map(condition => condition.id)).size !== rule.conditions.length) throw new Error("条件标识不能重复");
   if (new Set(rule.eventConditions.map(condition => condition.id)).size !== rule.eventConditions.length) throw new Error("事件条件标识不能重复");
   if (source.kind === "table") {
-    const [table] = await tx.select().from(tables).where(and(eq(tables.id, source.tableId), eq(tables.organizationId, organizationId)));
+    const [table] = await tx.select().from(tables).where(and(eq(tables.id, source.tableId), and(eq(tables.organizationId, organizationId), workspaceScope(deps, organizationId, tables.workspaceId))));
     if (!table) throw new Error("来源表格不存在");
     if (!["row_created", "field_changed", "enter_status"].includes(rule.trigger.type)) throw new Error("表格来源与触发器不匹配");
     const cols = await tx.select().from(columns).where(eq(columns.tableId, table.id));
@@ -77,15 +79,16 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
     }
     if (action.type === "command") {
       // Fully literal inputs are validated now; references retain their real types and are validated at execution.
+      await assertCommandReferences(deps, tx, organizationId, action.input);
       const encoded = JSON.stringify(action.input);
       if (!encoded.includes('"$event"') && !encoded.includes('"$step"')) parseAutomationCommand(action.command, action.input);
-      if (Object.hasOwn(action.input, "organizationId") || Object.hasOwn(action.input, "actorId") || Object.hasOwn(action.input, "skipAutomation")) throw new Error("动作不能设置执行身份");
+      if (Object.hasOwn(action.input, "workspaceId") || Object.hasOwn(action.input, "organizationId") || Object.hasOwn(action.input, "actorId") || Object.hasOwn(action.input, "skipAutomation")) throw new Error("动作不能设置执行身份");
     }
   }
 }
 export async function listWorkspaceAutomations(deps: CommandDependencies, organizationId: string, offset = 0, limit = 100, kind?: "event" | "schedule") {
   const hits = await deps.database.select({ rule: automations, sourceName: tables.name }).from(automations).leftJoin(tables, eq(tables.id, automations.tableId))
-    .where(and(eq(automations.organizationId, organizationId), isNull(automations.deletedAt), kind === "schedule" ? sql`${automations.source}->>'kind' = 'schedule'` : kind === "event" ? sql`${automations.source}->>'kind' <> 'schedule'` : undefined)).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
+    .where(and(and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt), kind === "schedule" ? sql`${automations.source}->>'kind' = 'schedule'` : kind === "event" ? sql`${automations.source}->>'kind' <> 'schedule'` : undefined)).orderBy(desc(automations.createdAt), desc(automations.id)).limit(limit + 1).offset(offset);
   return { rules: hits.slice(0, limit).map(({ rule, sourceName }) => ({ ...mapRule(rule), sourceName })), hasMore: hits.length > limit };
 }
 export async function getWorkspaceAutomation(deps: CommandDependencies, id: string, organizationId: string) {
@@ -97,7 +100,7 @@ export async function listAutomations(deps: CommandDependencies, input: ListAuto
   const organizationId = requireOrgId(input.organizationId);
   const { tableId, offset, limit } = AUTOMATION_LIST_SCHEMA.parse({ tableId: input.tableId, offset: input.offset, limit: input.limit });
   if (tableId) await requireTableInOrg(deps, tableId, organizationId, transaction);
-  return (await (transaction ?? deps.database).select().from(automations).where(and(eq(automations.organizationId, organizationId),
+  return (await (transaction ?? deps.database).select().from(automations).where(and(and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)),
     tableId ? eq(automations.tableId, tableId) : undefined, isNull(automations.deletedAt)))
     .orderBy(asc(automations.createdAt), asc(automations.id)).limit(limit ?? 100).offset(offset ?? 0)).map(mapRule);
 }
@@ -112,7 +115,7 @@ export async function createAutomation(deps: CommandDependencies, input: CreateA
     if (!creator) throw new Error("创建者已不在工作区");
     const data = { ...body, source, conditions: body.conditions ?? [], eventConditions: body.eventConditions ?? [], actions: body.actions };
     await validateRule(deps, tx, data, organizationId);
-    const [row] = await tx.insert(automations).values({ organizationId, createdByUserId: actorId, source, eventConditions: data.eventConditions,
+    const [row] = await tx.insert(automations).values({ organizationId, workspaceId: (await requireWorkspace(deps, organizationId, tx)).id, createdByUserId: actorId, source, eventConditions: data.eventConditions,
       tableId: source.kind === "table" ? source.tableId : null, name: body.name, enabled: body.enabled ?? true,
       trigger: body.trigger, conditions: data.conditions, conditionLogic: body.conditionLogic ?? "and", actions: body.actions }).returning();
     const rule = mapRule(row);await syncSchedule(deps, tx, rule);return rule;
@@ -153,7 +156,7 @@ export async function listAutomationRuns(deps: CommandDependencies, input: ListA
   }
   return (await (transaction ?? deps.database).select({ run: automationRuns }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId)).where(and(
-      eq(automations.organizationId, organizationId), isNull(automations.deletedAt),
+      and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt),
       tableId ? eq(automationRuns.tableId, tableId) : undefined,
       automationId ? eq(automationRuns.automationId, automationId) : undefined))
     .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit ?? 50)).map(hit => mapRun(hit.run));

@@ -232,6 +232,7 @@ export type TableIconName = typeof TABLE_ICON_NAMES[number];
 
 export type TableMeta = {
   id: string;
+  workspaceId: string;
   name: string;
   description: string | null;
   icon?: string | null;

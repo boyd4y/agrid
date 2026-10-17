@@ -75,6 +75,14 @@ export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; mi
   if (!orgRequired) missing.push("tables.organization_id NOT NULL (run pnpm db:migrate — migration 0004)");
   if (!eventAutomations) missing.push("automations.organization_id (run pnpm db:migrate — migration 0023)");
 
+  const [{ workspaceGuards }] = await client`
+    SELECT count(*) = 8 AS "workspaceGuards" FROM pg_trigger
+    WHERE NOT tgisinternal AND tgenabled IN ('O','A') AND tgname IN (
+      'organization_default_workspace','tables_workspace_guard','automations_workspace_guard',
+      'reports_workspace_guard','sites_workspace_guard','chat_threads_workspace_guard',
+      'file_objects_workspace_guard','automation_runs_workspace_guard')
+  `;
+  if (!workspaceGuards) missing.push("workspace initialization and ownership guards (run pnpm db:migrate — migration 0033)");
   return missing.length ? { ok: false, missing } : { ok: true };
 }
 

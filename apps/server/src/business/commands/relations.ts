@@ -1,3 +1,4 @@
+import { requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
@@ -91,6 +92,7 @@ export async function createRelationColumnInTransaction(
   input: { tableId: string; name: string; config?: ColumnConfig; width?: number } & Scope,
 ) {
   const organizationId = requireOrgId(input.organizationId);
+  const workspaceId = (await requireWorkspace(deps, organizationId, tx)).id;
   const config = relationConfigSchema.parse(input.config?.relation);
   const tableIds = [...new Set([input.tableId, config.targetTableId])].sort();
   const owned = await tx
@@ -101,7 +103,7 @@ export async function createRelationColumnInTransaction(
     .for("update");
   if (
     owned.length !== tableIds.length ||
-    owned.some((t) => t.organizationId !== organizationId)
+    owned.some((t) => t.organizationId !== organizationId || t.workspaceId !== workspaceId)
   )
     throw new Error("关联目标表不存在或不属于当前工作区");
   const insert = async (tableId: string, name: string) => {

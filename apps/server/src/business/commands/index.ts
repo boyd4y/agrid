@@ -2,7 +2,7 @@
 export * from "./rows.js";
 import { listTables, getTable, createTable, updateCell, updateCells, updateCellsInTransaction, setRelation, addRelation, removeRelation, addRow, batchAddRows, prepareBatchRowWrites, batchUpdateRows, deleteRow, batchDeleteRows, deleteTable, reorderColumns, queryRows, setStatus, moveCard } from "./rows.js";
 
-export { getWorkspace, listMembers } from "./workspace.js";
+export { getWorkspace, listWorkspaces, createWorkspace, listMembers } from "./workspace.js";
 import { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
 export { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
 import { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";

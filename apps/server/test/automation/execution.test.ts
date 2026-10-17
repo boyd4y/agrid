@@ -163,7 +163,8 @@ test("verified external events match their source and typed conditions without i
   await db.insert(organization).values({ id: foreign, name: "Foreign automation", slug: foreign });
   try {
     await db.insert(member).values({ id: randomUUID(), userId: owner, organizationId: foreign, role: "owner" });
-    const foreignRule = await createAutomation({ organizationId: foreign, actorId: owner, name: "Private schedule", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" }, actions: [{ type: "command", command: "addRow", input: { tableId: target.id } }] });
+    const foreignTarget = await commands.createTable({ organizationId: foreign, name: "Foreign destination" });
+    const foreignRule = await createAutomation({ organizationId: foreign, actorId: owner, name: "Private schedule", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" }, actions: [{ type: "command", command: "addRow", input: { tableId: foreignTarget.id } }] });
     assert(!(await tools.list_automations.execute({}, options)).some((rule: any) => rule.id === foreignRule.id));
     await assert.rejects(tools.list_automation_runs.execute({ automationId: foreignRule.id }, options), /不存在/);
   } finally { await db.delete(organization).where(eq(organization.id, foreign)); }

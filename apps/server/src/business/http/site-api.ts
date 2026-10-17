@@ -165,8 +165,8 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
       const { tableId, rowId, columnId, fileId } = c.req.param();
       if (!scope.files || !scope.siteRateLimit) throw new ServiceError(503, { message: "File access is unavailable" });
       await scope.siteRateLimit({ keyId: principal.id, ip: options.clientIp?.(c) ?? "unknown", kind: "read" });
-      await data.siteFileReference(scope.commands, { principal, secret, baseUrl: c.req.url }, tableId, rowId, columnId, fileId);
-      const { record, body } = await downloadFile({ ...scope.commands, ...scope.files, logger: scope.logger }, principal.organizationId, fileId);
+      const file = await data.siteFileReference(scope.commands, { principal, secret, baseUrl: c.req.url }, tableId, rowId, columnId, fileId);
+      const { record, body } = await downloadFile({ ...scope.commands, workspaceId: file.workspaceId, ...scope.files, logger: scope.logger }, principal.organizationId, fileId);
       const inline = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"].includes(record.mimeType);
       const encoded = encodeURIComponent(record.name).replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
       return new Response(body, { headers: { "Content-Type": record.mimeType, "Content-Length": String(record.size),

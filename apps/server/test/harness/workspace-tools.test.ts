@@ -44,7 +44,7 @@ test("native harness discovers real member identities, assigns person and keeps 
     await db.insert(member).values([{ id: actorMember, organizationId: orgId, userId: actorId, role: "member" }, { id: randomUUID(), organizationId: orgId, userId: ownerId, role: "owner" }, { id: randomUUID(), organizationId: foreignOrg, userId: outsiderId, role: "owner" }]);
     await db.insert(agentProfile).values({ userId: actorId, memberId: actorMember, organizationId: orgId, displayName: "表格大师", persona: { systemPrompt: "处理团队任务" }, apiKeyHash: "fixture-secret-must-not-leak" });
     const scope = { organizationId: orgId, actorId };
-    const workspace = await cmds.getWorkspace(scope); assert.equal(workspace.workspace.id, orgId); assert.equal(workspace.actor?.userId, actorId);
+    const workspace = await cmds.getWorkspace(scope); assert.equal(workspace.workspace.organizationId, orgId); assert.notEqual(workspace.workspace.id, orgId); assert.equal(workspace.actor?.userId, actorId);
     const people = await cmds.listMembers({ ...scope, search: "张三", kind: "human" }); assert.equal(people.total, 1); assert.equal(people.members[0].userId, ownerId); assert.notEqual(people.members[0].id, ownerId);
     const agents = await cmds.listMembers({ ...scope, kind: "agent" }); assert.equal(agents.members[0].userId, actorId); assert.equal(agents.members[0].agent?.persona.systemPrompt, "处理团队任务"); assert(!JSON.stringify(agents).includes("fixture-secret"));
     const first = await cmds.listMembers({ ...scope, limit: 1 }); const second = await cmds.listMembers({ ...scope, offset: 1, limit: 1 }); assert(first.hasMore); assert(!second.hasMore); assert.notEqual(first.members[0].userId, second.members[0].userId);

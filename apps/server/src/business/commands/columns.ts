@@ -1,3 +1,4 @@
+import { workspaceMatches, requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 import { ServiceError } from "../errors.js";
 import { and, asc, eq, gt, inArray, max, or, sql } from "drizzle-orm";
@@ -16,17 +17,18 @@ import { createRelationColumnInTransaction, validateRollup, assertNoRollupDepend
 
 type Scope = { organizationId?: string; actorId?: string };
 async function ownedColumn(deps: CommandDependencies, tx: Transaction, columnId: string, scope: Scope) {
-  const [hit] = await tx.select({ column: columns, organizationId: tables.organizationId }).from(columns)
+  const [hit] = await tx.select({ column: columns, organizationId: tables.organizationId, workspaceId: tables.workspaceId }).from(columns)
     .innerJoin(tables, eq(tables.id, columns.tableId)).where(eq(columns.id, columnId));
-  if (!hit || (scope.organizationId && hit.organizationId !== scope.organizationId)) throw new Error(`列不存在: ${columnId}`);
+  if (!hit || (scope.organizationId && hit.organizationId !== scope.organizationId) || !(await workspaceMatches(deps, hit, tx))) throw new Error(`列不存在: ${columnId}`);
   return hit.column;
 }
 
 /** Schema writers acquire tables and relation definitions in the same order as row batches. */
 async function lockSchema(deps: CommandDependencies, tx: Transaction, tableIds: string[], scope: Scope) {
+  const workspaceId = (await requireWorkspace(deps, requireOrgId(scope.organizationId), tx)).id;
   const ids = [...new Set(tableIds)].sort();
   const owned = await tx.select().from(tables).where(inArray(tables.id, ids)).orderBy(asc(tables.id)).for("update");
-  if (owned.length !== ids.length || (scope.organizationId && owned.some((table) => table.organizationId !== scope.organizationId)))
+  if (owned.length !== ids.length || owned.some((table) => table.organizationId !== scope.organizationId || table.workspaceId !== workspaceId))
     throw new Error("表格不存在或不属于该工作区");
   await tx.select().from(tableRelations).where(or(inArray(tableRelations.sourceTableId, ids), inArray(tableRelations.targetTableId, ids)))
     .orderBy(asc(tableRelations.id)).for("update");

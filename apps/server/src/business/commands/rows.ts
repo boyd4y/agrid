@@ -1,3 +1,4 @@
+import { workspaceMatches, requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 import { readRow } from "./relation-reads.js";
 import { ServiceError } from "../errors.js";
@@ -113,7 +114,7 @@ export async function createTable(deps: CommandDependencies, input: {
 }, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
   return inTransaction(deps, transaction, async tx => {
-    const [table] = await tx.insert(tables).values({ organizationId, name: input.name.trim(), description: input.description }).returning();
+    const [table] = await tx.insert(tables).values({ organizationId, workspaceId: (await requireWorkspace(deps, organizationId, tx)).id, name: input.name.trim(), description: input.description }).returning();
     await tx.insert(columns).values({ tableId: table.id, name: "标题", type: "text", sortOrder: 0, width: 220 });
     return table;
   });
@@ -132,6 +133,7 @@ export async function updateCellsInTransaction(
   input: UpdateCellsInput & OrgScoped,
   mode: "set" | "add" | "remove" = "set",
 ) {
+  requireOrgId(input.organizationId);
   const [hit] = await tx
     .select({ row: rows, table: tables })
     .from(rows)
@@ -139,7 +141,7 @@ export async function updateCellsInTransaction(
     .where(eq(rows.id, input.rowId));
   if (
     !hit ||
-    (input.organizationId && hit.table.organizationId !== input.organizationId)
+    ((input.organizationId && hit.table.organizationId !== input.organizationId) || !(await workspaceMatches(deps, hit.table, tx)))
   )
     throw new Error("行不存在或不属于该工作区");
   const cols = await loadTableColumns(deps, hit.row.tableId, tx),
@@ -241,9 +243,9 @@ async function writeRelation(
 ) {
   if (!Array.isArray(input.recordIds)) throw new Error("recordIds 必须是数组");
   return inTransaction(deps, transaction, async tx => {
-    const [hit] = await tx.select({ column: columns, organizationId: tables.organizationId }).from(columns)
+    const [hit] = await tx.select({ column: columns, organizationId: tables.organizationId, workspaceId: tables.workspaceId }).from(columns)
       .innerJoin(tables, eq(columns.tableId, tables.id)).where(eq(columns.id, input.columnId));
-    if (!hit || (input.organizationId && hit.organizationId !== input.organizationId) || hit.column.type !== "relation")
+    if (!hit || ((input.organizationId && hit.organizationId !== input.organizationId) || !(await workspaceMatches(deps, hit, tx))) || hit.column.type !== "relation")
       throw new Error("字段不是关联类型或不属于该工作区");
     return updateCellsInTransaction(deps, tx, { ...input, cells: { [input.columnId]: input.recordIds } }, mode);
   });
@@ -265,8 +267,9 @@ async function prepareRowCreation(
   input: Pick<AddRowInput, "tableId"> & OrgScoped,
   cellMaps: (Record<string, CellValue> | undefined)[],
 ) {
+  requireOrgId(input.organizationId);
   const [table] = await tx.select().from(tables).where(eq(tables.id, input.tableId)).for("update");
-  if (!table || (input.organizationId && table.organizationId !== input.organizationId))
+  if (!table || ((input.organizationId && table.organizationId !== input.organizationId) || !(await workspaceMatches(deps, table, tx))))
     throw new Error(`表格不存在或不属于该工作区: ${input.tableId}`);
   const cols = await loadTableColumns(deps, input.tableId, tx);
   const colMap = columnByIdMap(cols);
@@ -359,13 +362,14 @@ export async function prepareBatchRowWrites(
   updates: readonly { rowId: string; cells?: Record<string, CellValue> }[],
   scope: OrgScoped,
 ) {
+  const workspaceId = (await requireWorkspace(deps, requireOrgId(scope.organizationId), tx)).id;
   const rowIds = [...new Set(updates.map((item) => item.rowId))];
   const hits = await tx.select({ row: rows, table: tables }).from(rows).innerJoin(tables, eq(rows.tableId, tables.id)).where(inArray(rows.id, rowIds));
-  if (hits.length !== rowIds.length || hits.some((hit) => scope.organizationId && hit.table.organizationId !== scope.organizationId))
+  if (hits.length !== rowIds.length || hits.some((hit) => hit.table.organizationId !== scope.organizationId || hit.table.workspaceId !== workspaceId))
     throw new Error("行不存在或不属于该工作区");
   const tableIds = [...new Set(hits.map((hit) => hit.row.tableId))].sort();
   const owned = await tx.select().from(tables).where(inArray(tables.id, tableIds)).orderBy(asc(tables.id)).for("update");
-  if (owned.length !== tableIds.length || owned.some((table) => scope.organizationId && table.organizationId !== scope.organizationId))
+  if (owned.length !== tableIds.length || owned.some((table) => table.organizationId !== scope.organizationId || table.workspaceId !== workspaceId))
     throw new Error("表格不存在或不属于该工作区");
   const definitions = await tx.select().from(tableRelations).where(or(inArray(tableRelations.sourceTableId, tableIds), inArray(tableRelations.targetTableId, tableIds))).orderBy(asc(tableRelations.id)).for("update");
   const colsByTable = new Map<string, ColumnDef[]>();
@@ -493,7 +497,7 @@ export async function deleteTable(deps: CommandDependencies, input: { tableId: s
       .from(tables)
       .where(eq(tables.id, input.tableId))
       .for("update");
-    if (!table || table.organizationId !== input.organizationId)
+    if (!table || table.organizationId !== input.organizationId || !(await workspaceMatches(deps, table, tx)))
       throw new Error("表格不存在");
     const dependencies = await tx
       .select()
@@ -513,8 +517,9 @@ export async function deleteTable(deps: CommandDependencies, input: { tableId: s
 
 export async function reorderColumns(deps: CommandDependencies, input: ReorderColumnsInput & OrgScoped, transaction?: Transaction) {
   return inTransaction(deps, transaction, async tx => {
+    requireOrgId(input.organizationId);
     const [table] = await tx.select().from(tables).where(eq(tables.id, input.tableId)).for("update");
-    if (!table || (input.organizationId && table.organizationId !== input.organizationId)) throw new Error("表格不存在");
+    if (!table || ((input.organizationId && table.organizationId !== input.organizationId) || !(await workspaceMatches(deps, table, tx)))) throw new Error("表格不存在");
     const existing = await tx.select().from(columns).where(eq(columns.tableId, input.tableId)).orderBy(asc(columns.sortOrder)).for("update");
     const idSet = new Set(existing.map(column => column.id));
     if (new Set(input.columnIds).size !== input.columnIds.length) throw new Error("字段不能重复");

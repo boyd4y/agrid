@@ -2,17 +2,19 @@ import { eq } from "drizzle-orm";
 import type { Database } from "../db/types.js";
 import { agentProfile, member, user, organization } from "../db/schema.js";
 import { resolveActor as resolveIdentity, hashApiKey, type ActorDependencies as IdentityDependencies } from "@tabdo/auth/actor";
-import type { Actor } from "@tabdo/auth/actor";
+import type { Actor as IdentityActor } from "@tabdo/auth/actor";
+import { requireWorkspace } from "../tenant/workspace.js";
+export type Actor = IdentityActor & { workspaceId?: string };
 import { memberAvatarUrl } from "./avatar.js";
-export type { Actor, ActorSession } from "@tabdo/auth/actor";
+export type { ActorSession } from "@tabdo/auth/actor";
 export { hashApiKey } from "@tabdo/auth/actor";
 export type ActorDependencies = Omit<IdentityDependencies, "database" | "resolveBearer"> & Readonly<{ database: Database }>;
 
 /** Legacy agent keys are a Tabdo credential extension; ordinary identity stays in auth. */
-export function resolveActor(req: Request, deps: ActorDependencies): Promise<Actor | null> {
+export async function resolveActor(req: Request, deps: ActorDependencies): Promise<Actor | null> {
   // Table API keys are capabilities; they cannot inherit the creator's workspace identity.
   if (req.headers.has("X-Tabdo-Key") || req.headers.get("authorization")?.toLowerCase().startsWith("bearer tab_")) return Promise.resolve(null);
-  return resolveIdentity(req, { ...deps, async resolveBearer(raw) {
+  const actor = await resolveIdentity(req, { ...deps, async resolveBearer(raw) {
     if (!raw.toLowerCase().startsWith("agt_")) return undefined;
     const hash = await hashApiKey(raw);
     const [profile] = await deps.database
@@ -47,6 +49,11 @@ export function resolveActor(req: Request, deps: ActorDependencies): Promise<Act
       email: u.email,
     };
   } });
+  if (!actor?.organizationId) return actor;
+  const url = new URL(req.url);
+  const workspaceId = req.headers.get("X-Workspace-Id") ?? (/^\/api\/files\/[^/]+\/download$/.test(url.pathname) ? url.searchParams.get("workspace") : null) ?? undefined;
+  const workspace = await requireWorkspace({ database: deps.database, workspaceId }, actor.organizationId);
+  return { ...actor, workspaceId: workspace.id };
 }
 
 export type OrgMemberSummary = {

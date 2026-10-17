@@ -22,7 +22,7 @@ export async function prepareNativeChatAgent(options: {
   const { profile, harness, mode, provider, disabledTools, tableId } = configuration;
   const modelId = harness === "pi" ? resolvePiModelId(configuration.modelId, env) : configuration.modelId;
   const skillContext = await resolveAgentSkills(actor.organizationId, profile.persona?.skillNames, siteSdkUrl(env));
-  const tools = createTableTools(tableId, actor.organizationId, actor.userId);
+  const tools = createTableTools(tableId, actor.organizationId, actor.userId, actor.workspaceId);
   const { agentsDocument, system } = buildChatAgentInstructions({ ...configuration, modelId }, context, skillContext.instructions);
   // Reject unavailable configuration before saving user input or claiming a Run.
   const piModel = harness === "pi" ? await resolvePiModelMetadata(modelId, env) : undefined;

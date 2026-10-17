@@ -1,3 +1,4 @@
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Actor } from "../auth/actor.js";
@@ -10,7 +11,7 @@ import { requireThread, threadScope } from "../chat/store.js";
 import { ServiceError } from "../errors.js";
 
 const dto = (thread: typeof chatThreads.$inferSelect) => ({
-  id: thread.id, kind: thread.kind, scheduledTaskId: thread.scheduledTaskId, title: thread.title, status: thread.status, custom: thread.custom,
+  id: thread.id, workspaceId: thread.workspaceId, kind: thread.kind, scheduledTaskId: thread.scheduledTaskId, title: thread.title, status: thread.status, custom: thread.custom,
   lastMessageAt: thread.lastMessageAt, updatedAt: thread.updatedAt,
 });
 export async function listThreads(deps: RuntimeDependencies, actor: Actor, after?: string) {
@@ -20,17 +21,19 @@ export async function listThreads(deps: RuntimeDependencies, actor: Actor, after
     if (cursor.kind !== "chat") throw new ServiceError(400, { message: "分页游标不属于普通对话" });
   }
   const threads = await deps.database.select().from(chatThreads).where(and(
-    eq(chatThreads.userId, actor.userId), eq(chatThreads.organizationId, actor.organizationId), eq(chatThreads.kind, "chat"),
+    eq(chatThreads.userId, actor.userId), and(eq(chatThreads.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, chatThreads.workspaceId)), eq(chatThreads.kind, "chat"),
     cursor ? or(lt(chatThreads.createdAt, cursor.createdAt), and(eq(chatThreads.createdAt, cursor.createdAt), lt(chatThreads.id, cursor.id))) : undefined,
   )).orderBy(desc(chatThreads.createdAt), desc(chatThreads.id)).limit(101);
   return { threads: threads.slice(0, 100).map(dto), nextCursor: threads.length > 100 ? threads[99].id : undefined };
 }
 export async function createThread(deps: RuntimeDependencies, actor: Actor, raw: unknown) {
+  deps = { ...deps, workspaceId: actor.workspaceId ?? deps.workspaceId };
+  const workspace = await requireWorkspace(deps, actor.organizationId);
   const input = z.object({ clientId: z.string().min(1).max(200), context: z.unknown(), agentId: z.string().nullable().optional() }).parse(raw);
   const { resourceKey, context } = await resolveChatContext({ ...deps, loadReport: (id, org) => getReport(deps, id, org) }, input.context, actor);
   if (context.scheduledTaskId) throw new ServiceError(400, { message: "定时任务会话由运行创建，请打开已有运行" });
-  const [thread] = await deps.database.insert(chatThreads).values({ userId: actor.userId, organizationId: actor.organizationId, clientId: input.clientId, custom: { resourceKey, agentId: input.agentId ?? null } })
-    .onConflictDoUpdate({ target: [chatThreads.userId, chatThreads.organizationId, chatThreads.clientId], set: { clientId: input.clientId } }).returning();
+  const [thread] = await deps.database.insert(chatThreads).values({ userId: actor.userId, organizationId: actor.organizationId, workspaceId: workspace.id, clientId: input.clientId, custom: { resourceKey, agentId: input.agentId ?? null } })
+    .onConflictDoUpdate({ target: [chatThreads.userId, chatThreads.workspaceId, chatThreads.clientId], set: { clientId: input.clientId } }).returning();
   if (thread.kind !== "chat") throw new ServiceError(409, { message: "不能将任务运行变成普通对话" });
   if (thread.custom.resourceKey !== resourceKey) throw new ServiceError(409, { message: "对话属于其他资源" });
   return dto(thread);

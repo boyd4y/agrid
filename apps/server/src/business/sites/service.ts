@@ -1,3 +1,4 @@
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 import { SITE_FILES_SCHEMA, SITE_SAVE_SCHEMA, type SiteConfig, type SiteDetail, type SiteSummary } from "@tabdo/shared";
@@ -21,17 +22,17 @@ export function getSiteConfig(deps: CommandDependencies): SiteConfig {
   return { sdkUrl: capabilities(deps).sdkUrl };
 }
 async function owned(deps: CommandDependencies, input: Scope & { siteId: string }, tx?: Transaction, lock = false) {
-  const query = (tx ?? deps.database).select().from(sites).where(and(eq(sites.id, uuid(input.siteId)), eq(sites.organizationId, org(input))));
+  const query = (tx ?? deps.database).select().from(sites).where(and(eq(sites.id, uuid(input.siteId)), and(eq(sites.organizationId, org(input)), workspaceScope(deps, org(input), sites.workspaceId))));
   const [site] = await (lock ? query.for("update") : query);
   if (!site) throw new ServiceError(404, { message: "Site not found" }); return site;
 }
 function summary(deps: CommandDependencies, site: typeof sites.$inferSelect, publishedVersion: number | null): SiteSummary {
-  return { id: site.id, name: site.name, version: site.version, publishedRevisionId: site.publishedRevisionId, publishedVersion,
+  return { id: site.id, workspaceId: site.workspaceId, name: site.name, version: site.version, publishedRevisionId: site.publishedRevisionId, publishedVersion,
     publicUrl: new URL(`/s/${site.id}/`, capabilities(deps).publicOrigin).href, updatedAt: site.updatedAt.toISOString() };
 }
 export async function listSites(deps: CommandDependencies, input: Scope, tx?: Transaction) {
   const records = await (tx ?? deps.database).select({ site: sites, publishedVersion: siteRevisions.version }).from(sites)
-    .leftJoin(siteRevisions, eq(sites.publishedRevisionId, siteRevisions.id)).where(eq(sites.organizationId, org(input))).orderBy(desc(sites.updatedAt), desc(sites.id));
+    .leftJoin(siteRevisions, eq(sites.publishedRevisionId, siteRevisions.id)).where(and(eq(sites.organizationId, org(input)), workspaceScope(deps, org(input), sites.workspaceId))).orderBy(desc(sites.updatedAt), desc(sites.id));
   return records.map(record => summary(deps, record.site, record.publishedVersion));
 }
 export async function getSite(deps: CommandDependencies, input: Scope & { siteId: string; revisionId?: string; path?: string }, tx?: Transaction): Promise<SiteDetail> {
@@ -53,7 +54,7 @@ export async function saveSite(deps: CommandDependencies, raw: Scope & Record<st
       site = await owned(deps, { siteId: input.siteId, organizationId }, tx, true);
       if (site.version !== input.expectedVersion) throw new ServiceError(409, { message: "Site version conflict; reload before saving" });
       [site] = await tx.update(sites).set({ name: input.name, version: site.version + 1, updatedAt: deps.now() }).where(eq(sites.id, site.id)).returning();
-    } else [site] = await tx.insert(sites).values({ id: deps.uuid(), organizationId, name: input.name }).returning();
+    } else [site] = await tx.insert(sites).values({ id: deps.uuid(), organizationId, workspaceId: (await requireWorkspace(deps, organizationId, tx)).id, name: input.name }).returning();
     await tx.insert(siteRevisions).values({ id: deps.uuid(), siteId: site.id, version: site.version, files, createdByUserId: raw.actorId ?? null });
     return getSite(deps, { siteId: site.id, organizationId }, tx);
   });

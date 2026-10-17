@@ -36,7 +36,7 @@ export function createFilesRoute(acquire: RequestScopeResolver) {
     const { tableId, columnId } = c.req.param();
     if (service.invalidFileId(tableId) || service.invalidFileId(columnId)) return c.json({ error: "表格或字段不存在" }, 404);
     const resources = deps(c);
-    await service.ownedFileColumn(resources.database, actor.organizationId, tableId, columnId);
+    await service.ownedFileColumn(resources.database, actor.organizationId, tableId, columnId, false, resources.workspaceId);
     const form = await boundedMultipart(c.req.raw, resources.limits.maxBodyBytes), uploads = form.getAll("files");
     if (!uploads.length || uploads.some(file => !(file instanceof File))) return c.json({ error: "请选择文件" }, 400);
     return c.json(await service.uploadFiles(resources, actor.organizationId, tableId, columnId, uploads as File[]), 201);

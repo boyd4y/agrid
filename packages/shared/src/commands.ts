@@ -39,7 +39,7 @@ import type {
 
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
-  "getWorkspace", "listMembers",
+  "getWorkspace", "listWorkspaces", "createWorkspace", "listMembers",
   "listSites", "getSite", "saveSite", "restoreSiteRevision", "publishSite", "unpublishSite", "deleteSite",
   "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
   "getRow", "setRelation", "addRelation", "removeRelation", "queryRelationRecords",
@@ -161,7 +161,11 @@ export type ReorderColumnsInput = {
   columnIds: string[];
 };
 
+export type Workspace = { id: string; organizationId: string; name: string; isDefault: boolean; createdAt: string | Date };
+
 export type CommandInputMap = SiteCommands & RelationCommands & {
+  listWorkspaces: Record<string, never>;
+  createWorkspace: { name: string };
   batchAddColumns: BatchAddColumnsInput;
   batchUpdateColumns: BatchUpdateColumnsInput;
   batchDeleteColumns: BatchDeleteColumnsInput;
@@ -211,6 +215,8 @@ export type CommandInputMap = SiteCommands & RelationCommands & {
 };
 
 export type CommandResultMap = SiteResults & RelationResults & {
+  listWorkspaces: Workspace[];
+  createWorkspace: Workspace;
   batchAddColumns: BatchColumnsResult;
   batchUpdateColumns: BatchColumnsResult;
   batchDeleteColumns: BatchDeleteColumnsResult;

@@ -1,3 +1,4 @@
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import type { RuntimeDependencies, DatabaseDependencies } from "../dependencies.js";
@@ -9,7 +10,7 @@ export function threadScope(id: string, actor: Actor) {
   return and(
     eq(chatThreads.id, id),
     eq(chatThreads.userId, actor.userId),
-    eq(chatThreads.organizationId, actor.organizationId),
+    and(eq(chatThreads.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, chatThreads.workspaceId)),
   );
 }
 

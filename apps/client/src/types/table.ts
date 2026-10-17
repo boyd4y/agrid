@@ -75,6 +75,7 @@ export type CellValue = string | number | boolean | string[] | null;
 
 export type TableMeta = {
   id: string;
+  workspaceId: string;
   name: string;
   description: string | null;
   icon?: string | null;

@@ -1,3 +1,4 @@
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import type { RuntimeDependencies, DatabaseDependencies } from "../dependencies.js";
@@ -79,7 +80,7 @@ export async function loadNativeExecution(deps: DatabaseDependencies, executionI
     .innerJoin(user, eq(user.id, member.userId)).where(eq(agentExecutions.id, executionId));
   if (!row || row.record.threadId !== row.thread.id || row.profile.organizationId !== row.thread.organizationId) throw new ServiceError(404, { message: "执行不存在或创建者已离开工作区" });
   const actor: Actor = { kind: row.account.kind === "agent" ? "agent" : "human", userId: row.account.id, memberId: row.membership.id,
-    organizationId: row.membership.organizationId, role: row.membership.role, name: row.account.name, email: row.account.email };
+    organizationId: row.membership.organizationId, workspaceId: row.thread.workspaceId, role: row.membership.role, name: row.account.name, email: row.account.email };
   const lease: RuntimeLease = { threadId: row.thread.id, token: row.execution.leaseToken, fence: row.execution.fence };
   return { ...row, actor, lease };
 }
@@ -170,7 +171,7 @@ export async function readNativeExecutionOutput(deps: DatabaseDependencies, inpu
     const [membership] = await tx.select({ id: member.id }).from(member).where(and(eq(member.userId, input.actor.userId), eq(member.organizationId, input.actor.organizationId))).for("share");
     const [row] = await tx.select({ execution: agentExecutions, runStatus: agentRuns.status, threadId: chatThreads.id }).from(agentExecutions)
       .innerJoin(agentRuns, eq(agentRuns.id, agentExecutions.runId)).innerJoin(chatThreads, eq(chatThreads.id, agentRuns.threadId))
-      .where(and(eq(agentExecutions.id, input.executionId), eq(chatThreads.userId, input.actor.userId), eq(chatThreads.organizationId, input.actor.organizationId)));
+      .where(and(eq(agentExecutions.id, input.executionId), eq(chatThreads.userId, input.actor.userId), and(eq(chatThreads.organizationId, input.actor.organizationId), workspaceScope(input.actor, input.actor.organizationId, chatThreads.workspaceId))));
     if (!membership || !row || input.expected && (row.execution.runId !== input.expected.runId || row.threadId !== input.expected.threadId))
       throw new ServiceError(404, { message: "执行不存在" });
     const events = await tx.select({ cursor: agentExecutionChunks.cursor, chunk: agentExecutionChunks.chunk }).from(agentExecutionChunks)

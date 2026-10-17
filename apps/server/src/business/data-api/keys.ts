@@ -5,7 +5,7 @@ import type { ApiKeyInfo, TablePermission } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
 import type { RuntimeDependencies } from "../dependencies.js";
 import type { Database, Transaction } from "../db/types.js";
-import { userApiKeys, apiKeyTables, tables } from "../db/schema.js";
+import { userApiKeys, apiKeyTables, tables, workspaces } from "../db/schema.js";
 import { ServiceError } from "../errors.js";
 
 const permission = z.strictObject({ tableId: z.uuid(), canRead: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canDelete: z.boolean() })
@@ -38,7 +38,10 @@ async function summaries(database: Database, organizationId: string): Promise<Ap
   return keys.map(key => ({ id: key.id, name: key.name, prefix: key.prefix, createdAt: key.createdAt.toISOString(),
     permissions: grants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant) }));
 }
-export async function listSiteKeys(deps: RuntimeDependencies, actor: Actor) { manager(actor); return { keys: await summaries(deps.database, actor.organizationId) }; }
+export async function listSiteKeys(deps: RuntimeDependencies, actor: Actor) { manager(actor); return { keys: await summaries(deps.database, actor.organizationId), tables: await deps.database.select({ id: tables.id,
+    name: tables.name, description: tables.description, icon: tables.icon, pinned: tables.pinned, createdAt: tables.createdAt, updatedAt: tables.updatedAt,
+    workspaceId: tables.workspaceId, workspaceName: workspaces.name }).from(tables).innerJoin(workspaces, eq(workspaces.id, tables.workspaceId))
+    .where(eq(tables.organizationId, actor.organizationId)).orderBy(asc(workspaces.createdAt), asc(tables.createdAt)) }; }
 async function grantTables(tx: Transaction, organizationId: string, tableIds: string[]) {
   const found = await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.organizationId, organizationId), inArray(tables.id, tableIds))).orderBy(asc(tables.id)).for("share");
   if (found.length !== tableIds.length) throw new ServiceError(400, { message: "Choose tables from the current workspace" });

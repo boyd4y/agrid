@@ -1,3 +1,4 @@
+import { requireWorkspace } from "../tenant/workspace.js";
 import { and, eq } from "drizzle-orm";
 import { COMMANDS, type CommandName } from "@tabdo/shared";
 import { z } from "zod";
@@ -18,7 +19,7 @@ const commandRequest = z.object({
 export async function dispatchCommand(deps: CommandDependencies, actor: Actor, value: unknown) {
   const body = commandRequest.parse(value);
   if (!actor.organizationId || !actor.memberId) throw new ServiceError(401, { message: "缺少组织上下文：请先加入或选择工作区" });
-  if (Object.hasOwn(body.input, "skipAutomation") || Object.hasOwn(body.input, "actorId")) {
+  if (Object.hasOwn(body.input, "workspaceId") || Object.hasOwn(body.input, "skipAutomation") || Object.hasOwn(body.input, "actorId")) {
     throw new ServiceError(400, { message: "内部执行选项不能通过 API 设置" });
   }
   const { organizationId: _ignored, ...safeInput } = body.input;
@@ -31,7 +32,8 @@ export async function dispatchCommand(deps: CommandDependencies, actor: Actor, v
       eq(member.id, actor.memberId), eq(member.userId, actor.userId), eq(member.organizationId, actor.organizationId),
     )).limit(1).for("share");
     if (!current) throw new ServiceError(403, { message: "当前工作区不可访问" });
-    return fn(deps, { ...safeInput, organizationId: actor.organizationId, actorId: actor.userId }, tx);
+    const workspace = await requireWorkspace({ ...deps, workspaceId: actor.workspaceId ?? deps.workspaceId }, actor.organizationId, tx);
+    return fn({ ...deps, workspaceId: workspace.id }, { ...safeInput, organizationId: actor.organizationId, actorId: actor.userId }, tx);
   });
   return { ok: true as const, command: body.command as CommandName, result,
     actor: { kind: actor.kind, userId: actor.userId, role: actor.role } };

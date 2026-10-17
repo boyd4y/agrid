@@ -1,9 +1,12 @@
+import { z } from "zod";
+import { workspaces } from "../db/workspaces-schema.js";
+import { requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 import { and, eq } from "drizzle-orm";
 import { MEMBER_LIST_SCHEMA } from "@tabdo/shared";
 
 import { type Transaction } from "../db/context.js";
-import { organization, member, user } from "../db/schema.js";
+import { member, user } from "../db/schema.js";
 import { listOrgMembers } from "../auth/actor.js";
 import { requireOrgId } from "../tenant/scope.js";
 
@@ -21,9 +24,7 @@ async function currentActor(deps: CommandDependencies, input: Scope, transaction
 /** Trusted caller scope only. Never accept an organization ID from a model tool schema. */
 export async function getWorkspace(deps: CommandDependencies, input: Scope, transaction?: Transaction) {
   const { organizationId, actor } = await currentActor(deps, input, transaction);
-  const [workspace] = await (transaction ?? deps.database).select({ id: organization.id, name: organization.name, slug: organization.slug })
-    .from(organization).where(eq(organization.id, organizationId)).limit(1);
-  if (!workspace) throw new Error("工作区不存在");
+  const workspace = await requireWorkspace(deps, organizationId, transaction);
   return { workspace, actor };
 }
 
@@ -38,4 +39,17 @@ export async function listMembers(deps: CommandDependencies, input: Scope & { ki
   return { organizationId, members: members.slice(options.offset, options.offset + options.limit), total: members.length,
     offset: options.offset, hasMore: options.offset + options.limit < members.length,
     identityField: "userId", usage: "负责人/person 字段填成员 userId；智能体动作 agentUserId 填 kind=agent 的 userId。id 是成员记录 ID，不能代替 userId。" };
+}
+
+/** Workspace management shares the same membership transaction as other commands. */
+export async function listWorkspaces(deps: CommandDependencies, input: Scope, transaction?: Transaction) {
+  const { organizationId } = await currentActor(deps, input, transaction);
+  return (transaction ?? deps.database).select().from(workspaces).where(eq(workspaces.organizationId, organizationId)).orderBy(workspaces.createdAt, workspaces.id);
+}
+export async function createWorkspace(deps: CommandDependencies, input: Scope & { name: string }, transaction?: Transaction) {
+  const { organizationId, actor } = await currentActor(deps, input, transaction);
+  if (!actor || actor.kind !== "human") throw new Error("只有企业成员可创建工作区");
+  const name = z.string().trim().min(1).max(100).parse(input.name);
+  const [workspace] = await (transaction ?? deps.database).insert(workspaces).values({ organizationId, name }).returning();
+  return workspace;
 }

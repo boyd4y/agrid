@@ -45,7 +45,7 @@ export async function claimExecution(deps: AutomationExecutionDependencies, id: 
 }
 async function scopeValid(deps: AutomationExecutionDependencies, tx: Transaction, event: EventRow, run: RunRow, snapshot: AnyEventSnapshot, checkRow = true) {
   const [currentRule] = await tx.select().from(automations).where(eq(automations.id, run.automationId)).for("share");
-  if (!currentRule || currentRule.deletedAt || !currentRule.enabled || currentRule.organizationId !== event.organizationId) {
+  if (!currentRule || currentRule.deletedAt || !currentRule.enabled || currentRule.organizationId !== event.organizationId || currentRule.workspaceId !== run.workspaceId || (run.ruleSnapshot?.workspaceId !== undefined && run.ruleSnapshot.workspaceId !== run.workspaceId) || (event.workspaceId !== null && event.workspaceId !== run.workspaceId)) {
     await tx.update(automationRuns).set({ status: "cancelled", error: "规则已停用或删除", finishedAt: deps.now() }).where(eq(automationRuns.id, run.id));return null;
   }
   const actorId = currentRule.createdByUserId ?? (snapshot.protocol === 1 ? snapshot.actorId : null);
@@ -55,7 +55,7 @@ async function scopeValid(deps: AutomationExecutionDependencies, tx: Transaction
   } else if (snapshot.protocol === 2) throw new PermanentError("请由工作区成员重新保存此自动化以设置执行者");
   if (snapshot.protocol === 1) {
     const [table] = await tx.select().from(tables).where(eq(tables.id, snapshot.event.tableId)).for("share");
-    if (!table || table.organizationId !== event.organizationId) { await finishEvent(deps, tx, event, "cancelled", "来源表格已删除");return null; }
+    if (!table || table.organizationId !== event.organizationId || table.workspaceId !== run.workspaceId) { await finishEvent(deps, tx, event, "cancelled", "来源表格已删除");return null; }
     if (checkRow && event.expectedVersion !== null) {
       const [row] = await tx.select().from(rows).where(eq(rows.id, snapshot.row.id));
       if (!row) { await finishEvent(deps, tx, event, "cancelled", "触发记录已删除");return null; }
@@ -161,7 +161,7 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
       if (!scope.currentRule.createdByUserId) throw new PermanentError("请重新保存此自动化以设置真实执行者");
       return { event, run, rule, action, actorId: scope.currentRule.createdByUserId, context, steps };
     }
-    const result = await dataAction(deps, tx, event, action, context, steps, scope.actorId);
+    const result = await dataAction({ ...deps, workspaceId: run.workspaceId }, tx, event, action, context, steps, scope.actorId);
     await completeStep(deps, tx, event, run, rule, result);return "continue";
   });
   if (typeof plan === "string") return plan;

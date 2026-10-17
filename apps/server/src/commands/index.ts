@@ -54,7 +54,7 @@ export const deleteAutomation = (...args: Arguments<typeof implementation.delete
   businessCall(() => implementation.deleteAutomation(commandDependencies(), ...args));
 export const listAutomationRuns = (...args: Arguments<typeof implementation.listAutomationRuns>) =>
   businessCall(() => implementation.listAutomationRuns(commandDependencies(), ...args));
-export { getWorkspace, listMembers } from "./workspace.js";
+export { getWorkspace, listWorkspaces, createWorkspace, listMembers } from "./workspace.js";
 export { batchSetRelations, batchAddRelations, batchRemoveRelations } from "./batch-relations.js";
 export { addColumn, updateColumn, deleteColumn, batchAddColumns, batchUpdateColumns, batchDeleteColumns } from "./columns.js";
 export { countTableRows, queryRowsWindowed, recomputeAllFormulasForTable };

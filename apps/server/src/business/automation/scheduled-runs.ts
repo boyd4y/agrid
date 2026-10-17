@@ -1,3 +1,4 @@
+import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Actor } from "../auth/actor.js";
 import type { RuntimeDependencies } from "../dependencies.js";
@@ -8,7 +9,7 @@ import { ServiceError } from "../errors.js";
 
 export async function listScheduledRuns(deps: RuntimeDependencies, taskId: string, actor: Actor, offset = 0, limit = 20) {
   const [task] = await deps.database.select({ source: automations.source }).from(automations)
-    .where(and(eq(automations.id, taskId), eq(automations.organizationId, actor.organizationId)));
+    .where(and(eq(automations.id, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId))));
   if (task?.source.kind !== "schedule") throw new ServiceError(404, { message: "定时任务不存在" });
   const items = await deps.database.select({
     id: automationRuns.id, automationId: automationRuns.automationId, status: automationRuns.status,
@@ -23,7 +24,7 @@ export async function listScheduledRuns(deps: RuntimeDependencies, taskId: strin
   }).from(automationRuns).innerJoin(automations, eq(automations.id, automationRuns.automationId))
     .leftJoin(automationAgentActions, and(eq(automationAgentActions.runId, automationRuns.id), eq(automationAgentActions.step, 0)))
     .leftJoin(chatThreads, and(eq(chatThreads.id, automationAgentActions.threadId), eq(chatThreads.kind, "scheduled_task"), eq(chatThreads.userId, actor.userId), eq(chatThreads.scheduledTaskId, taskId)))
-    .where(and(eq(automationRuns.automationId, taskId), eq(automations.organizationId, actor.organizationId), eq(automations.createdByUserId, actor.userId)))
+    .where(and(eq(automationRuns.automationId, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId)), eq(automations.createdByUserId, actor.userId)))
     .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit + 1).offset(offset);
   return { runs: items.slice(0, limit), hasMore: items.length > limit };
 }

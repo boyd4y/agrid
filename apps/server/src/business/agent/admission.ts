@@ -1,3 +1,4 @@
+import { requireTableInOrg } from "../tenant/scope.js";
 import { and, eq } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import type { DatabaseDependencies } from "../dependencies.js";
@@ -21,6 +22,7 @@ export async function resolveChatAgentConfiguration(deps: DatabaseDependencies, 
   validateInput?: (harness: HarnessId) => void;
 }) {
   const tableId = boundTableId ?? context.context.tableId ?? undefined;
+  if (tableId) await requireTableInOrg({ ...deps, workspaceId: actor.workspaceId }, tableId, actor.organizationId);
   // agentId = member id (preferred) or user id
   const [mem] = await deps.database
     .select()

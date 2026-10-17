@@ -70,7 +70,7 @@ async function serializeRows(deps: CommandDependencies, context: SiteContext, ta
   }));
 }
 export async function siteRows(deps: CommandDependencies, context: SiteContext, tableId: string, input: unknown) {
-  const { cols } = await tableColumns(deps.database, context.principal, tableId, "read");
+  const { table, cols } = await tableColumns(deps.database, context.principal, tableId, "read");
   const parsed = rowsOptions.parse(input ?? {});
   if (parsed.cursor && !z.object({ id: z.uuid(), sortOrder: z.number().int().finite(), sortValue: z.string().nullable().optional() }).safeParse(decodeCursor(parsed.cursor)).success)
     throw new ServiceError(400, { message: "Invalid row cursor" });
@@ -87,11 +87,11 @@ export async function siteRows(deps: CommandDependencies, context: SiteContext, 
   }
   if (parsed.sort && !cols.some(col => col.id === parsed.sort!.columnId && readableColumn(col, cols, context.principal)))
     throw new ServiceError(400, { message: "Invalid or inaccessible sort column" });
-  const page = await queryRows(deps, { ...parsed, filters: parsed.filters?.map(filter => ({ ...filter, id: filter.id ?? filter.columnId })), tableId, organizationId: context.principal.organizationId });
+  const page = await queryRows({ ...deps, workspaceId: table.workspaceId }, { ...parsed, filters: parsed.filters?.map(filter => ({ ...filter, id: filter.id ?? filter.columnId })), tableId, organizationId: context.principal.organizationId });
   return { ...page, totalMatched: page.totalMatched ?? null, rows: await serializeRows(deps, context, tableId, cols, page.rows) };
 }
 export async function siteRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string) {
-  const { cols } = await tableColumns(deps.database, context.principal, tableId, "read");
+  const { table, cols } = await tableColumns(deps.database, context.principal, tableId, "read");
   if (!z.uuid().safeParse(rowId).success) return null;
   const [hit] = await deps.database.select({ id: rows.id }).from(rows).where(and(eq(rows.id, rowId), eq(rows.tableId, tableId)));
   if (!hit) return null;
@@ -105,7 +105,7 @@ export async function siteCreateRow(deps: CommandDependencies, context: SiteCont
     requireSiteTable(principal, tableId, "create");
     // Schema writers lock the table first; hold it before validating columns.
     await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
-    const { cols } = await tableColumns(tx, principal, tableId, "create");
+    const { table, cols } = await tableColumns(tx, principal, tableId, "create");
     for (const [columnId, value] of Object.entries(cells)) {
       const col = cols.find(candidate => candidate.id === columnId);
       if (!col || !writable.has(col.type)) throw new ServiceError(400, { message: "This column cannot be created through the site API" });
@@ -113,13 +113,13 @@ export async function siteCreateRow(deps: CommandDependencies, context: SiteCont
       if (error) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
     }
     // Public visitors are not the key creator. No forged human actor is used.
-    const row = await addRow(deps, { tableId, cells, organizationId: principal.organizationId }, tx);
+    const row = await addRow({ ...deps, workspaceId: table.workspaceId }, { tableId, cells, organizationId: principal.organizationId }, tx);
     return { id: row.id, createdAt: new Date(row.createdAt).toISOString() };
   });
 }
 export async function siteFileReference(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, columnId: string, fileId: string) {
   if ([tableId, rowId, columnId, fileId].some(value => !z.uuid().safeParse(value).success)) throw new ServiceError(404, { message: "File not found" });
-  const { cols } = await tableColumns(deps.database, context.principal, tableId, "read");
+  const { table, cols } = await tableColumns(deps.database, context.principal, tableId, "read");
   const col = cols.find(candidate => candidate.id === columnId && candidate.type === "file");
   const [row] = await deps.database.select({ cells: rows.cells }).from(rows).where(and(eq(rows.id, rowId), eq(rows.tableId, tableId)));
   if (!col || !row || !Array.isArray(row.cells[columnId]) || !(row.cells[columnId] as string[]).includes(fileId)) throw new ServiceError(404, { message: "File not found" });
@@ -136,7 +136,7 @@ export async function siteUpdateRow(deps: CommandDependencies, context: SiteCont
     const principal = await resolveSiteKey(tx, context.secret, true);
     requireSiteTable(principal, tableId, "update");
     await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
-    const { cols } = await tableColumns(tx, principal, tableId, "update");
+    const { table, cols } = await tableColumns(tx, principal, tableId, "update");
     const [row] = await tx.select({ id: rows.id }).from(rows).where(and(eq(rows.id, z.uuid().parse(rowId)), eq(rows.tableId, tableId)));
     if (!row) throw new ServiceError(404, { message: "Record not found" });
     for (const [columnId, value] of Object.entries(cells)) {
@@ -145,7 +145,7 @@ export async function siteUpdateRow(deps: CommandDependencies, context: SiteCont
       if (validateCell(col.type, value, col.config.options)) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
     }
     try {
-      const saved = await updateCells(deps, { rowId, cells, expectedVersion, organizationId: principal.organizationId }, tx);
+      const saved = await updateCells({ ...deps, workspaceId: table.workspaceId }, { rowId, cells, expectedVersion, organizationId: principal.organizationId }, tx);
       return { id: saved.id, updatedAt: new Date(saved.updatedAt).toISOString(), version: saved.version ?? 1 };
     } catch (error) {
       if (error instanceof Error && error.message.includes("版本冲突")) throw new ServiceError(409, { message: "Record changed; reload before updating" });
@@ -158,7 +158,7 @@ export async function siteDeleteRow(deps: CommandDependencies, context: SiteCont
     const principal = await resolveSiteKey(tx, context.secret, true);
     requireSiteTable(principal, tableId, "delete");
     await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
-    const { cols } = await tableColumns(tx, principal, tableId, "delete");
+    const { table, cols } = await tableColumns(tx, principal, tableId, "delete");
     const [row] = await tx.select().from(rows).where(and(eq(rows.id, z.uuid().parse(rowId)), eq(rows.tableId, tableId)));
     if (!row) throw new ServiceError(404, { message: "Record not found" });
     // Relation IDs live in the link table, not the stored cells JSON.
@@ -166,7 +166,7 @@ export async function siteDeleteRow(deps: CommandDependencies, context: SiteCont
     // Deleting a linked record also removes inverse links in another table.
     for (const col of cols) if (col.type === "relation" && Array.isArray(resolved.cells[col.id]) && (resolved.cells[col.id] as string[]).length && col.config.relation)
       requireSiteTable(principal, col.config.relation.targetTableId, "update");
-    await deleteRow(deps, { rowId, organizationId: principal.organizationId }, tx);
+    await deleteRow({ ...deps, workspaceId: table.workspaceId }, { rowId, organizationId: principal.organizationId }, tx);
     return { id: rowId };
   });
 }

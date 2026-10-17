@@ -48,21 +48,21 @@ const mappingScope = (input: Pick<ActionInput,"runId"|"step">) => and(eq(automat
 async function associate(deps: RuntimeDependencies, input: ActionInput): Promise<{ actor: Actor; mapping: Mapping }> {
   return deps.database.transaction(async tx => {
     const [rule] = await tx.select({ id: automationRuns.id, creator: automations.createdByUserId, name: automations.name, source: automations.source, taskId: automations.id,
-      enabled: automations.enabled, deletedAt: automations.deletedAt })
+      workspaceId: automationRuns.workspaceId, ruleWorkspaceId: automations.workspaceId, enabled: automations.enabled, deletedAt: automations.deletedAt })
       .from(automationRuns).innerJoin(automations, eq(automations.id, automationRuns.automationId))
       .where(and(eq(automationRuns.id, input.runId), eq(automations.organizationId, input.organizationId))).for("update");
-    if (!rule || !rule.creator || rule.creator !== input.actorUserId) throw new Error("自动化创建者不存在，无法启动私有智能体对话");
+    if (!rule || rule.workspaceId !== rule.ruleWorkspaceId || !rule.creator || rule.creator !== input.actorUserId) throw new Error("自动化创建者不存在，无法启动私有智能体对话");
     if (!rule.enabled || rule.deletedAt) throw new AutomationCancelledError("规则已停用或删除");
     const [owner] = await tx.select({ account: user, membership: member }).from(member).innerJoin(user, eq(user.id, member.userId))
       .where(and(eq(member.organizationId, input.organizationId), eq(member.userId, input.actorUserId)));
     if (!owner) throw new Error("自动化创建者已不属于当前工作区");
     if (input.tableId) {
       const [target] = await tx.select({ id: tables.id }).from(tables)
-        .where(and(eq(tables.id, input.tableId), eq(tables.organizationId, input.organizationId)));
+        .where(and(eq(tables.id, input.tableId), eq(tables.organizationId, input.organizationId), eq(tables.workspaceId, rule.workspaceId)));
       if (!target) throw new Error("自动化目标表格不存在或不属于当前工作区");
     }
     const actor: Actor = { kind: owner.account.kind === "agent" ? "agent" : "human", userId: owner.account.id,
-      memberId: owner.membership.id, organizationId: input.organizationId, role: owner.membership.role,
+      memberId: owner.membership.id, organizationId: input.organizationId, workspaceId: rule.workspaceId, role: owner.membership.role,
       name: owner.account.name, email: owner.account.email };
     const [existing] = await tx.select().from(automationAgentActions).where(mappingScope(input));
     if (existing) {
@@ -73,7 +73,7 @@ async function associate(deps: RuntimeDependencies, input: ActionInput): Promise
     const threadId = deps.uuid(), userMessageId = deps.uuid();
     const scheduled = rule.source.kind === "schedule";
     await tx.insert(chatThreads).values({ id: threadId,
-      kind: scheduled ? "scheduled_task" : "chat", scheduledTaskId: scheduled ? rule.taskId : null, userId: actor.userId, organizationId: actor.organizationId,
+      kind: scheduled ? "scheduled_task" : "chat", scheduledTaskId: scheduled ? rule.taskId : null, userId: actor.userId, organizationId: actor.organizationId, workspaceId: actor.workspaceId,
       clientId: `automation:${input.runId}:${input.step}`, title: `${scheduled ? "定时任务" : "自动化"} · ${rule.name}`,
       custom: { resourceKey: scheduled ? `schedule:${rule.taskId}` : "workspace", agentId: input.action.agentUserId ?? null, automationRunId: input.runId, automationStep: input.step } });
     const [mapping] = await tx.insert(automationAgentActions).values({ runId: input.runId, step: input.step, threadId, userMessageId }).returning();
@@ -169,7 +169,7 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
     const message: UIMessage = { id: mapping.userMessageId,role: "user",parts: [{ type: "text",text: prompt }] };
     const ownedMapping = mapping,ownedLease = lease;
     const reference = await withRuntimeLease(deps,ownedLease,async tx => {
-      const [rule] = await tx.select({ enabled: automations.enabled, deletedAt: automations.deletedAt }).from(automations)
+      const [rule] = await tx.select({ workspaceId: automationRuns.workspaceId, ruleWorkspaceId: automations.workspaceId, enabled: automations.enabled, deletedAt: automations.deletedAt }).from(automations)
         .innerJoin(automationRuns, eq(automationRuns.automationId, automations.id)).where(eq(automationRuns.id, input.runId)).for("share", { of: automations });
       if (!rule?.enabled || rule.deletedAt) throw new AutomationCancelledError("规则已停用或删除");
       let current = await mappedRun(deps,ownedMapping,tx);

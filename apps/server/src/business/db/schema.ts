@@ -1,3 +1,5 @@
+import { workspaces, workspaceColumn } from "./workspaces-schema.js";
+export { workspaces } from "./workspaces-schema.js";
 import { user, session, account, verification, organization, member, invitation, userApiKeys } from "@tabdo/auth/schema";
 export { user, session, account, verification, organization, member, invitation, userApiKeys, MEMBER_KINDS, MEMBER_ROLES, type MemberKind, type MemberRole } from "@tabdo/auth/schema";
 
@@ -79,6 +81,7 @@ export const tables = pgTable(
   "tables",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceColumn(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, {
@@ -91,7 +94,7 @@ export const tables = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("tables_org_idx").on(t.organizationId), index("tables_org_name_lookup").on(t.organizationId, sql`public.tabdo_name_key(${t.name})`)]
+  (t) => [index("tables_org_idx").on(t.organizationId), index("tables_workspace_idx").on(t.workspaceId, t.createdAt), index("tables_org_name_lookup").on(t.workspaceId, sql`public.tabdo_name_key(${t.name})`)]
 );
 
 export const columns = pgTable(
@@ -114,6 +117,7 @@ export const columns = pgTable(
 /** Uploaded blobs are retained independently of cell references and editor drafts. */
 export const fileObjects = pgTable("file_objects", {
   id: uuid("id").primaryKey(),
+    workspaceId: workspaceColumn(),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   tableId: uuid("table_id").notNull().references(() => tables.id, { onDelete: "cascade" }),
   columnId: uuid("column_id").notNull().references(() => columns.id, { onDelete: "cascade" }),
@@ -149,6 +153,7 @@ export const rows = pgTable(
 
 export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceColumn(),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   tableId: uuid("table_id").references(() => tables.id, { onDelete: "set null" }),
   name: text("name").notNull(),
@@ -156,7 +161,7 @@ export const reports = pgTable("reports", {
   version: integer("version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (t) => [index("reports_org_created_idx").on(t.organizationId, t.createdAt)]);
+}, (t) => [index("reports_org_created_idx").on(t.organizationId, t.createdAt), index("reports_workspace_created_idx").on(t.workspaceId, t.createdAt)]);
 
 export const VIEW_TYPES = ["grid", "board", "form"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
@@ -230,6 +235,7 @@ export const automations = pgTable(
   "automations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceColumn(),
     organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
     createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
     source: jsonb("source").$type<import("@tabdo/shared").AutomationSource>().notNull(),
@@ -249,6 +255,7 @@ export const automations = pgTable(
   },
   (t) => [
     index("automations_org_created_idx").on(t.organizationId, t.createdAt),
+    index("automations_workspace_created_idx").on(t.workspaceId, t.createdAt),
     index("automations_table_idx").on(t.tableId),
     index("automations_table_enabled_idx").on(t.tableId, t.enabled),
   ]
@@ -258,6 +265,7 @@ export const automationRuns = pgTable(
   "automation_runs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceColumn(),
     automationId: uuid("automation_id")
       .notNull(),
     tableId: uuid("table_id"),
@@ -287,6 +295,7 @@ export type AutomationRunRow = typeof automationRuns.$inferSelect;
 /** Durable event journal. Workers are scheduled exclusively by Redis/BullMQ. */
 export const automationEvents = pgTable("automation_events", {
   id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
   organizationId: text("organization_id").notNull(),
   tableId: uuid("table_id"),
   rowId: uuid("row_id"),
@@ -332,6 +341,7 @@ export const automationStepReceipts = pgTable("automation_step_receipts", {
 /** Private conversations: scoped to both the signed-in account and workspace. */
 export const chatThreads = pgTable("chat_threads", {
   id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: workspaceColumn(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   clientId: text("client_id").notNull(),
@@ -344,9 +354,9 @@ export const chatThreads = pgTable("chat_threads", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
-}, (t) => [uniqueIndex("chat_threads_client_idx").on(t.userId, t.organizationId, t.clientId),
-  index("chat_threads_owner_idx").on(t.userId, t.organizationId, t.updatedAt, t.id),
-  index("chat_threads_kind_owner_idx").on(t.userId, t.organizationId, t.kind, t.createdAt, t.id),
+}, (t) => [uniqueIndex("chat_threads_client_idx").on(t.userId, t.workspaceId, t.clientId),
+  index("chat_threads_owner_idx").on(t.userId, t.workspaceId, t.updatedAt, t.id),
+  index("chat_threads_kind_owner_idx").on(t.userId, t.workspaceId, t.kind, t.createdAt, t.id),
   index("chat_threads_scheduled_task_idx").on(t.scheduledTaskId, t.userId, t.createdAt, t.id),
   check("chat_threads_kind_check", sql`(${t.kind}='chat' AND ${t.scheduledTaskId} IS NULL) OR (${t.kind}='scheduled_task' AND ${t.scheduledTaskId} IS NOT NULL)`)]);
 

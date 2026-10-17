@@ -7,3 +7,7 @@ export const getWorkspace = (...args: Arguments<typeof implementation.getWorkspa
   businessCall(() => implementation.getWorkspace(commandDependencies(), ...args));
 export const listMembers = (...args: Arguments<typeof implementation.listMembers>) =>
   businessCall(() => implementation.listMembers(commandDependencies(), ...args));
+export const listWorkspaces = (...args: Arguments<typeof implementation.listWorkspaces>) =>
+  businessCall(() => implementation.listWorkspaces(commandDependencies(), ...args));
+export const createWorkspace = (...args: Arguments<typeof implementation.createWorkspace>) =>
+  businessCall(() => implementation.createWorkspace(commandDependencies(), ...args));

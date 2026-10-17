@@ -59,6 +59,7 @@ export type AutomationRule = {
   id: string;
   tableId: string | null;
   organizationId: string;
+  workspaceId: string;
   createdByUserId: string | null;
   source: AutomationSource;
   eventConditions: AutomationEventCondition[];
@@ -76,6 +77,7 @@ export type AutomationRule = {
 export type AutomationRunStatus = "queued" | "running" | "retrying" | "waiting_input" | "completed" | "failed" | "skipped" | "cancelled" | "superseded" | "unknown";
 
 export type AutomationRun = {
+  workspaceId: string;
   id: string;
   automationId: string;
   tableId: string | null;
