@@ -107,7 +107,10 @@ try {
   const require = createRequire(new URL('../../../mcp/package.json', import.meta.url));
   const { Client } = await import(require.resolve('@modelcontextprotocol/sdk/client/index.js'));
   const { StdioClientTransport } = await import(require.resolve('@modelcontextprotocol/sdk/client/stdio.js'));
-  const key = await api('/user/api-keys', { name: 'Document MCP', permissions: [], documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canReadHistory: false, canRestore: false, canUpload: false }] });
+  const calendar = await command('createCalendar', { name: '正文 Key 兼容日历', timeZone: 'UTC', idempotencyKey: crypto.randomUUID() });
+  const oldTableGrants = [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }];
+  const oldCalendarGrants = [{ calendarId: calendar.id, canRead: false, canReadAvailability: true, canCreate: false, canUpdate: false, canCancel: false, canManage: false }];
+  const key = await api('/user/api-keys', { name: 'Document MCP', permissions: oldTableGrants, calendarPermissions: oldCalendarGrants, documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canReadHistory: false, canRestore: false, canUpload: false }] });
   const transport = new StdioClientTransport({ command: 'pnpm', args: ['--filter', '@tabdo/mcp', 'exec', 'tsx', 'src/index.ts'], cwd: new URL('../../../../', import.meta.url).pathname, env: { PATH: process.env.PATH, TABDO_API_URL: fixture.base, TABDO_API_KEY: key.secret } });
   const client = new Client({ name: 'document-browser-smoke', version: '1.0.0' });
   try {
@@ -123,7 +126,10 @@ try {
   assert(await keyDialog.getByRole('checkbox', { name: '文章 · 读取正文与图片', exact: true }).isChecked());
   await keyDialog.getByRole('checkbox', { name: '文章 · 读取历史', exact: true }).check();
   await keyDialog.getByRole('button', { name: '保存', exact: true }).click(); await keyDialog.waitFor({ state: 'hidden' });
-  assert.equal((await api('/user/api-keys')).keys.find(k => k.id === key.key.id).documentPermissions[0].canReadHistory, true);
+  const updatedKey = (await api('/user/api-keys')).keys.find(k => k.id === key.key.id);
+  assert.equal(updatedKey.documentPermissions[0].canReadHistory, true);
+  assert.deepEqual(updatedKey.permissions, oldTableGrants);
+  assert.deepEqual(updatedKey.calendarPermissions, oldCalendarGrants);
   await page.reload(); await page.getByRole('button', { name: '编辑 Document MCP', exact: true }).click();
   assert(await page.getByRole('dialog').getByRole('checkbox', { name: '文章 · 读取历史', exact: true }).isChecked());
   assert.deepEqual(errors, []); console.log('PASS documents: Chinese composition, formatting/paste, private images, autosave, refresh, old response, second-client conflict draft, history, light/dark/mobile and real MCP stdio');
