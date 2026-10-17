@@ -674,7 +674,7 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
     "idempotencyKey": "publish-blog-example-1"
   }
 }` },
-      { type: "p", text: "getBlogSources 返回可选文章字段、正文版本和可明确选择的图片；limit 最大为 50，可用 nextAfterId 继续分页。getBlog 读取配置、当前构建、已发布文章、历史版本和 pendingChanges。saveBlog 保存模板与显式文章列表；buildBlog 从当前来源生成固定快照；createBlogPreview 返回 10 分钟分享链接；publishBlog 发布指定 buildId；withdrawBlogArticle 撤回单篇；unpublishBlog 撤下整站；restoreBlogRevision 将历史配置恢复成新草稿。写操作的请求体最大 8 MiB，具体博客内容和图片预算见博客使用指南。" },
+      { type: "p", text: "getBlogSources 返回可选文章字段、正文版本和可明确选择的图片；limit 最大为 50，可用 nextAfterId 继续分页。getBlog 读取配置、当前构建、已发布文章、历史版本和 pendingChanges。saveBlog 保存模板与显式文章列表；buildBlog 从当前来源生成固定快照；createBlogPreview 返回 10 分钟分享链接；publishBlog 发布指定 buildId；withdrawBlogArticle 撤回单篇；unpublishBlog 撤下整站；restoreBlogRevision 将历史配置恢复成新草稿。博客 REST 请求体上限为 128 KiB，具体博客内容和图片预算见博客使用指南。" },
       { type: "h2", text: "GraphQL" },
       { type: "p", text: "GraphQL 入口为 POST /api/graphql，同样使用 Authorization: Bearer tab_… 和专用博客权限。每个命令以 JSON input 作为参数；读取命令放在 query，写命令放在 mutation。对 REST 和 GraphQL 写操作使用相同的幂等键与版本前提。" },
       { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
@@ -732,7 +732,7 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: replace-body-example-1" \\
   -d '{"command":"replaceDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","expectedVersion":1,"idempotencyKey":"replace-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"An updated draft."}]}]}}}'` },
-      { type: "p", text: "REST 成功回执位于 result；getDocument 返回 { id, tableId, rowId, version, content, updatedAt } 或 null。替换时使用刚读到的 version 作为 expectedVersion；过期版本返回 409 VERSION_CONFLICT，先重读并比较草稿，不要覆盖新版本。写请求幂等键长度为 1–200；命令 REST 请求体最大 8 MiB。" },
+      { type: "p", text: "REST 成功回执位于 result；getDocument 返回 { id, tableId, rowId, version, content, updatedAt } 或 null。替换时使用刚读到的 version 作为 expectedVersion；过期版本返回 409 VERSION_CONFLICT，先重读并比较草稿，不要覆盖新版本。写请求幂等键长度为 1–200；普通 REST 请求体上限为 128 KiB，单独上传正文图片的请求可使用 8 MiB 请求体预算。" },
       { type: "h2", text: "REST 路径与 GraphQL" },
       { type: "table", headers: ["操作", "REST 路径", "最低正文权限"], rows: [
         ["读取/创建/替换", "GET/POST/PUT /api/tables/{tableId}/rows/{rowId}/document", "canRead / canCreate / canUpdate"],
