@@ -34,16 +34,15 @@ const views = ["timeGridDay", "timeGridWeek", "dayGridMonth", "listWeek"];
 const viewKey = "tabdo.calendar.view";
 type Draft = { booking?: Booking; start: string; duration: number; error?: string };
 type Management = { kind: "edit" | "manage" | "archive"; calendar: Calendar } | { kind: "new" };
-function initialView() {
+function savedView() {
   try { const stored = localStorage.getItem(viewKey); if (stored && views.includes(stored)) return stored; } catch { /* Storage can be unavailable. */ }
-  return window.matchMedia("(max-width: 767px)").matches ? "listWeek" : "dayGridMonth";
 }
 export function CalendarPage() {
   const { t, i18n } = useTranslation("calendar");
   const narrow = useMediaQuery("(max-width: 767px)");
   const [calendars, setCalendars] = useState<Calendar[]>([]), [calendarId, setCalendarId] = useState("");
   const [people, setPeople] = useState<CalendarPerson[]>([]), [personId, setPersonId] = useState("all"), [bookings, setBookings] = useState<Booking[]>([]);
-  const [range, setRange] = useState<{ rangeStart: string; rangeEnd: string }>(), [view, setView] = useState(initialView), [viewTitle, setViewTitle] = useState(""), [visibleRange, setVisibleRange] = useState<{ start: Date; end: Date }>();
+  const [range, setRange] = useState<{ rangeStart: string; rangeEnd: string }>(), [view, setView] = useState(savedView), [viewTitle, setViewTitle] = useState(""), [visibleRange, setVisibleRange] = useState<{ start: Date; end: Date }>();
   const [loading, setLoading] = useState(true), [peopleLoading, setPeopleLoading] = useState(false), [bookingsLoading, setBookingsLoading] = useState(false);
   const [error, setError] = useState(""), [peopleError, setPeopleError] = useState(""), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [management, setManagement] = useState<Management>(), [draft, setDraft] = useState<Draft>(), [setup, setSetup] = useState(false), [pending, setPending] = useState(false);
@@ -54,8 +53,8 @@ export function CalendarPage() {
   const calendar = calendars.find(item => item.id === calendarId);
   const selectedPerson = people.find(item => item.id === personId);
   const zone = selectedPerson?.timeZone ?? calendar?.timeZone ?? "UTC";
-  const effectiveView = view;
-  useEffect(() => { setView(narrow ? "listWeek" : initialView()); }, [narrow]);
+  // Only automatic defaults follow the viewport; an explicit choice takes precedence.
+  const effectiveView = view ?? (narrow ? "listWeek" : "dayGridMonth");
   useEffect(() => { calendarRef.current?.getApi().changeView(effectiveView); }, [effectiveView]);
   // Sheets opened from a menu have no Radix Trigger; restore focus to the originating control.
   const overlayOpen = !!(management || draft || setup || selectedPlan);

@@ -102,6 +102,9 @@ try {
     await page.screenshot({ path: f.artifact(`month-desktop-${theme}-${language}.png`), fullPage: false });
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  const mobileView = page.getByRole('combobox', { name: 'Calendar view', exact: true });
+  assert.equal(await mobileView.innerText(), 'Month', 'resizing preserves the manually selected month view');
+  await mobileView.click(); await page.getByRole('option', { name: 'Agenda', exact: true }).click();
   const list = page.getByRole('button', { name: 'Calendars', exact: true });
   await list.click(); await page.getByRole('dialog').getByRole('button', { name: '团队咨询改名', exact: true }).click();
   await page.getByRole('button', { name: 'New appointment', exact: true }).click();
