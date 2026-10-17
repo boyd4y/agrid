@@ -11,10 +11,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { createClient } from "@tabdo/sdk";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, agentProfile, workspaces, bookings, bookingReminderIntents, bookingReminders, automations, automationOccurrences, automationSchedules, automationEvents } from "../../src/business/db/schema.js";
+import { organization, user, member, agentProfile, workspaces, bookings, bookingReminderIntents, bookingReminders, automations, automationOccurrences, automationSchedules, automationEvents, automationRuns, automationAgentActions, chatThreads } from "../../src/business/db/schema.js";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import { executeCalendar } from "../../src/business/calendar/service.js";
-import { createAutomation, updateAutomation } from "../../src/business/automation/crud.js";
+import { createAutomation, updateAutomation, listAutomationRuns } from "../../src/business/automation/crud.js";
 import { dispatchDueSchedules } from "../../src/business/automation/schedule.js";
 import { appendExternalAutomationEvent } from "../../src/business/automation/events.js";
 import { createSiteKey, updateSiteKey } from "../../src/business/data-api/keys.js";
@@ -28,7 +28,7 @@ const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(process.env.DATABASE_URL_UNPOOLED, url);
 const resource = createDatabase({ connectionString: url, poolMax: 8 });
 const other = createDatabase({ connectionString: url, poolMax: 2 });
-const org = randomUUID(), uid = randomUUID(), mid = randomUUID(), aid = randomUUID(), am = randomUUID();
+const org = randomUUID(), uid = randomUUID(), mid = randomUUID(), aid = randomUUID(), am = randomUUID(), peerId = randomUUID();
 let now = new Date("2030-03-08T00:00:00Z");
 let deps: CommandDependencies = { database: resource.db, now: () => now, uuid: randomUUID, automationQueueName: "calendar-unit" };
 const identity = { organizationId: org, actorId: uid }, caller = { kind: "member" as const, ...identity };
@@ -45,8 +45,8 @@ const sdk = (secret: string) => createClient({ url: "http://fixture.test", key: 
 const booking = async (date: string, hour = "10") => call("createBooking", { calendarId, personId, title: "Private customer", time: { start: `${date}T${hour}:00:00Z`, end: `${date}T${hour}:30:00Z`, timeZone: "UTC" }, idempotencyKey: key() });
 before(async () => {
   await resource.db.insert(organization).values({ id: org, name: "Calendar triggers", slug: org });
-  await resource.db.insert(user).values([{ id: uid, name: actor.name, email: actor.email }, { id: aid, name: "Agent", email: `${aid}@local.test`, kind: "agent" }]);
-  await resource.db.insert(member).values([{ id: mid, organizationId: org, userId: uid, role: "owner" }, { id: am, organizationId: org, userId: aid, role: "member" }]);
+  await resource.db.insert(user).values([{ id: uid, name: actor.name, email: actor.email }, { id: aid, name: "Agent", email: `${aid}@local.test`, kind: "agent" }, { id: peerId, name: "Other member", email: `${peerId}@local.test` }]);
+  await resource.db.insert(member).values([{ id: mid, organizationId: org, userId: uid, role: "owner" }, { id: am, organizationId: org, userId: aid, role: "member" }, { id: key(), organizationId: org, userId: peerId, role: "member" }]);
   await resource.db.insert(agentProfile).values({ id: key(), userId: aid, memberId: am, organizationId: org, displayName: "Agent" });
   const spaces = await resource.db.insert(workspaces).values({ organizationId: org, name: "Other" }).returning(); secondWorkspace = spaces[0].id;
   const [first] = await resource.db.select().from(workspaces).where(and(eq(workspaces.organizationId, org), eq(workspaces.isDefault, true))); deps = { ...deps, workspaceId: first.id };
@@ -55,7 +55,7 @@ before(async () => {
   await call("setWorkingHours", { calendarId, personId, expectedVersion: 1, windows: [1,2,3,4,5,6,7].map(day => ({ day, start: "00:00", end: "24:00" })), idempotencyKey: key() });
 });
 beforeEach(() => { now = new Date("2030-03-08T00:00:00Z"); });
-after(async () => { await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await resource.db.delete(organization).where(eq(organization.id, org)); await resource.db.delete(user).where(sql`${user.id} in (${uid}, ${aid})`); await other.close(); await resource.close(); });
+after(async () => { await resource.db.delete(automationEvents).where(eq(automationEvents.organizationId, org)); await resource.db.delete(organization).where(eq(organization.id, org)); await resource.db.delete(user).where(sql`${user.id} in (${uid}, ${aid}, ${peerId})`); await other.close(); await resource.close(); });
 test("bounded DST projection reads authoritative cron/occurrences, exposes no private conversation and writes no predictions", async () => {
   const rule = await createAutomation(deps, { ...identity, name: "DST", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "America/New_York" }, trigger: { type: "schedule_due" }, actions: [{ type: "run_agent", agentUserId: aid, prompt: "Read" }] });
   const before = await resource.db.select().from(automationOccurrences).where(eq(automationOccurrences.automationId, rule.id));
@@ -178,4 +178,27 @@ test("thin REST reminder configuration enforces explicit trigger/read grants, CA
   await updateSiteKey(deps, actor, allowed.key.id, { name: "Revoked trigger", permissions: [], calendarPermissions: grants().map(grant => ({ ...grant, canTriggerAgent: false })) });
   assert.equal((await request(allowed.secret, 1, [reminder], receiptKey)).status, 403);
   const revoked = await request(writeOnly.secret, 2, []); assert.equal(revoked.status, 200); assert.equal((await revoked.json()).version, 3);
+});
+test("reminder reason cannot bypass private run diagnostics for another member or a calendar-read Key", async () => {
+  const b = await booking("2030-03-27");
+  await call("setBookingReminders", { calendarId, bookingId: b.id, expectedVersion: 1, reminders: [reminder], idempotencyKey: key() });
+  now = new Date("2030-03-27T09:35:00Z"); await dispatchDueBookingReminders(deps);
+  const [intent] = await resource.db.select().from(bookingReminderIntents).where(eq(bookingReminderIntents.bookingId, b.id)); assert(intent.eventId);
+  const [run] = await resource.db.select().from(automationRuns).where(eq(automationRuns.eventId, intent.eventId));
+  const threadId = key(), diagnostic = `PRIVATE_RUN_DIAGNOSTIC:${key()}`;
+  // A valid persisted failure after private-thread association, before native acceptance.
+  await resource.db.insert(chatThreads).values({ id: threadId, userId: uid, organizationId: org, workspaceId: deps.workspaceId!, clientId: key(), kind: "chat" });
+  await resource.db.insert(automationAgentActions).values({ runId: run.id, step: 0, threadId, userMessageId: key() });
+  await resource.db.update(automationRuns).set({ status: "failed", error: diagnostic, finishedAt: now, detail: { threadId } }).where(eq(automationRuns.id, run.id));
+  const shared = await listAutomationRuns(deps, { organizationId: org, actorId: peerId, automationId: run.automationId });
+  assert.equal(shared[0].error, null, "the repaired generic history correctly hides this private diagnostic");
+  assert.equal((await call("listBookingReminders", { calendarId, bookingId: b.id })).intents[0].reason, diagnostic, "owner retains the real failure");
+  const peer = await executeCalendar(deps, { kind: "member", organizationId: org, actorId: peerId }, "listBookingReminders", { calendarId, bookingId: b.id });
+  assert.equal(peer.intents[0].threadId, null);
+  const saved = await createSiteKey(deps, actor, { name: "Read reminder state", permissions: [], calendarPermissions: grants().map(grant => ({ ...grant, canCreate: false, canUpdate: false, canCancel: false, canTriggerAgent: false })) });
+  const response = await app.request(`/api/calendars/${calendarId}/bookings/${b.id}/reminders`, { headers: { Authorization: `Bearer ${saved.secret}` } });
+  assert.equal(response.status, 200); const publicHistory = await response.json();
+  const leaks = { member: JSON.stringify(peer).includes(diagnostic), keyRest: JSON.stringify(publicHistory).includes(diagnostic) };
+  console.log("CALENDAR_PRIVATE_ERROR_REASON", JSON.stringify({ genericError: shared[0].error, leaks, peer, keyRest: publicHistory }));
+  assert.deepEqual(leaks, { member: false, keyRest: false }, "Reminder reason must respect the same private-run visibility boundary");
 });
