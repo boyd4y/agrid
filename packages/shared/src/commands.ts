@@ -1,3 +1,4 @@
+import type { CreateCalendarViewInput, UpdateCalendarViewInput, QueryCalendarViewInput, CalendarViewResult } from "./calendar-view.js";
 import { DOCUMENT_COMMANDS, type DocumentCommands, type DocumentResults } from "./documents.js";
 import { CALENDAR_COMMANDS, type CalendarCommands, type CalendarResults } from "./calendar.js";
 import type { SiteCommands, SiteResults } from "./sites.js";
@@ -74,6 +75,7 @@ export const COMMANDS = [
   "renameView",
   "setDefaultView",
   "updateBoardView",
+  "createCalendarView", "updateCalendarView", "queryCalendarView",
   "createFormView",
   "updateFormView",
   "setFormFields",
@@ -203,6 +205,9 @@ export type CommandInputMap = DocumentCommands & CalendarCommands & SiteCommands
   renameView: RenameViewInput;
   setDefaultView: SetDefaultViewInput;
   updateBoardView: UpdateBoardViewInput;
+  createCalendarView: CreateCalendarViewInput;
+  updateCalendarView: UpdateCalendarViewInput;
+  queryCalendarView: QueryCalendarViewInput;
   createFormView: CreateFormViewInput;
   updateFormView: UpdateFormViewInput;
   setFormFields: SetFormFieldsInput;
@@ -254,6 +259,9 @@ export type CommandResultMap = DocumentResults & CalendarResults & SiteResults &
   renameView: TableView;
   setDefaultView: TableView;
   updateBoardView: TableView;
+  createCalendarView: TableView;
+  updateCalendarView: TableView;
+  queryCalendarView: CalendarViewResult;
   createFormView: ResolvedFormView;
   updateFormView: ResolvedFormView;
   setFormFields: ResolvedFormView;

@@ -1,8 +1,11 @@
+import { CalendarViewSettings } from "@/components/table/CalendarViewSettings";
+import { TableCalendarView } from "@/components/table/TableCalendarView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Columns3,
+  CalendarDays,
   FileInput,
   LayoutGrid,
   Loader2,
@@ -36,13 +39,14 @@ import { useAppShell } from "@/context/AppShellContext";
 import { useTranslation } from "react-i18next";
 
 function viewIcon(type: string) {
+  if (type === "calendar") return CalendarDays;
   if (type === "board") return LayoutGrid;
   if (type === "form") return FileInput;
   return Columns3;
 }
 
 function viewLabel(type: string, name: string, t: (k: string) => string) {
-  return name || (type === "board" ? t("board") : type === "form" ? t("form") : t("grid"));
+  return name || (type === "calendar" ? t("calendarView.name") : type === "board" ? t("board") : type === "form" ? t("form") : t("grid"));
 }
 
 export function TableDetailPage() {
@@ -60,6 +64,7 @@ export function TableDetailPage() {
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [formView, setFormView] = useState<ResolvedFormView | null>(null);
   const [viewsLoading, setViewsLoading] = useState(false);
+  const [addingCalendar, setAddingCalendar] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [menuViewId, setMenuViewId] = useState<string | null>(null);
   const tableRequest = useRef(0);
@@ -288,12 +293,14 @@ export function TableDetailPage() {
                     <Plus data-icon="inline-start" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-44" align="end"><DropdownMenuGroup>
+                <DropdownMenuContent className="w-44" align="end" onCloseAutoFocus={event => { if (addingCalendar) event.preventDefault(); }}><DropdownMenuGroup>
                   <DropdownMenuItem onSelect={() => void addView("grid")}><Columns3 />{t("gridView")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void addView("board")}><LayoutGrid />{t("boardView")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setAddingCalendar(true)}><CalendarDays />{t("calendarView.name")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void addView("form")}><FileInput />{t("formViewMenu")}</DropdownMenuItem>
                 </DropdownMenuGroup></DropdownMenuContent>
               </DropdownMenu>
+            {addingCalendar && <CalendarViewSettings table={table} initiallyOpen onClose={() => setAddingCalendar(false)} onSaved={created => { setViews(previous => [...previous, created]); setActiveViewId(created.id); }} />}
             <DataRefreshButton onRefresh={() => notifyTableMutated(table.id)} />
           </div>
         </div>
@@ -331,6 +338,8 @@ export function TableDetailPage() {
               {t("loadingForm")}
             </div>
           )
+        ) : activeView?.type === "calendar" ? (
+          <TableCalendarView key={activeView.id} table={table} view={activeView} refreshToken={tableRefreshToken} onUpdated={updated => setViews(previous => previous.map(view => view.id === updated.id ? updated : view))} />
         ) : isBoard ? (
           <div className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col">
             <div className="flex min-h-0 flex-1 flex-col">

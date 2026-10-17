@@ -62,6 +62,7 @@ export const PLATFORM_TOOL_IDS = [
   "rename_view",
   "set_default_view",
   "update_board_view",
+  "create_calendar_view", "update_calendar_view", "query_calendar_view",
   "delete_view",
   "create_grid_view",
   "create_board_view"

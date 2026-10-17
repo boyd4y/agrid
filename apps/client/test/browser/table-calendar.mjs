@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict';
+import { createBrowserFixture, pause } from './fixture.mjs';
+const fixture = await createBrowserFixture({ name: 'Table calendar records' });
+const { page, api, frontend, artifact, errors } = fixture;
+page.setDefaultTimeout(15000);
+const command = async (command, input) => (await api('/commands', { command, input })).result;
+const now = new Date(), year = now.getUTCFullYear(), month = String(now.getUTCMonth() + 1).padStart(2, '0');
+const date = day => `${year}-${month}-${String(day).padStart(2, '0')}`;
+try {
+  const table = await api('/tables', { name: '日期记录测试' });
+  const title = (await api(`/tables/${table.id}`)).columns[0];
+  const start = await api(`/tables/${table.id}/columns`, { name: '开始', type: 'date' });
+  const end = await api(`/tables/${table.id}/columns`, { name: '结束', type: 'date' });
+  const row = await api(`/tables/${table.id}/rows`, { cells: { [title.id]: '全天原记录', [start.id]: date(12), [end.id]: date(14) } });
+  const grid = await command('createGridView', { tableId: table.id });
+  await page.goto(frontend + `/app/tables/${table.id}`);
+  await page.getByTestId('add-view').click(); await page.getByRole('menuitem', { name: '日历', exact: true }).click();
+  const mapping = page.getByTestId('calendar-mapping'); await mapping.waitFor();
+  await mapping.getByLabel('起始日期（必选）').click(); await page.getByRole('option', { name: '开始', exact: true }).click();
+  await mapping.getByLabel('结束日期', { exact: true }).click(); await page.getByRole('option', { name: '结束', exact: true }).click();
+  await mapping.getByRole('button', { name: '保存', exact: true }).click(); await mapping.waitFor({ state: 'hidden' });
+  const view = (await command('listViews', { tableId: table.id })).find(view => view.type === 'calendar'); assert(view);
+  const event = page.locator(`[data-calendar-row-id="${row.id}"]`).first(); await event.waitFor();
+  await page.getByTestId(`view-menu-${view.id}`).click(); await page.getByRole('menuitem', { name: '设为默认视图', exact: true }).click();
+  await page.locator(`[data-view-id="${view.id}"]`).getByRole('img', { name: '默认视图' }).waitFor();
+  await page.getByTestId(`view-menu-${view.id}`).click(); await page.getByRole('menuitem', { name: '置顶到工作区', exact: true }).click(); await page.getByRole('menu').waitFor({ state: 'hidden' }); assert.equal((await api(`/tables/${table.id}`)).pinned, true);
+  await page.reload(); await event.waitFor(); assert.equal(await page.locator(`[data-view-id="${view.id}"]`).getAttribute('data-state'), 'active');
+  await event.focus(); await page.keyboard.press('Enter'); const sheet = page.getByTestId('related-record-panel'); await sheet.waitFor();
+  assert.equal(await sheet.locator(`[data-record-field="${title.id}"] input`).inputValue(), '全天原记录');
+  await page.keyboard.press('Escape'); await sheet.waitFor({ state: 'hidden' });
+  // A real pointer drag by one day updates the original two fields in a single PATCH.
+  async function dragOneDay() {
+    await event.hover(); await pause(150);
+    const cell = page.locator(`[data-date="${date(12)}"]`).first();
+    const width = (await cell.boundingBox()).width, box = await event.boundingBox();
+    const x = box.x + Math.min(24, box.width / 2), y = box.y + box.height / 2;
+    await page.mouse.move(x, y); await page.mouse.down(); await pause(100); await page.mouse.move(x + width, y, { steps: 20 }); await pause(100); await page.mouse.up();
+  }
+  const moveResponse = page.waitForResponse(response => response.url().endsWith(`/api/rows/${row.id}`) && response.request().method() === 'PATCH');
+  await dragOneDay(); const moved = await moveResponse; assert.equal(moved.status(), 200);
+  const payload = moved.request().postDataJSON(); assert.equal(payload.expectedVersion, 1); assert.deepEqual(payload.cells, { [start.id]: date(13), [end.id]: date(15) });
+  await pause(300); await event.waitFor(); const before = await event.boundingBox();
+  const reject = async route => route.request().method() === 'PATCH' ? route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: '版本冲突回归' }) }) : route.fallback();
+  await page.route(`**/api/rows/${row.id}`, reject);
+  const failed = page.waitForResponse(response => response.url().endsWith(`/api/rows/${row.id}`) && response.request().method() === 'PATCH');
+  await dragOneDay(); assert.equal((await failed).status(), 409); await page.getByRole('alert').filter({ hasText: '版本冲突回归' }).waitFor();
+  await pause(600); const after = await event.boundingBox(); assert(Math.abs(before.x - after.x) < 2, 'failed drag reverted');
+  await page.unroute(`**/api/rows/${row.id}`, reject); assert.equal((await command('getRow', { rowId: row.id })).cells[start.id], date(13));
+  await page.getByRole('button', { name: '重试', exact: true }).click(); await event.waitFor();
+  await page.getByTestId('global-ai-toggle').click(); await page.locator('#global-ai-panel').waitFor(); await event.waitFor();
+  await page.screenshot({ path: artifact('table-calendar-desktop.png') });
+  await page.getByTestId('global-ai-toggle').click();
+  await page.getByRole('radio', { name: '议程', exact: true }).click(); await event.waitFor();
+  await page.setViewportSize({ width: 760, height: 960 }); await pause(250); await page.screenshot({ path: artifact('table-calendar-narrow.png') });
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.emulateMedia({ colorScheme: 'dark' }); await page.waitForTimeout(250); await page.screenshot({ path: artifact('table-calendar-dark.png') });
+  await api(`/columns/${end.id}`, undefined, 'DELETE'); await page.reload();
+  await page.getByRole('alert').filter({ hasText: '日期映射已失效' }).waitFor();
+  await page.getByTestId('calendar-mapping-trigger').filter({ visible: true }).click(); await mapping.waitFor();
+  await mapping.getByLabel('结束日期', { exact: true }).click(); await page.getByRole('option', { name: '不映射', exact: true }).click(); await mapping.getByRole('button', { name: '保存', exact: true }).click(); await mapping.waitFor({ state: 'hidden' }); await event.waitFor();
+  await page.getByTestId(`view-menu-${view.id}`).click(); await page.getByRole('menuitem', { name: '重命名', exact: true }).click();
+  await page.getByTestId('view-rename').getByRole('textbox').fill('日期映射'); await page.keyboard.press('Enter'); await page.getByTestId('view-rename').waitFor({ state: 'hidden' });
+  await page.getByTestId(`view-menu-${view.id}`).click(); await page.getByRole('menuitem', { name: '删除视图', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认删除', exact: true }).click();
+  await page.locator(`[data-view-id="${grid.id}"][data-state="active"]`).waitFor();
+  assert.equal((await command('getRow', { rowId: row.id })).cells[start.id], date(13));
+  assert.deepEqual(errors, []); console.log('PASS table calendar mapping/default/pin/record/drag/CAS rollback/AI/repair/lifecycle');
+} catch (error) { await page.screenshot({ path: artifact('table-calendar-failure.png') }); console.log(await page.locator('body').innerText()); throw error; } finally { await fixture.close(); }

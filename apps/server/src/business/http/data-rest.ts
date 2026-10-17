@@ -1,3 +1,4 @@
+import { siteQueryCalendarView } from "../data-api/calendar-views.js";
 import { updateScheduledAutomation } from "../calendar/schedules.js";
 import { CALENDAR_READ_COMMANDS } from "@tabdo/shared";
 import { DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
@@ -60,6 +61,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       .where(and(eq(rows.id, id), eq(tables.organizationId, context.principal.organizationId)));
     if (!found) throw new ServiceError(404, { message: "Record not found" }); return found.tableId;
   };
+  route.post("/views/:id/calendar/query", handle(false, ({ scope, context, c, body }) => siteQueryCalendarView(scope.commands, context, { ...body, viewId: c.req.param("id") })));
   route.get("/tables", handle(false, ({ scope, context }) => data.siteTables(scope.commands, context)));
   route.get("/tables/:id", handle(false, ({ scope, context, c }) => data.siteTable(scope.commands, context, c.req.param("id")!)));
   route.get("/tables/:id/rows", handle(false, ({ scope, context, c }) => data.siteRows(scope.commands, context, c.req.param("id")!, {
@@ -74,6 +76,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     const { scope, context, body } = input, command = z.string().parse(body.command), args = z.record(z.string(), z.unknown()).parse(body.input ?? {});
     if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
+    if (command === "queryCalendarView") return { ok: true, command, result: await siteQueryCalendarView(deps, context, args) };
     if (command === "updateAutomation") return { ok: true, command, result: await updateScheduledAutomation(deps, context.secret, args) };
     if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
