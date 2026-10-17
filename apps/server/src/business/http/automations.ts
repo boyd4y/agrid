@@ -126,7 +126,7 @@ automationsRoute.post("/automations", async c => {
 automationsRoute.get("/automations/:id/runs", async c => {
   const scope = await requireActorOrg(c);
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
-  try { return c.json(await crud.listRuleRuns(c.get("resources").commands, z.uuid().parse(c.req.param("id")), scope.organizationId)); }
+  try { return c.json(await crud.listRuleRuns(c.get("resources").commands, z.uuid().parse(c.req.param("id")), scope.organizationId, 50, scope.actor.userId)); }
   catch (error) { return c.json({ error: error instanceof Error ? error.message : "自动化不存在" }, 404); }
 });
 automationsRoute.post("/automations/schedule-preview", async c => {

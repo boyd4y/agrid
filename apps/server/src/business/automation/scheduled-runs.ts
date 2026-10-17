@@ -1,17 +1,19 @@
 import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import type { Actor } from "../auth/actor.js";
 import type { RuntimeDependencies } from "../dependencies.js";
 
 import { automations, automationRuns, automationAgentActions, chatThreads } from "../db/schema.js";
 import { requireThread } from "../chat/store.js";
 import { ServiceError } from "../errors.js";
+import { readableRunDetails } from "./run-visibility.js";
 
 export async function listScheduledRuns(deps: RuntimeDependencies, taskId: string, actor: Actor, offset = 0, limit = 20) {
   const [task] = await deps.database.select({ source: automations.source }).from(automations)
     .where(and(eq(automations.id, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId))));
   if (task?.source.kind !== "schedule") throw new ServiceError(404, { message: "定时任务不存在" });
   const items = await deps.database.select({
+    savedRun: automationRuns, actions: automations.actions,
     id: automationRuns.id, automationId: automationRuns.automationId, status: automationRuns.status,
     createdAt: automationRuns.createdAt, finishedAt: automationRuns.finishedAt, error: automationRuns.error,
     threadId: chatThreads.id, title: chatThreads.title,
@@ -23,10 +25,13 @@ export async function listScheduledRuns(deps: RuntimeDependencies, taskId: strin
     nativeStatus: sql<string | null>`(SELECT status FROM agent_runs WHERE thread_id=${chatThreads.id} ORDER BY started_at DESC,id DESC LIMIT 1)`,
   }).from(automationRuns).innerJoin(automations, eq(automations.id, automationRuns.automationId))
     .leftJoin(automationAgentActions, and(eq(automationAgentActions.runId, automationRuns.id), eq(automationAgentActions.step, 0)))
-    .leftJoin(chatThreads, and(eq(chatThreads.id, automationAgentActions.threadId), eq(chatThreads.kind, "scheduled_task"), eq(chatThreads.userId, actor.userId), eq(chatThreads.scheduledTaskId, taskId)))
-    .where(and(eq(automationRuns.automationId, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId)), eq(automations.createdByUserId, actor.userId)))
+    .leftJoin(chatThreads, and(eq(chatThreads.id, automationAgentActions.threadId), eq(chatThreads.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, chatThreads.workspaceId), eq(chatThreads.kind, "scheduled_task"), eq(chatThreads.userId, actor.userId), eq(chatThreads.scheduledTaskId, taskId)))
+    .where(and(eq(automationRuns.automationId, taskId), and(eq(automations.organizationId, actor.organizationId), workspaceScope(actor, actor.organizationId, automations.workspaceId)), or(eq(automations.createdByUserId, actor.userId), eq(chatThreads.userId, actor.userId))))
     .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit + 1).offset(offset);
-  return { runs: items.slice(0, limit), hasMore: items.length > limit };
+  const readable = await readableRunDetails({ ...deps, workspaceId: actor.workspaceId ?? deps.workspaceId }, items.map(item => ({ run: item.savedRun, actions: item.actions })), actor.organizationId, actor.userId);
+  return { runs: items.slice(0, limit).map(({ savedRun: _saved, actions: _actions, ...item }) => readable.has(item.id) ? item : {
+    ...item, error: null, threadId: null, title: null, prompt: "", preview: null, nativeStatus: null,
+  }), hasMore: items.length > limit };
 }
 
 export async function getScheduledRunThread(deps: RuntimeDependencies, taskId: string, threadId: string, actor: Actor) {

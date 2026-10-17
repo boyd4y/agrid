@@ -224,6 +224,10 @@ test("another member cannot retrieve a private reminder turn or its answer throu
     assert.deepEqual({ native: privateData(exposed), rest: privateData(rest) }, {
       native: { thread: false, answer: false }, rest: { thread: false, answer: false },
     }, "Generic run history must enforce the same private-turn boundary as booking reminder history");
+    const [mapping] = await db.select().from(automationAgentActions).where(eq(automationAgentActions.runId, run.id)); assert(mapping.agentRunId);
+    assert(!JSON.stringify(exposed).includes(mapping.agentRunId)); assert(!JSON.stringify(rest).includes(mapping.agentRunId));
+    const owned = await createTableTools({ ...commandDependencies(), workspaceId }, undefined, org, uid).list_automation_runs.execute({ automationId: run.automationId }, { toolCallId: randomUUID(), messages: [], context: undefined });
+    assert.deepEqual(privateData(owned), { thread: true, answer: true }); assert(JSON.stringify(owned).includes(mapping.agentRunId));
   } finally { await stop(worker.child); }
 });
 test("unknown event protocol fails durably instead of acknowledging and silently dropping the reminder", { timeout: 60000 }, async () => {

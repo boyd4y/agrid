@@ -13,6 +13,7 @@ import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCH
   type AutomationRule, type AutomationRun, type AutomationSource, type CreateAutomationInput, type UpdateAutomationInput,
   type ListAutomationsInput, type DeleteAutomationInput, type ListAutomationRunsInput } from "@tabdo/shared";
 import { schedulePreview, syncSchedule } from "./schedule.js";
+import { readableRunDetails, type RunHistory } from "./run-visibility.js";
 
 type OrgScoped = { organizationId?: string; actorId?: string };
 export function mapRule(row: typeof automations.$inferSelect): AutomationRule {
@@ -22,12 +23,16 @@ export function mapRule(row: typeof automations.$inferSelect): AutomationRule {
     conditionLogic: row.conditionLogic as AutomationRule["conditionLogic"], actions: row.actions as AutomationRule["actions"],
     createdAt: row.createdAt, updatedAt: row.updatedAt };
 }
-function mapRun(row: typeof automationRuns.$inferSelect): AutomationRun {
+function mapRun(row: typeof automationRuns.$inferSelect, readable: boolean): AutomationRun {
   return { id: row.id, workspaceId: row.workspaceId, automationId: row.automationId, tableId: row.tableId, rowId: row.rowId,
     status: row.status as AutomationRun["status"], eventId: row.eventId, attempts: row.attempts, nextStep: row.nextStep,
-    triggerType: row.triggerType as AutomationRun["triggerType"], detail: row.detail, error: row.error,
+    triggerType: row.triggerType as AutomationRun["triggerType"], detail: readable ? row.detail : {}, error: readable ? row.error : null,
     createdAt: row.createdAt, finishedAt: row.finishedAt,
-    threadId: typeof row.detail.threadId === "string" ? row.detail.threadId : null };
+    threadId: readable && typeof row.detail.threadId === "string" ? row.detail.threadId : null };
+}
+async function projectRuns(deps: CommandDependencies, hits: RunHistory[], organizationId: string, actorId?: string, transaction?: Transaction) {
+  const readable = await readableRunDetails(deps, hits, organizationId, actorId, transaction);
+  return hits.map(({ run }) => mapRun(run, readable.has(run.id)));
 }
 async function ownedRule(deps: CommandDependencies, id: string, organizationId?: string, tx: Transaction | CommandDependencies["database"] = deps.database, lock = false) {
   if (!organizationId) throw new Error("缺少工作区上下文");
@@ -148,9 +153,8 @@ export async function deleteAutomation(deps: CommandDependencies, { automationId
     await syncSchedule(deps, tx, mapRule(row));return { ok: true as const };
   });
 }
-export async function listRuleRuns(deps: CommandDependencies, automationId: string, organizationId: string, limit = 50) {
-  await ownedRule(deps, automationId, organizationId);
-  return (await deps.database.select().from(automationRuns).where(eq(automationRuns.automationId, automationId)).orderBy(desc(automationRuns.createdAt)).limit(Math.min(Math.max(limit, 1), 200))).map(mapRun);
+export async function listRuleRuns(deps: CommandDependencies, automationId: string, organizationId: string, limit = 50, actorId?: string) {
+  return listAutomationRuns(deps, { automationId, organizationId, actorId, limit: Math.min(Math.max(limit, 1), 200) });
 }
 export async function listAutomationRuns(deps: CommandDependencies, input: ListAutomationRunsInput & OrgScoped, transaction?: Transaction) {
   const organizationId = requireOrgId(input.organizationId);
@@ -160,12 +164,14 @@ export async function listAutomationRuns(deps: CommandDependencies, input: ListA
     const rule = await ownedRule(deps, automationId, organizationId, transaction);
     if (tableId && rule.tableId !== tableId) throw new Error("自动化不属于指定表格");
   }
-  return (await (transaction ?? deps.database).select({ run: automationRuns }).from(automationRuns)
+  const hits = await (transaction ?? deps.database).select({ run: automationRuns, actions: automations.actions }).from(automationRuns)
     .innerJoin(automations, eq(automations.id, automationRuns.automationId)).where(and(
       and(eq(automations.organizationId, organizationId), workspaceScope(deps, organizationId, automations.workspaceId)), isNull(automations.deletedAt),
+      workspaceScope(deps, organizationId, automationRuns.workspaceId),
       tableId ? eq(automationRuns.tableId, tableId) : undefined,
       automationId ? eq(automationRuns.automationId, automationId) : undefined))
-    .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit ?? 50)).map(hit => mapRun(hit.run));
+    .orderBy(desc(automationRuns.createdAt), desc(automationRuns.id)).limit(limit ?? 50);
+  return projectRuns(deps, hits, organizationId, input.actorId, transaction);
 }
 export async function getEnabledAutomations(deps: CommandDependencies, tableId: string) {
   return (await deps.database.select().from(automations).where(and(eq(automations.tableId, tableId), eq(automations.enabled, true), isNull(automations.deletedAt)))).map(mapRule);

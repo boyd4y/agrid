@@ -14,6 +14,8 @@ try {
       const result = await client.callTool({ name: item.name, arguments: item.input });
       assert(!result.isError, JSON.stringify(result));
       const value = JSON.parse(result.content[0].text);
+      for (const hidden of item.absent ?? []) assert(!JSON.stringify(value).includes(hidden), item.name + ' exposed private content');
+      for (const visible of item.includes ?? []) assert(JSON.stringify(value).includes(visible), item.name + ' missing owned content');
       for (const [field, expected] of Object.entries(item.expect ?? {})) {
         const actual = field.split('.').reduce((current, key) => current[key], value);
         assert.deepEqual(actual, expected, item.name + '.' + field);
