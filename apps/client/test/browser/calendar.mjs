@@ -62,9 +62,17 @@ try {
   const booking = (await command('queryBookings', query)).items[0]; assert(booking); assert.equal(booking.title, '智能体牙医预约');
   // Display the actual native-tool booking in the page's fetched range.
   await page.getByRole('button', { name: '刷新', exact: true }).click();
+  const agendaRead = page.waitForResponse(response => {
+    if (!response.url().endsWith('/api/commands')) return false;
+    const body = response.request().postDataJSON();
+    return body?.command === 'queryBookings' && Date.parse(body.input.rangeEnd) - Date.parse(body.input.rangeStart) === 7 * 86400000;
+  });
   await page.getByRole('combobox', { name: '日历视图', exact: true }).click(); await page.getByRole('option', { name: '议程', exact: true }).click();
+  const displayedRange = (await agendaRead).request().postDataJSON().input;
   const event = page.locator('.tabdo-booking-calendar').getByText(/智能体牙医预约/).first();
-  if (!await event.count()) await page.getByRole('button', { name: '下一时段', exact: true }).click();
+  // A pending read is not evidence that the booking lies outside this week.
+  if (Date.parse(booking.start) >= Date.parse(displayedRange.rangeEnd)) await page.getByRole('button', { name: '下一时段', exact: true }).click();
+  else if (Date.parse(booking.start) < Date.parse(displayedRange.rangeStart)) await page.getByRole('button', { name: '上一时段', exact: true }).click();
   await event.waitFor(); await event.click();
   sheet = page.getByRole('dialog');
   await sheet.getByLabel('开始时间', { exact: true }).fill('15:00');
