@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
 import { createBrowserFixture } from './fixture.mjs';
 const fixture = await createBrowserFixture({ name: 'Calendar drag and grants' });
 const { page, api, frontend } = fixture;
@@ -8,6 +9,7 @@ const key = () => crypto.randomUUID();
 const today = new Date().toISOString().slice(0, 10);
 const time = (hour) => ({ start: `${today}T${hour}:00:00Z`, end: `${today}T${hour}:30:00Z`, timeZone: 'UTC' });
 let releasePending = () => {};
+const pointerGeometry = [];
 try {
   const calendar = await command('createCalendar', { name: '交互预约日历', timeZone: 'UTC', idempotencyKey: key() });
   const person = await command('createCalendarPerson', { calendarId: calendar.id, name: '拖拽医生', timeZone: 'UTC', idempotencyKey: key() });
@@ -22,11 +24,23 @@ try {
   const hourPixels = occupied.y - bounds.y;
   assert(hourPixels > 20);
   const drag = async (hours) => {
+    // Raw mouse coordinates do not scroll the target into view. A refreshed
+    // calendar mounts before its initial time-grid scroll has settled.
+    await event.evaluate(el => el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+    await event.hover();
     const source = await event.boundingBox();
+    const hit = await page.evaluate(({ x, y, distance }) => ({
+      sourceId: document.elementFromPoint(x, y)?.closest('[data-booking-id]')?.getAttribute('data-booking-id'),
+      targetInCalendar: !!document.elementFromPoint(x, y + distance)?.closest('.tabdo-booking-calendar'),
+    }), { x: source.x + source.width / 2, y: source.y + Math.min(source.height / 2, 10), distance: hourPixels * hours });
+    pointerGeometry.push({ hours, source, hit });
+    assert.equal(hit.sourceId, a.id, 'the real pointer starts on the visible booking');
+    assert(hit.targetInCalendar, 'the real pointer ends inside the visible calendar');
     await page.mouse.move(source.x + source.width / 2, source.y + Math.min(source.height / 2, 10));
-    await page.mouse.down(); await page.mouse.move(source.x + source.width / 2, source.y + Math.min(source.height / 2, 10) + hourPixels * hours, { steps: 20 }); await page.mouse.up();
+    await page.mouse.down(); await page.waitForTimeout(100); await page.mouse.move(source.x + source.width / 2, source.y + Math.min(source.height / 2, 10) + hourPixels * hours, { steps: 20 }); await page.waitForTimeout(100); await page.mouse.up();
   };
   const conflictResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'rescheduleBooking');
+  void conflictResponse.catch(() => {});
   await drag(1);
   assert.equal((await conflictResponse).status(), 409);
   const sheet = page.getByRole('dialog');
@@ -54,6 +68,7 @@ try {
   const moved = await command('getBooking', { calendarId: calendar.id, bookingId: a.id }); assert.match(moved.start, /T12:00:00/); assert.equal(moved.version, 2);
   // Resize with the actual pointer handle at the bottom edge, adding 30 minutes.
   const resizedResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'rescheduleBooking');
+  void resizedResponse.catch(() => {});
   await event.hover(); const rect = await event.boundingBox();
   await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 2); await page.mouse.down();
   await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 2 + hourPixels / 2, { steps: 15 }); await page.mouse.up();
@@ -82,4 +97,8 @@ try {
   assert.deepEqual(fixture.errors, []);
   console.log('PASS: real pointer drag conflict rollback with preserved form, pending feedback, successful drag/resize through versioned commands, calendar grants UI persists without dropping table grants.');
 } catch (error) { await page.screenshot({ path: fixture.artifact('calendar-interactions-failure.png'), fullPage: true }); throw error; }
-finally { releasePending(); await fixture.close(); }
+finally {
+  releasePending();
+  try { await writeFile(fixture.artifact('calendar-pointer-geometry.json'), JSON.stringify(pointerGeometry, null, 2)); }
+  finally { await fixture.close(); }
+}
