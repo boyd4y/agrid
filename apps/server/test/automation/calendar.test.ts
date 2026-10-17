@@ -157,3 +157,25 @@ test("actual native and MCP operations configure/query reminders and read/update
     assert.equal(JSON.parse(output.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
+
+test("thin REST reminder configuration enforces explicit trigger/read grants, CAS and revoked replay", async () => {
+  const b = await booking("2030-03-25");
+  const path = `/api/calendars/${calendarId}/bookings/${b.id}/reminders`;
+  const createKey = (canRead: boolean, canTriggerAgent: boolean) => createSiteKey(deps, actor, { name: "REST reminder", permissions: [],
+    calendarPermissions: grants().map(grant => ({ ...grant, canRead, canTriggerAgent })) });
+  const denied = await createKey(true, false), allowed = await createKey(true, true), writeOnly = await createKey(false, true);
+  const request = (secret: string, version: number, reminders: unknown = [reminder], idempotencyKey = key()) => app.request(path, {
+    method: "POST", headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ expectedVersion: version, reminders }),
+  });
+  const forbidden = await request(denied.secret, 1); assert.equal(forbidden.status, 403); assert.equal((await forbidden.json()).code, "FORBIDDEN");
+  const malformed = await request(allowed.secret, 1, [{ ...reminder, offsetMinutes: 0 }]); assert.equal(malformed.status, 400);
+  const receiptKey = key(); const saved = await request(allowed.secret, 1, [reminder], receiptKey); assert.equal(saved.status, 200); assert.equal((await saved.json()).version, 2);
+  const read = await app.request(path, { headers: { Authorization: `Bearer ${allowed.secret}` } }); assert.equal(read.status, 200); assert.equal((await read.json()).reminders.length, 1);
+  assert.equal((await app.request(path, { headers: { Authorization: `Bearer ${writeOnly.secret}` } })).status, 403);
+  const stale = await request(allowed.secret, 1, []); assert.equal(stale.status, 409); assert.equal((await stale.json()).code, "VERSION_CONFLICT");
+  const replay = await request(allowed.secret, 1, [reminder], receiptKey); assert.equal(replay.status, 200); assert.equal((await replay.json()).version, 2);
+  await updateSiteKey(deps, actor, allowed.key.id, { name: "Revoked trigger", permissions: [], calendarPermissions: grants().map(grant => ({ ...grant, canTriggerAgent: false })) });
+  assert.equal((await request(allowed.secret, 1, [reminder], receiptKey)).status, 403);
+  const revoked = await request(writeOnly.secret, 2, []); assert.equal(revoked.status, 200); assert.equal((await revoked.json()).version, 3);
+});
