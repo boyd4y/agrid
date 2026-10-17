@@ -1,3 +1,6 @@
+import { isBlogCommand, blogTransportInput } from "../blogs/transport.js";
+import { executeBlog } from "../blogs/service.js";
+import { BlogError } from "../blogs/errors.js";
 import { DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
 import { executeDocument } from "../documents/service.js";
 import { DocumentError } from "../documents/errors.js";
@@ -47,7 +50,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       c.header("Cache-Control", "private, no-store");
       return c.json(await fn({ scope, context, c, body }), status);
     } catch (error) {
-      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, error.status as 400);
+      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof BlogError || error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, error.status as 400);
       if (error instanceof z.ZodError) return c.json({ error: "Invalid request data" }, 400);
       return c.json({ error: "Request could not be completed" }, 500);
     } finally { try { await scope?.close(); } catch { /* Committed responses survive cleanup failures. */ } }
@@ -72,6 +75,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     const { scope, context, body } = input, command = z.string().parse(body.command), args = z.record(z.string(), z.unknown()).parse(body.input ?? {});
     if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
+    if (isBlogCommand(command)) return { ok: true, command, result: await executeBlog(deps, { kind: "key", secret: context.secret }, command, blogTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });

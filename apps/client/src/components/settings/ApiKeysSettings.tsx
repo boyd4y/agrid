@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Copy, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ApiKeyInfo, ApiKeyInput, CalendarPermission, DocumentPermission, TablePermission } from "@tabdo/shared";
+import type { ApiKeyInfo, ApiKeyInput, CalendarPermission, BlogPermission, DocumentPermission, TablePermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
@@ -19,7 +19,7 @@ import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { groupPermissionTables, operations, summarizePermissions, type ApiKeyTable } from "@/components/settings/api-key-permissions";
 
-const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], documentPermissions: [] });
+const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], documentPermissions: [], blogPermissions: [] });
 
 export function ApiKeysSettings() {
   const { t } = useTranslation(["app", "common"]);
@@ -27,6 +27,7 @@ export function ApiKeysSettings() {
   const id = useId();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<ApiKeyTable[]>([]);
   const [calendars, setCalendars] = useState<{ id: string; name: string; workspaceName: string }[]>([]);
+  const blogOperations = ["canRead", "canConfigure", "canBuild", "canPublish", "canRestore"] as const;
   const documentOperations = ["canRead", "canCreate", "canUpdate", "canReadHistory", "canRestore", "canUpload"] as const;
   const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage"] as const;
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
@@ -52,7 +53,7 @@ export function ApiKeysSettings() {
   }, [revision]);
 
   function edit(key?: ApiKeyInfo) {
-    setInput(key ? { name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })), documentPermissions: (key.documentPermissions ?? []).map(p => ({ ...p })) } : blank());
+    setInput(key ? { name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })), blogPermissions: (key.blogPermissions ?? []).map(p => ({ ...p })), documentPermissions: (key.documentPermissions ?? []).map(p => ({ ...p })) } : blank());
     setSecret(""); setFormError(""); setEditor({ key });
   }
   function close() { if (busy.current) return; setEditor(null); setSecret(""); setFormError(""); }
@@ -79,6 +80,12 @@ export function ApiKeysSettings() {
     setInput(current => {
       const grant: TablePermission = { tableId, canRead: false, canCreate: false, canUpdate: false, canDelete: false, ...current.permissions.find(p => p.tableId === tableId), [operation]: checked };
       return { ...current, permissions: [...current.permissions.filter(p => p.tableId !== tableId), ...(operations.some(op => grant[op]) ? [grant] : [])] };
+    });
+  }
+  function toggleBlog(tableId: string, operation: typeof blogOperations[number], checked: boolean) {
+    setInput(current => {
+      const grant: BlogPermission = { tableId, canRead: false, canConfigure: false, canBuild: false, canPublish: false, canRestore: false, ...current.blogPermissions?.find(p => p.tableId === tableId), [operation]: checked };
+      return { ...current, blogPermissions: [...(current.blogPermissions ?? []).filter(p => p.tableId !== tableId), ...(blogOperations.some(op => grant[op]) ? [grant] : [])] };
     });
   }
   function toggleDocument(tableId: string, operation: typeof documentOperations[number], checked: boolean) {
@@ -121,6 +128,7 @@ export function ApiKeysSettings() {
                 </span>
                 <span className="flex shrink-0 flex-col gap-1 text-xs text-muted-foreground">
                   <span>{scope.tableCount ? text("scopeSummary", { workspaces: text("workspaceCount", { count: scope.workspaceCount }), tables: text("tableCount", { count: scope.tableCount }) }) : text("noAuthorizedTables")}</span>
+                  {!!key.blogPermissions?.length && <span>{t("blogs:grantCount", { count: key.blogPermissions.length })}</span>}
                   {!!key.documentPermissions?.length && <span>{t("documents:documentScope", { count: key.documentPermissions.length })}</span>}
                   {!!key.calendarPermissions?.length && <span>{t("calendar:calendarScope", { count: key.calendarPermissions.length })}</span>}
                   {scope.unavailableCount > 0 && <span>{text("unavailableSummary", { count: scope.unavailableCount })}</span>}
@@ -151,6 +159,9 @@ export function ApiKeysSettings() {
                 {input.permissions.filter(grant => !tables.some(table => table.id === grant.tableId)).map(grant => permissionRow(grant.tableId, `${text("removedTable")} (${grant.tableId})`, `${text("removedTable")} (${grant.tableId})`))}
               </div>
             </FieldSet>
+            <FieldSet className="gap-3"><FieldLegend variant="label">{t("blogs:grantsTitle")}</FieldLegend><FieldDescription>{t("blogs:grantsHint")}</FieldDescription>
+              {tables.map(table => <div key={table.id} className="flex flex-col gap-2 rounded-md border p-3"><span className="break-words text-sm font-medium">{table.workspaceName} / {table.name}</span><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{blogOperations.map(operation => <label key={operation} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} aria-label={`${table.name} · ${t(`blogs:grants.${operation}`)}`} checked={input.blogPermissions?.find(p => p.tableId === table.id)?.[operation] ?? false} onCheckedChange={checked => toggleBlog(table.id, operation, checked === true)} />{t(`blogs:grants.${operation}`)}</label>)}</div></div>)}
+            </FieldSet>
             <FieldSet className="gap-3"><FieldLegend variant="label">{t("documents:grantsTitle")}</FieldLegend><FieldDescription>{t("documents:grantsHint")}</FieldDescription>
               {tables.map(table => <div key={table.id} className="flex flex-col gap-2 rounded-md border p-3"><span className="break-words text-sm font-medium">{table.workspaceName} / {table.name}</span><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{documentOperations.map(operation => <label key={operation} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} aria-label={`${table.name} · ${t(`documents:grants.${operation}`)}`} checked={input.documentPermissions?.find(p => p.tableId === table.id)?.[operation] ?? false} onCheckedChange={checked => toggleDocument(table.id, operation, checked === true)} />{t(`documents:grants.${operation}`)}</label>)}</div></div>)}
             </FieldSet>
@@ -159,7 +170,7 @@ export function ApiKeysSettings() {
             </FieldSet>
           </FieldGroup>
           {formError && <FieldError role="alert">{formError}</FieldError>}
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.documentPermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.documentPermissions?.length && !input.blogPermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
         </form>}
       </DialogContent>
     </Dialog>

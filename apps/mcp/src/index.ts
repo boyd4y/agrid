@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { BLOG_TOOLS, BLOG_SCHEMAS } from "@tabdo/shared";
 import { DOCUMENT_TOOLS, DOCUMENT_SCHEMAS } from "@tabdo/shared";
 /**
  * @tabdo/mcp — stdio MCP server
@@ -47,6 +48,13 @@ const server = new McpServer({
   name: "tabdo",
   version: "0.1.0",
 });
+
+for (const [name, definition] of Object.entries(BLOG_TOOLS)) {
+  server.registerTool(name, { description: definition.description, inputSchema: BLOG_SCHEMAS[definition.command].shape }, async (input: Record<string, unknown>) => {
+    try { return textResult(await callCommand(definition.command, BLOG_SCHEMAS[definition.command].parse(input))); }
+    catch (error) { return { ...textResult({ ok: false, error: { code: error instanceof z.ZodError ? "BAD_INPUT" : (error as { code?: string }).code ?? "REQUEST_FAILED", message: error instanceof Error ? error.message : "Blog request failed" } }), isError: true }; }
+  });
+}
 
 for (const [name, definition] of Object.entries(DOCUMENT_TOOLS)) {
   server.registerTool(name, { description: definition.description, inputSchema: DOCUMENT_SCHEMAS[definition.command].shape }, async (input: Record<string, unknown>) => {

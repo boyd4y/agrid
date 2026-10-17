@@ -1,10 +1,11 @@
+import type { BlogPermission } from "./blogs.js";
 import type { DocumentPermission } from "./documents.js";
 import type { CalendarPermission } from "./calendar.js";
 import type { CellValue, ColumnType, SelectOption } from "./types.js";
 import type { FilterCondition, FilterLogic } from "./filters.js";
 
 export type TablePermission = { tableId: string; canRead: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean };
-export type ApiKeyInput = { name: string; permissions: TablePermission[]; calendarPermissions?: CalendarPermission[]; documentPermissions?: DocumentPermission[] };
+export type ApiKeyInput = { name: string; permissions: TablePermission[]; calendarPermissions?: CalendarPermission[]; documentPermissions?: DocumentPermission[]; blogPermissions?: BlogPermission[] };
 export type ApiKeyInfo = ApiKeyInput & { id: string; prefix: string; createdAt: string };
 export type SiteKeyInput = ApiKeyInput;
 export type SiteKeyInfo = ApiKeyInfo;

@@ -1,3 +1,4 @@
+import { BlogError } from "../business/blogs/errors.js";
 import { DocumentError } from "../business/documents/errors.js";
 import { CalendarError } from "../business/calendar/errors.js";
 import { siteCapabilities } from "../sites/capabilities.js";
@@ -28,7 +29,7 @@ export function mapServiceError(error: unknown): never {
   if (error instanceof ServiceError) {
     const status = error.status as ContentfulStatusCode;
     throw new HTTPException(status, { message: error.message, cause: error.cause,
-      res: Response.json({ error: error.message, ...(error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, { status }) });
+      res: Response.json({ error: error.message, ...(error instanceof BlogError || error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, { status }) });
   }
   throw error;
 }

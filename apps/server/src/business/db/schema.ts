@@ -543,3 +543,5 @@ export { sites, siteRevisions, sitePreviews } from "./sites-schema.js";
 export { calendars, calendarPeople, availabilityExceptions, bookings, calendarReceipts, apiKeyCalendars } from "./calendar-schema.js";
 
 export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
+
+export * from "./blogs-schema.js";
