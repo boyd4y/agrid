@@ -4,7 +4,7 @@ export type AgentToolGroup = { id: string; source: AgentToolCatalogItem["source"
 const platformToolIds = new Set<string>(PLATFORM_TOOL_IDS);
 const platformCategories: Record<string, string> = {
   "表格与记录": "tables", "关联记录": "tables", "视图": "tables",
-  "日历与预约": "calendar", "站点": "sites", "表单": "forms", "报告": "reports", "自动化": "automations",
+  "记录正文": "documents", "日历与预约": "calendar", "站点": "sites", "表单": "forms", "报告": "reports", "自动化": "automations",
 };
 /** Platform capabilities only; native tools remain owned by the Harness. */
 export function groupAgentTools(catalog: AgentToolCatalogItem[]): AgentToolGroup[] {
