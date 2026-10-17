@@ -321,3 +321,18 @@ test("native, member command, SDK GraphQL and actual MCP reminder reads share di
     }
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
+
+test("managed reminder history with incomplete action metadata stays private across reminder and generic reads", async () => {
+  const f = await privateReminderFailure("2030-04-04");
+  await resource.db.delete(automationAgentActions).where(eq(automationAgentActions.runId, f.run.id));
+  // Match the incomplete historical metadata state covered by the reminder DTO test,
+  // while preserving the saved calendar source and the authoritative managed rule.
+  await resource.db.update(automationRuns).set({ ruleSnapshot: { ...f.run.ruleSnapshot, actions: [] }, detail: {} }).where(eq(automationRuns.id, f.run.id));
+  const reminder = await f.read(peerId);
+  assertAbsent(reminder, [f.diagnostic]);
+  const generic = await listAutomationRuns(deps, { organizationId: org, actorId: peerId, automationId: f.run.automationId });
+  const native = await createTableTools(deps, undefined, org, peerId).list_automation_runs.execute({ automationId: f.run.automationId }, { toolCallId: key(), messages: [], context: undefined });
+  const leaks = { reminder: JSON.stringify(reminder).includes(f.diagnostic), generic: JSON.stringify(generic).includes(f.diagnostic), native: JSON.stringify(native).includes(f.diagnostic) };
+  console.log("CALENDAR_INCOMPLETE_PRIVATE_HISTORY", JSON.stringify({ leaks, reminder, generic, native }));
+  assert.deepEqual(leaks, { reminder: false, generic: false, native: false }, "Known managed agent reminders must not become public data results when historical action metadata is incomplete");
+});
