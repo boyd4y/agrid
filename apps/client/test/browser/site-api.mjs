@@ -15,6 +15,7 @@ const server = spawn(process.execPath, ['examples/sites/server.mjs'], { cwd: wor
 server.stdout.pipe(log); server.stderr.pipe(log);
 let site;
 try {
+  const workspaceName = (await api('/commands', { command: 'getWorkspace' })).result.workspace.name;
   const catalog = await api('/tables', { name: 'Site catalog' });
   const leads = await api('/tables', { name: 'Site leads' });
   const schema = await api('/tables/' + catalog.id);
@@ -33,7 +34,7 @@ try {
     await settings.getByRole('button', { name: '创建 API Key', exact: true }).click();
     const dialog = page.getByRole('dialog'); await dialog.getByRole('textbox', { name: '名称', exact: true }).fill(name);
     for (const [table, operations] of Object.entries(grants)) for (const operation of operations)
-      await dialog.getByRole('checkbox', { name: `${table} · ${operation}`, exact: true }).check();
+      await dialog.getByRole('checkbox', { name: `${workspaceName} / ${table} · ${operation}`, exact: true }).check();
     await dialog.getByRole('button', { name: '创建 API Key', exact: true }).click();
     const secret = await dialog.getByRole('textbox', { name: 'API Key', exact: true }).inputValue();
     assert.match(secret, /^tab_[A-Za-z0-9_-]{43}$/);

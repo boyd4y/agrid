@@ -101,7 +101,13 @@ try{
  assert(await dialog.getByRole('checkbox',{name:`${bLabel} · 读取`,exact:true}).isChecked());
  await fits(); assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
  await page.screenshot({path:artifact('api-key-grouped-320-dark.png'),fullPage:true,animations:'disabled'});
- await dialog.getByRole('button',{name:'取消',exact:true}).click();
+ await dialog.getByRole('checkbox',{name:`${bLabel} · 读取`,exact:true}).uncheck();
+ await dialog.getByRole('checkbox',{name:`${bLabel} · 更新`,exact:true}).check();
+ await dialog.getByRole('button',{name:'保存',exact:true}).click();
+ await dialog.waitFor({state:'hidden'});
+ const crossKey=(await api('/user/api-keys')).keys.find(key=>key.name==='Cross workspace');
+ assert.deepEqual(crossKey.permissions.find(grant=>grant.tableId===table.id),grants[0]);
+ assert.deepEqual(crossKey.permissions.find(grant=>grant.tableId===otherTable.id),{...grants[1],canRead:false,canUpdate:true},'same-name table edits preserve independent IDs and operations');
  // Defensive missing metadata keeps original grants visible and cancellation does not drop them.
  const missingId=crypto.randomUUID();
  const stale=async route=>{const r=await route.fetch({url:base+'/api/user/api-keys'});const data=await r.json();data.keys.find(key=>key.id===emptyKey.id).permissions=[{...grants[0],tableId:missingId}];await route.fulfill({response:r,json:data});};
@@ -110,6 +116,14 @@ try{
  await settings.getByText('另有 1 张不可用的表',{exact:true}).waitFor();
  await settings.getByRole('button',{name:'编辑 Removed target',exact:true}).click();
  assert(await dialog.getByRole('checkbox',{name:`不可用的表格 (${missingId}) · 读取`,exact:true}).isChecked());
+ const rejectedSave=page.waitForResponse(response=>response.request().method()==='PATCH'&&new URL(response.url()).pathname===`/api/user/api-keys/${emptyKey.id}`);
+ await dialog.getByRole('button',{name:'保存',exact:true}).click();
+ const rejected=await rejectedSave;
+ assert.equal(rejected.status(),400,'unavailable target follows real server validation');
+ assert.deepEqual(rejected.request().postDataJSON().permissions,[{...grants[0],tableId:missingId}],'saving must not silently discard the original unavailable grant');
+ await dialog.getByRole('alert').waitFor();
+ assert(await dialog.getByRole('checkbox',{name:`不可用的表格 (${missingId}) · 读取`,exact:true}).isChecked());
+ assert.deepEqual((await api('/user/api-keys')).keys.find(key=>key.id===emptyKey.id).permissions,[],'rejected save must not change persisted grants');
  await dialog.getByRole('button',{name:'取消',exact:true}).click();
  await page.unroute('**/api/user/api-keys',stale);
  // Multi-page navigation and removing the only item on the last page.
@@ -144,5 +158,5 @@ try{
  assert.equal(await settings.getByRole('button',{name:'Create API key',exact:true}).count(),0);
  assert.equal(await settings.locator('li[data-slot=list-item]').count(),0);
  assert.deepEqual(errors,[]);
- console.log('PASS API keys: concise identity-based scope, grouped permissions, keyboard, one-time secret/copy, save failure/retry/cancel/delete, empty/unavailable grants, 21-key pagination/delete clamp, retry, no management role, English pluralization, 320px/desktop light/dark.');
+ console.log('PASS API keys: concise identity-based scope, grouped permissions and same-name edit isolation, keyboard, one-time secret/copy, save failure/retry/cancel/delete, empty/unavailable grants and rejected-save preservation, 21-key pagination/delete clamp, retry, no management role, English pluralization, 320px/desktop light/dark.');
 }finally{await db.end();await fixture.close();}
