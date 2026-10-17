@@ -378,7 +378,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "Open Calendar in the app. On desktop, switch calendars from the list beside the schedule; on a narrow screen, first choose Calendars. Use the plus beside the list title to create a calendar, then set its name and display time zone.",
         "Choose People and hours from the target calendar’s more menu. Add a staff member and choose their time zone. You can link an existing active workspace member when appropriate; avoid creating a second identity for the same person.",
         "Set the staff member’s weekly working hours. These hours repeat in the selected time zone. Add dated unavailable periods for time off, then edit or remove them when plans change.",
-        "Click New booking in the schedule toolbar, choose a staff member and duration, then choose Find available time to check the next seven days. Select a slot and enter a title. If the calendar has no staff, follow the page prompt for an owner/admin to add one or contact an administrator.",
+        "Click New appointment in the schedule toolbar, choose a service person and duration, expand Choose an available time, then click Find availability for 7 days to run the query. Select a slot, enter an appointment title, and click Confirm appointment. If the calendar has no staff, follow the page prompt for an owner/admin to add one or contact an administrator.",
         "Open a booking to review, reschedule, or cancel it. Rescheduling and cancellation check the current version; if a conflict occurs, the original booking remains in place.",
       ] },
       { type: "h2", text: "Reminders and scheduled plans" },
@@ -579,13 +579,13 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions" \\
       { type: "table", headers: ["Operation", "REST path", "Permission"], rows: [
         ["Create subscription (POST)", "/api/calendars/:calendarId/subscriptions", "Subscribe + calendar read"],
         ["List subscriptions (POST)", "/api/calendars/:calendarId/subscriptions/query", "Subscribe"],
-        ["Read / update (GET / PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Read subscription / manage subscription"],
+        ["Read / update (GET / PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Subscribe / manage subscription"],
         ["Pause / resume (PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Manage subscription"],
         ["Rotate secret (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/rotate-secret", "Manage subscription"],
         ["Revoke (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/revoke", "Manage subscription"],
         ["Query deliveries (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/query", "Read deliveries"],
         ["Read delivery and attempts (GET)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId", "Read deliveries"],
-        ["Retry a failed delivery (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "Manage subscription"],
+        ["Retry a failed delivery (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "Manage subscription + calendar read + subscribe"],
       ] },
       { type: "code", lang: "bash", code: `# Explicitly retry a deadletter delivery for the current active subscription version
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCRIPTION_ID/deliveries/$DELIVERY_ID/retry" \\
@@ -606,7 +606,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   -d '{"expectedVersion":2,"idempotencyKey":"calendar-subscription-revoke-001"}'
 
 ` },
-      { type: "p", text: "Provide an idempotency key for writes such as create, update, revoke, rotate, and retry. Update, revoke, rotate, and retry also require the latest expectedVersion. Delivery-history access is a separate grant; subscription management does not include it automatically. POST /api/commands accepts the matching command names, such as createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and listCalendarDeliveries. GraphQL queries are listCalendarSubscriptions, getCalendarSubscription, listCalendarDeliveries, and getCalendarDelivery; mutations are createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and retryCalendarDelivery. Each takes a JSON input. A connected, authorized MCP client can use the snake_case calendar subscription tools. The new JavaScript SDK methods have not been published to npm/CDN; use REST, GraphQL, or an already configured MCP connection." },
+      { type: "p", text: "An API key can access only the subscriptions it created. Provide an idempotency key for writes such as create, update, revoke, rotate, and retry. Update, revoke, rotate, and retry also require the latest expectedVersion. Creating a subscription requires subscribe and calendar-read grants; retry also requires manage-subscription. Delivery-history access is a separate grant; subscription management does not include it automatically. POST /api/commands accepts the matching command names, such as createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and listCalendarDeliveries. GraphQL queries are listCalendarSubscriptions, getCalendarSubscription, listCalendarDeliveries, and getCalendarDelivery; mutations are createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and retryCalendarDelivery. Each takes a JSON input. A connected, authorized MCP client can use the snake_case calendar subscription tools. The new JavaScript SDK methods have not been published to npm/CDN; use REST, GraphQL, or an already configured MCP connection." },
       { type: "h2", text: "Delivery status, limits, and troubleshooting" },
       { type: "ul", items: [
         "Supported events are booking.created, booking.rescheduled, booking.cancelled, booking.reminders_changed, calendar.updated, calendar.archived, person.created, person.updated, person.archived, working_hours.updated, availability_exception.created, availability_exception.updated, and availability_exception.removed. Booking events go to subscriptions on their calendar; shared staff and schedule changes may notify related calendars in the workspace.",
@@ -614,7 +614,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
         "Delivery records can be pending, delivering, succeeded, deadletter, or skipped. Details list each attempt, completion time, and HTTP status; they do not expose the receiver response body or signing secret.",
         "Events are not backfilled while a subscription is paused. Updating its configuration, rotating its secret, or revoking it skips unfinished deliveries for the old configuration. Resuming does not replay events from the paused period. A request already processed by your receiver cannot be recalled.",
         "A calendar can have up to 100 non-revoked subscriptions. Lists default to 25 items per page and allow up to 100; continue with nextCursor. The receiver URL must resolve publicly to an HTTPS service. Private-network addresses, IP literals, and redirects are not supported.",
-        "If a request returns FORBIDDEN, ask an owner/admin to check the calendar’s subscription, read, or delivery-read grants. If a secret is lost, rotate it and save the new one. For deadletter deliveries, check receiver availability and the HTTP status before retrying a delivery for the current active subscription version.",
+        "If create or retry returns FORBIDDEN, ask an owner/admin to check that the key has both subscribe and calendar-read grants; retry also needs manage-subscription. Querying delivery history requires the separate delivery-read grant. If a secret is lost, rotate it and save the new one. For deadletter deliveries, check receiver availability and the HTTP status before retrying a delivery for the current active subscription version.",
       ] },
       { type: "cards", items: [
         { title: "Calendars and bookings", description: "Configure staff, availability, and bookings.", href: "/docs/calendar-booking", badge: "Calendar" },
