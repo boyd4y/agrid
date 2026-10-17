@@ -1,3 +1,4 @@
+import { createBlogTools } from "./blogs.js";
 import { createDocumentTools } from "./documents.js";
 import { createCalendarTools } from "./calendar.js";
 import { createSiteTools } from "./sites.js";
@@ -53,6 +54,7 @@ export function createTableTools(
   return {
     ...createReportTools(deps, organizationId, transaction),
     ...createSiteTools(deps, organizationId, actorId, transaction),
+    ...createBlogTools(deps, organizationId, actorId, transaction),
     ...createDocumentTools(deps, organizationId, actorId, transaction),
     ...createCalendarTools(deps, organizationId, actorId, transaction),
     ...createBatchTools(deps, defaultTableId, organizationId, actorId, transaction),

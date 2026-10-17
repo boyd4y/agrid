@@ -1,12 +1,14 @@
 import { workspaceColumn } from "./workspaces-schema.js";
 import { pgTable, uuid, text, integer, jsonb, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { organization, user } from "@tabdo/auth/schema";
-import type { SiteSourceFile } from "@tabdo/shared";
+import type { SiteSourceFile, BlogConfig, BlogManifest } from "@tabdo/shared";
 
 export const sites = pgTable("sites", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   workspaceId: workspaceColumn(),
+  kind: text("kind").$type<"code" | "blog">().notNull().default("code"),
+  blogConfig: jsonb("blog_config").$type<BlogConfig>(),
   name: text("name").notNull(), version: integer("version").notNull().default(1),
   publishedRevisionId: uuid("published_revision_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -15,6 +17,7 @@ export const sites = pgTable("sites", {
 export const siteRevisions = pgTable("site_revisions", {
   id: uuid("id").defaultRandom().primaryKey(), siteId: uuid("site_id").notNull().references(() => sites.id, { onDelete: "cascade" }),
   version: integer("version").notNull(), files: jsonb("files").$type<SiteSourceFile[]>().notNull(),
+  blogConfig: jsonb("blog_config").$type<BlogConfig>(), blogManifest: jsonb("blog_manifest").$type<BlogManifest>(),
   assets: jsonb("assets").$type<Record<string, string>>(), storageDriver: text("storage_driver"),
   createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

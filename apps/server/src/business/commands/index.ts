@@ -1,3 +1,5 @@
+import * as blogCommands from "./blogs.js";
+export * from "./blogs.js";
 import * as documentCommands from "./documents.js";
 export * from "./documents.js";
 export * from "./calendar.js";
@@ -47,6 +49,7 @@ export { getRow, queryRelationRecords } from "./relations.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 
 export const commands = {
+  ...blogCommands,
   ...documentCommands,
   ...calendarCommands,
   batchSetRelations,

@@ -67,7 +67,7 @@ async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
     const message =
       res.status >= 500
         ? i18n.t("errors:systemUnavailable")
-        : err.error || i18n.t("errors:requestFailed", { status: res.status });
+        : ["SOURCE_CHANGED", "UNPUBLISH_REQUIRED"].includes(err.code) ? i18n.t(`blogs:errors.${err.code}`) : err.error || i18n.t("errors:requestFailed", { status: res.status });
     if (res.status >= 500 && shouldToast) toast.error(message, { id: "api-system-error" });
     throw new Error(message);
   }
@@ -575,4 +575,3 @@ reorderFormFields: async (viewId: string, columnIds: string[]) => {
   },
 
 };
-

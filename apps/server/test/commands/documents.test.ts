@@ -77,13 +77,13 @@ test("late host failure and handled native errors roll back changes, history, re
   assert.equal(blobs.size, beforeBlobs);
   const tools = nativeHostTools(createDocumentTools(a, org, uid, getToolTransaction), operation => resource.db.transaction(tx => operation(tx)), { userId: uid, organizationId: org }).tools;
   const result = await tools.replace_document.execute!({ ...identity(), expectedVersion: current.version, content: body("native write"), idempotencyKey: k() }, { toolCallId: k(), messages: [], context: {} }); assert.equal((result as any).version, current.version + 1);
-  const count = (await resource.db.select().from(documentReceipts)).length;
+  const count = (await resource.db.select().from(documentReceipts).where(eq(documentReceipts.workspaceId, a.workspaceId!))).length;
   await resource.db.transaction(async tx => {
     const broken = createDocumentTools(a, org, uid, tx);
     const result = await broken.replace_document.execute!({ ...identity(), expectedVersion: 999, content: body("bad"), idempotencyKey: k() }, { toolCallId: k(), messages: [], context: {} }); assert.equal((result as any).ok, false);
     await tx.execute(sql`select 1`);
   });
-  assert.equal((await resource.db.select().from(documentReceipts)).length, count);
+  assert.equal((await resource.db.select().from(documentReceipts).where(eq(documentReceipts.workspaceId, a.workspaceId!))).length, count);
   assert.deepEqual((await tools.get_document.execute!(identity(), { toolCallId: k(), messages: [], context: {} }) as any).content, body("native write"));
 });
 test("private images have scoped ownership, shared budgets and safe static rendering", async () => {
