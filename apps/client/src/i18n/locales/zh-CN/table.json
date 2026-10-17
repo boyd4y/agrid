@@ -343,5 +343,7 @@
     "multiple": "允许多个文件",
     "unavailable": "文件不可用 · 重试",
     "loading": "加载文件…"
-  }
+  },
+  "openRecord": "打开",
+  "rowNumber": "第 {{number}} 行"
 }

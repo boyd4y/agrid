@@ -86,7 +86,11 @@ export function RelatedRecordPanel() {
   const titleColumn = row?.columns.find((column) => column.name === "标题" /* seed */) ?? row?.columns.find((column) => column.type === "text");
   const title = titleColumn && row ? String(row.cells[titleColumn.id] ?? record?.title ?? t("untitled")) : record?.title || t("record");
   return <><Sheet open={visible} modal={false} onOpenChange={(open) => { if (!open) close(); }}>
-    <SheetContent data-testid="related-record-panel" onPointerDownOutside={(event) => { if (savingRef.current || documentOpen) event.preventDefault(); }} onFocusOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (savingRef.current || documentOpen) event.preventDefault(); }}>
+    <SheetContent data-testid="related-record-panel" onPointerDownOutside={(event) => {
+      const target = event.detail.originalEvent.target;
+      // Let an explicit record trigger handle navigation without an outside-dismiss race.
+      if (savingRef.current || documentOpen || target instanceof Element && target.closest("[data-record-trigger]")) event.preventDefault();
+    }} onFocusOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (savingRef.current || documentOpen) event.preventDefault(); }}>
       <SheetHeader>
         <div className="flex items-center gap-2">
           {stack.length > 1 && <Button variant="ghost" size="icon" aria-label={t("backToPrevRecord")} disabled={saving} onClick={() => { reset(); setStack((previous) => previous.slice(0, -1)); }}><ArrowLeft /></Button>}

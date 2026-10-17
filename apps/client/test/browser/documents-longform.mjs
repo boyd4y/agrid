@@ -13,7 +13,7 @@ try {
   const identity = { tableId: table.id, rowId: row.id };
   const open = async (label = '正文') => {
     await page.getByTestId('global-ai-toggle').waitFor();
-    await page.evaluate(record => window.dispatchEvent(new CustomEvent('tabdo:open-record', { detail: record })), { id: row.id, tableId: table.id, title: '按需长文' });
+    await page.getByTestId(`open-grid-record-${row.id}`).click();
     await page.getByTestId('related-record-panel').getByRole('button', { name: label, exact: true }).click();
     await page.getByTestId('document-editor').waitFor();
   };

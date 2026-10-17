@@ -17,7 +17,7 @@ try {
   await page.getByTestId('global-ai-toggle').waitFor();
   const open = async (target = page) => {
     await target.getByTestId("global-ai-toggle").waitFor();
-    await target.evaluate(record => window.dispatchEvent(new CustomEvent('tabdo:open-record', { detail: record })), { id: row.id, tableId: table.id, title: '中文长文编辑验证' });
+    await target.getByTestId(`open-grid-record-${row.id}`).click();
     await target.getByTestId('related-record-panel').getByRole('button', { name: '正文', exact: true }).click();
     await target.getByTestId('document-editor').waitFor();
   };
