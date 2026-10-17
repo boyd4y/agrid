@@ -19,7 +19,7 @@ export function CalendarViewSettings({ table, view, onSaved, onClose, initiallyO
   const fields = [["startColumnId", "date"], ["endColumnId", "date"], ["titleColumnId", "text"], ["personColumnId", "person"]] as const;
   return <Popover open={open} onOpenChange={changeOpen}>
     <PopoverTrigger asChild><Button variant="outline" size="sm" data-testid="calendar-mapping-trigger"><Settings2 />{t(view ? "calendarView.mapping" : "calendarView.add")}</Button></PopoverTrigger>
-    <PopoverContent align="end" className="w-80" data-testid="calendar-mapping" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
+    <PopoverContent align="end" className="max-h-[var(--radix-popover-content-available-height)] w-80 overflow-y-auto overscroll-contain" data-testid="calendar-mapping" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
       <form noValidate onSubmit={async event => {
         event.preventDefault(); if (!draft.startColumnId || busy) return;
         setBusy(true); setError("");

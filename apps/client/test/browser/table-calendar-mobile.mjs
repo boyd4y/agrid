@@ -35,6 +35,11 @@ test('390px calendar pagination remains clickable beside the floating AI control
     const more = page.getByRole('button', { name: '加载更多记录', exact: true });
     await more.waitFor();
     assert.equal(await page.locator('[data-calendar-row-id]').count(), 100);
+    await more.scrollIntoViewIfNeeded();
+    const button = await more.boundingBox(), ai = await page.getByTestId('global-ai-toggle').boundingBox();
+    assert(button && ai);
+    assert(button.x + button.width <= ai.x || button.x >= ai.x + ai.width || button.y + button.height <= ai.y || button.y >= ai.y + ai.height, 'the entire pagination button clears the floating AI control');
+    await page.screenshot({ path: artifact('table-calendar-mobile-pagination.png') });
     await more.click();
     await page.waitForFunction(() => document.querySelectorAll('[data-calendar-row-id]').length === 105);
     assert.equal(await more.count(), 0);
@@ -56,6 +61,7 @@ test('320px calendar mapping can scroll to and save its original fields', async 
     await mapping.hover();
     await page.mouse.wheel(0, 600);
     await pause(200);
+    await page.screenshot({ path: artifact('table-calendar-mobile-mapping.png') });
     await mapping.getByRole('button', { name: '保存', exact: true }).click();
     await mapping.waitFor({ state: 'hidden' });
     assert.deepEqual(fixture.errors, []);
