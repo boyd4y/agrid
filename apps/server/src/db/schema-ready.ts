@@ -1,4 +1,7 @@
 import { getDatabaseClient } from "../resources/scope.js";
+import { is } from "drizzle-orm";
+import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import * as schema from "./schema.js";
 
 /**
  * Detect common "forgot to migrate" failure modes that surface as opaque 500s
@@ -7,6 +10,21 @@ import { getDatabaseClient } from "../resources/scope.js";
 export async function checkSchemaReady(): Promise<{ ok: true } | { ok: false; missing: string[] }> {
   const client = getDatabaseClient();
   const missing: string[] = [];
+  // Table existence alone misses new columns on existing tables. Check the
+  // application schema so future migrations cannot silently bypass readiness.
+  const columns = await client`
+    SELECT table_name, column_name FROM information_schema.columns
+    WHERE table_schema = 'public'
+  `;
+  const presentColumns = new Set(columns.map((column) => `${column.table_name}.${column.column_name}`));
+  for (const table of Object.values(schema)) {
+    if (!is(table, PgTable)) continue;
+    const config = getTableConfig(table);
+    for (const column of config.columns) {
+      const name = `${config.name}.${column.name}`;
+      if (!presentColumns.has(name)) missing.push(`${name} (run pnpm db:migrate)`);
+    }
+  }
   const [{ icon }] = await client`
     SELECT EXISTS (
       SELECT 1 FROM information_schema.columns
@@ -64,7 +82,7 @@ export async function assertSchemaReady(): Promise<void> {
   const result = await checkSchemaReady();
   if (!result.ok) {
     throw new Error(
-      `Database schema is behind the app. Missing: ${result.missing.join("; ")}. Fix: pnpm db:migrate && pnpm db:seed`
+      `Database schema is behind the app. Missing: ${result.missing.join("; ")}. Fix: pnpm db:migrate`
     );
   }
 }

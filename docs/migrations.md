@@ -3,6 +3,18 @@
 Back up the database before migrating, especially before attributing or deleting
 orphan data. Stop application writers and run `pnpm db:migrate` from the repo root.
 
+Migration 0032 adds `agent_runtime_sessions.provider` and `sandbox_created`,
+backfills existing local/Vercel session identities, and preserves opaque resume
+state. Startup and `/api/health` check every column declared by the application
+schema, so a missing migration prevents API startup and reports the missing
+columns with `pnpm db:migrate` as the recovery command. Seeding is not required.
+
+`drizzle/meta/0032_snapshot.json` records the schema after the manually authored
+0001–0032 migrations. Keep it as the generation baseline: using only the original
+0000 snapshot makes `db:generate` emit duplicate `CREATE TABLE` statements for
+existing tables. Run `pnpm db:generate` after schema changes and review the SQL
+before migrating; it should contain only the intended delta.
+
 The journal originally placed 0002–0005 before 0001 in timestamp order. Their
 `when` values are now 1791691000000, 1791692000000, 1791693000000 and
 1791694000000 respectively; idx, tags and all other timestamps are unchanged.

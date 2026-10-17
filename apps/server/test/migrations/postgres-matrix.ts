@@ -7,7 +7,7 @@ import { runMigrations } from "../../src/db/migrate.js";
 
 const url = new URL(process.env.MIGRATION_TEST_DATABASE_URL ?? "postgresql://tableapp:tableapp@localhost:5432/tableapp");
 const admin = postgres(url.toString(), { max: 1 });
-const database = `migration_matrix_${process.pid}`;
+const database = `migration_matrix_${process.pid}_agent_test`;
 const folder = new URL("../../drizzle/", import.meta.url);
 const { entries } = JSON.parse(fs.readFileSync(new URL("meta/_journal.json", folder), "utf8"));
 const saved = [process.env.MIGRATION_ORPHAN_ORG_ID, process.env.MIGRATION_ALLOW_ORPHAN_DELETE];
