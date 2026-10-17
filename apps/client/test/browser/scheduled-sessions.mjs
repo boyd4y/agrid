@@ -30,7 +30,7 @@ try {
  assert(pane.x>=bounds.x+bounds.width);assert(pane.width>bounds.width*2);
  await sidebar.getByRole('link',{name:'每周任务复盘',exact:true}).click();await page.getByRole('heading',{name:'还没有运行记录。',exact:true}).waitFor().catch(async()=>{await page.getByText('还没有运行记录。',{exact:true}).waitFor();});
  await sidebar.getByRole('link',{name:'每日项目摘要',exact:true}).click();
- await cards.getByRole('link').click();await page.waitForURL(`**/app/schedules/${task.id}/runs/${threadId}`);
+ await cards.getByRole('link').click();await page.waitForURL(url=>url.pathname===`/app/schedules/${task.id}/runs/${threadId}`);
  await page.getByTestId('scheduled-run-chat').getByText('定时任务的原始结果。',{exact:true}).waitFor();
  assert.equal(await page.getByTestId('chat-thread-sidebar').count(),0);
  await page.getByTestId('chat-agent-header').getByText('定时助手',{exact:true}).waitFor();
@@ -48,7 +48,7 @@ try {
  await cards.getByText('已继续处理本次运行。',{exact:true}).waitFor();
  await page.getByRole('link',{name:'编辑',exact:true}).click();await page.getByTestId('scheduled-task-editor').waitFor();
  await page.getByLabel('名称',{exact:true}).fill('每日项目摘要（更新）');await page.getByRole('button',{name:'保存',exact:true}).click();
- await page.waitForURL(`**/app/schedules/${task.id}`);await sidebar.getByRole('link',{name:'每日项目摘要（更新）',exact:true}).waitFor();
+ await page.waitForURL(url=>url.pathname===`/app/schedules/${task.id}`);await sidebar.getByRole('link',{name:'每日项目摘要（更新）',exact:true}).waitFor();
  await page.setViewportSize({width:390,height:844});assert.equal(await page.getByTestId('schedules-workspace').evaluate(el=>el.scrollWidth>el.clientWidth),false);
  const other=(await api('/members/agents',{name:'第二个助手',persona:{defaultHarness:'pi',defaultModel:'fixture/model'}})).member;fixture.users.push(other.userId);
  const ordinary=await api('/threads',{clientId:crypto.randomUUID(),context:{page:'ai'},agentId:agent.id});

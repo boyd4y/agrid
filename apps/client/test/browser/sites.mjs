@@ -74,7 +74,7 @@ try {
   await workspacePreview.getByRole('link', { name: '编辑站点', exact: true }).waitFor();
   await workspacePreview.frameLocator('iframe').getByRole('heading', { name: '活动报名', exact: true }).waitFor();
   await workspacePreview.getByRole('link', { name: '编辑站点', exact: true }).click();
-  await page.waitForURL(`**/app/sites/${nativeId}`); const editor = page.getByTestId('site-editor');
+  await page.waitForURL(url => url.pathname === `/app/sites/${nativeId}`); const editor = page.getByTestId('site-editor');
   await editor.getByRole('button', { name: '发布', exact: true }).waitFor();
   const frame = editor.frameLocator('iframe'); await frame.getByText('春日设计分享会', { exact: true }).waitFor();
   await editor.getByRole('button', { name: '连接数据', exact: true }).click();

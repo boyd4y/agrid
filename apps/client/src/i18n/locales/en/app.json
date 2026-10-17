@@ -216,5 +216,22 @@
     "description": "Choose an agent and a task to run on a schedule.",
     "emptyTitle": "Create your first scheduled task",
     "emptyDescription": "Have an agent summarize notes, report progress, or complete your task on a schedule."
+  },
+  "workspaces": {
+    "switch": "Switch workspace: {{name}}",
+    "enterpriseWorkspaces": "Workspaces in this organization",
+    "current": "Current workspace",
+    "create": "Create workspace",
+    "createDescription": "Start with an empty workspace. Members, agents and organization settings are shared.",
+    "name": "Workspace name",
+    "cancel": "Cancel",
+    "creating": "Creating…",
+    "createAndEnter": "Create and enter",
+    "unavailable": "Workspace unavailable. Choose an accessible workspace and try again.",
+    "retry": "Retry",
+    "openDefault": "Open default workspace",
+    "loading": "Loading workspace…",
+    "switching": "Switching workspace…",
+    "operationFailed": "Could not complete this action. Please try again."
   }
 }

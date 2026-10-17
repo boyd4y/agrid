@@ -1,3 +1,4 @@
+import { workspaceHeaders, workspaceCacheKey } from "./workspace-scope";
 import { useMemo } from "react";
 import { useAui, type RemoteThreadListAdapter, type ThreadHistoryAdapter } from "@assistant-ui/react";
 import { createAssistantStream } from "assistant-stream";
@@ -13,7 +14,9 @@ export type ChatPageContext = {
 type ThreadRow = { id: string; title: string | null; status: "regular"; custom: Record<string, unknown>; lastMessageAt: string | null };
 type StoredMessage = { id: string; parentId: string | null; format: string; content: unknown };
 async function request<T>(url: string, body?: unknown, method = "POST"): Promise<T> {
-  const response = await fetch(url, body === undefined && method === "POST" ? undefined : { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const scope = workspaceCacheKey();
+  const response = await fetch(url, { method: body === undefined && method === "POST" ? "GET" : method, headers: { "Content-Type": "application/json", ...workspaceHeaders() }, body: body === undefined ? undefined : JSON.stringify(body) });
+  if (scope !== workspaceCacheKey()) throw new DOMException("Workspace changed", "AbortError");
   if (!response.ok) throw new Error(i18n.t("common:chatPersistFailed", { status: response.status, body: await response.text() }));
   return response.json();
 }

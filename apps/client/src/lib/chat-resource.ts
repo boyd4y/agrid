@@ -1,10 +1,9 @@
+import { workspaceCacheKey } from "./workspace-scope";
 import i18n from "@/i18n";
 /** Resource-scoped chat sessions (table / workspace / etc.). */
 
 const LAST_THREAD_KEY = "tabdo.chat.lastThreadByResource";
-const LAST_THREAD_KEY_LEGACY = "agrid.chat.lastThreadByResource";
 const THREAD_RESOURCE_KEY = "tabdo.chat.threadResourceMap";
-const THREAD_RESOURCE_KEY_LEGACY = "agrid.chat.threadResourceMap";
 
 export type ChatResourceKey = string;
 
@@ -72,24 +71,24 @@ function writeJsonMap(storageKey: string, map: Record<string, string>) {
 }
 
 export function getLastThreadId(resourceKey: ChatResourceKey): string | null {
-  return readJsonMap(LAST_THREAD_KEY, LAST_THREAD_KEY_LEGACY)[resourceKey] ?? null;
+  return readJsonMap(`${LAST_THREAD_KEY}:${workspaceCacheKey()}`)[resourceKey] ?? null;
 }
 
 export function setLastThreadId(resourceKey: ChatResourceKey, threadId: string) {
-  const map = readJsonMap(LAST_THREAD_KEY, LAST_THREAD_KEY_LEGACY);
+  const map = readJsonMap(`${LAST_THREAD_KEY}:${workspaceCacheKey()}`);
   map[resourceKey] = threadId;
-  writeJsonMap(LAST_THREAD_KEY, map);
+  writeJsonMap(`${LAST_THREAD_KEY}:${workspaceCacheKey()}`, map);
 }
 
 /** Fallback map when assistant-ui custom metadata is missing (e.g. race before stamp). */
 export function getStoredThreadResource(threadId: string): string | null {
-  return readJsonMap(THREAD_RESOURCE_KEY, THREAD_RESOURCE_KEY_LEGACY)[threadId] ?? null;
+  return readJsonMap(`${THREAD_RESOURCE_KEY}:${workspaceCacheKey()}`)[threadId] ?? null;
 }
 
 export function setStoredThreadResource(threadId: string, resourceKey: ChatResourceKey) {
-  const map = readJsonMap(THREAD_RESOURCE_KEY, THREAD_RESOURCE_KEY_LEGACY);
+  const map = readJsonMap(`${THREAD_RESOURCE_KEY}:${workspaceCacheKey()}`);
   map[threadId] = resourceKey;
-  writeJsonMap(THREAD_RESOURCE_KEY, map);
+  writeJsonMap(`${THREAD_RESOURCE_KEY}:${workspaceCacheKey()}`, map);
 }
 
 export function readThreadResourceKey(thread: {

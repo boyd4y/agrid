@@ -12,10 +12,15 @@ const compiled = ts.transpileModule(await read("../src/lib/ensure-organization.t
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const { createOrganizationInitializer } = await import(`data:text/javascript;base64,${Buffer.from(withTranslationFixture(compiled)).toString("base64")}`);
+const scopeCompiled = ts.transpileModule(await read("../src/lib/workspace-scope.ts"), {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+}).outputText;
+const scopeModule = `data:text/javascript;base64,${Buffer.from(scopeCompiled).toString("base64")}`;
+const { setWorkspaceScope } = await import(scopeModule);
 const chatCompiled = ts.transpileModule(await read("../src/lib/chat-resource.ts"), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
-const { threadResourceCustomUpdate, setStoredThreadResource } = await import(`data:text/javascript;base64,${Buffer.from(withTranslationFixture(chatCompiled)).toString("base64")}`);
+const { threadResourceCustomUpdate, setStoredThreadResource } = await import(`data:text/javascript;base64,${Buffer.from(withTranslationFixture(chatCompiled).replace("./workspace-scope", scopeModule)).toString("base64")}`);
 const user = { id: "user-123456789", name: "Demo" };
 const organization = { id: "workspace-1", name: "Workspace", slug: "workspace" };
 
@@ -161,4 +166,14 @@ test("core text, buttons, tinted notices and primary hover remain readable in bo
     const hover = composite(tokens.primary.slice(0, 3).concat(0.9), tokens.background);
     assert.ok(contrast(tokens["primary-foreground"], hover) >= 4.5, `${selector} primary hover`);
   }
+});
+
+test("remembered conversations are isolated by account, organization and workspace", () => {
+  const values = new Map();
+  globalThis.localStorage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  setWorkspaceScope("A", "user:org"); setStoredThreadResource("thread", "table:A");
+  setWorkspaceScope("B", "user:org"); assert.equal(threadResourceCustomUpdate({ id: "thread", status: "regular" }, "workspace")?.resourceKey, "workspace");
+  setWorkspaceScope("A", "user:org"); assert.equal(threadResourceCustomUpdate({ id: "thread", status: "regular" }, "workspace"), null);
+  setWorkspaceScope("A", "other-user:org"); assert.equal(threadResourceCustomUpdate({ id: "thread", status: "regular" }, "workspace")?.resourceKey, "workspace");
+  delete globalThis.localStorage;
 });

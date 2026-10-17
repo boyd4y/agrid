@@ -42,7 +42,7 @@ try {
     else await route.fallback();
   });
   await page.goto(frontend + '/app/integrations');
-  await page.waitForURL('**/app/settings?tab=agentmail');
+  await page.waitForURL(url => url.pathname === '/app/settings' && url.searchParams.get('tab') === 'agentmail');
   const settingsTabs = page.getByRole('tablist', { name: '设置分类', exact: true });
   assert.equal(await settingsTabs.getAttribute('aria-orientation'), 'vertical');
   assert.equal(await settingsTabs.getAttribute('data-variant'), 'navigation');
@@ -204,7 +204,7 @@ try {
   await editor.getByRole('button', { name: '条件', exact: true }).click();
   await editor.getByLabel('事件字段路径', { exact: true }).first().fill('payload.kind');
   await editor.getByLabel('值', { exact: true }).fill('created');
-  await editor.getByRole('button', { name: '保存', exact: true }).click(); await page.waitForURL('**/app/automations');
+  await editor.getByRole('button', { name: '保存', exact: true }).click(); await page.waitForURL(url => url.pathname === '/app/automations');
   const hookRule = (await api('/automations')).rules.find(rule => rule.name === 'Browser webhook binding');
   assert.equal(hookRule.source.endpointId, endpoint.id);
   assert.equal(hookRule.trigger.type, 'webhook_received');
@@ -217,7 +217,7 @@ try {
   await page.getByTestId('automation-runs-sheet').getByText('还没有运行记录。', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await page.setViewportSize({ width: 700, height: 700 });
-  await editor.getByRole('button', { name: '取消', exact: true }).click(); await page.waitForURL('**/app/automations');
+  await editor.getByRole('button', { name: '取消', exact: true }).click(); await page.waitForURL(url => url.pathname === '/app/automations');
   assert.equal((await api(`/automations/${hookRule.id}`)).name, hookRule.name);
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto(`${frontend}/app/automations/${hookRule.id}`); await editor.waitFor();
@@ -235,7 +235,7 @@ try {
   assert.equal(await editor.getByRole('button', { name: '保存', exact: true }).isDisabled(), true, 'invalid advanced JSON cannot silently save the previous input');
   const secondInput = { rowId: { $step: { index: 0, path: 'id' } }, cells: { [amount.id]: 43 } };
   await json.click(); await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.insertText(JSON.stringify(secondInput, null, 2));
-  await editor.getByRole('button', { name: '保存', exact: true }).click(); await page.waitForURL('**/app/automations');
+  await editor.getByRole('button', { name: '保存', exact: true }).click(); await page.waitForURL(url => url.pathname === '/app/automations');
   assert.deepEqual((await api(`/automations/${hookRule.id}`)).actions[1], { type: 'command', command: 'updateCells', input: secondInput });
 
   const computed = await api(`/tables/${table.id}/columns`, { name: 'Computed total', type: 'formula', config: { formula: '1 + 1', formulaResultType: 'number' } });

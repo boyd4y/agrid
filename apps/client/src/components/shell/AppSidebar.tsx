@@ -1,3 +1,4 @@
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useEffect, useState } from "react";
 import { Pin, PinOff } from "lucide-react";
@@ -166,6 +167,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
         )}
       </div>
 
+      <div className="px-2 pt-2"><WorkspaceSwitcher collapsed={sidebarCollapsed} /></div>
       <nav
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-2"
         data-testid="sidebar-upper"

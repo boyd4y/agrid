@@ -1,3 +1,4 @@
+import { WorkspaceProvider } from "@/context/WorkspaceContext";
 import { RelatedRecordPanel } from "@/components/table/RelatedRecordPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useMatch, useNavigate } from "react-router-dom";
@@ -138,8 +139,8 @@ function AppShellInner() {
 
 export function AppShell() {
   return (
-    <AppShellProvider>
+    <WorkspaceProvider><AppShellProvider>
       <AppShellInner />
-    </AppShellProvider>
+    </AppShellProvider></WorkspaceProvider>
   );
 }

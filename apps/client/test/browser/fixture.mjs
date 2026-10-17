@@ -46,8 +46,24 @@ export async function createBrowserFixture({ name = 'Builder Browser', modelRequ
     const cleanup = async (name, work) => {
       try { await work(); } catch (cause) { failures.push(new Error(`Fixture cleanup failed: ${name}`, { cause })); }
     };
-    await cleanup('browser', async () => { if (browser) await browser.close(); });
-    await cleanup('API', async () => { try { process.kill(-server.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; } });
+    await cleanup('browser', async () => {
+      if (!browser) return;
+      // Workspace navigation may leave old document requests finishing at teardown.
+      for (const context of browser.contexts()) for (const tab of context.pages()) await tab.unrouteAll({ behavior: 'ignoreErrors' });
+      await browser.close();
+    });
+    await cleanup('API', async () => {
+      const exited = server.exitCode !== null || server.signalCode !== null ? Promise.resolve() : new Promise(resolve => server.once('exit', resolve));
+      try { process.kill(-server.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      await exited;
+      // Do not let the next suite mistake a shutting-down API for its own ready process.
+      for (let i = 0; i < 100; i++) {
+        try { await fetch(base + '/api/chat/status', { signal: AbortSignal.timeout(500) }); }
+        catch { return; }
+        await pause(50);
+      }
+      throw new Error('Fixture API did not release its listener');
+    });
     await cleanup('model', async () => { model.closeAllConnections(); await new Promise((resolve) => model.close(resolve)); });
     const db = postgres(databaseUrl);
     await cleanup('owned events/outbox', async () => {

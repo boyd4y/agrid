@@ -41,7 +41,8 @@ export function ApiKeysSettings() {
       if (controller.signal.aborted) return;
       setCanManage(allowed);
       if (!allowed) return;
-      const [saved, allTables] = await Promise.all([api.listApiKeys(controller.signal), api.listTables()]);
+      const saved = await api.listApiKeys(controller.signal);
+      const allTables = saved.tables.map(table => ({ ...table, name: `${table.workspaceName} / ${table.name}` }));
       if (!controller.signal.aborted) { setKeys(saved.keys); setTables(allTables); }
     })().catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });

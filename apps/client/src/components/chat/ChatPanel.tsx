@@ -1,3 +1,4 @@
+import { workspaceHeaders } from "@/lib/workspace-scope";
 import { FloatingAssistantFrame } from "./FloatingAssistantFrame";
 import { FloatingThreadControls } from "./FloatingThreadControls";
 import { ChatActivityContext, ChatRunStatus } from "./ChatRunStatus";
@@ -388,6 +389,7 @@ function ScopedChatPanel({
     () =>
       new AssistantChatTransport({
         api: "/api/chat",
+        headers: workspaceHeaders(),
         prepareSendMessagesRequest: prepareNativeChatRequest,
         body: () => ({
           agentId: requestRef.current.agentId,

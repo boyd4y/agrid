@@ -1,3 +1,4 @@
+import { workspaceHeaders, workspaceUrl, workspaceCacheKey } from "./workspace-scope";
 import { toast } from "sonner";
 import i18n from "@/i18n";
 import { announceApiWrite } from "./data-changes";
@@ -39,6 +40,8 @@ export type ApiRequestInit = RequestInit & {
 };
 
 async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
+  const scope = workspaceCacheKey();
+  const checkScope = () => { if (scope !== workspaceCacheKey()) throw new DOMException("Workspace changed", "AbortError"); };
   const { errorToast, ...fetchInit } = init ?? {};
   const method = (fetchInit.method ?? "GET").toUpperCase();
   const shouldToast =
@@ -48,14 +51,17 @@ async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...workspaceHeaders(),
       ...(fetchInit.headers ?? {}),
     },
   }).catch((error: unknown) => {
+    checkScope();
     if (error instanceof Error && error.name === "AbortError") throw error;
     const message = i18n.t("errors:network");
     toast.error(message, { id: "api-network-error" });
     throw new Error(message, { cause: error });
   });
+  checkScope();
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     const message =
@@ -66,6 +72,7 @@ async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
     throw new Error(message);
   }
   const result = await res.json() as T;
+  checkScope();
   announceApiWrite(url, fetchInit, result);
   return result;
 }
@@ -106,6 +113,7 @@ function uploadFiles(tableId: string, columnId: string, files: File[], onProgres
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `/api/tables/${encodeURIComponent(tableId)}/columns/${encodeURIComponent(columnId)}/files`);
     xhr.withCredentials = true;
+    for (const [key, value] of Object.entries(workspaceHeaders())) xhr.setRequestHeader(key, value);
     xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress?.(Math.round(event.loaded / event.total * 100)); };
     xhr.onerror = () => reject(new Error(i18n.t("errors:network")));
     xhr.onabort = () => reject(new Error(i18n.t("errors:network")));
@@ -122,13 +130,13 @@ function uploadFiles(tableId: string, columnId: string, files: File[], onProgres
 export type UserApiKeyInfo = import("@tabdo/shared").ApiKeyInfo;
 
 export const api = {
-  listApiKeys: (signal?: AbortSignal) => request<{ keys: UserApiKeyInfo[] }>("/api/user/api-keys", { signal }),
+  listApiKeys: (signal?: AbortSignal) => request<{ keys: UserApiKeyInfo[]; tables: (TableMeta & { workspaceName: string })[] }>("/api/user/api-keys", { signal }),
   createApiKey: (input: import("@tabdo/shared").ApiKeyInput) => request<{ key: UserApiKeyInfo; secret: string }>("/api/user/api-keys", { method: "POST", body: JSON.stringify(input), errorToast: false }),
   updateApiKey: (id: string, input: import("@tabdo/shared").ApiKeyInput) => request<{ key: UserApiKeyInfo }>(`/api/user/api-keys/${id}`, { method: "PATCH", body: JSON.stringify(input), errorToast: false }),
   deleteApiKey: (id: string) => request<{ id: string }>(`/api/user/api-keys/${id}`, { method: "DELETE", errorToast: false }),
   uploadFiles,
   getFiles: (ids: string[]) => request<{ files: import("@tabdo/shared").StoredFile[] }>(`/api/files?ids=${encodeURIComponent(ids.join(","))}`),
-  fileDownloadUrl: (id: string) => `/api/files/${encodeURIComponent(id)}/download`,
+  fileDownloadUrl: (id: string) => workspaceUrl(`/api/files/${encodeURIComponent(id)}/download`),
   getAgentTools: (harness: "pi" | "codex" | "claude", signal?: AbortSignal) => request<{ harness: string; supportsFiltering: boolean; tools: import("@tabdo/shared").AgentToolCatalogItem[] }>(`/api/members/agents/tools?harness=${harness}`, { signal }),
   listAgentRuns: (threadId: string, signal?: AbortSignal) => request<{ runs: import("@tabdo/shared").AgentRunSummary[] }>(`/api/threads/${threadId}/runs`, { signal }),
   listAgentRunEvents: (threadId: string, runId: string, signal?: AbortSignal) => request<{ events: import("@tabdo/shared").AgentRunEvent[] }>(`/api/threads/${threadId}/runs/${runId}/events`, { signal }),

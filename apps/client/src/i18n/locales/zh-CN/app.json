@@ -216,5 +216,22 @@
     "description": "选择智能体和任务，让它按计划替你干活。",
     "emptyTitle": "创建你的第一个定时任务",
     "emptyDescription": "让智能体定时整理笔记、汇总进展，或完成你指定的任务。"
+  },
+  "workspaces": {
+    "switch": "切换工作区：{{name}}",
+    "enterpriseWorkspaces": "企业下的工作区",
+    "current": "当前工作区",
+    "create": "创建工作区",
+    "createDescription": "从空白工作区开始。成员、智能体和组织设置在企业内共享。",
+    "name": "工作区名称",
+    "cancel": "取消",
+    "creating": "正在创建…",
+    "createAndEnter": "创建并进入",
+    "unavailable": "工作区不可访问，请选择可用的工作区后重试。",
+    "retry": "重试",
+    "openDefault": "进入默认工作区",
+    "loading": "正在加载工作区…",
+    "switching": "正在切换工作区…",
+    "operationFailed": "操作未完成，请重试。"
   }
 }
