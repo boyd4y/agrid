@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "../runtime.js";
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
+import { ServiceError } from "../../src/business/errors.js";
 import { eq } from "drizzle-orm";
 if (!process.env.DATABASE_URL?.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
 const { db, client } = await import("../../src/db/index.js");
@@ -65,12 +66,18 @@ test("report source, fields and CRUD are tenant scoped and require authenticatio
 });
 
 test("unexpected server failures do not expose SQL, parameters or internal errors", async () => {
-  const broken = new Hono().onError(reportErrorResponse).get("/", () => { throw new Error("Failed query: select cells from rows params: private-table-id"); });
+  const internal = "Failed query: select cells from rows params: private-table-id";
+  const broken = new Hono().onError(reportErrorResponse)
+    .get("/", () => { throw new Error(internal); })
+    .get("/service", () => { throw new ServiceError(503, { message: internal }); });
   const originalLog = console.error;const logs: unknown[][] = [];
   console.error = (...args: unknown[]) => { logs.push(args); };
   try {
-    const response = await broken.request("http://localhost/");assert.equal(response.status, 500);
-    assert.deepEqual(await response.json(), { error: "报告暂时无法加载，请稍后重试" });assert.equal(logs.length, 1);
+    for (const path of ["/", "/service"]) {
+      const response = await broken.request(`http://localhost${path}`);assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), { error: "报告暂时无法加载，请稍后重试" });
+    }
+    assert.equal(logs.length, 2);
   } finally { console.error = originalLog; }
 });
 

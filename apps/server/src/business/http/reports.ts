@@ -1,6 +1,8 @@
 import { createRequestRoute, requireActorOrg, type RequestScopeResolver, type RequestEnvironment } from "./request.js";
 import type { Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import { ServiceError } from "../errors.js";
 
 import * as service from "../reports/service.js";
 import { reportConfigSchema, reportPageSchema } from "../reports/schema.js";
@@ -9,6 +11,7 @@ type Env = RequestEnvironment;
 export function reportErrorResponse(error: Error, c: Context, logger?: Readonly<{ error(event: string, error: unknown): void }>) {
   if (error instanceof z.ZodError) return c.json({ error: "报告参数错误" }, 400);
   if (error instanceof service.ReportError) return c.json({ error: error.message }, error.status);
+  if (error instanceof ServiceError && error.status < 500) return c.json({ error: error.message }, error.status as ContentfulStatusCode);
   (c.get("resources")?.logger ?? logger)?.error("reports.request", error);
   return c.json({ error: "报告暂时无法加载，请稍后重试" }, 500);
 }
