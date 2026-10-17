@@ -175,6 +175,7 @@ function matchCondition(
     case "gte":
     case "lt":
     case "lte": {
+      if (isEmpty(cell) || isEmpty(value ?? null)) return false;
       if (typeof cell === "string" && cell.startsWith("#ERR:")) return false;
       const a = type === "date" ? String(cell ?? "") : Number(cell);
       const b = type === "date" ? String(value ?? "") : Number(value);

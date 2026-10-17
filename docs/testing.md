@@ -67,6 +67,7 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test pnpm
 - `run-recovery`：原始流请求在刷新时真实断开，服务端仍执行；持久化运行状态禁发、完成消息原位恢复、显式停止、官方 continuation 和消息内失败反馈；确认聊天没有执行历史入口。
 - `avatars`：本地 Notionists/Croodles 选择、批次与主题，成员头像暂存/取消/失败/保存恢复，bot 专用 bloub 配置与禁止上传，创建草稿及紧凑高度按钮可达。
 - `agent-tools`：三步创建与编辑左侧工具 Tab；platform 缺省开启、native 由 Harness 管理、真实 API 保存/取消/刷新恢复、跨步骤和 Tab 草稿保留、搜索/目录错误重试、light/dark 和窄屏。主题截图等待输入颜色过渡完成，避免截到切换中间帧。
+- `questions`：原生提问逐题展示，单选自动进入下一题、多选与文字手动继续、返回修改与草稿保留、最终统一提交、部分回答与拒绝；验证刷新待回答状态、发送失败重试、只读回答摘要和密文遮盖，以及 light/dark 和窄屏布局。
 - `platform-style`：Settings、Skill 列表/详情、Reports 列表/Builder、Automations 列表/来源选择的紧凑 light/dark 截图；有记录的报告刷新失败和自动化失败重试；Skill 文件选择、复制失败反馈与真实剪贴板；主题单选和侧栏偏好刷新恢复。
 - `kanban-drag`：整卡标题/正文的原生浏览器拖拽，Sheet 打开/关闭前后真实 PATCH 与状态持久化、无误开详情；卡片菜单控件不触发行拖拽；统一删除确认的取消/失败 toast/重试/删除刷新恢复。API 通知会刷新看板列，动作先等待数据稳定，再定位当前语义标题/正文，不依赖合成 drag 事件或过期卡片坐标。
 
@@ -131,6 +132,8 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 ```
 
 `test/automation/` 验证真实数据命令与receipt原子事务、顺序引用、已提交步骤不重放、邮件补正文后条件match/skip，以及并发计划去重和DST。原生智能体 fixture 使用实际官方Pi、平台数据工具、askUserQuestions和普通chat答案续接；断言同一native run/input及单次工具副作用。所有fixture精确清理自己组织，不truncate其他测试组织。
+
+条件回归同时覆盖：保存时拒绝缺失比较值但接受 `0/false`、历史残缺/已删除字段的条件不得放宽、多选状态只在加入目标选项时触发、空数字/日期不参与大小比较。新原生动作对过期/已删除触发行不调用模型，规则在关联或准备阶段停用时不接受新执行。
 
 `integrations.test.ts` 用官方Svix、固定origin的AgentMail协议fixture和真实DB测试投递、认证、body上限、事务故障不ACK、幂等与生命周期。不会连接真实AgentMail。`event-automations` browser suite 覆盖端点一次性token、定时/事件分页隔离、typed动作保存、事件绑定/重载、失败草稿重试与自动化运行Sheet；集成界面验证四个设置tabs、无内部搜索/tabs、单创建入口、居中Dialog、错误重试与注册失败保留选择。首次连接的上游响应使用浏览器fixture，凭证创建与修改实际写入隔离库，不宣称已连接真实邮箱。
 
@@ -200,6 +203,8 @@ REDIS_URL=redis://127.0.0.1:6381 QUEUE_PREFIX=agrid-queue-test-event-local \
 ```
 
 真实 PG/Redis 验证事务提交与嵌套 savepoint 回滚、通知失败不影响提交、空闲期间 SQL 计数不增长、及时投递、多批 drain、延迟重试、定时任务改期/停用、重复消息、启动恢复和丢失通知的安全扫描。原生 Pi 提问续接回归另验证 canonical checkpoint 提交后的线程级通知。测试不证明真实 Neon 已休眠或 Railway 已部署。
+
+`test/queue/event-driven.test.ts` 还使用真实 Worker、Redis、PostgreSQL 和官方 Pi 接本地 HTTP 模型，验证“多选状态 trigger + 数值条件 → 原生工具真实创建表格 → 后续动作引用输出”和“延迟期限 → 定时原生工具执行”；重复投递不重发原生输入。该测试不连接付费模型或远程 Sandbox。
 
 ## API Key 与表格数据 API
 

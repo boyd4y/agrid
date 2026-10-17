@@ -141,10 +141,15 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
     }
     const rule = run.ruleSnapshot as unknown as AutomationRule;
     const snapshot = hydrated ?? event.snapshot as unknown as AnyEventSnapshot;
-    const scope = await scopeValid(deps, tx, event, run, snapshot, rule.actions[run.nextStep]?.type !== "run_agent");
+    const action = rule.actions[run.nextStep];
+    // A new native action obeys the same stale/deleted-row guard as data actions.
+    // Once associated, it may have changed that row itself: reconcile its saved
+    // outcome without replaying or rejecting its own completed mutation.
+    const [nativeMapping] = action?.type === "run_agent" ? await tx.select({ id: automationAgentActions.runId })
+      .from(automationAgentActions).where(and(eq(automationAgentActions.runId, run.id), eq(automationAgentActions.step, run.nextStep))) : [];
+    const scope = await scopeValid(deps, tx, event, run, snapshot, !nativeMapping);
     if (!scope) return event.finishedAt ? "done" : "continue";
     if (hydrated) await tx.update(automationEvents).set({ snapshot: hydrated as unknown as Record<string, unknown> }).where(eq(automationEvents.id, id));
-    const action = rule.actions[run.nextStep];
     if (!action) { await tx.update(automationRuns).set({ status: "completed", finishedAt: deps.now() }).where(eq(automationRuns.id, run.id));return "continue"; }
     const steps = await stepsOf(deps, tx, run.id), context = eventBindingContext(snapshot);
     if (snapshot.protocol === 2 && run.nextStep === 0 && !eventConditionsMatch(rule, context)) {

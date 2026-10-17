@@ -7,7 +7,7 @@ import type { ExternalAutomationEvent } from "../../src/automation/events.js";
 if (!process.env.DATABASE_URL || !new URL(process.env.DATABASE_URL).pathname.endsWith("_agent_test")) throw new Error("Use a dedicated *_agent_test database");
 process.env.INTEGRATION_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 const { db, client } = await import("../../src/db/index.js");
-const { organization, user, member, rows, automationRuns, automationEvents, automationOutbox, automationStepReceipts, webhookEndpoints, integrationConnections } = await import("../../src/db/schema.js");
+const { organization, user, member, rows, automations, automationRuns, automationEvents, automationOutbox, automationStepReceipts, webhookEndpoints, integrationConnections } = await import("../../src/db/schema.js");
 const commands = await import("../../src/commands/index.js");
 const { createAutomation, replayAutomationRun } = await import("../../src/automation/crud.js");
 const { appendExternalAutomationEvent } = await import("../../src/automation/events.js");
@@ -20,6 +20,43 @@ before(async () => {
   await db.insert(user).values({ id: owner, name: "Executor fixture", email: `${owner}@local.test` });
   await db.insert(organization).values({ id: org, name: "Executor integration", slug: org });
   await db.insert(member).values({ id: randomUUID(), userId: owner, organizationId: org, role: "owner" });
+});
+
+test("incomplete legacy conditions and deleted condition columns cannot broaden table triggers", async () => {
+  const source = await table("Strict conditions"), target = await table("Strict condition output");
+  const rule = await createAutomation({ ...scope, tableId: source.id, name: "Strict saved predicate", trigger: { type: "row_created" },
+    conditions: [{ id: "required", columnId: source.title, op: "eq", value: "match" }],
+    actions: [{ type: "command", command: "addRow", input: { tableId: target.id } }] });
+  await assert.rejects(createAutomation({ ...scope, tableId: source.id, name: "Incomplete predicate", trigger: { type: "row_created" },
+    conditions: [{ id: "missing", columnId: source.title, op: "contains", value: "" }], actions: rule.actions }), /条件需要比较值/);
+  await db.update(automations).set({ conditions: [{ id: "legacy", columnId: source.title, op: "eq" }] }).where(eq(automations.id, rule.id));
+  const first = await commands.addRow({ ...scope, tableId: source.id });
+  assert.equal((await db.select().from(automationEvents).where(eq(automationEvents.rowId, first.id))).length, 0);
+  await db.update(automations).set({ conditions: rule.conditions }).where(eq(automations.id, rule.id));
+  await commands.deleteColumn({ ...scope, columnId: source.title });
+  const second = await commands.addRow({ ...scope, tableId: source.id });
+  assert.equal((await db.select().from(automationEvents).where(eq(automationEvents.rowId, second.id))).length, 0);
+});
+
+test("new native actions cannot start for superseded or deleted trigger rows", async () => {
+  const { executeNext: execute } = await import("../../src/business/automation/execution.js");
+  const { commandDependencies } = await import("../../src/services/dependencies.js");
+  for (const change of ["updated", "deleted"] as const) {
+    const source = await table(`Stale native ${change}`);
+    await db.insert(automations).values({ organizationId: org, createdByUserId: owner, tableId: source.id,
+      source: { kind: "table", tableId: source.id }, name: "Native stale guard", trigger: { type: "row_created" },
+      actions: [{ type: "run_agent", agentUserId: owner, prompt: "Must not start" }] });
+    const row = await commands.addRow({ ...scope, tableId: source.id }), event = await eventFor(row.id);
+    if (change === "updated") await commands.updateCell({ ...scope, rowId: row.id, columnId: source.title, value: "Newer input", skipAutomation: true });
+    else await commands.deleteRow({ ...scope, rowId: row.id });
+    let invocations = 0;
+    const deps = { ...commandDependencies(), runAgentAction: async () => { invocations++;throw new Error("Stale native input invoked"); } };
+    const fence = await claimExecution(event.id, event.generation);assert(fence !== undefined);
+    assert.equal(await execute(deps, event.id, fence), "continue");
+    assert.equal(await execute(deps, event.id, fence), "done");
+    assert.equal(invocations, 0);
+    assert.equal((await db.select().from(automationEvents).where(eq(automationEvents.id, event.id)))[0].status, change === "updated" ? "superseded" : "cancelled");
+  }
 });
 after(async () => {
   globalThis.fetch = fetchOriginal;

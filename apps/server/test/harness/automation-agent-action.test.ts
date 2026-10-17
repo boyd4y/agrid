@@ -15,7 +15,7 @@ const { db, client } = await import("../../src/db/index.js");
 const { user, member, organization, account, agentProfile, chatThreads, chatMessages, agentRuns, agentRuntimeSessions,
   automationRuns, automationEvents, automationOutbox, automationAgentActions, automationStepReceipts, automations, tables, rows } = await import("../../src/db/schema.js");
 const { createTable, getTable, getRow, addRow } = await import("../../src/commands/index.js");
-const { createAutomation } = await import("../../src/automation/crud.js");
+const { createAutomation, updateAutomation } = await import("../../src/automation/crud.js");
 const { claimExecution, executeNext, reconcileNativeAutomations } = await import("../../src/automation/execution.js");
 const { runAutomationAgentAction } = await import("../../src/automation/agent-action.js");
 const { claimRuntimeLease, prepareRuntimeRecord, releaseRuntimeLease, NOT_INVOKED } = await import("../../src/harness/store.js");
@@ -95,6 +95,40 @@ async function input(prompt: string) {
     eventContext: { source: "table", type: "row_created", row: { id: anchorId }, payload: "EXTERNAL_EVENT_MARKER" }, tableId: sourceId };
 }
 const mappings = (runId: string) => db.select().from(automationAgentActions).where(eq(automationAgentActions.runId, runId));
+
+test("a disabled rule cannot start native work after the executor's initial scope check", async () => {
+  const task = await input("Must not start after disabling");
+  const before = requests.length;
+  await updateAutomation({ organizationId: org, actorId: owner, automationId: ruleId, enabled: false });
+  try {
+    const result = await runAutomationAgentAction(task);
+    assert.equal(result.status, "cancelled");
+    assert.match(result.error ?? "", /停用/);
+    assert.equal(requests.length, before);
+    assert.deepEqual(await mappings(task.runId), []);
+  } finally { await updateAutomation({ organizationId: org, actorId: owner, automationId: ruleId, enabled: true }); }
+});
+
+test("disabling during native preparation prevents durable acceptance and model dispatch", async () => {
+  const { runAutomationAgentAction: execute } = await import("../../src/business/automation/agent-action.js");
+  const { runtimeDependencies } = await import("../../src/services/dependencies.js");
+  const { prepareNativeChatAgent } = await import("../../src/harness/preparation.js");
+  const task = await input("Must not start after preparation");
+  const before = requests.length;
+  try {
+    const result = await execute({ ...runtimeDependencies(), agent: {
+      async prepare(options) {
+        const prepared = await prepareNativeChatAgent(options);
+        await updateAutomation({ organizationId: org, actorId: owner, automationId: ruleId, enabled: false });
+        return { ...prepared, tableId: options.boundTableId };
+      },
+      async dispatch() { assert.fail("Disabled native task dispatched"); },
+    } }, task);
+    assert.equal(result.status, "cancelled");assert.equal(requests.length, before);
+    const [mapping] = await mappings(task.runId);assert(mapping);
+    assert.equal((await db.select().from(agentRuns).where(eq(agentRuns.threadId, mapping.threadId))).length, 0);
+  } finally { await updateAutomation({ organizationId: org, actorId: owner, automationId: ruleId, enabled: true }); }
+});
 
 test("headless native Pi commits one actual tool and reply; concurrent and receipt retries reuse its private turn", { timeout: 30000 }, async () => {
   const task = await input("Create one table for {{event.row.id}} then report the result.");

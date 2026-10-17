@@ -1,7 +1,7 @@
 import type { CommandDependencies } from "../dependencies.js";
 
 import { and, eq, isNull } from "drizzle-orm";
-import { automationPath, applyFilters, triggerMatches, type AutomationEvent, type AutomationRule, type ColumnDef, type RowData } from "@tabdo/shared";
+import { automationPath, automationConditionsMatch, triggerMatches, type AutomationEvent, type AutomationRule, type ColumnDef, type RowData } from "@tabdo/shared";
 import type { Transaction } from "../db/context.js";
 import { automations, automationEvents, automationRuns, automationOutbox } from "../db/schema.js";
 
@@ -21,8 +21,7 @@ export async function appendAutomationEvent(deps: CommandDependencies, tx: Trans
     eq(automations.tableId, event.tableId), eq(automations.enabled, true), isNull(automations.deletedAt)));
   const matched = rules.filter((raw) => {
     const rule = raw as unknown as AutomationRule;
-    return triggerMatches(rule.trigger, event) && (!rule.conditions.length ||
-      applyFilters([row], columns, { filters: rule.conditions, filterLogic: rule.conditionLogic }).length > 0);
+    return triggerMatches(rule.trigger, event) && automationConditionsMatch(row, columns, rule.conditions, rule.conditionLogic);
   });
   if (!matched.length) return;
   const id = deps.uuid();
@@ -79,7 +78,7 @@ export function eventConditionsMatch(rule: AutomationRule, context: Record<strin
     return { id, columnId: id, op: condition.op, value: condition.value };
   });
   const row: RowData = { id: "event", tableId: "event", cells, sortOrder: 0, createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() };
-  return applyFilters([row], syntheticColumns, { filters, filterLogic: rule.conditionLogic }).length > 0;
+  return automationConditionsMatch(row, syntheticColumns, filters, rule.conditionLogic);
 }
 /** Called by verified delivery and schedule transactions, never before authentication. */
 export async function appendExternalAutomationEvent(deps: CommandDependencies, tx: Transaction, event: ExternalAutomationEvent, selectedRules?: AutomationRule[]) {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import {
   AUTOMATION_DATA_COMMANDS, AUTOMATION_DATA_COMMAND_SCHEMAS, AUTOMATION_SOURCE_SCHEMA,
+  AUTOMATION_FILTER_SCHEMA, AUTOMATION_EVENT_CONDITION_SCHEMA,
   automationPath, parseAutomationCommand, renderAutomationPrompt, resolveAutomationBindings, validateAutomationActionReferences,
   type AutomationDataCommand,
 } from "../src/automation-contracts.js";
@@ -10,6 +11,16 @@ import {
 const tableId = randomUUID(), rowId = randomUUID(), columnId = randomUUID(), recordId = randomUUID();
 const cells = { [columnId]: 0 };
 const relation = { rowId, columnId, recordIds: [recordId], expectedVersion: 1 };
+
+test("saved automation conditions require real comparison values, including zero and false", () => {
+  for (const schema of [AUTOMATION_FILTER_SCHEMA, AUTOMATION_EVENT_CONDITION_SCHEMA]) {
+    const base = { id: "condition", columnId, path: "payload.amount", op: "eq" };
+    const condition = schema === AUTOMATION_FILTER_SCHEMA ? { id: base.id, columnId, op: base.op } : { id: base.id, path: base.path, op: base.op };
+    for (const value of [undefined, null, "", []]) assert.equal(schema.safeParse({ ...condition, value }).success, false);
+    for (const value of [0, false, "done", ["done"]]) assert.equal(schema.safeParse({ ...condition, value }).success, true);
+    for (const op of ["is_empty", "is_not_empty"]) assert.equal(schema.safeParse({ ...condition, op }).success, true);
+  }
+});
 
 test("saving rejects stale, self and future step references after actions change", () => {
   const initial = { type: "command", command: "addRow", input: { tableId } } as const;

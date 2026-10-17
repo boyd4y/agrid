@@ -4,6 +4,7 @@ import { createBrowserFixture } from './fixture.mjs';
 const fixture = await createBrowserFixture({ name: 'Automation typed values' });
 const { page, api, frontend, errors } = fixture;
 try {
+  const agent = (await api('/members/agents', { name: 'Typed trigger agent', persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local' } })).member;fixture.users.push(agent.userId);
   const target = await api('/tables', { name: 'Customers' });
   const title = (await api(`/tables/${target.id}`)).columns[0];
   const records = [];
@@ -59,42 +60,10 @@ try {
   await page.keyboard.press('Escape');
 
   const then = editor.locator('section').filter({ has: page.getByText('就', { exact: true }) });
-  await choose(then.getByRole('combobox').nth(1), person);
-  await editor.getByTestId('automation-action-value').getByRole('button').click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Automation typed values', exact: true }).click();
-  await then.getByRole('button', { name: '动作', exact: true }).click();
-  await then.getByRole('combobox').nth(2).click();
+  await then.getByRole('combobox', { name: '动作', exact: true }).click();
   await page.getByRole('option', { name: '执行智能体', exact: true }).click();
-  let writebackColumn = then.getByRole('combobox').nth(4);
-  let resultValue = editor.getByTestId('automation-result-value').last();
-  const addAgentAction = async () => {
-    await then.getByRole('button', { name: '动作', exact: true }).click();
-    const controls = then.getByRole('combobox');
-    await controls.nth(await controls.count() - 2).click();
-    await page.getByRole('option', { name: '执行智能体', exact: true }).click();
-    writebackColumn = controls.last();
-    resultValue = editor.getByTestId('automation-result-value').last();
-  };
-  await writebackColumn.click();
-  assert.equal(await page.getByRole('option', { name: formula.name, exact: true }).count(), 0);
-  assert.equal(await page.getByRole('option', { name: rollup.name, exact: true }).count(), 0);
-  await page.getByRole('option', { name: number.name, exact: true }).click();
-  await resultValue.locator('input').fill('-12.5');
-  await addAgentAction();
-  await choose(writebackColumn, checkbox);
-  await resultValue.getByRole('checkbox').click();
-  await addAgentAction();
-  await choose(writebackColumn, date);
-  await resultValue.getByRole('button').click();
-  await page.getByRole('dialog', { name: '选择日期', exact: true }).getByRole('textbox').fill('2026-10-14');
-  await page.keyboard.press('Enter');
-  await addAgentAction();
-  await choose(writebackColumn, multi);
-  await resultValue.getByRole('button').click();
-  const choices = page.getByRole('dialog');
-  await choices.getByRole('button', { name: 'Alpha', exact: true }).click();
-  await choices.getByRole('button', { name: 'Beta', exact: true }).click();
-  await page.keyboard.press('Escape');
+  await then.getByRole('textbox').fill('整理当前记录 {{event.row.id}} 的跟进事项');
+  assert.equal(await editor.getByTestId('automation-result-value').count(), 0, 'native actions have no simulated result value');
 
   await editor.getByRole('button', { name: '保存', exact: true }).click();
   await page.waitForURL('**/app/automations');
@@ -102,11 +71,22 @@ try {
   assert.equal(rule.enabled, false, 'this fixture never executes automation/model work');
   assert.deepEqual(rule.trigger.toValue, records.map(row => row.id), 'WHEN relation equals the complete array, not the IF scalar');
   assert.equal(rule.conditions[0].value, -2.5);
-  assert.equal(rule.actions[0].value, fixture.users[0]);
-  assert.equal(rule.actions[1].resultValue, -12.5);
-  assert.equal(rule.actions[2].resultValue, true);
-  assert.equal(rule.actions[3].resultValue, '2026-10-14');
-  assert.deepEqual(rule.actions[4].resultValue, ['a', 'b']);
+  assert.deepEqual(rule.actions, [{ type: 'run_agent', agentUserId: agent.userId, prompt: '整理当前记录 {{event.row.id}} 的跟进事项' }]);
+
+  await page.goto(frontend + `/app/automations/${rule.id}`);await editor.waitFor();
+  await when.getByRole('combobox').first().click();
+  await page.getByRole('option', { name: '进入状态时', exact: true }).click();
+  await choose(when.getByRole('combobox').nth(1), multi);
+  await when.getByRole('combobox').nth(2).click();
+  await page.getByRole('option', { name: 'Beta', exact: true }).click();
+  await editor.getByRole('button', { name: '保存', exact: true }).click();
+  await page.waitForURL('**/app/automations');
+  const updated = await api(`/automations/${rule.id}`);
+  assert.deepEqual(updated.trigger, { type: 'enter_status', columnId: multi.id, optionId: 'b' }, 'multi-select status is configurable even when a single-select column exists');
+  const plain = await api('/tables', { name: 'No status options' });
+  await page.goto(frontend + `/app/automations/new?source=${plain.id}`);await editor.waitFor();
+  await when.getByRole('combobox').first().click();
+  assert.equal(await page.getByRole('option', { name: '进入状态时', exact: true }).getAttribute('aria-disabled'), 'true', 'tables without selectable statuses cannot configure a meaningless status trigger');
   assert.deepEqual(errors, []);
-  console.log('PASS automation typed IF sizes/computed WHEN input/complete relation trigger/person action/typed agent writeback/read-only exclusion/canonical saved values');
+  console.log('PASS typed automation conditions, computed/relation trigger values, actual agent/prompt configuration, multi-select status trigger and canonical persistence');
 } finally { await fixture.close(); }

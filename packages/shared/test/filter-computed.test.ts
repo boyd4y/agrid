@@ -55,6 +55,16 @@ const rows: RowData[] = [
   updatedAt: new Date(),
 }));
 
+test("empty numbers and dates never satisfy ordered comparisons through coercion", () => {
+  const cols = [column("amount", "number"), column("date", "date")];
+  const empty = { ...rows[0], cells: { amount: null, date: null } };
+  for (const [columnId, value] of [["amount", 10], ["date", "2026-01-01"]] as const) {
+    for (const op of ["lt", "lte"] as const) assert.deepEqual(applyFilters([empty], cols, { filters: [{ id: "c", columnId, op, value }] }), []);
+  }
+  const zero = { ...empty, cells: { amount: 0 } };
+  assert.deepEqual(applyFilters([zero], cols, { filters: [{ id: "c", columnId: "amount", op: "lt", value: 10 }] }), [zero]);
+});
+
 test("automation filters compare declared and auto formula dates as dates, and checkbox results as booleans", () => {
   for (const columnId of ["dateFormula", "autoDate"]) {
     assert.deepEqual(

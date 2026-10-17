@@ -48,7 +48,7 @@ function newId(prefix: string) {
 }
 
 function defaultTrigger(columns: ColumnDef[]): AutomationTrigger {
-  const selectCol = columns.find((c) => c.type === "select");
+  const selectCol = columns.find((c) => ["select", "multi_select"].includes(c.type) && c.config?.options?.length);
   if (selectCol?.config?.options?.[0]) {
     return {
       type: "enter_status",
@@ -464,7 +464,7 @@ export function AutomationEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selectColumns = columns.filter((c) => c.type === "select");
+  const selectColumns = columns.filter((c) => ["select", "multi_select"].includes(c.type) && c.config?.options?.length);
   const writableColumns = columns.filter((c) => !["formula", "rollup"].includes(c.type));
   const agents = members.filter((member) => member.kind === "agent");
 
@@ -580,7 +580,7 @@ export function AutomationEditor({
                 {(
                   (["row_created", "field_changed", "enter_status"] as const)
                 ).map((k) => (
-                  <SelectItem key={k} value={k} className="text-xs">
+                  <SelectItem key={k} value={k} disabled={k === "enter_status" && !selectColumns.length} className="text-xs">
                     {t(`triggers.${k}`)}
                   </SelectItem>
                 ))}
@@ -663,7 +663,7 @@ export function AutomationEditor({
                     <SelectValue placeholder={t("statusColumn")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {(selectColumns.length ? selectColumns : columns).map(
+                    {selectColumns.map(
                       (c) => (
                         <SelectItem key={c.id} value={c.id} className="text-xs">
                           {c.name}

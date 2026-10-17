@@ -4,6 +4,7 @@ import { BATCH_ADD_ROWS_SCHEMA, BATCH_UPDATE_ROWS_SCHEMA, BATCH_DELETE_ROWS_SCHE
 import { BATCH_SET_RELATIONS_SCHEMA } from "./batch-relations.js";
 import type { CommandInputMap } from "./commands.js";
 import type { AutomationAction } from "./automation.js";
+import { isFilterConditionComplete } from "./filters.js";
 
 const uuid = z.string().uuid();
 const value = z.union([z.string(), z.number().finite(), z.boolean(), z.array(z.string()), z.null()]);
@@ -54,7 +55,9 @@ export const AUTOMATION_EVENT_CONDITION_SCHEMA = z.object({
   id: z.string().min(1), path: z.string().min(1).max(500),
   op: z.enum(["eq", "neq", "contains", "not_contains", "is_empty", "is_not_empty", "gt", "gte", "lt", "lte"]),
   value: value.optional(),
-}).strict();
+}).strict().refine(condition => isFilterConditionComplete({ ...condition, columnId: condition.path }), {
+  message: "条件需要比较值，请填写或移除此条件", path: ["value"],
+});
 export type AutomationEventCondition = z.infer<typeof AUTOMATION_EVENT_CONDITION_SCHEMA>;
 
 export type AutomationJson = null | string | number | boolean | AutomationJson[] | { [key: string]: AutomationJson };
@@ -104,7 +107,8 @@ export function renderAutomationPrompt(template: string, context: AutomationBind
 }
 
 export const AUTOMATION_FILTER_SCHEMA = z.object({ id: z.string().min(1), columnId: uuid,
-  op: z.enum(["eq", "neq", "contains", "not_contains", "is_empty", "is_not_empty", "gt", "gte", "lt", "lte"]), value: value.optional() }).strict();
+  op: z.enum(["eq", "neq", "contains", "not_contains", "is_empty", "is_not_empty", "gt", "gte", "lt", "lte"]), value: value.optional() }).strict()
+  .refine(isFilterConditionComplete, { message: "条件需要比较值，请填写或移除此条件", path: ["value"] });
 export const AUTOMATION_TRIGGER_SCHEMA = z.discriminatedUnion("type", [
   z.object({ type: z.literal("row_created") }).strict(),
   z.object({ type: z.literal("field_changed"), columnId: uuid, toValue: value.optional() }).strict(),

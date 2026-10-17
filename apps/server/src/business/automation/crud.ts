@@ -36,6 +36,7 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
   const source = rule.source;
   validateAutomationActionReferences(rule.actions);
   if (!source || (source.kind === "table" && !source.tableId)) throw new Error("请选择自动化来源");
+  if (new Set(rule.conditions.map(condition => condition.id)).size !== rule.conditions.length) throw new Error("条件标识不能重复");
   if (new Set(rule.eventConditions.map(condition => condition.id)).size !== rule.eventConditions.length) throw new Error("事件条件标识不能重复");
   if (source.kind === "table") {
     const [table] = await tx.select().from(tables).where(and(eq(tables.id, source.tableId), eq(tables.organizationId, organizationId)));

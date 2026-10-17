@@ -41,15 +41,18 @@ function questionContinuation(record: RuntimeRecord) {
   return value?.pendingToolResults?.some(call => call.toolName === "askUserQuestions") ? value : undefined;
 }
 type Mapping = typeof automationAgentActions.$inferSelect;
+class AutomationCancelledError extends Error {}
 const mappingScope = (input: Pick<ActionInput,"runId"|"step">) => and(eq(automationAgentActions.runId, input.runId), eq(automationAgentActions.step, input.step));
 
 /** Associate the task with its private conversation before any native model starts. */
 async function associate(deps: RuntimeDependencies, input: ActionInput): Promise<{ actor: Actor; mapping: Mapping }> {
   return deps.database.transaction(async tx => {
-    const [rule] = await tx.select({ id: automationRuns.id, creator: automations.createdByUserId, name: automations.name, source: automations.source, taskId: automations.id })
+    const [rule] = await tx.select({ id: automationRuns.id, creator: automations.createdByUserId, name: automations.name, source: automations.source, taskId: automations.id,
+      enabled: automations.enabled, deletedAt: automations.deletedAt })
       .from(automationRuns).innerJoin(automations, eq(automations.id, automationRuns.automationId))
       .where(and(eq(automationRuns.id, input.runId), eq(automations.organizationId, input.organizationId))).for("update");
     if (!rule || !rule.creator || rule.creator !== input.actorUserId) throw new Error("自动化创建者不存在，无法启动私有智能体对话");
+    if (!rule.enabled || rule.deletedAt) throw new AutomationCancelledError("规则已停用或删除");
     const [owner] = await tx.select({ account: user, membership: member }).from(member).innerJoin(user, eq(user.id, member.userId))
       .where(and(eq(member.organizationId, input.organizationId), eq(member.userId, input.actorUserId)));
     if (!owner) throw new Error("自动化创建者已不属于当前工作区");
@@ -166,6 +169,9 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
     const message: UIMessage = { id: mapping.userMessageId,role: "user",parts: [{ type: "text",text: prompt }] };
     const ownedMapping = mapping,ownedLease = lease;
     const reference = await withRuntimeLease(deps,ownedLease,async tx => {
+      const [rule] = await tx.select({ enabled: automations.enabled, deletedAt: automations.deletedAt }).from(automations)
+        .innerJoin(automationRuns, eq(automationRuns.automationId, automations.id)).where(eq(automationRuns.id, input.runId)).for("share", { of: automations });
+      if (!rule?.enabled || rule.deletedAt) throw new AutomationCancelledError("规则已停用或删除");
       let current = await mappedRun(deps,ownedMapping,tx);
       if (current) {
         const restarted = await retryUninvoked(deps,ownedLease,record,current,tx);
@@ -184,6 +190,6 @@ export async function runAutomationAgentAction(deps: AutomationAgentDependencies
   } catch (error) {
     const run = mapping ? await mappedRun(deps,mapping).catch(() => undefined) : undefined;
     if (run) return { ...await resultOf(deps,mapping!,run),error: formatError(error) };
-    return { threadId: mapping?.threadId ?? null,agentRunId: null,text: "",status: "failed",error: formatError(error) };
+    return { threadId: mapping?.threadId ?? null,agentRunId: null,text: "",status: error instanceof AutomationCancelledError ? "cancelled" : "failed",error: formatError(error) };
   } finally { if (lease) await releaseRuntimeLease(deps,lease); }
 }

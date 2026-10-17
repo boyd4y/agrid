@@ -1,6 +1,6 @@
-import type { CellValue } from "./types.js";
+import type { CellValue, ColumnDef, RowData } from "./types.js";
 import type { AutomationSource, AutomationDataCommand, AutomationEventCondition } from "./automation-contracts.js";
-import type { FilterCondition, FilterLogic } from "./filters.js";
+import { applyFilters, FILTER_OPS, isFilterConditionComplete, type FilterCondition, type FilterLogic } from "./filters.js";
 
 /** Sources and actions compose independently of the underlying data layout. */
 export const AUTOMATION_TRIGGERS = [
@@ -196,10 +196,18 @@ export function triggerMatches(
     if (!event.changedColumnIds.includes(trigger.columnId)) return false;
     const prev = event.before[trigger.columnId] ?? null;
     const next = event.after[trigger.columnId] ?? null;
-    return next === trigger.optionId && prev !== trigger.optionId;
+    const contains = (value: CellValue) => Array.isArray(value) ? value.includes(trigger.optionId) : value === trigger.optionId;
+    return contains(next) && !contains(prev);
   }
 
   return false;
+}
+
+/** Saved automation conditions fail closed; view drafts may skip incomplete filters. */
+export function automationConditionsMatch(row: RowData, columns: ColumnDef[], conditions: FilterCondition[], logic: FilterLogic): boolean {
+  if (conditions.some(condition => !isFilterConditionComplete(condition) || !FILTER_OPS.includes(condition.op)
+    || !columns.some(column => column.id === condition.columnId))) return false;
+  return applyFilters([row], columns, { filters: conditions, filterLogic: logic }).length > 0;
 }
 
 /** A scheduled occurrence projects its private native conversation, without copying messages. */

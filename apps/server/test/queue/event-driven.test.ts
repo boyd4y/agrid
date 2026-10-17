@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test as register, before, after } from "node:test";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { createServer } from "node:http";
+import { and, eq } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
 import { withPlatformResources, type PlatformResources } from "../../src/resources/scope.js";
 import { commandDependencies } from "../../src/services/dependencies.js";
@@ -9,9 +10,9 @@ import { createAutomationNotifier } from "../../src/automation/jobs/notification
 import { createAutomationService } from "../../src/automation/jobs/service.js";
 import { createAutomationControlQueue, createAutomationQueue } from "../../src/automation/jobs/queues.js";
 import { createRedisClient, waitForRedisReady, redisConnectionOptions } from "@tabdo/queue/redis";
-import { createTable, getTable, addRow } from "../../src/commands/index.js";
+import { createTable, getTable, addRow, addColumn, updateCell, updateCells } from "../../src/commands/index.js";
 import { createAutomation, updateAutomation } from "../../src/automation/crud.js";
-import { organization, user, member, rows, automationOutbox, automationEvents, automationSchedules, automationOccurrences } from "../../src/db/schema.js";
+import { organization, user, member, rows, tables, agentProfile, agentRuns, automationRuns, automationAgentActions, automationStepReceipts, automationOutbox, automationEvents, automationSchedules, automationOccurrences } from "../../src/db/schema.js";
 import type { BackgroundWakeup } from "../../src/business/background.js";
 
 assert(new URL(process.env.DATABASE_URL ?? "").pathname.endsWith("_queue_test"));
@@ -195,4 +196,78 @@ test("the low-frequency safety sweep recovers lost post-commit notifications wit
   const row = await withPlatformResources({ database }, () => addRow({ ...scope, tableId: table.id }));
   await eventually(() => finished(row.id));
   await service.close(); service = undefined;
+});
+
+test("table predicates and schedule deadlines reach a real native agent through Redis, with actual tool effects and no duplicate input", async () => {
+  const keys = ["PI_API_KEY", "PI_BASE_URL", "PI_CONTEXT_WINDOW", "PI_MAX_OUTPUT_TOKENS"] as const;
+  const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const agentUserId = randomUUID(), agentMemberId = randomUUID();
+  const names = [`Queue trigger ${randomUUID()}`, `Queue schedule ${randomUUID()}`];
+  const requests: { messages: { role: string; content: unknown; tool_call_id?: string }[] }[] = [];
+  const failures: unknown[] = [];
+  const provider = createServer(async (request, response) => {
+    try {
+      let raw = "";for await (const chunk of request) raw += chunk;
+      const body = JSON.parse(raw);requests.push(body);
+      const prompt = JSON.stringify(body.messages.filter((message: { role: string }) => message.role === "user"));
+      const name = names.find(name => prompt.includes(name));assert(name);
+      response.writeHead(200, { "Content-Type": "text/event-stream" });
+      const send = (delta: unknown, finish_reason: string | null = null) => response.write(`data: ${JSON.stringify({ id: "queue-native", object: "chat.completion.chunk", created: 1, model: "queue-fixture", choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+      if (body.messages.some((message: { role: string; tool_call_id?: string }) => message.role === "tool" && message.tool_call_id === "queue-create")) {
+        send({ role: "assistant", content: "Queue native task completed." });send({}, "stop");
+      } else {
+        send({ role: "assistant", tool_calls: [{ index: 0, id: "queue-create", type: "function", function: { name: "create_table", arguments: JSON.stringify({ name }) } }] });send({}, "tool_calls");
+      }
+      response.end("data: [DONE]\n\n");
+    } catch (error) { failures.push(error);response.writeHead(500);response.end("Fixture failed"); }
+  });
+  try {
+    await new Promise<void>(resolve => provider.listen(0, "127.0.0.1", resolve));
+    const address = provider.address();assert(address && typeof address !== "string");
+    Object.assign(process.env, { PI_API_KEY: "queue-local-fixture", PI_BASE_URL: `http://127.0.0.1:${address.port}/v1`, PI_CONTEXT_WINDOW: "262144", PI_MAX_OUTPUT_TOKENS: "1024" });
+    await db.insert(user).values({ id: agentUserId, name: "Queue native agent", email: `${agentUserId}@local.test`, kind: "agent" });
+    await db.insert(member).values({ id: agentMemberId, userId: agentUserId, organizationId: org, role: "member" });
+    await db.insert(agentProfile).values({ userId: agentUserId, memberId: agentMemberId, organizationId: org, displayName: "Queue native agent",
+      persona: { defaultHarness: "pi", defaultModel: "queue-fixture", runtime: "local", skillNames: [] } });
+    service = createAutomationService({ closeDatabase: false });await service.ready;
+    const source = await createTable({ ...scope, name: `Native source ${randomUUID()}` });
+    const amount = await addColumn({ ...scope, tableId: source.id, name: "Amount", type: "number" });
+    const stage = await addColumn({ ...scope, tableId: source.id, name: "Stage", type: "multi_select", config: { options: [{ id: "ready", label: "Ready" }, { id: "other", label: "Other" }] } });
+    const target = await createTable({ ...scope, name: `Native results ${randomUUID()}` });
+    const title = (await getTable({ ...scope, tableId: target.id })).columns[0].id;
+    const action = (name: string) => ({ type: "run_agent" as const, agentUserId, prompt: `Create the table ${name}, then report completion.` });
+    await createAutomation({ ...scope, tableId: source.id, name: "Guarded native action", trigger: { type: "enter_status", columnId: stage.id, optionId: "ready" },
+      conditions: [{ id: "threshold", columnId: amount.id, op: "gt", value: 10 }], actions: [action(names[0]!),
+        { type: "command", command: "addRow", input: { tableId: target.id, cells: { [title]: { $step: { index: 0, path: "text" } } } } }] });
+    const row = await addRow({ ...scope, tableId: source.id, cells: { [amount.id]: 0 } });
+    await updateCell({ ...scope, rowId: row.id, columnId: stage.id, value: ["ready"] });
+    await updateCell({ ...scope, rowId: row.id, columnId: amount.id, value: 20 });
+    await settled();assert.equal(requests.length, 0, "neither an unmet condition nor a different changed field invokes the agent");
+    await updateCells({ ...scope, rowId: row.id, cells: { [stage.id]: [] } });
+    await updateCell({ ...scope, rowId: row.id, columnId: stage.id, value: ["ready"] });
+    await eventually(() => finished(row.id));
+    const [event] = await db.select().from(automationEvents).where(eq(automationEvents.rowId, row.id));
+    const [run] = await db.select().from(automationRuns).where(eq(automationRuns.eventId, event.id));
+    const [mapping] = await db.select().from(automationAgentActions).where(eq(automationAgentActions.runId, run.id));
+    assert.equal((await db.select().from(agentRuns).where(eq(agentRuns.id, mapping.agentRunId!)))[0].status, "completed");
+    assert.equal((await db.select().from(automationStepReceipts).where(eq(automationStepReceipts.runId, run.id))).length, 2);
+    assert.equal((await db.select().from(rows).where(eq(rows.tableId, target.id)))[0].cells[title], "Queue native task completed.");
+    const queue = createAutomationQueue();
+    try { await queue.publish({ id: randomUUID(), body: { protocol: 1, eventId: event.id, generation: event.generation } });await settled(); }
+    finally { await queue.close(); }
+    assert.equal(requests.length, 2, "a duplicate queue delivery does not resend the accepted native input");
+
+    const scheduled = await createAutomation({ ...scope, name: "Scheduled native action", source: { kind: "schedule", cron: "0 9 * * *", timeZone: "Asia/Shanghai" },
+      trigger: { type: "schedule_due" }, actions: [action(names[1]!)] });
+    await deadline(scheduled.id, new Date(Date.now() + 250));
+    await eventually(async () => (await db.select().from(automationRuns).where(and(eq(automationRuns.automationId, scheduled.id), eq(automationRuns.status, "completed")))).length === 1);
+    assert.equal((await db.select().from(automationOccurrences).where(eq(automationOccurrences.automationId, scheduled.id))).length, 1);
+    for (const name of names) assert.equal((await db.select().from(tables).where(and(eq(tables.organizationId, org), eq(tables.name, name)))).length, 1, "native platform tool commits its actual table");
+    assert.equal(requests.length, 4);assert.deepEqual(failures, []);
+  } finally {
+    await service?.close();service = undefined;
+    provider.closeAllConnections();await new Promise<void>(resolve => provider.close(() => resolve()));
+    await db.delete(user).where(eq(user.id, agentUserId));
+    for (const key of keys) { if (saved[key] === undefined) delete process.env[key];else process.env[key] = saved[key]; }
+  }
 });
