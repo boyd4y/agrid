@@ -401,7 +401,41 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       ] },
       { type: "callout", tone: "warn", text: "The site editor lets you edit website files directly. Each site can contain up to 50 files, using the file types listed above. Publish a saved version. A tab_ key is delivered with the site front-end code, so do not put a high-privilege credential there; grant only the required per-table data access." },
       { type: "cards", items: [
+        { title: "Publish a blog", description: "Choose article records, preview them, and publish a blog.", href: "/docs/blogging", badge: "Blog" },
         { title: "HTTP API and data access keys", description: "Learn about tab_ key permissions and access boundaries.", href: "/docs/api-quickstart", badge: "Security" },
+      ] },
+    ],
+  },
+  {
+    slug: "blogging",
+    sectionId: "humans",
+    title: "Publish a blog",
+    description: "Choose articles from table records, review a preview, and publish or update a blog.",
+    body: [
+      { type: "p", text: "A blog turns the record bodies you select into public articles. Each build and publication is a fixed version. Preview it first, then decide whether readers can access it." },
+      { type: "ol", items: [
+        "Open Sites in your workspace, create a blog, and choose a content table. In the table, enable a document for each article record. Write and add images in the visual document editor; wait until its status says the changes are saved. Use document history to review or restore an earlier version.",
+        "In the blog settings, map the title and URL slug. Map a summary, author, date, cover, category, or tags as needed. Select each article you want to publish, then choose its document images and cover explicitly. Unselected records, related records, and attachments are not added to the blog.",
+        "Save the settings and build the blog. Review the build and its preview link. Anyone with the link can open the preview for 10 minutes. Previews are excluded from search indexing; you can revoke all preview links earlier.",
+        "After reviewing the preview, publish that build. Copy the blog address from its details and share it with readers. Editing a document or blog setting does not automatically change the live articles. To update them, build again, review the new preview, and publish the new version.",
+        "To remove one article, choose and confirm its withdrawal. To stop the entire blog, unpublish it. You can also restore an internal configuration as a new draft, then build and publish it again.",
+      ] },
+      { type: "h2", text: "Content and access" },
+      { type: "ul", items: [
+        "A blog can include up to 20 selected articles. Document content is limited to 4 MiB. Each article can use up to 20 selected images; a blog can use up to 60 image assets, up to 5 MiB each and 30 MiB total. Supported image types are PNG, JPEG, WebP, and GIF.",
+        "Public content includes the mapped fields, selected articles, their document bodies, and selected images. Author names are public; email addresses and internal member IDs are not included. Do not put secrets or private information in public fields, document content, or links.",
+        "A published blog is a snapshot. Changes to source records or documents do not update it. Before building again, confirm the selected records, images, and public fields are still correct.",
+        "Withdrawing an article blocks its old blog paths and images. Readers may still have copies they downloaded, copied, or cached elsewhere; those copies cannot be recalled remotely. Withdraw an article before deleting its source when needed.",
+        "Unpublish the whole blog before deleting it. Blog history and staged uploads may remain until the site is deleted. A blog retains at most 100 revisions; create another blog to continue after reaching that limit.",
+      ] },
+      { type: "h2", text: "Permissions and troubleshooting" },
+      { type: "ul", items: [
+        "Workspace members need permission to read and edit the selected records and documents. For API access, a workspace owner or admin grants blog read, configure, build, publish, or restore permissions separately for the content table. Grant only what is needed.",
+        "If an article has no body, confirm that its document is enabled and saved. On a version conflict, the editor retains the draft in the current browser tab and offers options to view the server version, export the draft, or export it and load the server version. Compare both versions before deciding what to keep. You can preview a history version and restore it as a new version. If a build reports changed sources, reload the records, review them, and build again.",
+        "If a slug is invalid or duplicated, set a unique lowercase slug using English letters, numbers, and hyphens. If publishing or previewing fails, check the key's permission, the build version, and pending changes. Create a new preview if the old link expired.",
+      ] },
+      { type: "cards", items: [
+        { title: "Blog API", description: "Read and manage blogs with REST, GraphQL, or available MCP tools.", href: "/docs/blog-api", badge: "API" },
       ] },
     ],
   },
@@ -529,6 +563,82 @@ if (row) {
       ] },
       { type: "callout", tone: "info", text: "Do not embed a high-privilege key in a public website; browser code exposes its key. Keep keys in environment variables for private integrations; for a public site, use a dedicated key with only the required table permissions." },
       { type: "cards", items: [{ title: "API quickstart", description: "Follow the complete REST flow and permissions guide.", href: "/docs/api-quickstart", badge: "Guide" }, { title: "GraphQL", description: "Read the GraphQL schema and limits.", href: "/docs/graphql", badge: "GraphQL" }] },
+    ],
+  },
+  {
+    slug: "blog-api",
+    sectionId: "reference",
+    title: "Blog API",
+    description: "Manage blog snapshots with dedicated blog permissions using REST, GraphQL, or MCP.",
+    body: [
+      { type: "p", text: "Use blog commands through the API key REST command endpoint or GraphQL. Blog permissions are granted separately for each content table; existing data or document permissions do not grant blog configuration, build, or publishing access. Blog methods are not available in the currently published npm SDK." },
+      { type: "h2", text: "Create an access key" },
+      { type: "ol", items: [
+        "Ask a workspace owner or admin to open Settings → API Key and create a dedicated key. Add only the content table and blog permissions you need: canRead for sources and configuration, canConfigure to save settings, canBuild to build and preview, canPublish to authorize the key to publish or withdraw, and canRestore to restore a configuration revision.",
+        "Keep the full key in server-side secret storage or an environment variable. Do not place it in browser code, a public website, a blog document, or a URL. The full key is shown once; deleting it revokes future access.",
+        "Every blog write command requires a 1–200 character idempotency key. Send it in the Idempotency-Key header and reuse it when retrying the same request. A replay returns the saved result; reusing the key for a different request returns a conflict.",
+      ] },
+      { type: "h2", text: "REST command endpoint" },
+      { type: "p", text: "Send JSON to POST /api/commands with Authorization: Bearer tab_…. Each request contains command and input; include Idempotency-Key for writes. This read-only example uses fictional IDs and a placeholder key:" },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
+      { type: "p", text: "Create a blog with saveBlog. This configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. Then call buildBlog. Use the siteId, version, and publishedRevisionId from getBlog as the version preconditions for publication. Successful REST commands return { ok, command, result }." },
+      { type: "code", lang: "json", code: `{
+  "command": "saveBlog",
+  "input": {
+    "name": "Field Notes",
+    "idempotencyKey": "save-blog-example-1",
+    "config": {
+      "tableId": "00000000-0000-4000-8000-000000000001",
+      "authorName": "Tabdo Team",
+      "description": "Notes and updates",
+      "language": "en",
+      "mapping": {
+        "title": "00000000-0000-4000-8000-000000000011",
+        "slug": "00000000-0000-4000-8000-000000000012"
+      },
+      "articles": [{
+        "rowId": "00000000-0000-4000-8000-000000000021",
+        "imageIds": []
+      }]
+    }
+  }
+}` },
+      { type: "p", text: "For the first publication, set expectedPublishedRevisionId to null. When updating a published blog, send the current publishedRevisionId from getBlog. Use the buildId from the current build manifest." },
+      { type: "code", lang: "json", code: `{
+  "command": "publishBlog",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 2,
+    "expectedPublishedRevisionId": null,
+    "buildId": "00000000-0000-4000-8000-000000000003",
+    "idempotencyKey": "publish-blog-example-1"
+  }
+}` },
+      { type: "p", text: "getBlogSources returns selectable article fields, document versions, and explicitly selectable images. Its limit is at most 50; use nextAfterId to continue. getBlog reads configuration, the current build, published articles, revisions, and pendingChanges. saveBlog saves the template and explicit article list; buildBlog creates a fixed snapshot from current sources; createBlogPreview returns a 10-minute share link; publishBlog publishes a selected buildId; withdrawBlogArticle removes one article; unpublishBlog takes down the whole site; restoreBlogRevision restores an earlier configuration as a new draft. REST write request bodies are limited to 8 MiB. See the blog guide for content and image budgets." },
+      { type: "h2", text: "GraphQL" },
+      { type: "p", text: "The GraphQL endpoint is POST /api/graphql and uses the same Authorization: Bearer tab_… header and dedicated blog permissions. Pass each command's JSON input as an argument; use query for reads and mutation for writes. Use the same idempotency keys and version preconditions for REST and GraphQL writes." },
+      { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
+  getBlog(input: $input)
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "query ReadBlog($input: JSON!) { getBlog(input: $input) }",
+  "variables": { "input": { "siteId": "00000000-0000-4000-8000-000000000002" } }
+}` },
+      { type: "p", text: "Use the Idempotency-Key header for writes. GraphQL request bodies are limited to 128 KiB and responses use the standard { data } or { errors } envelope. Common errors include FORBIDDEN (permission missing), NOT_FOUND (object missing or not visible), VERSION_CONFLICT (configuration or published version changed), SOURCE_CHANGED (source changed; build again), IDEMPOTENCY_MISMATCH (key reused for a different request), and LIMIT_EXCEEDED (blog budget exceeded). On a version conflict, call getBlog again and review the current state before continuing." },
+      { type: "h2", text: "MCP and public reading" },
+      { type: "p", text: "Clients connected to tabdo MCP can use get_blog_sources, get_blog, save_blog, build_blog, create_blog_preview, revoke_blog_previews, publish_blog, withdraw_blog_article, unpublish_blog, and restore_blog_revision. MCP calls use the same content-table blog permissions; only give publishing access to trusted integrations." },
+      { type: "p", text: "Published blogs can be read without a key. GET /s/{siteId}/ (the publicUrl returned by getBlog) opens the article list; articles, pagination, categories, and selected images use paths below that address. Draft content, withdrawn article paths, and unpublished blogs are not publicly readable. Anyone with a preview URL can access it until it expires; it is not a private, sign-in-only preview." },
+      { type: "callout", tone: "warn", text: "Do not give a publishing key to browser code or an untrusted automation. Saving, building, and publishing are separate actions; a new build does not automatically update live content. The blog commands are not available through the currently published npm SDK." },
+      { type: "cards", items: [
+        { title: "Publish a blog", description: "Follow the full workflow from document writing to publishing and withdrawal.", href: "/docs/blogging", badge: "Guide" },
+        { title: "Authentication", description: "Learn about API key creation, table grants, and access boundaries.", href: "/docs/auth", badge: "Permissions" },
+      ] },
     ],
   },
   {

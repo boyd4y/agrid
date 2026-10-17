@@ -416,7 +416,41 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       ] },
       { type: "callout", tone: "warn", text: "站点编辑器可直接编辑网站文件；每个站点最多 50 个文件，文件类型见上方列表。发布时使用已保存的版本。tab_ Key 会随站点前端代码提供，不能存放高权限凭证；Key 只应授予必要的逐表数据权限。" },
       { type: "cards", items: [
+        { title: "发布博客", description: "从正文记录中选择文章、预览并发布博客。", href: "/docs/blogging", badge: "博客" },
         { title: "HTTP API 与数据访问 Key", description: "了解 tab_ Key 的逐表权限和访问边界。", href: "/docs/api-quickstart", badge: "安全" },
+      ] },
+    ],
+  },
+  {
+    slug: "blogging",
+    sectionId: "humans",
+    title: "发布博客",
+    description: "从表格正文中选择文章，检查预览后发布和更新博客。",
+    body: [
+      { type: "p", text: "博客把你选中的记录正文整理成可公开阅读的文章。每次构建和发布都是固定版本；你可以先预览，再决定是否让读者访问。" },
+      { type: "ol", items: [
+        "在工作区打开「站点」，新建博客并选择一张内容表。先在表格中为文章记录启用正文，再用可视化正文编辑器写作、插入图片并等待保存状态显示已保存。正文历史可用于查看和恢复先前版本。",
+        "在博客设置中映射标题和 URL slug；按需映射摘要、作者、日期、封面、分类和标签。逐篇选择要发布的记录，并逐项选择正文图片和封面。未选中的记录、关联记录和附件不会加入博客。",
+        "保存配置后构建博客。查看构建结果和预览链接；预览链接在 10 分钟后过期，任何持有链接的人都可访问。预览不进入搜索索引；你也可以提前撤销所有预览链接。",
+        "检查无误后发布构建版本。发布后复制博客地址分享给读者。继续编辑正文或博客设置不会自动改动线上文章；发现待发布更改时，重新构建、预览并发布，线上内容才会更新。",
+        "要撤下一篇文章，选择该文章并确认撤回；要停止整个博客，选择撤下博客。也可以恢复内部历史配置作为新草稿，再重新构建并发布。",
+      ] },
+      { type: "h2", text: "发布内容与访问范围" },
+      { type: "ul", items: [
+        "每个博客最多选择 20 篇文章。正文最多 4 MiB；每篇最多选择 20 张图片，全站最多 60 个图片资源、每个资源最多 5 MiB，总计最多 30 MiB。图片仅支持 PNG、JPEG、WebP 和 GIF。",
+        "公开内容包括已映射并选择的文章字段、正文和选中的图片。作者显示为公开姓名，不包含邮箱或内部成员 ID；不要在公开字段、正文或链接中放入秘密或私人资料。",
+        "博客发布的是内容快照。源记录或正文后续变化不会同步到线上；重新构建前请确认所选记录、图片和公开字段仍正确。",
+        "撤回会阻止博客旧版本中的文章和图片继续通过博客地址访问；已被读者下载、复制或缓存到其他位置的副本无法远程收回。删除来源前，先按需要撤回相应文章。",
+        "删除博客前必须先撤下整站。博客历史版本和暂存上传可能在站点删除前保留；每个博客最多保留 100 个历史版本，达到上限后请新建博客继续发布。",
+      ] },
+      { type: "h2", text: "权限与排错" },
+      { type: "ul", items: [
+        "工作区成员需有权查看并编辑所选记录和正文。通过 API 连接时，owner/admin 在「设置 → API Key」为内容表单独授予博客读取、配置、构建、发布或恢复权限；只授予实际需要的权限。",
+        "若正文没有出现在文章中，请确认已启用正文并等待保存完成。出现版本冲突时，编辑器会保留当前标签页中的草稿，并提供查看服务器版本、导出草稿或导出后加载服务器版本的选项；先比较两份内容，再决定如何继续。历史版本可先预览，再恢复为新版本。构建提示来源已变化时，重新读取记录、核对内容并重新构建。",
+        "若 slug 重复或格式无效，请为每篇文章设置唯一的小写英文、数字和连字符 slug。若无法发布或预览，请检查 Key 的对应权限、构建版本和待发布更改；过期预览需要重新生成。",
+      ] },
+      { type: "cards", items: [
+        { title: "博客 API", description: "通过 REST、GraphQL 或可用的 MCP 工具读取和管理博客。", href: "/docs/blog-api", badge: "API" },
       ] },
     ],
   },
@@ -544,6 +578,82 @@ if (row) {
       ] },
       { type: "callout", tone: "info", text: "不要把高权限 Key 嵌入公开网页；浏览器代码会暴露 Key。私密集成请将 Key 保存在环境变量中；公开站点应使用仅具所需逐表权限的专用 Key。" },
       { type: "cards", items: [{ title: "API 入门", description: "查看完整 REST 流程和权限说明。", href: "/docs/api-quickstart", badge: "指南" }, { title: "GraphQL", description: "查看 GraphQL Schema 与限制。", href: "/docs/graphql", badge: "GraphQL" }] },
+    ],
+  },
+  {
+    slug: "blog-api",
+    sectionId: "reference",
+    title: "博客 API",
+    description: "使用专用博客权限，通过 REST、GraphQL 或 MCP 管理博客快照。",
+    body: [
+      { type: "p", text: "博客命令可通过 API Key 的 REST 命令入口和 GraphQL 使用。博客权限按内容表单独授予；旧的数据读写权限或正文权限不会自动获得博客配置、构建或发布权限。博客相关的 npm SDK 方法尚未在公开版本提供。" },
+      { type: "h2", text: "创建访问 Key" },
+      { type: "ol", items: [
+        "请工作区 owner/admin 打开「设置 → API Key」并创建专用 Key。仅添加需要访问的内容表及博客权限：canRead 读取来源和配置，canConfigure 保存博客设置，canBuild 构建和预览，canPublish 授权该 Key 发布或撤回，canRestore 恢复历史配置。",
+        "将完整 Key 存放在服务端密钥管理或环境变量中，不放在浏览器、公开网页、博客正文或 URL 中。完整 Key 只显示一次；删除 Key 可撤销后续访问。",
+        "博客 API 的写命令都要提供 1–200 字符的幂等键。可通过 Idempotency-Key 请求头提供；不要为同一请求的重试生成新值。相同 Key 重放会返回原结果；相同 Key 用于不同请求会返回冲突。",
+      ] },
+      { type: "h2", text: "REST 命令入口" },
+      { type: "p", text: "向 POST /api/commands 发送 JSON，使用 Authorization: Bearer tab_…。每个请求包含 command 和 input；写操作应附带 Idempotency-Key。以下是只读示例，使用虚构 ID 和占位 Key：" },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
+      { type: "p", text: "创建博客时调用 saveBlog。以下配置使用虚构 UUID；将字段 ID、表 ID 和记录 ID 替换为 getBlogSources 与字段元数据返回的值。之后调用 buildBlog，再用 getBlog 的 siteId、version 和 publishedRevisionId 作为发布的版本前提。REST 命令成功时响应包含 { ok, command, result }。" },
+      { type: "code", lang: "json", code: `{
+  "command": "saveBlog",
+  "input": {
+    "name": "Field Notes",
+    "idempotencyKey": "save-blog-example-1",
+    "config": {
+      "tableId": "00000000-0000-4000-8000-000000000001",
+      "authorName": "Tabdo Team",
+      "description": "Notes and updates",
+      "language": "en",
+      "mapping": {
+        "title": "00000000-0000-4000-8000-000000000011",
+        "slug": "00000000-0000-4000-8000-000000000012"
+      },
+      "articles": [{
+        "rowId": "00000000-0000-4000-8000-000000000021",
+        "imageIds": []
+      }]
+    }
+  }
+}` },
+      { type: "p", text: "首次发布时，expectedPublishedRevisionId 使用 null；更新已发布的博客时，传 getBlog 返回的当前 publishedRevisionId。buildId 使用当前构建 manifest 中的值。" },
+      { type: "code", lang: "json", code: `{
+  "command": "publishBlog",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 2,
+    "expectedPublishedRevisionId": null,
+    "buildId": "00000000-0000-4000-8000-000000000003",
+    "idempotencyKey": "publish-blog-example-1"
+  }
+}` },
+      { type: "p", text: "getBlogSources 返回可选文章字段、正文版本和可明确选择的图片；limit 最大为 50，可用 nextAfterId 继续分页。getBlog 读取配置、当前构建、已发布文章、历史版本和 pendingChanges。saveBlog 保存模板与显式文章列表；buildBlog 从当前来源生成固定快照；createBlogPreview 返回 10 分钟分享链接；publishBlog 发布指定 buildId；withdrawBlogArticle 撤回单篇；unpublishBlog 撤下整站；restoreBlogRevision 将历史配置恢复成新草稿。写操作的请求体最大 8 MiB，具体博客内容和图片预算见博客使用指南。" },
+      { type: "h2", text: "GraphQL" },
+      { type: "p", text: "GraphQL 入口为 POST /api/graphql，同样使用 Authorization: Bearer tab_… 和专用博客权限。每个命令以 JSON input 作为参数；读取命令放在 query，写命令放在 mutation。对 REST 和 GraphQL 写操作使用相同的幂等键与版本前提。" },
+      { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
+  getBlog(input: $input)
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "query ReadBlog($input: JSON!) { getBlog(input: $input) }",
+  "variables": { "input": { "siteId": "00000000-0000-4000-8000-000000000002" } }
+}` },
+      { type: "p", text: "写命令使用 Idempotency-Key 请求头；GraphQL 单次请求体上限为 128 KiB。GraphQL 返回标准 { data } 或 { errors }。常见错误包括 FORBIDDEN（缺少权限）、NOT_FOUND（对象不存在或不可见）、VERSION_CONFLICT（配置或发布版本已变化）、SOURCE_CHANGED（来源变化，需要重新构建）、IDEMPOTENCY_MISMATCH（幂等键被不同请求复用）和 LIMIT_EXCEEDED（超过博客预算）。发生版本冲突时重新调用 getBlog 并核对后再继续。" },
+      { type: "h2", text: "MCP 与公开阅读" },
+      { type: "p", text: "已连接 tabdo MCP 的客户端可使用 get_blog_sources、get_blog、save_blog、build_blog、create_blog_preview、revoke_blog_previews、publish_blog、withdraw_blog_article、unpublish_blog 和 restore_blog_revision 工具。MCP 调用遵循同一组内容表博客权限；发布权限只应交给受信任的集成。" },
+      { type: "p", text: "已发布博客无需 Key 即可公开读取：GET /s/{siteId}/（即 getBlog 返回的 publicUrl）可访问文章列表；文章、分页、分类和选中图片使用该地址下的子路径。未发布内容、撤下文章的旧路径以及已撤下博客不可公开读取。预览 URL 是任何持链接者均可访问的短时链接，不要将其当作私有登录预览。" },
+      { type: "callout", tone: "warn", text: "不要将可发布的 Key 交给浏览器或不受信任的自动化。保存、构建和发布是不同操作；只有明确授权的 Key 才能发布，重新构建不会自动更新线上内容。" },
+      { type: "cards", items: [
+        { title: "发布博客", description: "查看从正文写作到发布和撤回的完整步骤。", href: "/docs/blogging", badge: "指南" },
+        { title: "API Key", description: "了解 Key 的创建、逐表授权和使用边界。", href: "/docs/auth", badge: "权限" },
+      ] },
     ],
   },
   {
