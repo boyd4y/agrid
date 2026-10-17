@@ -550,4 +550,5 @@ export const apiKeySchedules = pgTable("api_key_schedules", {
 
 export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
 
+export { calendarEvents, calendarSubscriptions, calendarDeliveries, calendarDeliveryAttempts } from "./calendar-subscriptions-schema.js";
 export * from "./blogs-schema.js";

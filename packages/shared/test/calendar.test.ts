@@ -20,7 +20,7 @@ test("weekly hours are finite nonoverlapping wall-clock windows, not booking rec
   assert(CALENDAR_SCHEMAS.setWorkingHours.safeParse({ ...common, windows: [{ day: 1, start: "09:00", end: "10:00" }, { day: 1, start: "10:00", end: "11:00" }] }).success);
 });
 test("every promised calendar operation has a named public command and configurable native/MCP ID", () => {
-  assert.equal(CALENDAR_COMMANDS.length, 26);
+  assert.equal(CALENDAR_COMMANDS.length, 35);
   assert.deepEqual(new Set(Object.values(CALENDAR_TOOLS).map(item => item.command)), new Set(CALENDAR_COMMANDS));
   for (const command of CALENDAR_COMMANDS) assert(COMMANDS.includes(command));
   for (const name of Object.keys(CALENDAR_TOOLS)) assert((PLATFORM_TOOL_IDS as readonly string[]).includes(name));
@@ -35,4 +35,14 @@ test("reminder offsets, deadlines and schedule projections reject ambiguous or u
   assert(!CALENDAR_SCHEMAS.setBookingReminders.safeParse({ ...common, reminders: [reminder, reminder] }).success);
   assert(CALENDAR_SCHEMAS.setBookingReminders.safeParse({ ...common, reminders: [] }).success);
   assert(!CALENDAR_SCHEMAS.queryScheduledOccurrences.safeParse({ rangeStart: "2030-01-01T00:00:00Z", rangeEnd: "2031-01-01T00:00:00Z" }).success);
+});
+
+test("outbound subscription contracts bound pages, forbid forged scope and keep lifecycle versioned", () => {
+  const subscriptionId = randomUUID();
+  const input = { calendarId, name: "Receiver", endpoint: "https://receiver.example.test/events", eventTypes: ["booking.created"], idempotencyKey: "subscribe" };
+  assert(CALENDAR_SCHEMAS.createCalendarSubscription.safeParse(input).success);
+  for (const change of [{ eventTypes: [] }, { eventTypes: ["booking.created", "booking.created"] }, { eventTypes: ["webhook_received"] }, { endpoint: "http://localhost" }, { endpoint: "https://user:password@example.test" }, { workspaceId: randomUUID() }]) assert(!CALENDAR_SCHEMAS.createCalendarSubscription.safeParse({ ...input, ...change }).success);
+  assert(!CALENDAR_SCHEMAS.listCalendarDeliveries.safeParse({ calendarId, subscriptionId, limit: 101 }).success);
+  assert(!CALENDAR_SCHEMAS.retryCalendarDelivery.safeParse({ calendarId, subscriptionId, deliveryId: randomUUID(), idempotencyKey: "retry" }).success);
+  assert(!CALENDAR_SCHEMAS.updateCalendarSubscription.safeParse({ ...input, subscriptionId, expectedVersion: 1, status: "revoked" }).success);
 });

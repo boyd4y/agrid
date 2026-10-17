@@ -48,7 +48,7 @@ export function createClient(options: ClientOptions) {
   }
   // Aborting transport does not cancel a server transaction. Retry the same input/key to read its receipt.
   async function calendarCommand<K extends CalendarCommand>(command: K, input: CalendarCommands[K], request?: RequestOptions): Promise<CalendarResults[K]> {
-    const read = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"].includes(command);
+    const read = ["listCalendarSubscriptions", "getCalendarSubscription", "listCalendarDeliveries", "getCalendarDelivery", "listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"].includes(command);
     const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
@@ -86,6 +86,16 @@ export function createClient(options: ClientOptions) {
     getDocumentImage: (input: DocumentCommands["getDocumentImage"], request?: RequestOptions) => documentCommand("getDocumentImage", input, request),
   };
   const calendarApi = {
+    listCalendarSubscriptions: (input: CalendarCommands["listCalendarSubscriptions"], request?: RequestOptions) => calendarCommand("listCalendarSubscriptions", input, request),
+    getCalendarSubscription: (input: CalendarCommands["getCalendarSubscription"], request?: RequestOptions) => calendarCommand("getCalendarSubscription", input, request),
+    createCalendarSubscription: (input: CalendarCommands["createCalendarSubscription"], request?: RequestOptions) => calendarCommand("createCalendarSubscription", input, request),
+    updateCalendarSubscription: (input: CalendarCommands["updateCalendarSubscription"], request?: RequestOptions) => calendarCommand("updateCalendarSubscription", input, request),
+    revokeCalendarSubscription: (input: CalendarCommands["revokeCalendarSubscription"], request?: RequestOptions) => calendarCommand("revokeCalendarSubscription", input, request),
+    rotateCalendarSubscriptionSecret: (input: CalendarCommands["rotateCalendarSubscriptionSecret"], request?: RequestOptions) => calendarCommand("rotateCalendarSubscriptionSecret", input, request),
+    listCalendarDeliveries: (input: CalendarCommands["listCalendarDeliveries"], request?: RequestOptions) => calendarCommand("listCalendarDeliveries", input, request),
+    getCalendarDelivery: (input: CalendarCommands["getCalendarDelivery"], request?: RequestOptions) => calendarCommand("getCalendarDelivery", input, request),
+    retryCalendarDelivery: (input: CalendarCommands["retryCalendarDelivery"], request?: RequestOptions) => calendarCommand("retryCalendarDelivery", input, request),
+
     queryScheduledOccurrences: (input: CalendarCommands["queryScheduledOccurrences"], request?: RequestOptions) => calendarCommand("queryScheduledOccurrences", input, request),
     setBookingReminders: (input: CalendarCommands["setBookingReminders"], request?: RequestOptions) => calendarCommand("setBookingReminders", input, request),
     listBookingReminders: (input: CalendarCommands["listBookingReminders"], request?: RequestOptions) => calendarCommand("listBookingReminders", input, request),

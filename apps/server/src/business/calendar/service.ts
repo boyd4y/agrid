@@ -1,3 +1,5 @@
+import { subscriptionCommand, appendCalendarEvent } from "./subscriptions.js";
+import { CALENDAR_SUBSCRIPTION_COMMANDS, type CalendarEventType } from "@tabdo/shared";
 import { queryScheduledOccurrences } from "./schedules.js";
 import { replaceBookingReminders, readBookingReminders, syncBookingReminders } from "./reminders.js";
 import { and, asc, eq, gt, inArray, lt } from "drizzle-orm";
@@ -60,7 +62,17 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
     let workspaceId: string;
     if (input.calendarId) {
       const query = tx.select().from(calendars).where(and(eq(calendars.id, input.calendarId), eq(calendars.organizationId, organizationId)));
-      [calendar] = await (read ? query.for("share") : query.for("update"));
+      if (read) [calendar] = await query.for("share");
+      else {
+        const [target] = await query;
+        if (target) {
+          // Personnel are workspace-wide. Lock calendars in one order before person locks,
+          // so a schedule change can atomically notify every calendar without cross-calendar deadlocks.
+          const workspaceConfiguration = ["createCalendarPerson", "updateCalendarPerson", "archiveCalendarPerson", "setWorkingHours", "setAvailabilityException", "removeAvailabilityException"].includes(command);
+          const locked = await tx.select().from(calendars).where(workspaceConfiguration ? eq(calendars.workspaceId, target.workspaceId) : eq(calendars.id, target.id)).orderBy(asc(calendars.id)).for("update");
+          calendar = locked.find(value => value.id === target.id);
+        }
+      }
       if (!calendar) fail(404, "NOT_FOUND", "Calendar not found");
       workspaceId = calendar.workspaceId;
       if (!principal) {
@@ -78,9 +90,12 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
       if (principal) {
         if (!calendar || !principal.calendarPermissions.has(calendar.id)) fail(404, "NOT_FOUND", "Calendar not found");
         if (!principal.calendarPermissions.get(calendar!.id)![permission]) fail(403, "FORBIDDEN", "This calendar operation is not granted");
-      } else if (permission === "canManage" && !manager) fail(403, "FORBIDDEN", "Only owners and admins can manage calendars and working hours");
+      } else if (["canManage", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"].includes(permission) && !manager) fail(403, "FORBIDDEN", "Only owners and admins can manage calendars and working hours");
     };
     const permissions: Partial<Record<CalendarCommand, keyof Omit<CalendarPermission, "calendarId">>> = {
+      createCalendarSubscription: "canSubscribe", listCalendarSubscriptions: "canSubscribe", getCalendarSubscription: "canSubscribe",
+      listCalendarDeliveries: "canReadDeliveries", getCalendarDelivery: "canReadDeliveries",
+      updateCalendarSubscription: "canManageSubscriptions", revokeCalendarSubscription: "canManageSubscriptions", rotateCalendarSubscriptionSecret: "canManageSubscriptions", retryCalendarDelivery: "canManageSubscriptions",
       setBookingReminders: "canUpdate",
       createBooking: "canCreate", rescheduleBooking: "canUpdate", cancelBooking: "canCancel",
       queryAvailability: "canReadAvailability", checkBookingConflicts: "canReadAvailability",
@@ -92,6 +107,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
       if (!grant) fail(404, "NOT_FOUND", "Calendar not found");
       if (!grant.canRead && !grant.canReadAvailability && !grant.canManage) fail(403, "FORBIDDEN", "Reading service configuration is not granted");
     } else if (command !== "listCalendars" && command !== "batchBookings") authorize(permission);
+    if (command === "createCalendarSubscription" || command === "retryCalendarDelivery") { authorize("canRead"); authorize("canSubscribe"); }
     if (command === "setBookingReminders" && principal) authorize("canTriggerAgent");
     const serializePerson = (person: Person) => ({ ...publicPerson(person), userId: principal && !principal.calendarPermissions.get(calendar!.id)?.canRead && !principal.calendarPermissions.get(calendar!.id)?.canManage ? null : person.userId });
     if (command === "batchBookings") for (const operation of input.operations) authorize(operation.kind === "create" ? "canCreate" : operation.kind === "reschedule" ? "canUpdate" : "canCancel");
@@ -109,7 +125,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
       }
       requestId = reserved.id;
     }
-    if (calendar?.archived && !read) fail(409, "ARCHIVED", "The calendar is archived");
+    if (calendar?.archived && !read && !(CALENDAR_SUBSCRIPTION_COMMANDS as readonly string[]).includes(command)) fail(409, "ARCHIVED", "The calendar is archived");
     const peopleScope = and(eq(calendarPeople.workspaceId, workspaceId));
     const loadPeople = async (ids: string[]) => {
       const unique = [...new Set(ids)].sort();
@@ -272,11 +288,31 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
           if (initial.has(booking.id)) await tx.update(bookings).set(booking).where(eq(bookings.id, booking.id));
           else await tx.insert(bookings).values(booking);
           await syncBookingReminders(deps, tx, booking);
+          await appendCalendarEvent(deps, tx, booking.calendarId, workspaceId, !initial.has(booking.id) ? "booking.created" : booking.status === "cancelled" ? "booking.cancelled" : "booking.rescheduled", booking.id, booking.version);
         }
         output = command === "batchBookings" ? { receipts: changed.map(receipt) } : receipt(changed[0]); break;
       }
     }
-    if (requestId) await tx.update(calendarReceipts).set({ result: output }).where(eq(calendarReceipts.id, requestId));
+    if ((CALENDAR_SUBSCRIPTION_COMMANDS as readonly string[]).includes(command)) {
+      const actorId = caller.kind === "member" ? caller.actorId : principal!.userId;
+      if (!actorId) fail(403, "FORBIDDEN", "A current key owner is required");
+      output = await subscriptionCommand(deps, tx, command, input, { calendar: calendar!, actorId, keyId: principal?.id ?? null });
+    }
+    const events: Partial<Record<CalendarCommand, CalendarEventType>> = {
+      updateCalendar: "calendar.updated", archiveCalendar: "calendar.archived", createCalendarPerson: "person.created", updateCalendarPerson: "person.updated", archiveCalendarPerson: "person.archived", setWorkingHours: "working_hours.updated",
+      setAvailabilityException: input.exceptionId ? "availability_exception.updated" : "availability_exception.created", removeAvailabilityException: "availability_exception.removed", setBookingReminders: "booking.reminders_changed",
+    };
+    const eventType = events[command];
+    if (eventType) {
+      const saved = output as { id: string; version?: number };
+      const aggregateVersion = saved.version ?? input.expectedVersion + 1;
+      const targets = eventType.startsWith("person.") || eventType.startsWith("working_hours.") || eventType.startsWith("availability_exception.")
+        ? await tx.select({ id: calendars.id }).from(calendars).where(eq(calendars.workspaceId, workspaceId)).orderBy(asc(calendars.id)) : [{ id: calendar!.id }];
+      for (const target of targets) await appendCalendarEvent(deps, tx, target.id, workspaceId, eventType, saved.id, aggregateVersion);
+    }
+    // Secrets are disclosed once, never persisted in an idempotency receipt or returned on replay.
+    const persisted = output && typeof output === "object" && "secret" in output && "subscription" in output ? { subscription: output.subscription } : output;
+    if (requestId) await tx.update(calendarReceipts).set({ result: persisted }).where(eq(calendarReceipts.id, requestId));
     return output;
   }).catch(calendarDatabaseError);
   return result as CalendarResults[K];

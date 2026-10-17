@@ -46,7 +46,8 @@ export const apiKeyCalendars = pgTable("api_key_calendars", {
   keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }), calendarId: uuid("calendar_id").notNull().references(() => calendars.id, { onDelete: "cascade" }),
   canRead: boolean("can_read").notNull().default(false), canReadAvailability: boolean("can_read_availability").notNull().default(false),
   canCreate: boolean("can_create").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false), canCancel: boolean("can_cancel").notNull().default(false), canManage: boolean("can_manage").notNull().default(false), canTriggerAgent: boolean("can_trigger_agent").notNull().default(false),
-}, t => [uniqueIndex("api_key_calendars_key_calendar_idx").on(t.keyId, t.calendarId), check("api_key_calendars_capability", sql`${t.canRead} OR ${t.canReadAvailability} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canCancel} OR ${t.canManage} OR ${t.canTriggerAgent}`)]);
+  canSubscribe: boolean("can_subscribe").notNull().default(false), canReadDeliveries: boolean("can_read_deliveries").notNull().default(false), canManageSubscriptions: boolean("can_manage_subscriptions").notNull().default(false),
+}, t => [uniqueIndex("api_key_calendars_key_calendar_idx").on(t.keyId, t.calendarId), check("api_key_calendars_capability", sql`${t.canRead} OR ${t.canReadAvailability} OR ${t.canCreate} OR ${t.canUpdate} OR ${t.canCancel} OR ${t.canManage} OR ${t.canTriggerAgent} OR ${t.canSubscribe} OR ${t.canReadDeliveries} OR ${t.canManageSubscriptions}`)]);
 
 export const bookingReminders = pgTable("booking_reminders", {
   id: uuid("id").defaultRandom().primaryKey(),

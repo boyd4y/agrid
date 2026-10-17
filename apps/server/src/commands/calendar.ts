@@ -31,3 +31,13 @@ export const queryScheduledOccurrences = (...args: Args<typeof implementation.qu
 export const setBookingReminders = (...args: Args<typeof implementation.setBookingReminders>) => businessCall(() => implementation.setBookingReminders(commandDependencies(), ...args));
 
 export const listBookingReminders = (...args: Args<typeof implementation.listBookingReminders>) => businessCall(() => implementation.listBookingReminders(commandDependencies(), ...args));
+
+export const listCalendarSubscriptions = (...args: Args<typeof implementation.listCalendarSubscriptions>) => businessCall(() => implementation.listCalendarSubscriptions(commandDependencies(), ...args));
+export const getCalendarSubscription = (...args: Args<typeof implementation.getCalendarSubscription>) => businessCall(() => implementation.getCalendarSubscription(commandDependencies(), ...args));
+export const createCalendarSubscription = (...args: Args<typeof implementation.createCalendarSubscription>) => businessCall(() => implementation.createCalendarSubscription(commandDependencies(), ...args));
+export const updateCalendarSubscription = (...args: Args<typeof implementation.updateCalendarSubscription>) => businessCall(() => implementation.updateCalendarSubscription(commandDependencies(), ...args));
+export const revokeCalendarSubscription = (...args: Args<typeof implementation.revokeCalendarSubscription>) => businessCall(() => implementation.revokeCalendarSubscription(commandDependencies(), ...args));
+export const rotateCalendarSubscriptionSecret = (...args: Args<typeof implementation.rotateCalendarSubscriptionSecret>) => businessCall(() => implementation.rotateCalendarSubscriptionSecret(commandDependencies(), ...args));
+export const listCalendarDeliveries = (...args: Args<typeof implementation.listCalendarDeliveries>) => businessCall(() => implementation.listCalendarDeliveries(commandDependencies(), ...args));
+export const getCalendarDelivery = (...args: Args<typeof implementation.getCalendarDelivery>) => businessCall(() => implementation.getCalendarDelivery(commandDependencies(), ...args));
+export const retryCalendarDelivery = (...args: Args<typeof implementation.retryCalendarDelivery>) => businessCall(() => implementation.retryCalendarDelivery(commandDependencies(), ...args));

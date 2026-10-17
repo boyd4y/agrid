@@ -1,3 +1,4 @@
+import { suspendKeySubscriptions, lockSubscriptionCalendarsForKey } from "../calendar/subscriptions.js";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sha256 } from "@tabdo/core/crypto";
@@ -97,6 +98,7 @@ export async function updateSiteKey(deps: RuntimeDependencies, actor: Actor, key
   return deps.database.transaction(async tx => {
     const [key] = await tx.select().from(userApiKeys).where(and(eq(userApiKeys.id, keyId), eq(userApiKeys.organizationId, actor.organizationId), isNull(userApiKeys.revokedAt))).for("update");
     if (!key) throw new ServiceError(404, { message: "API key not found" });
+    await lockSubscriptionCalendarsForKey(tx, actor.organizationId, keyId, input.calendarPermissions.map(p => p.calendarId));
     await grantSchedules(tx, actor.organizationId, input.schedulePermissions.map(p => p.automationId));
     await grantTables(tx, actor.organizationId, input.permissions.map(p => p.tableId));
     await grantCalendars(tx, actor.organizationId, input.calendarPermissions.map(p => p.calendarId));
@@ -111,6 +113,7 @@ export async function updateSiteKey(deps: RuntimeDependencies, actor: Actor, key
     if (input.blogPermissions.length) await tx.insert(apiKeyBlogs).values(input.blogPermissions.map(grant => ({ keyId, ...grant })));
     await tx.delete(apiKeyDocuments).where(eq(apiKeyDocuments.keyId, keyId));
     if (input.documentPermissions.length) await tx.insert(apiKeyDocuments).values(input.documentPermissions.map(grant => ({ keyId, ...grant })));
+    await suspendKeySubscriptions(deps, tx, keyId, input.calendarPermissions.filter(g => g.canRead && g.canSubscribe).map(g => g.calendarId));
     await tx.delete(apiKeyCalendars).where(eq(apiKeyCalendars.keyId, keyId));
     if (input.calendarPermissions.length) await tx.insert(apiKeyCalendars).values(input.calendarPermissions.map(grant => ({ keyId, ...grant })));
     return { key: (await summaries(tx, actor.organizationId)).find(key => key.id === keyId)! };
@@ -118,8 +121,13 @@ export async function updateSiteKey(deps: RuntimeDependencies, actor: Actor, key
 }
 export async function deleteSiteKey(deps: RuntimeDependencies, actor: Actor, keyId: string) {
   manager(actor); id(keyId);
-  const [key] = await deps.database.delete(userApiKeys).where(and(eq(userApiKeys.id, keyId), eq(userApiKeys.organizationId, actor.organizationId))).returning({ id: userApiKeys.id });
-  if (!key) throw new ServiceError(404, { message: "API key not found" }); return key;
+  return deps.database.transaction(async tx => {
+    const [key] = await tx.select({ id: userApiKeys.id }).from(userApiKeys).where(and(eq(userApiKeys.id, keyId), eq(userApiKeys.organizationId, actor.organizationId))).for("update");
+    if (!key) throw new ServiceError(404, { message: "API key not found" });
+    await suspendKeySubscriptions(deps, tx, keyId, []);
+    await tx.delete(userApiKeys).where(eq(userApiKeys.id, keyId));
+    return key;
+  });
 }
 export async function resolveSiteKey(database: Database, secret: string, lock = false): Promise<SitePrincipal> {
   if (!isApiKey(secret)) throw new ServiceError(401, { message: "A valid API key is required" });
@@ -128,7 +136,7 @@ export async function resolveSiteKey(database: Database, secret: string, lock = 
   if (!key) throw new ServiceError(401, { message: "Invalid API key" });
   const grants = await database.select({ tableId: tables.id, canRead: apiKeyTables.canRead, canCreate: apiKeyTables.canCreate, canUpdate: apiKeyTables.canUpdate, canDelete: apiKeyTables.canDelete }).from(apiKeyTables).innerJoin(tables, eq(tables.id, apiKeyTables.tableId))
     .where(and(eq(apiKeyTables.keyId, key.id), eq(tables.organizationId, key.organizationId)));
-  const calendarGrants = await database.select({ calendarId: calendars.id, canRead: apiKeyCalendars.canRead, canReadAvailability: apiKeyCalendars.canReadAvailability, canCreate: apiKeyCalendars.canCreate, canUpdate: apiKeyCalendars.canUpdate, canCancel: apiKeyCalendars.canCancel, canManage: apiKeyCalendars.canManage, canTriggerAgent: apiKeyCalendars.canTriggerAgent }).from(apiKeyCalendars).innerJoin(calendars, eq(calendars.id, apiKeyCalendars.calendarId)).where(and(eq(apiKeyCalendars.keyId, key.id), eq(calendars.organizationId, key.organizationId)));
+  const calendarGrants = await database.select({ calendarId: calendars.id, canRead: apiKeyCalendars.canRead, canReadAvailability: apiKeyCalendars.canReadAvailability, canCreate: apiKeyCalendars.canCreate, canUpdate: apiKeyCalendars.canUpdate, canCancel: apiKeyCalendars.canCancel, canManage: apiKeyCalendars.canManage, canTriggerAgent: apiKeyCalendars.canTriggerAgent, canSubscribe: apiKeyCalendars.canSubscribe, canReadDeliveries: apiKeyCalendars.canReadDeliveries, canManageSubscriptions: apiKeyCalendars.canManageSubscriptions }).from(apiKeyCalendars).innerJoin(calendars, eq(calendars.id, apiKeyCalendars.calendarId)).where(and(eq(apiKeyCalendars.keyId, key.id), eq(calendars.organizationId, key.organizationId)));
   const scheduleGrants = await database.select().from(apiKeySchedules).where(eq(apiKeySchedules.keyId, key.id));
   const documentGrants = await database.select({ tableId: apiKeyDocuments.tableId, canRead: apiKeyDocuments.canRead, canCreate: apiKeyDocuments.canCreate, canUpdate: apiKeyDocuments.canUpdate, canReadHistory: apiKeyDocuments.canReadHistory, canRestore: apiKeyDocuments.canRestore, canUpload: apiKeyDocuments.canUpload }).from(apiKeyDocuments).innerJoin(tables, eq(tables.id, apiKeyDocuments.tableId)).where(and(eq(apiKeyDocuments.keyId, key.id), eq(tables.organizationId, key.organizationId)));
   const blogGrants = await database.select().from(apiKeyBlogs).innerJoin(tables, eq(tables.id, apiKeyBlogs.tableId)).where(and(eq(apiKeyBlogs.keyId, key.id), eq(tables.organizationId, key.organizationId)));

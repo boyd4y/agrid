@@ -267,6 +267,13 @@
       "when": 1792235325422,
       "tag": "0037_blog_site_publishing",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792249806245,
+      "tag": "0038_calendar_event_subscriptions",
+      "breakpoints": true
     }
   ]
 }

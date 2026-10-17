@@ -9,7 +9,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member } from "../../src/business/db/schema.js";
+import { organization, user, member, calendarDeliveries } from "../../src/business/db/schema.js";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import { createSiteApiRoutes } from "../../src/business/http/site-api.js";
 import { createCommandsRoute } from "../../src/business/http/commands.js";
@@ -27,7 +27,7 @@ const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(process.env.DATABASE_URL_UNPOOLED, url);
 const resource = createDatabase({ connectionString: url, poolMax: 5 });
 const org = randomUUID(), uid = randomUUID(), mid = randomUUID();
-const deps: CommandDependencies = { database: resource.db, now: () => new Date("2029-01-01T00:00:00Z"), uuid: randomUUID, automationQueueName: "unused" };
+const deps: CommandDependencies = { database: resource.db, now: () => new Date("2029-01-01T00:00:00Z"), uuid: randomUUID, automationQueueName: "unused", calendarOutbound: { encryptionKey: "11".repeat(32), send: async () => ({ httpStatus: 204, error: null }) } };
 const actor: Actor = { organizationId: org, userId: uid, memberId: mid, kind: "human", role: "owner", name: "API calendar owner", email: `${uid}@local.test` };
 const caller = { kind: "member" as const, organizationId: org, actorId: uid };
 let rateHook: () => Promise<void> = async () => {};
@@ -39,7 +39,7 @@ const call = <K extends CalendarCommand>(command: K, input: CalendarCommands[K])
 const publicCall = (command: CalendarCommand, input: unknown, headers: Record<string, string> = {}) => app.request("http://fixture.test/api/commands", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}`, ...headers }, body: JSON.stringify({ command, input }) });
 const range = { rangeStart: "2030-01-07T00:00:00Z", rangeEnd: "2030-01-08T00:00:00Z" };
 const time = (hour: number) => ({ start: `2030-01-07T${String(hour).padStart(2, "0")}:00:00Z`, end: `2030-01-07T${String(hour).padStart(2, "0")}:30:00Z`, timeZone: "UTC" });
-const grants = () => [{ calendarId, canRead: true, canReadAvailability: true, canCreate: true, canUpdate: true, canCancel: true, canManage: true }];
+const grants = () => [{ calendarId, canRead: true, canReadAvailability: true, canCreate: true, canUpdate: true, canCancel: true, canManage: true, canSubscribe: true, canReadDeliveries: true, canManageSubscriptions: true }];
 before(async () => {
   await resource.db.insert(organization).values({ id: org, name: "Calendar API test", slug: org });
   await resource.db.insert(user).values({ id: uid, name: actor.name, email: actor.email });
@@ -115,6 +115,44 @@ test("actual MCP stdio round-trip queries availability, creates and cancels thro
     const result = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ availability: { calendarId, personId, ...range, durationMinutes: 30 }, booking: { calendarId, personId, title: "Real MCP", idempotencyKey: key() } }) } });
     assert.equal(JSON.parse(result.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+});
+test("subscription CRUD, delivery history and explicit retry align across REST, GraphQL, SDK, native and real MCP", { timeout: 30000 }, async () => {
+  const transport: typeof fetch = async (url, options) => app.request(String(url), options);
+  const client = createClient({ url: "http://fixture.test", key: secret, fetch: transport });
+  const endpoint = `http://fixture.test/api/calendars/${calendarId}/subscriptions`;
+  const headers = { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" };
+  const created = await app.request(endpoint, { method: "POST", headers, body: JSON.stringify({ name: "API outgoing", endpoint: "https://receiver.example.test/events", eventTypes: ["booking.created"], idempotencyKey: key() }) });
+  assert.equal(created.status, 200); const { subscription, secret: signingSecret } = await created.json(); assert(signingSecret);
+  const subscriptionId = subscription.id;
+  const list = await client.calendar.listCalendarSubscriptions({ calendarId, limit: 1 }); assert.equal(list.items[0].id, subscriptionId); assert(!JSON.stringify(list).includes(signingSecret));
+  assert.equal((await client.calendar.getCalendarSubscription({ calendarId, subscriptionId })).id, subscriptionId);
+  const b = await call("createBooking", { calendarId, personId, title: "API outgoing booking", time: time(16), idempotencyKey: key() });
+  const deliveries = await client.calendar.listCalendarDeliveries({ calendarId, subscriptionId }); assert.equal(deliveries.items.length, 1);
+  const deliveryId = deliveries.items[0].id;
+  const detail = await app.request(`${endpoint}/${subscriptionId}/deliveries/${deliveryId}`, { headers }); assert.equal(detail.status, 200); assert.equal((await detail.json()).attempts.length, 0);
+  await resource.db.update(calendarDeliveries).set({ status: "deadletter" }).where(eq(calendarDeliveries.id, deliveryId));
+  assert.equal((await client.calendar.retryCalendarDelivery({ calendarId, subscriptionId, deliveryId, expectedVersion: 1, idempotencyKey: key() })).id, deliveryId);
+  assert.equal((await client.calendar.getBooking({ calendarId, bookingId: b.id })).version, 1);
+  const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
+  if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
+  const address = server.address(); assert(address && typeof address !== "string");
+  try {
+    const calls = [
+      { name: "list_calendar_subscriptions", input: { calendarId }, expect: { "items.0.id": subscriptionId }, absent: [signingSecret] },
+      { name: "get_calendar_subscription", input: { calendarId, subscriptionId }, expect: { id: subscriptionId } },
+      { name: "list_calendar_deliveries", input: { calendarId, subscriptionId }, expect: { "items.0.id": deliveryId } },
+      { name: "get_calendar_delivery", input: { calendarId, subscriptionId, deliveryId }, expect: { "delivery.id": deliveryId } },
+    ];
+    const result = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls }) } });
+    assert.equal(JSON.parse(result.stdout).operations, calls.length);
+  } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+  const paused = await client.calendar.updateCalendarSubscription({ calendarId, subscriptionId, name: subscription.name, endpoint: subscription.endpoint, eventTypes: subscription.eventTypes, status: "paused", expectedVersion: 1, idempotencyKey: key() }); assert.equal(paused.version, 2);
+  const rotated = await client.calendar.rotateCalendarSubscriptionSecret({ calendarId, subscriptionId, expectedVersion: 2, idempotencyKey: key() }); assert(rotated.secret); assert.notEqual(rotated.secret, signingSecret);
+  const native = createCalendarTools(deps, org, uid);
+  const memberCreated = await native.create_calendar_subscription.execute!({ calendarId, name: "Native subscription", endpoint: "https://receiver.example.test/native", eventTypes: ["booking.created"], idempotencyKey: key() }, { toolCallId: key(), messages: [], context: undefined }) as any; assert(memberCreated.secret);
+  const result = await dispatchCommand(deps, actor, { command: "listCalendarSubscriptions", input: { calendarId } }); assert((result.result as any).items.some((v: any) => v.id === memberCreated.subscription.id));
+  const revoked = await app.request(`${endpoint}/${subscriptionId}/revoke`, { method: "POST", headers, body: JSON.stringify({ expectedVersion: 3, idempotencyKey: key() }) }); assert.equal(revoked.status, 200); assert.equal((await revoked.json()).status, "revoked");
+  assert.equal((await client.calendar.getCalendarDelivery({ calendarId, subscriptionId, deliveryId })).delivery.status, "skipped");
 });
 test("narrowed grants cannot replay a previously accepted create receipt", async () => {
   const input = { calendarId, personId, title: "Revocation", time: time(14), idempotencyKey: key() };

@@ -25,7 +25,7 @@ const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(process.env.DATABASE_URL_UNPOOLED, url);
 const resource = createDatabase({ connectionString: url, poolMax: 4 });
 const org = randomUUID(), uid = randomUUID(), mid = randomUUID(), scope = { organizationId: org };
-const deps: CommandDependencies = { database: resource.db, now: () => new Date(), uuid: randomUUID, automationQueueName: "unused" };
+const deps: CommandDependencies = { database: resource.db, now: () => new Date(), uuid: randomUUID, automationQueueName: "unused", calendarOutbound: { encryptionKey: "11".repeat(32), send: async () => { throw new Error("Read matrix must never send HTTP"); } } };
 const actor: Actor = { organizationId: org, userId: uid, memberId: mid, kind: "human", role: "owner", name: "Date API owner", email: `${uid}@local.test` };
 const acquire: RequestScopeResolver = async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async headers => headers.get("Cookie") === "dates=owner" ? { user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } } : null }, siteRateLimit: async () => {}, close: async () => {} });
 const app = new Hono().route("/api", createSiteApiRoutes(acquire)).route("/api/commands", createCommandsRoute(acquire));
@@ -80,26 +80,32 @@ test("native configuration/query and real MCP stdio use the same scoped record p
   await invoke("update_calendar_view", { viewId: native.id, config: { startColumnId: startId, titleColumnId: titleId } });
   const result = await invoke("query_calendar_view", { viewId: native.id, ...range });
   assert.equal(result.items[0].rowId, rowId);
-  // Shared entry-point merges must retain all four read surfaces and their grants.
+  // Shared entry-point merges must retain all five read surfaces and their grants.
   await commands.createDocument(deps, { ...scope, actorId: uid, tableId, rowId, content: EMPTY_DOCUMENT, idempotencyKey: randomUUID() });
   const calendar = await commands.createCalendar(deps, { ...scope, actorId: uid, name: "Coexisting calendar", timeZone: "UTC", idempotencyKey: randomUUID() });
   const mixed = await createSiteKey(deps, actor, { name: "Combined reads",
     permissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false }],
     documentPermissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }],
     blogPermissions: [{ tableId, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }],
-    calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false }],
+    calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canSubscribe: true, canReadDeliveries: true, canManageSubscriptions: false }],
   });
   const sdk = createClient({ url: "http://fixture.test", key: mixed.secret, fetch: async (url, options) => app.request(String(url), options) });
   assert.equal((await sdk.queryCalendarView({ viewId, ...range })).items[0].rowId, rowId);
   assert.deepEqual((await sdk.documents.getDocument({ tableId, rowId }))!.content, EMPTY_DOCUMENT);
   assert((await sdk.blogs.getBlogSources({ tableId })).items.some(item => item.rowId === rowId));
   assert.equal((await sdk.calendar.getCalendar({ calendarId: calendar.id })).id, calendar.id);
+  const subscription = await sdk.calendar.createCalendarSubscription({ calendarId: calendar.id, name: "Coexisting subscription", endpoint: "https://receiver.example.test/read-matrix", eventTypes: ["booking.created"], idempotencyKey: randomUUID() });
+  assert(subscription.secret);
+  assert.equal((await sdk.calendar.getCalendarSubscription({ calendarId: calendar.id, subscriptionId: subscription.subscription.id })).id, subscription.subscription.id);
+  assert((await sdk.calendar.listCalendarSubscriptions({ calendarId: calendar.id })).items.some(item => item.id === subscription.subscription.id));
+  assert.deepEqual((await sdk.calendar.listCalendarDeliveries({ calendarId: calendar.id, subscriptionId: subscription.subscription.id })).items, []);
+
   const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
   const address = server.address(); assert(address && typeof address !== "string");
   try {
     const runner = fileURLToPath(new URL("../../../mcp/test/calendar-view-client.mjs", import.meta.url));
-    const response = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: mixed.secret, CALENDAR_VIEW_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_VIEW_MCP_CASE: JSON.stringify({ viewId, rowId, startId, tableId, calendarId: calendar.id }) } });
+    const response = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: mixed.secret, CALENDAR_VIEW_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_VIEW_MCP_CASE: JSON.stringify({ viewId, rowId, startId, tableId, calendarId: calendar.id, subscriptionId: subscription.subscription.id }) } });
     assert.equal(JSON.parse(response.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });

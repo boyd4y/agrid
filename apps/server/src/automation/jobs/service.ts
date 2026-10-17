@@ -1,3 +1,4 @@
+import { dispatchCalendarDeliveries, nextCalendarDeliveryDeadline } from "../../business/calendar/outbound.js";
 import { dispatchDueBookingReminders } from "../../business/calendar/reminders.js";
 import { startWorkerService, closeResources } from "@tabdo/worker/runtime";
 import type { QueuePublisher, QueueTransport } from "@tabdo/queue";
@@ -16,6 +17,7 @@ import { positiveInt } from "./config.js";
 /** Redis drives normal work. SQL sweeps are startup/recovery only, not the clock. */
 export function createAutomationService(options: {
   recoveryIntervalMs?: number;
+  calendarOutbound?: import("../../business/calendar/outbound.js").CalendarOutbound;
   closeDatabase?: boolean;
   controlQueue?: QueueTransport<AutomationWakeup>;
   publisher?: QueuePublisher<AutomationDelivery>;
@@ -25,9 +27,9 @@ export function createAutomationService(options: {
   const relay = createRelay(options.publisher ?? createAutomationQueue());
   const recovery = createPublishedReconciler();
   const control = options.controlQueue ?? createAutomationControlQueue();
-  const deps = commandDependencies();
+  const deps = { ...commandDependencies(), ...(options.calendarOutbound ? { calendarOutbound: options.calendarOutbound } : {}) };
   let stopping = false;
-  async function arm(kind: "outbox" | "schedules", deadline: Date | null) {
+  async function arm(kind: "outbox" | "schedules" | "calendar-deliveries", deadline: Date | null) {
     if (!deadline || stopping) return;
     const at = deadline.getTime(), delayMs = Math.max(100, at - Date.now());
     // Future deadlines deduplicate across producers/replicas. Already-due batches
@@ -45,6 +47,10 @@ export function createAutomationService(options: {
     await outbox();
     await arm("schedules", await nextScheduleDeadline(deps));
   }
+  async function calendarDeliveries() {
+    await dispatchCalendarDeliveries(deps, 1);
+    await arm("calendar-deliveries", await nextCalendarDeliveryDeadline(deps));
+  }
   async function native(threadId?: string) {
     const candidates = await reconcileNativeAutomations(25, undefined, threadId);
     await outbox();
@@ -55,12 +61,13 @@ export function createAutomationService(options: {
   const listener = control.consume({
     concurrency: 1, globalConcurrency: 1, lockDuration: 30_000, stalledInterval: 30_000,
     async process({ body }) {
-      if (!body || !["outbox", "schedules", "native-actions"].includes(body.kind)
+      if (!body || !["outbox", "schedules", "native-actions", "calendar-deliveries"].includes(body.kind)
         || ("threadId" in body && (body.kind !== "native-actions" || typeof body.threadId !== "string"))) {
         return { type: "retry", permanent: true, error: new Error("Invalid automation wakeup") };
       }
       if (body.kind === "outbox") await outbox();
       else if (body.kind === "schedules") await schedules();
+      else if (body.kind === "calendar-deliveries") await calendarDeliveries();
       else await native("threadId" in body ? body.threadId : undefined);
       return { type: "complete" };
     },
@@ -77,6 +84,7 @@ export function createAutomationService(options: {
     worker, intervalMs,
     tasks: [
       { name: "schedules", run: schedules },
+      { name: "calendar-deliveries", run: calendarDeliveries },
       { name: "native-actions", run: () => native() },
       { name: "delivery-recovery", async run() { await recovery.tick(); await outbox(); } },
     ],

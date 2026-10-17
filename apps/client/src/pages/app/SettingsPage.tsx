@@ -1,3 +1,5 @@
+import { CalendarSubscriptionsSettings } from "@/components/settings/CalendarSubscriptionsSettings";
+import { workspaceCacheKey } from "@/lib/workspace-scope";
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
@@ -23,6 +25,7 @@ export function SettingsPage() {
     { id: "general", label: t("settings.tabs.general"), icon: Settings2 },
     ...(user && user.kind !== "agent" ? [{ id: "api-keys", label: t("settings.tabs.apiKeys"), icon: KeyRound }] : []),
     { id: "agentmail", label: "AgentMail", icon: Mail },
+    { id: "calendar-events", label: t("calendar:subscriptions.title"), icon: Webhook },
     { id: "webhook", label: "Webhook", icon: Webhook },
   ];
   const requestedTab = searchParams.get("tab") ?? "general";
@@ -82,6 +85,7 @@ export function SettingsPage() {
         </TabsContent>
         {user && user.kind !== "agent" && <TabsContent value="api-keys" className={paneClass}><ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} /></TabsContent>}
         <TabsContent value="agentmail" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:agentmail`} kind="agentmail" /></TabsContent>
+        <TabsContent value="calendar-events" className={paneClass}><CalendarSubscriptionsSettings key={workspaceCacheKey()} /></TabsContent>
         <TabsContent value="webhook" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:webhook`} kind="webhook" /></TabsContent>
       </Tabs>
     </Card>

@@ -39,7 +39,7 @@ const key = randomUUID;
 const call = <K extends CalendarCommand>(command: K, input: CalendarCommands[K]) => executeCalendar(deps, caller, command, input);
 const range = { rangeStart: "2030-03-09T00:00:00Z", rangeEnd: "2030-03-12T00:00:00Z" };
 const reminder = { kind: "before_start" as const, offsetMinutes: 30, agentUserId: aid, prompt: "Check {{event.booking.title}}", maxLatenessMinutes: 60 };
-const grants = () => [{ calendarId, canRead: true, canReadAvailability: false, canCreate: true, canUpdate: true, canCancel: true, canManage: false, canTriggerAgent: true }];
+const grants = () => [{ calendarId, canRead: true, canReadAvailability: false, canCreate: true, canUpdate: true, canCancel: true, canManage: false, canTriggerAgent: true, canSubscribe: false, canReadDeliveries: false, canManageSubscriptions: false }];
 const app = new Hono().route("/api", createSiteApiRoutes(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => null }, siteRateLimit: async () => {}, close: async () => {} })))
   .route("/api/commands", createCommandsRoute(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => ({ user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } }) }, close: async () => {} })));
 const sdk = (secret: string) => createClient({ url: "http://fixture.test", key: secret, fetch: async (url, options) => app.request(String(url), options) });
@@ -80,6 +80,14 @@ test("one Key preserves independent table, calendar, schedule, document and blog
   assert.deepEqual((await tools.get_document.execute(location, { toolCallId: key(), messages: [] })).content, EMPTY_DOCUMENT);
   assert.equal((await tools.get_calendar.execute({ calendarId }, { toolCallId: key(), messages: [] })).id, calendarId);
   assert((await tools.query_scheduled_occurrences.execute({ ...range, automationIds: [rule.id] }, { toolCallId: key(), messages: [] })).items.length);
+  // The three outbound capabilities remain independent of agent triggering and all five families.
+  for (const capability of ["canSubscribe", "canReadDeliveries", "canManageSubscriptions"] as const) {
+    input = { ...input, calendarPermissions: [{ ...input.calendarPermissions![0], [capability]: true }] };
+    const edited = await management.request(`/${saved.key.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    assert.equal(edited.status, 200);
+    const listed = (await (await management.request("/")).json()).keys.find((value: { id: string }) => value.id === saved.key.id);
+    for (const family of ["permissions", "documentPermissions", "schedulePermissions", "calendarPermissions", "blogPermissions"] as const) assert.deepEqual(listed[family], input[family]);
+  }
   // Each edit changes one family and sends back every other family unchanged.
   for (const change of [
     { blogPermissions: [{ ...input.blogPermissions![0], canBuild: true }] },
