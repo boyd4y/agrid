@@ -1,7 +1,7 @@
 import { sha256 } from "../auth/hash.js";
 import { ServiceError } from "../errors.js";
 import type { IntegrationCapabilities } from "./dependencies.js";
-export type SecretContext = { organizationId: string; id: string; purpose: "agentmail-key" | "agentmail-signing" };
+export type SecretContext = { organizationId: string; id: string; purpose: "agentmail-key" | "agentmail-signing" | "calendar-signing" };
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const decode = (value: string) => Uint8Array.from(atob(value), char => char.charCodeAt(0));
 async function key(deps: Pick<IntegrationCapabilities, "encryptionKey">) {

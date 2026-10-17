@@ -33,3 +33,13 @@ export const queryScheduledOccurrences = (deps: CommandDependencies, input: Cale
 export const setBookingReminders = (deps: CommandDependencies, input: CalendarCommands["setBookingReminders"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "setBookingReminders", input, tx);
 
 export const listBookingReminders = (deps: CommandDependencies, input: CalendarCommands["listBookingReminders"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "listBookingReminders", input, tx);
+
+export const listCalendarSubscriptions = (deps: CommandDependencies, input: CalendarCommands["listCalendarSubscriptions"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "listCalendarSubscriptions", input, tx);
+export const getCalendarSubscription = (deps: CommandDependencies, input: CalendarCommands["getCalendarSubscription"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "getCalendarSubscription", input, tx);
+export const createCalendarSubscription = (deps: CommandDependencies, input: CalendarCommands["createCalendarSubscription"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "createCalendarSubscription", input, tx);
+export const updateCalendarSubscription = (deps: CommandDependencies, input: CalendarCommands["updateCalendarSubscription"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "updateCalendarSubscription", input, tx);
+export const revokeCalendarSubscription = (deps: CommandDependencies, input: CalendarCommands["revokeCalendarSubscription"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "revokeCalendarSubscription", input, tx);
+export const rotateCalendarSubscriptionSecret = (deps: CommandDependencies, input: CalendarCommands["rotateCalendarSubscriptionSecret"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "rotateCalendarSubscriptionSecret", input, tx);
+export const listCalendarDeliveries = (deps: CommandDependencies, input: CalendarCommands["listCalendarDeliveries"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "listCalendarDeliveries", input, tx);
+export const getCalendarDelivery = (deps: CommandDependencies, input: CalendarCommands["getCalendarDelivery"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "getCalendarDelivery", input, tx);
+export const retryCalendarDelivery = (deps: CommandDependencies, input: CalendarCommands["retryCalendarDelivery"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "retryCalendarDelivery", input, tx);

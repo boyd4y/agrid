@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { CALENDAR_SUBSCRIPTION_SCHEMAS, CALENDAR_SUBSCRIPTION_COMMANDS, CALENDAR_SUBSCRIPTION_READ_COMMANDS, CALENDAR_SUBSCRIPTION_TOOLS, type CalendarSubscriptionResults } from "./calendar-subscriptions.js";
+export * from "./calendar-subscriptions.js";
 
-export const CALENDAR_ERROR_CODES = ["BAD_INPUT", "NOT_FOUND", "FORBIDDEN", "VERSION_CONFLICT", "RESOURCE_CONFLICT", "OUTSIDE_AVAILABILITY", "IDEMPOTENCY_MISMATCH", "RANGE_TOO_LARGE", "QUERY_LIMIT", "ARCHIVED", "INVALID_STATE", "FUTURE_BOOKINGS"] as const;
+export const CALENDAR_ERROR_CODES = ["BAD_INPUT", "NOT_FOUND", "FORBIDDEN", "VERSION_CONFLICT", "RESOURCE_CONFLICT", "OUTSIDE_AVAILABILITY", "IDEMPOTENCY_MISMATCH", "RANGE_TOO_LARGE", "QUERY_LIMIT", "ARCHIVED", "INVALID_STATE", "FUTURE_BOOKINGS", "SERVICE_UNAVAILABLE"] as const;
 export type CalendarErrorCode = typeof CALENDAR_ERROR_CODES[number];
 export const calendarZone = z.string().min(1).max(100).refine(value => {
   if (/^[+-]/.test(value)) return false;
@@ -32,6 +34,7 @@ const bookingCreate = z.strictObject({ kind: z.literal("create"), personId: id, 
 const bookingReschedule = z.strictObject({ kind: z.literal("reschedule"), bookingId: id, expectedVersion: version, time: bookingTimeSchema });
 const bookingCancel = z.strictObject({ kind: z.literal("cancel"), bookingId: id, expectedVersion: version });
 export const CALENDAR_SCHEMAS = {
+  ...CALENDAR_SUBSCRIPTION_SCHEMAS,
   listCalendars: z.strictObject({ includeArchived: z.boolean().default(false) }),
   getCalendar: z.strictObject(scope),
   createCalendar: z.strictObject({ name, timeZone: calendarZone, ...write }),
@@ -59,12 +62,12 @@ export const CALENDAR_SCHEMAS = {
   listBookingReminders: z.strictObject({ ...scope, bookingId: id }),
   batchBookings: z.strictObject({ ...scope, operations: z.array(z.discriminatedUnion("kind", [bookingCreate, bookingReschedule, bookingCancel])).min(1).max(100), ...write }),
 } as const;
-export const CALENDAR_COMMANDS = ["listCalendars", "getCalendar", "createCalendar", "updateCalendar", "archiveCalendar", "listCalendarPeople", "getCalendarPerson", "createCalendarPerson", "updateCalendarPerson", "archiveCalendarPerson", "getWorkingHours", "setWorkingHours", "listAvailabilityExceptions", "setAvailabilityException", "removeAvailabilityException", "queryBookings", "getBooking", "createBooking", "rescheduleBooking", "cancelBooking", "queryAvailability", "checkBookingConflicts", "batchBookings", "queryScheduledOccurrences", "setBookingReminders", "listBookingReminders"] as const satisfies readonly (keyof typeof CALENDAR_SCHEMAS)[];
+export const CALENDAR_COMMANDS = [...CALENDAR_SUBSCRIPTION_COMMANDS, "listCalendars", "getCalendar", "createCalendar", "updateCalendar", "archiveCalendar", "listCalendarPeople", "getCalendarPerson", "createCalendarPerson", "updateCalendarPerson", "archiveCalendarPerson", "getWorkingHours", "setWorkingHours", "listAvailabilityExceptions", "setAvailabilityException", "removeAvailabilityException", "queryBookings", "getBooking", "createBooking", "rescheduleBooking", "cancelBooking", "queryAvailability", "checkBookingConflicts", "batchBookings", "queryScheduledOccurrences", "setBookingReminders", "listBookingReminders"] as const satisfies readonly (keyof typeof CALENDAR_SCHEMAS)[];
 export type CalendarCommand = typeof CALENDAR_COMMANDS[number];
 export type CalendarCommands = { [K in CalendarCommand]: z.input<typeof CALENDAR_SCHEMAS[K]> };
 export type CalendarParsed<K extends CalendarCommand> = z.output<typeof CALENDAR_SCHEMAS[K]>;
-export const CALENDAR_READ_COMMANDS: readonly CalendarCommand[] = ["listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"];
-export const calendarPermissionSchema = z.strictObject({ calendarId: id, canRead: z.boolean(), canReadAvailability: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canCancel: z.boolean(), canManage: z.boolean(), canTriggerAgent: z.boolean().optional() }).refine(v => v.canRead || v.canReadAvailability || v.canCreate || v.canUpdate || v.canCancel || v.canManage || v.canTriggerAgent);
+export const CALENDAR_READ_COMMANDS: readonly CalendarCommand[] = [...CALENDAR_SUBSCRIPTION_READ_COMMANDS, "listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"];
+export const calendarPermissionSchema = z.strictObject({ calendarId: id, canRead: z.boolean(), canReadAvailability: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canCancel: z.boolean(), canManage: z.boolean(), canTriggerAgent: z.boolean().optional(), canSubscribe: z.boolean().optional(), canReadDeliveries: z.boolean().optional(), canManageSubscriptions: z.boolean().optional() }).refine(v => v.canRead || v.canReadAvailability || v.canCreate || v.canUpdate || v.canCancel || v.canManage || v.canTriggerAgent || v.canSubscribe || v.canReadDeliveries || v.canManageSubscriptions);
 export type CalendarPermission = z.infer<typeof calendarPermissionSchema>;
 export type Calendar = { id: string; workspaceId: string; name: string; timeZone: string; version: number; archived: boolean };
 export type CalendarPerson = { id: string; name: string; timeZone: string; userId: string | null; version: number; archived: boolean; windows: WorkingWindow[] };
@@ -77,7 +80,7 @@ export type BookingReminderIntent = { id: string; revision: number; kind: Bookin
 export type ScheduledOccurrence = { automationId: string; ruleVersion: number; name: string; enabled: boolean; cron: string; scheduledFor: string; timeZone: string; projection: "planned" | "occurred"; delayed: boolean; status: string | null; threadId: string | null };
 export type SchedulePermission = { automationId: string; canRead: boolean; canUpdate: boolean };
 export const schedulePermissionSchema = z.strictObject({ automationId: id, canRead: z.boolean(), canUpdate: z.boolean() }).refine(v => v.canRead || v.canUpdate);
-export type CalendarResults = {
+export type CalendarResults = CalendarSubscriptionResults & {
   queryScheduledOccurrences: CompleteCalendarPage<ScheduledOccurrence>;
   setBookingReminders: BookingReceipt;
   listBookingReminders: { bookingVersion: number; revision: number; reminders: BookingReminder[]; intents: BookingReminderIntent[]; complete: true };
@@ -94,6 +97,7 @@ export type CalendarResults = {
 
 /** Explicit public tool registrations shared by MCP and the native tool catalog. */
 export const CALENDAR_TOOLS = {
+  ...CALENDAR_SUBSCRIPTION_TOOLS,
   query_scheduled_occurrences: { command: "queryScheduledOccurrences", description: "只读投影当前工作区cron计划与实际occurrence，最多93天/1000点；预测不代表执行，不占预约资源。Key需独立计划授权。" },
   set_booking_reminders: { command: "setBookingReminders", description: "按预约expectedVersion整体替换最多10项智能体提醒，空数组撤销。before_start正offsetMinutes，at_end为0；改期/取消使未接受旧提醒失效。已接受运行不保证撤回。" },
   list_booking_reminders: { command: "listBookingReminders", description: "读取预约提醒配置与真实持久执行状态，只有对话所有者获得运行链接。" },

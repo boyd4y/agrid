@@ -11,7 +11,7 @@ try{
  await page.goto(frontend+'/app/settings?tab=api-keys');
  const settings=page.getByTestId('api-keys-settings');
  await settings.getByText('创建你的第一个 API Key',{exact:true}).waitFor();
- assert.equal(await page.getByRole('tab').count(),4);
+ assert.equal(await page.getByRole('tab').count(),5);
  await settings.getByRole('button',{name:'创建 API Key',exact:true}).click();
  const dialog=page.getByRole('dialog');
  await dialog.getByRole('textbox',{name:'名称',exact:true}).fill('Script');

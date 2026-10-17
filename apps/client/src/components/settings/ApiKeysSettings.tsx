@@ -28,7 +28,7 @@ export function ApiKeysSettings() {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<ApiKeyTable[]>([]);
   const [calendars, setCalendars] = useState<{ id: string; name: string; workspaceName: string }[]>([]);
   const [schedules, setSchedules] = useState<{ id: string; name: string; workspaceName: string }[]>([]);
-  const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage", "canTriggerAgent"] as const;
+  const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage", "canTriggerAgent", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"] as const;
   const documentOperations = ["canRead", "canCreate", "canUpdate", "canReadHistory", "canRestore", "canUpload"] as const;
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);

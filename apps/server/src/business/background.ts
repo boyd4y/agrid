@@ -2,4 +2,5 @@
 export type BackgroundWakeup =
   | Readonly<{ kind: "outbox" }>
   | Readonly<{ kind: "schedules" }>
+  | Readonly<{ kind: "calendar-deliveries" }>
   | Readonly<{ kind: "native-actions"; threadId: string }>;

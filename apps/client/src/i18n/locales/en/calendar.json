@@ -67,7 +67,7 @@
   "slotCount": "Found {{count}} available slots",
   "moreSlots": "Show more slots",
   "calendarGrants": "Calendar permissions",
-  "calendarGrantsHint": "Grant each calendar explicitly. Create does not include reading details; availability excludes customer information. Table permissions remain separate. Setting agent reminders requires both booking update and agent trigger permissions.",
+  "calendarGrantsHint": "Grant each calendar explicitly. Create does not include reading details; availability excludes customer information. Table permissions remain separate. Setting agent reminders requires both booking update and agent trigger permissions. Event subscriptions require both subscribe and detail-read permissions. Delivery history and subscription management have separate grants. Keys can access only subscriptions they created.",
   "calendarScope": "{{count}} calendars",
   "errors": {
     "BAD_INPUT": "Check the dates, time zone and input format.",
@@ -82,7 +82,8 @@
     "ARCHIVED": "The calendar or person is archived. Choose an active record.",
     "INVALID_STATE": "The appointment status or linked membership changed. Refresh and try again.",
     "FUTURE_BOOKINGS": "Reschedule or cancel unfinished appointments before archiving.",
-    "REQUEST_FAILED": "The request could not be completed. Check your connection and retry."
+    "REQUEST_FAILED": "The request could not be completed. Check your connection and retry.",
+    "SERVICE_UNAVAILABLE": "Outbound delivery is not configured. Ask your administrator to check the integration encryption key."
   },
   "grants": {
     "canRead": "Details",
@@ -91,7 +92,10 @@
     "canUpdate": "Reschedule",
     "canCancel": "Cancel",
     "canManage": "Manage",
-    "canTriggerAgent": "Trigger agent reminders"
+    "canTriggerAgent": "Trigger agent reminders",
+    "canSubscribe": "Subscribe to events",
+    "canReadDeliveries": "Read deliveries",
+    "canManageSubscriptions": "Manage subscriptions"
   },
   "days": {
     "1": "Monday",
@@ -172,5 +176,89 @@
     "canRead": "Read plan",
     "canUpdate": "Update plan",
     "scope": "{{count}} scheduled plan grants"
+  },
+  "subscriptions": {
+    "title": "Calendar event subscriptions",
+    "description": "Send calendar change notifications to your HTTPS endpoint and inspect delivery history.",
+    "adminOnly": "Only owners and administrators can manage outbound subscriptions here.",
+    "noCalendars": "Create a calendar first",
+    "noCalendarsHint": "Open Calendar to create a calendar in this workspace, then return here.",
+    "create": "New subscription",
+    "edit": "Edit subscription",
+    "empty": "No event subscriptions",
+    "emptyHint": "Choose which changes your endpoint should receive.",
+    "boundary": "Notifications contain IDs and versions only. Fetch details with separate API permissions. Changes to shared staff schedules notify every calendar in this workspace. Pausing or changing configuration skips unfinished deliveries; resuming starts with new events.",
+    "endpoint": "HTTPS endpoint",
+    "endpointHint": "Use a public HTTPS address on port 443. Private addresses and redirects are rejected.",
+    "eventTypes": "Event types",
+    "history": "Delivery history",
+    "pause": "Pause",
+    "resume": "Resume",
+    "revoke": "Revoke subscription",
+    "rotate": "Rotate signing secret",
+    "rotateHint": "The old secret stops being used. Unfinished deliveries are skipped. Save the new secret before closing.",
+    "revokeHint": "This permanently stops future deliveries. Requests already received by your endpoint cannot be withdrawn.",
+    "secretTitle": "Save your signing secret",
+    "secret": "Signing secret",
+    "secretOnce": "This secret is shown once. Use it to verify the request signature. If lost, rotate it.",
+    "secretLost": "The request was already accepted. The secret cannot be shown again; rotate it to get a new one.",
+    "copy": "Copy secret",
+    "copied": "Secret copied",
+    "copyFailed": "Could not copy. Select and copy the secret manually.",
+    "deliveryBoundary": "Delivery may repeat or arrive out of order. Deduplicate by deliveryId/eventId and use aggregateVersion. Automatic retries stop after five attempts.",
+    "filterStatus": "Delivery status",
+    "allStatuses": "All statuses",
+    "noDeliveries": "No deliveries match this filter. Only events after subscription creation are delivered.",
+    "attemptCount": "{{count}} attempts",
+    "attempt": "Attempt {{number}}",
+    "deliveryDetails": "Delivery details",
+    "notAttempted": "No HTTP attempt has started.",
+    "retry": "Retry delivery",
+    "retrying": "Requesting retry…",
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "revoked": "Revoked"
+    },
+    "deliveryStatus": {
+      "pending": "Pending",
+      "delivering": "Delivering",
+      "succeeded": "Succeeded",
+      "deadletter": "Retries exhausted",
+      "skipped": "Skipped"
+    },
+    "attemptStatus": {
+      "started": "Started",
+      "succeeded": "Succeeded",
+      "failed": "Failed",
+      "unknown": "Outcome unknown",
+      "skipped": "Skipped"
+    },
+    "events": {
+      "booking_created": "Booking created",
+      "booking_rescheduled": "Booking rescheduled",
+      "booking_cancelled": "Booking cancelled",
+      "booking_reminders_changed": "Reminders changed",
+      "calendar_updated": "Calendar updated",
+      "calendar_archived": "Calendar archived",
+      "person_created": "Person added",
+      "person_updated": "Person updated",
+      "person_archived": "Person archived",
+      "working_hours_updated": "Working hours changed",
+      "availability_exception_created": "Time off added",
+      "availability_exception_updated": "Time off updated",
+      "availability_exception_removed": "Time off removed"
+    },
+    "reasons": {
+      "destination_rejected": "Destination is blocked by outbound address restrictions.",
+      "timeout": "The endpoint did not respond before the deadline.",
+      "response_too_large": "The endpoint response exceeded the size limit.",
+      "network_error": "Connection or signing configuration failed.",
+      "http_error": "The endpoint returned a non-success HTTP status.",
+      "outcome_unknown": "The delivery result could not be confirmed. Your endpoint may have received this attempt.",
+      "subscription_changed": "Subscription configuration changed; old deliveries were skipped.",
+      "authorization_revoked": "The creator or original API key no longer has the required permissions.",
+      "invalid_event": "The stored event format or scope is invalid; no request was sent."
+    }
   }
 }

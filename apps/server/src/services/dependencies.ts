@@ -1,3 +1,4 @@
+import { calendarOutboundCapabilities } from "./calendar-outbound-http.js";
 import { DocumentError } from "../business/documents/errors.js";
 import { CalendarError } from "../business/calendar/errors.js";
 import { siteCapabilities } from "../sites/capabilities.js";
@@ -21,7 +22,7 @@ export function runtimeDependencies(): RuntimeDependencies {
 }
 
 export function commandDependencies(): CommandDependencies {
-  return { ...runtimeDependencies(), automationQueueName: queueName, sites: siteCapabilities() };
+  return { ...runtimeDependencies(), automationQueueName: queueName, calendarOutbound: calendarOutboundCapabilities(), sites: siteCapabilities() };
 }
 
 export function mapServiceError(error: unknown): never {

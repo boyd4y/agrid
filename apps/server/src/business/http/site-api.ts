@@ -139,7 +139,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
     return executeDocument(ctx.scope.commands, { kind: "key", secret: ctx.secret }, command, documentTransportInput(command, args.input, ctx.idempotencyKey));
   });
   const calendarResolver = (command: CalendarCommand) => safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => {
-    charge(ctx, command === "queryBookings" ? 500 : command === "queryScheduledOccurrences" ? 1000 : command === "listBookingReminders" ? 500 : 0);
+    charge(ctx, ["listCalendarSubscriptions", "listCalendarDeliveries", "getCalendarDelivery"].includes(command) ? 100 : command === "queryBookings" ? 500 : command === "queryScheduledOccurrences" ? 1000 : command === "listBookingReminders" ? 500 : 0);
     if (!CALENDAR_READ_COMMANDS.includes(command)) await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
     return executeCalendar(ctx.scope.commands, { kind: "key", secret: ctx.secret }, command, calendarTransportInput(command, args.input, ctx.idempotencyKey));
   });

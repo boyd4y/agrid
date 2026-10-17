@@ -39,7 +39,7 @@ const key = randomUUID;
 const call = <K extends CalendarCommand>(command: K, input: CalendarCommands[K]) => executeCalendar(deps, caller, command, input);
 const range = { rangeStart: "2030-03-09T00:00:00Z", rangeEnd: "2030-03-12T00:00:00Z" };
 const reminder = { kind: "before_start" as const, offsetMinutes: 30, agentUserId: aid, prompt: "Check {{event.booking.title}}", maxLatenessMinutes: 60 };
-const grants = () => [{ calendarId, canRead: true, canReadAvailability: false, canCreate: true, canUpdate: true, canCancel: true, canManage: false, canTriggerAgent: true }];
+const grants = () => [{ calendarId, canRead: true, canReadAvailability: false, canCreate: true, canUpdate: true, canCancel: true, canManage: false, canTriggerAgent: true, canSubscribe: false, canReadDeliveries: false, canManageSubscriptions: false }];
 const app = new Hono().route("/api", createSiteApiRoutes(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => null }, siteRateLimit: async () => {}, close: async () => {} })))
   .route("/api/commands", createCommandsRoute(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => ({ user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } }) }, close: async () => {} })));
 const sdk = (secret: string) => createClient({ url: "http://fixture.test", key: secret, fetch: async (url, options) => app.request(String(url), options) });

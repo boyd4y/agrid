@@ -99,6 +99,15 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.patch("/automations/:id", handle(true, ({ scope, context, c, body }) => updateScheduledAutomation(scope.commands, context.secret, { ...body, automationId: c.req.param("id") })));
   route.get("/calendars/:id/bookings/:bookingId/reminders", calendar("listBookingReminders", ({ c }) => ({ calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
   route.post("/calendars/:id/bookings/:bookingId/reminders", calendar("setBookingReminders", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), bookingId: c.req.param("bookingId") })));
+  route.post("/calendars/:id/subscriptions/query", calendar("listCalendarSubscriptions", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.post("/calendars/:id/subscriptions", calendar("createCalendarSubscription", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
+  route.get("/calendars/:id/subscriptions/:subscriptionId", calendar("getCalendarSubscription", ({ c }) => ({ calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId") })));
+  route.patch("/calendars/:id/subscriptions/:subscriptionId", calendar("updateCalendarSubscription", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId") })));
+  route.post("/calendars/:id/subscriptions/:subscriptionId/revoke", calendar("revokeCalendarSubscription", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId") })));
+  route.post("/calendars/:id/subscriptions/:subscriptionId/rotate-secret", calendar("rotateCalendarSubscriptionSecret", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId") })));
+  route.post("/calendars/:id/subscriptions/:subscriptionId/deliveries/query", calendar("listCalendarDeliveries", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId") })));
+  route.get("/calendars/:id/subscriptions/:subscriptionId/deliveries/:deliveryId", calendar("getCalendarDelivery", ({ c }) => ({ calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId"), deliveryId: c.req.param("deliveryId") })));
+  route.post("/calendars/:id/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", calendar("retryCalendarDelivery", ({ c, body }) => ({ ...body, calendarId: c.req.param("id"), subscriptionId: c.req.param("subscriptionId"), deliveryId: c.req.param("deliveryId") })));
   route.get("/calendars", calendar("listCalendars", ({ c }) => ({ includeArchived: c.req.query("includeArchived") === "true" })));
   route.post("/calendars", calendar("createCalendar", ({ body }) => body));
   route.get("/calendars/:id", calendar("getCalendar", ({ c }) => ({ calendarId: c.req.param("id") })));

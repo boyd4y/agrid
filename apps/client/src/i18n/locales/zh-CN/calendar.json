@@ -67,7 +67,7 @@
   "slotCount": "找到 {{count}} 个可约时段",
   "moreSlots": "显示更多时段",
   "calendarGrants": "日历授权",
-  "calendarGrantsHint": "逐日历授权；创建不包含详情读取，空档查询不包含客户信息。旧表格授权保持独立。 设置智能体提醒需同时授予预约更新与触发智能体权限。",
+  "calendarGrantsHint": "逐日历授权；创建不包含详情读取，空档查询不包含客户信息。旧表格授权保持独立。 设置智能体提醒需同时授予预约更新与触发智能体权限。 事件订阅需要同时授予订阅和详情读取权限，投递记录读取与订阅管理分别授权。Key 仅可访问自身创建的订阅。",
   "calendarScope": "{{count}} 个日历",
   "errors": {
     "BAD_INPUT": "日期、时区或输入格式无效，请检查后重试。",
@@ -82,7 +82,8 @@
     "ARCHIVED": "日历或人员已归档，请选择活跃记录。",
     "INVALID_STATE": "预约状态或绑定成员已变更，请刷新。",
     "FUTURE_BOOKINGS": "请先改期或取消未结束的预约，再归档。",
-    "REQUEST_FAILED": "操作未完成，请检查连接并重试。"
+    "REQUEST_FAILED": "操作未完成，请检查连接并重试。",
+    "SERVICE_UNAVAILABLE": "出站投递尚未配置，请联系管理员检查集成加密密钥。"
   },
   "grants": {
     "canRead": "详情",
@@ -91,7 +92,10 @@
     "canUpdate": "改期",
     "canCancel": "取消",
     "canManage": "管理",
-    "canTriggerAgent": "触发智能体提醒"
+    "canTriggerAgent": "触发智能体提醒",
+    "canSubscribe": "订阅事件",
+    "canReadDeliveries": "读取投递记录",
+    "canManageSubscriptions": "管理订阅"
   },
   "days": {
     "1": "周一",
@@ -172,5 +176,89 @@
     "canRead": "读取计划",
     "canUpdate": "修改计划",
     "scope": "{{count}} 项定时计划授权"
+  },
+  "subscriptions": {
+    "title": "预约事件订阅",
+    "description": "将预约和排班变更通知发送到你的 HTTPS 接收地址，并查看投递记录。",
+    "adminOnly": "仅企业所有者和管理员可在此管理出站订阅。",
+    "noCalendars": "请先创建日历",
+    "noCalendarsHint": "在当前工作区的日历中创建日历后，再到此处设置订阅。",
+    "create": "新建订阅",
+    "edit": "编辑订阅",
+    "empty": "暂无事件订阅",
+    "emptyHint": "选择接收地址需要接收的变更类型。",
+    "boundary": "通知仅包含 ID 和版本，详情需单独获权读取。共享人员的排班变更会通知本工作区各日历。暂停或修改配置会跳过尚未完成的投递，恢复后只接收新事件。",
+    "endpoint": "HTTPS 接收地址",
+    "endpointHint": "使用 443 端口的公网 HTTPS 地址，不接受私网地址或重定向。",
+    "eventTypes": "事件类型",
+    "history": "投递记录",
+    "pause": "暂停",
+    "resume": "恢复",
+    "revoke": "撤销订阅",
+    "rotate": "轮换签名密钥",
+    "rotateHint": "旧密钥停止使用，尚未完成的投递会跳过。请在关闭前保存新密钥。",
+    "revokeHint": "永久停止后续投递。接收地址已收到的请求无法撤回。",
+    "secretTitle": "保存签名密钥",
+    "secret": "签名密钥",
+    "secretOnce": "密钥仅显示一次，用于校验请求签名。遗失后请轮换。",
+    "secretLost": "请求已被接受，密钥无法再次显示，请轮换获取新密钥。",
+    "copy": "复制密钥",
+    "copied": "密钥已复制",
+    "copyFailed": "复制失败，请选中密钥手动复制。",
+    "deliveryBoundary": "投递可能重复或乱序，请按 deliveryId/eventId 去重，并参考 aggregateVersion。自动重试最多五次。",
+    "filterStatus": "投递状态",
+    "allStatuses": "全部状态",
+    "noDeliveries": "暂无符合条件的投递，仅投递订阅创建后的事件。",
+    "attemptCount": "已尝试 {{count}} 次",
+    "attempt": "第 {{number}} 次尝试",
+    "deliveryDetails": "投递详情",
+    "notAttempted": "尚未开始 HTTP 投递。",
+    "retry": "重试投递",
+    "retrying": "正在请求重试…",
+    "status": {
+      "active": "启用",
+      "paused": "暂停",
+      "revoked": "已撤销"
+    },
+    "deliveryStatus": {
+      "pending": "待投递",
+      "delivering": "投递中",
+      "succeeded": "成功",
+      "deadletter": "重试耗尽",
+      "skipped": "已跳过"
+    },
+    "attemptStatus": {
+      "started": "已开始",
+      "succeeded": "成功",
+      "failed": "失败",
+      "unknown": "结果未知",
+      "skipped": "已跳过"
+    },
+    "events": {
+      "booking_created": "预约创建",
+      "booking_rescheduled": "预约改期",
+      "booking_cancelled": "预约取消",
+      "booking_reminders_changed": "提醒配置变更",
+      "calendar_updated": "日历更新",
+      "calendar_archived": "日历归档",
+      "person_created": "服务人员新增",
+      "person_updated": "服务人员更新",
+      "person_archived": "服务人员归档",
+      "working_hours_updated": "工作时间变更",
+      "availability_exception_created": "临时休息新增",
+      "availability_exception_updated": "临时休息更新",
+      "availability_exception_removed": "临时休息撤销"
+    },
+    "reasons": {
+      "destination_rejected": "接收地址未通过出网地址限制。",
+      "timeout": "接收地址未在时限内响应。",
+      "response_too_large": "响应正文超过大小限制。",
+      "network_error": "连接或签名配置失败。",
+      "http_error": "接收地址返回非成功 HTTP 状态。",
+      "outcome_unknown": "投递结果未确认，接收地址可能已收到此次请求。",
+      "subscription_changed": "订阅配置已变更，旧投递已跳过。",
+      "authorization_revoked": "创建者或原 API Key 已不具备所需权限。",
+      "invalid_event": "事件格式或范围无效，未发出请求。"
+    }
   }
 }
