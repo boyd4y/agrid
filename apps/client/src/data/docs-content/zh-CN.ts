@@ -390,7 +390,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
       { type: "h2", text: "统一命令入口与 GraphQL" },
       { type: "p", text: "也可以把同一操作发送到 POST /api/commands，请求体使用 {\"command\": \"queryAvailability\", \"input\": {…}} 或 {\"command\": \"createBooking\", \"input\": {…}}。REST、GraphQL 与此入口使用相同的日历权限和预约校验；写入可把幂等键放在请求体，也可通过 Idempotency-Key 请求头传入。" },
       { type: "table", headers: ["操作", "REST 路径"], rows: [
-        ["列出 / 新建日历（GET / POST）", "/api/calendars"],
+        ["列出日历（GET）", "/api/calendars"],
         ["列出 / 添加服务人员（GET / POST）", "/api/calendars/:calendarId/people"],
         ["读取 / 替换每周工作时间（GET / POST）", "/api/calendars/:calendarId/people/:personId/hours"],
         ["查询日期临时休息（POST）", "/api/calendars/:calendarId/people/:personId/exceptions/query"],
@@ -406,6 +406,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
         ["设置 / 读取提醒（POST / GET）", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["查询定时任务时间（POST）", "/api/schedules/occurrences/query"],
       ] },
+      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → API Key」为 Key 授权。" },
       { type: "p", text: "批量路径接受 1–100 项创建、改期或取消操作，并作为一个整体应用。任一项校验失败或发生冲突，整批都会回滚。" },
       { type: "code", lang: "bash", code: `# 改期：expectedVersion 取自最近读取的预约
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
@@ -413,17 +414,18 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/r
   -H "Content-Type: application/json" \\
   -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
 
-# 取消：使用最新 expectedVersion 与新的幂等键
-curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"expectedVersion":2,"idempotencyKey":"booking-cancel-demo-001"}'
-
-# 提醒设置需要预约更新权与「触发智能体」权；空 reminders 可撤销未接受的提醒
+# 只有已确认预约可以设置提醒。上面的改期成功后返回版本 2。
+# 设置提醒需要预约更新权与「触发智能体」权；空 reminders 可撤销未接受的提醒
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"准备这次预约所需的信息。","maxLatenessMinutes":60}]}'` },
+  -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"准备这次预约所需的信息。","maxLatenessMinutes":60}]}'
+
+# 设置提醒后返回版本 3；使用该版本取消仍处于已确认状态的预约
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":3,"idempotencyKey":"booking-cancel-demo-001"}'` },
       { type: "code", lang: "graphql", code: `query FindSlots($input: JSON!) {
   queryAvailability(input: $input)
 }` },

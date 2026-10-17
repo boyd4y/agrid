@@ -376,7 +376,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
       { type: "h2", text: "Unified command endpoint and GraphQL" },
       { type: "p", text: "You can also send the same operation to POST /api/commands with a body such as {\"command\": \"queryAvailability\", \"input\": {…}} or {\"command\": \"createBooking\", \"input\": {…}}. REST, GraphQL, and this endpoint use the same calendar grants and booking checks. Include an idempotency key in the body or send it in the Idempotency-Key header." },
       { type: "table", headers: ["Operation", "REST path"], rows: [
-        ["List / create calendars (GET / POST)", "/api/calendars"],
+        ["List calendars (GET)", "/api/calendars"],
         ["List / add staff (GET / POST)", "/api/calendars/:calendarId/people"],
         ["Read / replace weekly hours (GET / POST)", "/api/calendars/:calendarId/people/:personId/hours"],
         ["List dated unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions/query"],
@@ -392,6 +392,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
         ["Set / read reminders (POST / GET)", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["Query scheduled task times (POST)", "/api/schedules/occurrences/query"],
       ] },
+      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → API Key." },
       { type: "p", text: "The batch route accepts 1–100 create, reschedule, or cancel operations and applies them together. If one operation fails validation or conflicts, the batch is rolled back." },
       { type: "code", lang: "bash", code: `# Reschedule. Use the latest booking version you have read.
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
@@ -399,18 +400,19 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/r
   -H "Content-Type: application/json" \\
   -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
 
-# Cancel. Use the current expectedVersion and a new idempotency key.
-curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"expectedVersion":2,"idempotencyKey":"booking-cancel-demo-001"}'
-
-# Reminders require booking update and the "trigger agent" grant. An empty
+# Only confirmed bookings can have reminders. Rescheduling above returns version 2.
+# Reminder setup requires booking update and the "trigger agent" grant. An empty
 # reminders array removes reminders that have not been accepted.
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"Prepare the information needed for this booking.","maxLatenessMinutes":60}]}'` },
+  -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"Prepare the information needed for this booking.","maxLatenessMinutes":60}]}'
+
+# Reminder setup returns version 3. Cancel the still-confirmed booking using it.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":3,"idempotencyKey":"booking-cancel-demo-001"}'` },
       { type: "code", lang: "graphql", code: `query FindSlots($input: JSON!) {
   queryAvailability(input: $input)
 }` },
