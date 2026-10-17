@@ -172,5 +172,20 @@
     "canRead": "读取计划",
     "canUpdate": "修改计划",
     "scope": "{{count}} 项定时计划授权"
-  }
+  },
+  "calendarList": "日历列表",
+  "calendarMore": "{{name}}的更多操作",
+  "hideCalendars": "收起日历列表",
+  "showCalendars": "展开日历列表",
+  "noCalendars": "尚无日历",
+  "chooseCalendar": "选择日历查看对应日程。",
+  "bookingSetup": "设置预约排班",
+  "bookingSetupAdmin": "添加服务人员或关联已有企业成员，再设置工作时间。没有工作时段的日期不可预约。",
+  "bookingSetupMember": "请联系工作区管理员，为此日历添加服务人员并设置工作时间。你仍可查看日程和定时计划。",
+  "view": "日历视图",
+  "moreEvents": "还有{{count}}项",
+  "availability": "选择可约时间",
+  "manageTarget": "人员与排班 · {{name}}",
+  "archiveTarget": "归档“{{name}}”？",
+  "personMore": "{{name}}的更多操作"
 }

@@ -549,3 +549,5 @@ export const apiKeySchedules = pgTable("api_key_schedules", {
 }, t => [uniqueIndex("api_key_schedules_key_rule_idx").on(t.keyId, t.automationId), check("api_key_schedules_capability", sql`${t.canRead} OR ${t.canUpdate}`)]);
 
 export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
+
+export * from "./blogs-schema.js";

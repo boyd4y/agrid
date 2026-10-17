@@ -1,0 +1,10 @@
+import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { createDatabase } from "../../src/business/db/factory.js";
+import { executeBlog } from "../../src/business/blogs/service.js";
+import { createStorageAdapter } from "../../src/storage/adapter.js";
+const input = JSON.parse(await readFile(process.argv[2], "utf8")), url = process.env.DATABASE_URL!;
+if (!new URL(url).pathname.endsWith("_agent_test") || url !== process.env.DATABASE_URL_UNPOOLED) throw new Error("Isolated database required");
+const resource = createDatabase({ connectionString: url, poolMax: 2 }), storage = createStorageAdapter({ driver: "local", localDir: input.directory });
+await executeBlog({ database: resource.db, workspaceId: input.workspaceId, uuid: randomUUID, now: () => new Date(input.now), automationQueueName: "unused", sites: { publicOrigin: "http://blog.test", apiOrigin: "http://blog.test", appOrigin: "http://app.test", sdkUrl: "https://example.test/sdk.js", storageDriver: "local", storage: () => ({ ...storage, async put(key, bytes, mime) { await storage.put(key, bytes, mime); process.exit(27); } }) } }, { kind: "member", organizationId: input.org, actorId: input.uid }, "publishBlog", input.request);
+throw new Error("Crash fixture did not terminate during upload");

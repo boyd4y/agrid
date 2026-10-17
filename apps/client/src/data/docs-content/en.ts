@@ -142,6 +142,7 @@ export const docsPages: DocsPage[] = [
           { title: "Tables, columns, and records", description: "Learn about file uploads, related records, rollups, and formulas.", href: "/docs/tables", badge: "Data" },
           { title: "Views and boards", description: "Create views, configure filters and sorts, and review records.", href: "/docs/views", badge: "Views" },
           { title: "Forms", description: "Design a data entry view over the same table.", href: "/docs/forms", badge: "Collect" },
+          { title: "Calendars and bookings", description: "Set staff hours, find open slots, and manage bookings.", href: "/docs/calendar-booking", badge: "Calendar" },
           { title: "Automations and scheduled tasks", description: "Trigger actions from table events, external events, or a schedule.", href: "/docs/automations", badge: "Actions" },
           { title: "Reports", description: "Summarize table data with metrics and charts.", href: "/docs/reports", badge: "Insights" },
           { title: "Sites", description: "Edit, preview, and publish a simple website.", href: "/docs/sites", badge: "Publish" },
@@ -213,6 +214,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         { title: "REST API", description: "Full routes, queries, and response details.", href: "/docs/rest", badge: "REST" },
         { title: "GraphQL", description: "GraphQL query and mutation reference.", href: "/docs/graphql", badge: "GraphQL" },
         { title: "TypeScript SDK", description: "Call the same data API with @tabdo/sdk.", href: "/docs/sdk", badge: "SDK" },
+        { title: "Calendar booking API", description: "Calendar grants, availability, bookings, and agent reminders.", href: "/docs/calendar-booking", badge: "Calendar" },
       ] },
     ],
   },
@@ -279,6 +281,36 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         tone: "warn",
         text: "Files can be viewed and downloaded only by workspace members with access. To add a file through an API, upload it in tabdo first.",
       },
+      { type: "cards", items: [
+        { title: "Use record bodies", description: "Enable a body, write long-form content, and review its history.", href: "/docs/record-documents", badge: "Body" },
+        { title: "Document API", description: "Read and update bodies with REST, GraphQL, or MCP.", href: "/docs/document-api", badge: "API" },
+      ] },
+    ],
+  },
+  {
+    slug: "record-documents",
+    sectionId: "humans",
+    title: "Use record bodies",
+    description: "Add a separate body to a record and write, illustrate, and restore it in the visual editor.",
+    body: [
+      { type: "p", text: "Record bodies hold long-form text and images without using table fields or loading with the table row list. Keep properties such as title and status in the table; the body is saved separately." },
+      { type: "ol", items: [
+        "Open a table and open a record. In its details, choose Body. If the record does not have one yet, choose Enable body to start writing.",
+        "Write in the visual body editor. Use headings, lists, quotes, code blocks, and links. Choose Upload image to add an image; pasted external images are not uploaded automatically. The editor shows saving, saved, unsaved, failed, or conflict status.",
+        "On a version conflict, the editor retains a draft in the current browser tab. Use View server version to compare, or export the local draft. Decide what to keep before loading the server version and continuing. If the browser cannot retain the draft, keep the tab open and retry saving.",
+        "Choose History to review earlier versions. Open a version to preview it; restoring saves its content as a new version and leaves the previous history unchanged.",
+        "A connected and authorized tabdo agent or MCP client can read, create, or replace a record body when its body tools are available. Image and history access also require their matching permissions. For REST or GraphQL access, see Document API.",
+      ] },
+      { type: "h2", text: "Formatting, images, and limits" },
+      { type: "ul", items: [
+        "Supported formatting includes paragraphs, level 1–3 headings, bullet and numbered lists, quotes, code blocks, horizontal rules, line breaks, bold, italic, strike, inline code, safe links, and images. Links must be full http, https, or mailto URLs.",
+        "A body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Supported image types are PNG, JPEG, WebP, and GIF. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
+        "Unsaved drafts stay in the current browser tab. They are not a cross-device backup; confirm a body is saved before closing the tab, and export a draft you need to keep during a conflict.",
+      ] },
+      { type: "cards", items: [
+        { title: "Document API", description: "Review permissions, read/write examples, history, and image routes.", href: "/docs/document-api", badge: "API" },
+        { title: "Publish a blog", description: "Publish explicitly selected record bodies as blog articles.", href: "/docs/blogging", badge: "Blog" },
+      ] },
     ],
   },
   {
@@ -327,6 +359,114 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "ul", items: [
         "You can edit the form title, description, submit button label, success message, and field order. Field options are shared with the table column. Formula and rollup fields display calculated values and cannot be entered; hidden fields are not shown, and required fields are validated on submission. File and relation columns use their upload and record picker controls.",
         "Forms are currently used inside the signed-in table page. There is no public form link or separate publishing flow. A form is not a separate data store; changing or deleting a column affects other views of the table too.",
+      ] },
+    ],
+  },
+  {
+    slug: "calendar-booking",
+    sectionId: "humans",
+    title: "Calendars and bookings",
+    description: "Set staff hours and time off, find open slots, and manage bookings in the calendar or through the API.",
+    body: [
+      { type: "p", text: "Use a calendar to arrange service bookings in a workspace. Create separate calendars for different services, add staff, set working hours and temporary unavailable times, then let members, agents, or authorized applications create and manage bookings. Staff are the people providing the service; they are separate from the AI agent that performs an action." },
+      { type: "h2", text: "Set up staff availability" },
+      { type: "ol", items: [
+        "Open Calendar in the app and choose an existing calendar or create one. Set a name and display time zone.",
+        "Open staff and schedule settings. Add a staff member and choose their time zone. You can link an existing active workspace member when appropriate; avoid creating a second identity for the same person.",
+        "Set the staff member’s weekly working hours. These hours repeat in the selected time zone. Add dated unavailable periods for time off, then edit or remove them when plans change.",
+        "Review bookings in the calendar. To book, choose a staff member, duration, and available time. You can also check the next seven days for open slots before entering a booking title.",
+        "Open a booking to review, reschedule, or cancel it. Rescheduling and cancellation check the current version; if a conflict occurs, the original booking remains in place.",
+      ] },
+      { type: "h2", text: "Reminders and scheduled plans" },
+      { type: "ul", items: [
+        "Members with permission can set an existing workspace agent to run before a booking starts or at its end. Booking details show the actual run status. These are agent actions, not email or text-message notifications.",
+        "A before-start reminder is skipped after the booking starts. Rescheduling or cancelling invalidates reminders that have not been accepted. An agent action that has already started cannot always be recalled.",
+        "You can overlay scheduled tasks on the calendar to view their projected times and recorded runs. A projected time is a preview; it does not mean the task ran or reserves booking time. Open the scheduled task to edit it.",
+      ] },
+      { type: "h2", text: "Connect with the REST API" },
+      { type: "p", text: "A workspace owner/admin can create a key under Settings → API Key and grant access to each calendar separately. Booking detail, availability, create, reschedule, cancel, calendar management, and triggering an agent reminder are separate grants. Detail access does not include availability, and create access does not include detail access. Reminder setup requires both booking update and trigger-agent access. Scheduled task projections use separate per-task read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
+export PERSON_ID="00000000-0000-4000-8000-000000000002"
+
+# Find complete availability for 30-minute bookings over the next seven days
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/availability/query" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"personId":"'"$PERSON_ID"'","rangeStart":"2026-10-19T00:00:00Z","rangeEnd":"2026-10-26T00:00:00Z","durationMinutes":30,"stepMinutes":30}'
+
+# Create a booking. Use a new idempotency key for each write; on a network retry,
+# resend the original request with the same key.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"personId":"'"$PERSON_ID"'","title":"Example booking","time":{"start":"2026-10-20T09:00:00+08:00","end":"2026-10-20T09:30:00+08:00","timeZone":"Asia/Shanghai"},"idempotencyKey":"booking-create-demo-001"}'` },
+      { type: "p", text: "Availability results include a completeness marker and time zone. A query is a snapshot: the service checks staff hours, unavailable periods, and existing bookings again when you create the booking. Send RFC 3339 instants with a UTC offset and include an IANA time zone. A successful write returns the booking ID, version, revision, and status." },
+      { type: "h2", text: "Unified command endpoint and GraphQL" },
+      { type: "p", text: "You can also send the same operation to POST /api/commands with a body such as {\"command\": \"queryAvailability\", \"input\": {…}} or {\"command\": \"createBooking\", \"input\": {…}}. REST, GraphQL, and this endpoint use the same calendar grants and booking checks. Include an idempotency key in the body or send it in the Idempotency-Key header." },
+      { type: "table", headers: ["Operation", "REST path"], rows: [
+        ["List calendars (GET)", "/api/calendars"],
+        ["List / add staff (GET / POST)", "/api/calendars/:calendarId/people"],
+        ["Read / replace weekly hours (GET / POST)", "/api/calendars/:calendarId/people/:personId/hours"],
+        ["List dated unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions/query"],
+        ["Add / edit unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions"],
+        ["Remove unavailable time (POST)", "/api/calendars/:calendarId/people/:personId/exceptions/:exceptionId/remove"],
+        ["Query availability (POST)", "/api/calendars/:calendarId/availability/query"],
+        ["Query bookings (POST)", "/api/calendars/:calendarId/bookings/query"],
+        ["Get a booking (GET)", "/api/calendars/:calendarId/bookings/:bookingId"],
+        ["Create a booking (POST)", "/api/calendars/:calendarId/bookings"],
+        ["Reschedule (POST)", "/api/calendars/:calendarId/bookings/:bookingId/reschedule"],
+        ["Cancel (POST)", "/api/calendars/:calendarId/bookings/:bookingId/cancel"],
+        ["Batch create / reschedule / cancel (POST)", "/api/calendars/:calendarId/bookings/batch"],
+        ["Set / read reminders (POST / GET)", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
+        ["Query scheduled task times (POST)", "/api/schedules/occurrences/query"],
+      ] },
+      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → API Key." },
+      { type: "p", text: "The batch route accepts 1–100 create, reschedule, or cancel operations and applies them together. If one operation fails validation or conflicts, the batch is rolled back." },
+      { type: "code", lang: "bash", code: `# Reschedule. Use the latest booking version you have read.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
+
+# Only confirmed bookings can have reminders. Rescheduling above returns version 2.
+# Reminder setup requires booking update and the "trigger agent" grant. An empty
+# reminders array removes reminders that have not been accepted.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"Prepare the information needed for this booking.","maxLatenessMinutes":60}]}'
+
+# Reminder setup returns version 3. Cancel the still-confirmed booking using it.
+curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"expectedVersion":3,"idempotencyKey":"booking-cancel-demo-001"}'` },
+      { type: "code", lang: "graphql", code: `query FindSlots($input: JSON!) {
+  queryAvailability(input: $input)
+}` },
+      { type: "code", lang: "bash", code: `curl -s -X POST "$TABDO_API_URL/api/graphql" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"query":"query FindSlots($input: JSON!) { queryAvailability(input: $input) }","variables":{"input":{"calendarId":"'"$CALENDAR_ID"'","personId":"'"$PERSON_ID"'","rangeStart":"2026-10-19T00:00:00Z","rangeEnd":"2026-10-26T00:00:00Z","durationMinutes":30,"stepMinutes":30}}}'` },
+      { type: "p", text: "Use createBooking(input: $input) for a write. The GraphQL endpoint is POST /api/graphql. Send the key in the Authorization: Bearer <API key> header." },
+      { type: "h2", text: "Reminders and MCP tools" },
+      { type: "p", text: "In a connected Tabdo MCP client with the required grants, use calendar tools such as query_availability, create_booking, reschedule_booking, and cancel_booking. Manage schedules with create_calendar_person, set_working_hours, and set_availability_exception. Configure and review reminders with set_booking_reminders and list_booking_reminders; query the scheduled-task projection with query_scheduled_occurrences. Calendar tools follow the grants for their target calendar; scheduled task projections require separate read access to the selected tasks." },
+      { type: "p", text: "To set reminders, provide the booking’s current expectedVersion, an idempotency key, and up to 10 reminder rules. For before_start, offsetMinutes is the number of minutes before the start; at_end uses 0. Each rule names an existing workspace agent and its prompt. The result shows reminder configuration and actual run status. A run link is shown only to someone allowed to view that conversation." },
+      { type: "h2", text: "Limits, permissions, and troubleshooting" },
+      { type: "ul", items: [
+        "Workspace members can view and manage bookings according to their workspace access. Only owners/admins can manage calendars, staff, working hours, and unavailable periods. An API key only accesses calendars you grant; creating a booking does not grant access to customer details. Calendar grants do not grant access to scheduled tasks.",
+        "Bookings and staff are isolated by workspace; busy times from another workspace are not combined. A staff member can have only one booking at a time. Supported booking states are confirmed and cancelled. Recurring booking series, guest self-service, payments, and external calendar sync are not available.",
+        "Availability results contain open time slots, not booking titles or customer details. Booking detail requires its own read grant.",
+        "Booking queries cover up to 93 days and 500 items. Availability queries cover up to 31 days and 5,000 slots. Results do not use a cursor; exceeding a query budget returns an explicit error. Results are not silently truncated and missing time is never treated as available.",
+        "Rescheduling, cancellation, and schedule changes require the current expectedVersion. On VERSION_CONFLICT, reload the booking or schedule and review the latest version. On RESOURCE_CONFLICT or OUTSIDE_AVAILABILITY, query availability again.",
+        "Writes require an idempotency key. If a request is interrupted, retry the same input with the same key; do not reuse a key for different data. A cancelled booking cannot be restored, but you can create another booking.",
+        "If you receive FORBIDDEN, ask an owner/admin to check that the key has the required grant for the target calendar. If you receive QUERY_LIMIT, narrow the date range. Future bookings must be resolved before a calendar or staff member can be archived; booking history is retained.",
+      ] },
+      { type: "cards", items: [
+        { title: "Automations and scheduled tasks", description: "Create scheduled tasks and review their run history.", href: "/docs/automations", badge: "Automation" },
+        { title: "HTTP API", description: "Learn API key basics and REST and GraphQL access.", href: "/docs/api-quickstart", badge: "API" },
       ] },
     ],
   },
@@ -401,7 +541,42 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       ] },
       { type: "callout", tone: "warn", text: "The site editor lets you edit website files directly. Each site can contain up to 50 files, using the file types listed above. Publish a saved version. A tab_ key is delivered with the site front-end code, so do not put a high-privilege credential there; grant only the required per-table data access." },
       { type: "cards", items: [
+        { title: "Publish a blog", description: "Choose article records, preview them, and publish a blog.", href: "/docs/blogging", badge: "Blog" },
         { title: "HTTP API and data access keys", description: "Learn about tab_ key permissions and access boundaries.", href: "/docs/api-quickstart", badge: "Security" },
+      ] },
+    ],
+  },
+  {
+    slug: "blogging",
+    sectionId: "humans",
+    title: "Publish a blog",
+    description: "Choose articles from table records, review a preview, and publish or update a blog.",
+    body: [
+      { type: "p", text: "A blog turns the record bodies you select into public articles. Each build and publication is a fixed version. Preview it first, then decide whether readers can access it." },
+      { type: "ol", items: [
+        "Open Sites in your workspace, create a blog, and choose a content table. In the table, enable a document for each article record. Write and add images in the visual document editor; wait until its status says the changes are saved. Use document history to review or restore an earlier version.",
+        "In the blog settings, map the title and URL slug. Map a summary, author, date, cover, category, or tags as needed. Select each article you want to publish, then choose its document images and cover explicitly. Unselected records, related records, and attachments are not added to the blog.",
+        "Save the settings and build the blog. Review the build and its preview link. Anyone with the link can open the preview for 10 minutes. Previews are excluded from search indexing; you can revoke all preview links earlier.",
+        "After reviewing the preview, publish that build. Copy the blog address from its details and share it with readers. Editing a document or blog setting does not automatically change the live articles. To update them, build again, review the new preview, and publish the new version.",
+        "To remove one article, choose and confirm its withdrawal. To stop the entire blog, unpublish it. You can also restore an internal configuration as a new draft, then build and publish it again.",
+      ] },
+      { type: "h2", text: "Content and access" },
+      { type: "ul", items: [
+        "A document body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Generated HTML across a blog has a separate 4 MiB total budget. A blog can include up to 20 selected articles and up to 60 image assets, each up to 5 MiB and 30 MiB total. Supported image types are PNG, JPEG, WebP, and GIF.",
+        "Public content includes the mapped fields, selected articles, their document bodies, and selected images. Author names are public; email addresses and internal member IDs are not included. Do not put secrets or private information in public fields, document content, or links.",
+        "A published blog is a snapshot. Changes to source records or documents do not update it. Before building again, confirm the selected records, images, and public fields are still correct.",
+        "Withdrawing an article blocks its old blog paths and images. Readers may still have copies they downloaded, copied, or cached elsewhere; those copies cannot be recalled remotely. Withdraw an article before deleting its source when needed.",
+        "Unpublish the whole blog before deleting it. Blog history and staged uploads may remain until the site is deleted. A blog retains at most 100 revisions; create another blog to continue after reaching that limit.",
+      ] },
+      { type: "h2", text: "Permissions and troubleshooting" },
+      { type: "ul", items: [
+        "Workspace members need permission to read and edit the selected records and documents. For API access, a workspace owner or admin grants blog read, configure, build, publish, or restore permissions separately for the content table. Grant only what is needed.",
+        "If an article has no body, confirm that its document is enabled and saved. On a version conflict, the editor retains the draft in the current browser tab and offers options to view the server version, export the draft, or export it and load the server version. Compare both versions before deciding what to keep. You can preview a history version and restore it as a new version. If a build reports changed sources, reload the records, review them, and build again.",
+        "If a slug is invalid or duplicated, set a unique lowercase slug using English letters, numbers, and hyphens. If publishing or previewing fails, check the key's permission, the build version, and pending changes. Create a new preview if the old link expired.",
+      ] },
+      { type: "cards", items: [
+        { title: "Blog API", description: "Read and manage blogs with REST, GraphQL, or available MCP tools.", href: "/docs/blog-api", badge: "API" },
+        { title: "Use record bodies", description: "Learn about the editor, save status, conflict drafts, and history recovery.", href: "/docs/record-documents", badge: "Body" },
       ] },
     ],
   },
@@ -529,6 +704,175 @@ if (row) {
       ] },
       { type: "callout", tone: "info", text: "Do not embed a high-privilege key in a public website; browser code exposes its key. Keep keys in environment variables for private integrations; for a public site, use a dedicated key with only the required table permissions." },
       { type: "cards", items: [{ title: "API quickstart", description: "Follow the complete REST flow and permissions guide.", href: "/docs/api-quickstart", badge: "Guide" }, { title: "GraphQL", description: "Read the GraphQL schema and limits.", href: "/docs/graphql", badge: "GraphQL" }] },
+    ],
+  },
+  {
+    slug: "blog-api",
+    sectionId: "reference",
+    title: "Blog API",
+    description: "Manage blog snapshots with dedicated blog permissions using REST, GraphQL, or MCP.",
+    body: [
+      { type: "p", text: "Use blog commands through the API key REST command endpoint or GraphQL. Blog permissions are granted separately for each content table; existing data or document permissions do not grant blog configuration, build, or publishing access. Blog methods are not available in the currently published npm SDK." },
+      { type: "h2", text: "Create an access key" },
+      { type: "ol", items: [
+        "Ask a workspace owner or admin to open Settings → API Key and create a dedicated key. Add only the content table and blog permissions you need: canRead for sources and configuration, canConfigure to save settings, canBuild to build and preview, canPublish to authorize the key to publish or withdraw, and canRestore to restore a configuration revision.",
+        "Keep the full key in server-side secret storage or an environment variable. Do not place it in browser code, a public website, a blog document, or a URL. The full key is shown once; deleting it revokes future access.",
+        "Every blog write command requires a 1–200 character idempotency key. Send it in the Idempotency-Key header and reuse it when retrying the same request. A replay returns the saved result; reusing the key for a different request returns a conflict.",
+      ] },
+      { type: "h2", text: "REST command endpoint" },
+      { type: "p", text: "Send JSON to POST /api/commands with Authorization: Bearer tab_…. Each request contains command and input; include Idempotency-Key for writes. This read-only example uses fictional IDs and a placeholder key:" },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
+      { type: "p", text: "Create a blog with saveBlog. This configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. Successful REST commands return { ok, command, result }. The BlogDetail site ID field is id: read it as result.id in REST or data.saveBlog.id in GraphQL after saveBlog; after getBlog, use result.id in REST or data.getBlog.id in GraphQL." },
+      { type: "code", lang: "json", code: `{
+  "command": "saveBlog",
+  "input": {
+    "name": "Field Notes",
+    "idempotencyKey": "save-blog-example-1",
+    "config": {
+      "tableId": "00000000-0000-4000-8000-000000000001",
+      "authorName": "Tabdo Team",
+      "description": "Notes and updates",
+      "language": "en",
+      "mapping": {
+        "title": "00000000-0000-4000-8000-000000000011",
+        "slug": "00000000-0000-4000-8000-000000000012"
+      },
+      "articles": [{
+        "rowId": "00000000-0000-4000-8000-000000000021",
+        "imageIds": []
+      }]
+    }
+  }
+}` },
+      { type: "p", text: "Use result.id from a successful saveBlog response (data.saveBlog.id in GraphQL) as siteId, and pass its version to buildBlog. After building, read siteId from result.id (data.buildBlog.id in GraphQL) and buildId from result.revisionId. Use expectedVersion and expectedPublishedRevisionId from that build result for publishBlog. For the first publication, expectedPublishedRevisionId is null; before updating a published blog, read and confirm its current publication state." },
+      { type: "code", lang: "json", code: `{
+  "command": "buildBlog",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 1,
+    "idempotencyKey": "build-blog-example-1"
+  }
+}` },
+      { type: "code", lang: "json", code: `{
+  "command": "publishBlog",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 2,
+    "expectedPublishedRevisionId": null,
+    "buildId": "00000000-0000-4000-8000-000000000003",
+    "idempotencyKey": "publish-blog-example-1"
+  }
+}` },
+      { type: "p", text: "getBlogSources returns selectable article fields, document versions, and explicitly selectable images. Its limit is at most 50; use nextAfterId to continue. getBlog reads configuration, the current build, published articles, revisions, and pendingChanges. saveBlog saves the template and explicit article list; buildBlog creates a fixed snapshot from current sources; createBlogPreview returns a 10-minute share link; publishBlog publishes a selected buildId; withdrawBlogArticle removes one article; unpublishBlog takes down the whole site; restoreBlogRevision restores an earlier configuration as a new draft. Blog REST request bodies are limited to 128 KiB. See the blog guide for content and image budgets." },
+      { type: "h2", text: "GraphQL" },
+      { type: "p", text: "The GraphQL endpoint is POST /api/graphql and uses the same Authorization: Bearer tab_… header and dedicated blog permissions. Pass each command's JSON input as an argument; use query for reads and mutation for writes. Use the same idempotency keys and version preconditions for REST and GraphQL writes." },
+      { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
+  getBlog(input: $input)
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "query ReadBlog($input: JSON!) { getBlog(input: $input) }",
+  "variables": { "input": { "siteId": "00000000-0000-4000-8000-000000000002" } }
+}` },
+      { type: "p", text: "Use the Idempotency-Key header for writes. GraphQL request bodies are limited to 128 KiB and responses use the standard { data } or { errors } envelope. Common errors include FORBIDDEN (permission missing), NOT_FOUND (object missing or not visible), VERSION_CONFLICT (configuration or published version changed), SOURCE_CHANGED (source changed; build again), IDEMPOTENCY_MISMATCH (key reused for a different request), and LIMIT_EXCEEDED (blog budget exceeded). On a version conflict, call getBlog again and review the current state before continuing." },
+      { type: "h2", text: "MCP and public reading" },
+      { type: "p", text: "Clients connected to tabdo MCP can use get_blog_sources, get_blog, save_blog, build_blog, create_blog_preview, revoke_blog_previews, publish_blog, withdraw_blog_article, unpublish_blog, and restore_blog_revision. MCP calls use the same content-table blog permissions; only give publishing access to trusted integrations." },
+      { type: "p", text: "Published blogs can be read without a key. GET /s/{siteId}/ (the publicUrl returned by getBlog) opens the article list; articles, pagination, categories, and selected images use paths below that address. Draft content, withdrawn article paths, and unpublished blogs are not publicly readable. Anyone with a preview URL can access it until it expires; it is not a private, sign-in-only preview." },
+      { type: "callout", tone: "warn", text: "Do not give a publishing key to browser code or an untrusted automation. Saving, building, and publishing are separate actions; a new build does not automatically update live content. The blog commands are not available through the currently published npm SDK." },
+      { type: "cards", items: [
+        { title: "Publish a blog", description: "Follow the full workflow from document writing to publishing and withdrawal.", href: "/docs/blogging", badge: "Guide" },
+        { title: "Authentication", description: "Learn about API key creation, table grants, and access boundaries.", href: "/docs/auth", badge: "Permissions" },
+      ] },
+    ],
+  },
+  {
+    slug: "document-api",
+    sectionId: "reference",
+    title: "Document API",
+    description: "Read, create, replace, and restore record bodies with REST, GraphQL, or MCP.",
+    body: [
+      { type: "p", text: "Document endpoints read one record body on demand and do not include body content in table row queries. API keys need separate document permissions; table CRUD grants, blog grants, and document grants are independent." },
+      { type: "h2", text: "Grant the minimum permissions" },
+      { type: "ol", items: [
+        "Ask a workspace owner or admin to configure document permissions for the content table under Settings → API Key. canRead reads the current body, images, and safe rendering; canCreate creates a body; canUpdate replaces a body; canReadHistory reads revisions; canRestore restores a revision and also requires canReadHistory; canUpload uploads images.",
+        "Grant only the operations a caller needs. Create permission does not include body or history reads. Document access does not grant table CRUD, blog publishing, or other workspace permissions.",
+        "Send Authorization: Bearer tab_… and keep the key out of URLs and public websites. Every write command needs a 1–200 character idempotencyKey; it can also be sent in the Idempotency-Key header. Reuse the same value when retrying the same request.",
+      ] },
+      { type: "h2", text: "REST command examples" },
+      { type: "p", text: "POST /api/commands accepts { command, input } and returns { ok, command, result }. The example reads a body, then shows the shapes for create and replace. Substitute table and row UUIDs that the key is authorized to access. createDocument returns a version receipt only; it does not grant read access, so call getDocument separately if you need the content." },
+      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
+export TABDO_API_KEY="tab_replace_with_your_key"
+
+# Read; result is null if this row has no body yet
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"command":"getDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002"}}'
+
+# Create on a row that does not have a body
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: create-body-example-1" \\
+  -d '{"command":"createDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","idempotencyKey":"create-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"A first draft."}]}]}}}'
+
+# Replace after reading the current version
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
+  -H "Authorization: Bearer $TABDO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: replace-body-example-1" \\
+  -d '{"command":"replaceDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","expectedVersion":1,"idempotencyKey":"replace-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"An updated draft."}]}]}}}'` },
+      { type: "p", text: "REST success data is in result. getDocument returns { id, tableId, rowId, version, content, updatedAt } or null. For replaceDocument, use the current version you just read as expectedVersion. An old version returns 409 VERSION_CONFLICT; read and compare the new version rather than overwriting it. Write idempotency keys must be 1–200 characters. Ordinary REST request bodies are limited to 128 KiB; a separate body image upload request can use an 8 MiB body budget." },
+      { type: "h2", text: "REST paths and GraphQL" },
+      { type: "table", headers: ["Operation", "REST path", "Minimum document grant"], rows: [
+        ["Read / create / replace", "GET/POST/PUT /api/tables/{tableId}/rows/{rowId}/document", "canRead / canCreate / canUpdate"],
+        ["List history / read revision", "GET /api/tables/{tableId}/rows/{rowId}/document/revisions?limit=&beforeVersion=; GET /api/tables/{tableId}/rows/{rowId}/document/revisions/{version}", "canReadHistory"],
+        ["Restore history", "POST /api/tables/{tableId}/rows/{rowId}/document/restore", "canRestore + canReadHistory"],
+        ["Safe rendering", "GET /api/tables/{tableId}/rows/{rowId}/document/render?version=", "canRead; older version also needs canReadHistory"],
+        ["Upload / read image", "POST /api/tables/{tableId}/rows/{rowId}/document/images; GET /api/tables/{tableId}/rows/{rowId}/document/images/{fileId}", "canUpload / canRead"],
+      ] },
+      { type: "p", text: "GraphQL is available at POST /api/graphql. Use getDocument(input: JSON!) to read. Use mutations for createDocument, replaceDocument, restoreDocumentRevision, uploadDocumentImage, and other writes. Send Authorization: Bearer tab_…; for writes, send Idempotency-Key and the same idempotencyKey in input. Ordinary GraphQL request bodies are limited to 128 KiB; a single uploadDocumentImage mutation can use an 8 MiB body budget." },
+      { type: "code", lang: "graphql", code: `query ReadBody($input: JSON!) {
+  getDocument(input: $input)
+}
+
+mutation ReplaceBody($input: JSON!) {
+  replaceDocument(input: $input)
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "query ReadBody($input: JSON!) { getDocument(input: $input) }",
+  "variables": { "input": { "tableId": "00000000-0000-4000-8000-000000000001", "rowId": "00000000-0000-4000-8000-000000000002" } }
+}` },
+      { type: "code", lang: "json", code: `{
+  "query": "mutation ReplaceBody($input: JSON!) { replaceDocument(input: $input) }",
+  "variables": { "input": {
+    "tableId": "00000000-0000-4000-8000-000000000001",
+    "rowId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 1,
+    "idempotencyKey": "replace-body-example-2",
+    "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "An updated draft." }] }] }
+  } }
+}` },
+      { type: "h2", text: "Images, history, and content limits" },
+      { type: "ul", items: [
+        "Content uses restricted schemaVersion 1 JSON, not arbitrary HTML. Supported nodes include paragraphs, level 1–3 headings, lists, quotes, code blocks, horizontal rules, line breaks, and images. Supported marks are bold, italic, strike, code, and safe links. Links must use a full http, https, or mailto URL. Unknown nodes, properties, or invalid structures are rejected.",
+        "The complete serialized body JSON is limited to 64 KiB, 4,000 nodes, 12 levels, and 20 referenced images. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
+        "Call uploadDocumentImage first with base64 data without a data URL prefix, the current expectedVersion, file name, PNG/JPEG/WebP/GIF MIME type, and an idempotency key. Put the returned fileId in an image node's attrs.fileId and its alt text in attrs.alt, then save with replaceDocument. Images belong to one body and cannot be referenced from another record.",
+        "getDocumentImage returns base64 only for an image in the authorized body. renderDocument returns safe HTML and a private asset list; relative image paths are not public download links. Do not place private file URLs, keys, or tokens in body content.",
+        "listDocumentRevisions returns 20 items by default, up to 50; use nextBeforeVersion to request older history. getDocumentRevision reads one version. restoreDocumentRevision takes the historical version, current expectedVersion, and a new idempotency key; restoration creates a new version.",
+      ] },
+      { type: "h2", text: "MCP tools and errors" },
+      { type: "p", text: "Clients connected to tabdo MCP can use get_document, create_document, replace_document, list_document_revisions, get_document_revision, restore_document_revision, render_document, upload_document_image, and get_document_image. For example, read with get_document({ tableId, rowId }); for a replacement, pass tableId, rowId, the current expectedVersion, restricted JSON content, and idempotencyKey. Tools use the same per-table document permissions and version checks; provide only the access a caller needs." },
+      { type: "p", text: "Common errors: FORBIDDEN means the operation is not granted; NOT_FOUND means the body or image is missing or outside the authorized scope; VERSION_CONFLICT means a newer body exists; IDEMPOTENCY_MISMATCH means a retry key was reused with different input; BAD_INPUT or ATTACHMENT_LIMIT means the content structure or image budget is invalid. On a version conflict, read the latest version and compare it with the local draft." },
+      { type: "cards", items: [
+        { title: "Use record bodies", description: "Review editing, conflict drafts, images, and history recovery.", href: "/docs/record-documents", badge: "Guide" },
+        { title: "Publish a blog", description: "Select and explicitly publish a snapshot of record bodies.", href: "/docs/blogging", badge: "Blog" },
+      ] },
     ],
   },
   {

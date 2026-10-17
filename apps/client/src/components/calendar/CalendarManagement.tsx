@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2 } from "lucide-react";
+import { MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import type { AvailabilityException, Calendar, CalendarPerson, WorkingWindow } from "@tabdo/shared";
 import { calendarCommand } from "@/lib/calendar-api";
 import { useMemberOptions } from "@/hooks/useMemberOptions";
@@ -12,6 +12,8 @@ import { Field, FieldError, FieldGroup, FieldLabel, FieldDescription } from "@ta
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@tabdo/ui/components/sheet";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@tabdo/ui/components/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@tabdo/ui/components/tabs";
+import { ListErrorState } from "@/components/shell/ListErrorState";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem } from "@tabdo/ui/components/dropdown-menu";
 import { Separator } from "@tabdo/ui/components/separator";
 
 const key = () => crypto.randomUUID();
@@ -31,17 +33,19 @@ export function CalendarEditor({ calendar, onClose, onSaved }: { calendar?: Cale
   </SheetContent></Sheet>;
 }
 
-type Props = { calendar: Calendar; people: CalendarPerson[]; onClose(): void; onSaved(): Promise<void> };
+type Props = { calendar: Calendar; people: CalendarPerson[]; onClose(): void; onSaved(): Promise<void>; loading: boolean; error: string; onRetry(): void };
 export function CalendarManagement(props: Props) {
   const { t } = useTranslation("calendar");
   const [pending, setPending] = useState(false);
   const [personId, setPersonId] = useState(props.people[0]?.id ?? "new");
+  const initialized = useRef(!props.loading);
+  useEffect(() => { if (!props.loading && !initialized.current) { initialized.current = true; setPersonId(props.people[0]?.id ?? "new"); } }, [props.loading, props.people]);
   const person = props.people.find(item => item.id === personId);
   useEffect(() => { if (personId !== "new" && !props.people.some(item => item.id === personId)) setPersonId(props.people[0]?.id ?? "new"); }, [props.people, personId]);
-  return <Sheet open onOpenChange={open => { if (!open && !pending) props.onClose(); }}><SheetContent className="overflow-y-auto sm:max-w-lg"><SheetHeader><SheetTitle>{t("manage")}</SheetTitle><SheetDescription>{t("manageHint")}</SheetDescription><Button type="button" variant="ghost" size="sm" disabled={pending} onClick={props.onClose}>{t("close")}</Button></SheetHeader>
-    <div className="flex flex-col gap-5 p-4"><Field><FieldLabel>{t("person")}</FieldLabel><Select value={personId} onValueChange={setPersonId} disabled={pending}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{props.people.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}<SelectItem value="new">{t("newPerson")}</SelectItem></SelectGroup></SelectContent></Select></Field>
+  return <Sheet open onOpenChange={open => { if (!open && !pending) props.onClose(); }}><SheetContent className="overflow-y-auto sm:max-w-lg"><SheetHeader><SheetTitle>{t("manageTarget", { name: props.calendar.name })}</SheetTitle><SheetDescription>{t("manageHint")}</SheetDescription><Button type="button" variant="ghost" size="sm" disabled={pending} onClick={props.onClose}>{t("close")}</Button></SheetHeader>
+    {props.loading ? <p role="status" className="p-4 text-sm text-muted-foreground">{t("loading")}</p> : props.error ? <ListErrorState description={props.error} onRetry={props.onRetry} /> : <div className="flex flex-col gap-5 p-4"><Field><FieldLabel>{t("person")}</FieldLabel><Select value={personId} onValueChange={setPersonId} disabled={pending}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{props.people.map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}<SelectItem value="new">{t("newPerson")}</SelectItem></SelectGroup></SelectContent></Select></Field>
       <PersonSettings key={personId} calendar={props.calendar} person={person} onPending={setPending} onSaved={async saved => { await props.onSaved(); if (saved) setPersonId(saved.id); }} />
-    </div>
+    </div>}
   </SheetContent></Sheet>;
 }
 function PersonSettings({ calendar, person, onSaved, onPending }: { calendar: Calendar; person?: CalendarPerson; onPending(pending: boolean): void; onSaved(person?: CalendarPerson): Promise<void> }) {
@@ -73,8 +77,8 @@ function PersonSettings({ calendar, person, onSaved, onPending }: { calendar: Ca
         const saved = person ? await calendarCommand("updateCalendarPerson", { ...input, personId: person.id, expectedVersion: person.version }) : await calendarCommand("createCalendarPerson", { ...input, userId: userId === "none" ? null : userId });
         await onSaved(saved);
       }); }}><FieldGroup><Field><FieldLabel htmlFor="person-name">{t("name")}</FieldLabel><Input id="person-name" required value={name} maxLength={200} disabled={pending} onChange={e => setName(e.target.value)} /></Field><Field><FieldLabel htmlFor="person-zone">{t("timeZone")}</FieldLabel><Input id="person-zone" required value={zone} disabled={pending} onChange={e => setZone(e.target.value)} /><FieldDescription>{t("personZoneHint")}</FieldDescription></Field>
-        {!person && <Field><FieldLabel>{t("bindMember")}</FieldLabel><Select value={userId} onValueChange={setUserId} disabled={pending}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="none">{t("independentPerson")}</SelectItem>{members.filter(item => item.kind === "human").map(item => <SelectItem key={item.userId} value={item.userId}>{item.name}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>}
-      </FieldGroup><div className="flex flex-wrap gap-2"><Button disabled={pending || !name.trim()}>{t(pending ? "saving" : "save")}</Button>{person && <Button type="button" variant="destructive-ghost" disabled={pending} onClick={() => setConfirmArchive(true)}>{t("archivePerson")}</Button>}</div></form></TabsContent>
+        {!person && <Field><FieldLabel>{t("bindMember")}</FieldLabel><Select value={userId} onValueChange={value => { setUserId(value); if (!name.trim()) setName(members.find(item => item.userId === value)?.name ?? ""); }} disabled={pending}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="none">{t("independentPerson")}</SelectItem>{members.filter(item => item.kind === "human").map(item => <SelectItem key={item.userId} value={item.userId}>{item.name}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>}
+      </FieldGroup><div className="flex flex-wrap gap-2"><Button disabled={pending || !name.trim()}>{t(pending ? "saving" : "save")}</Button>{person && <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" disabled={pending} aria-label={t("personMore", { name: person.name })}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuLabel>{person.name}</DropdownMenuLabel><DropdownMenuGroup><DropdownMenuItem variant="destructive" onSelect={() => setConfirmArchive(true)}>{t("archivePerson")}</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent></DropdownMenu>}</div></form></TabsContent>
       {person && <><TabsContent value="hours"><form noValidate className="flex flex-col gap-4 pt-4" onSubmit={e => { e.preventDefault(); void run(async () => { const saved = await calendarCommand("setWorkingHours", { calendarId: calendar.id, personId: person.id, expectedVersion: person.version, windows, idempotencyKey: idem(["hours", person.version, windows]) }); await onSaved(saved); }); }}>
         <p className="text-sm text-muted-foreground">{t("hoursHint", { zone: person.timeZone })}</p>
         <FieldGroup>{windows.map((window, index) => <Field key={index}><FieldLabel>{t("workingWindow", { count: index + 1 })}</FieldLabel><div className="flex flex-wrap items-center gap-2"><Select value={String(window.day)} onValueChange={value => setWindows(items => items.map((item, i) => i === index ? { ...item, day: Number(value) } : item))} disabled={pending}><SelectTrigger className="w-28" aria-label={t("weekday")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{[1, 2, 3, 4, 5, 6, 7].map(day => <SelectItem key={day} value={String(day)}>{t(`days.${day}`)}</SelectItem>)}</SelectGroup></SelectContent></Select><Input className="w-20" aria-label={t("startTime")} value={window.start} disabled={pending} onChange={e => setWindows(items => items.map((item, i) => i === index ? { ...item, start: e.target.value } : item))} /><Input className="w-20" aria-label={t("endTime")} value={window.end} disabled={pending} onChange={e => setWindows(items => items.map((item, i) => i === index ? { ...item, end: e.target.value } : item))} /><Button type="button" variant="ghost" size="icon" aria-label={t("removeWindow")} disabled={pending} onClick={() => setWindows(items => items.filter((_, i) => i !== index))}><Trash2 /></Button></div></Field>)}</FieldGroup>

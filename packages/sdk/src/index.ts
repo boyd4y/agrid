@@ -1,3 +1,4 @@
+import type { BlogCommand, BlogCommands, BlogResults } from "@tabdo/shared";
 import type { DocumentCommand, DocumentCommands, DocumentResults } from "@tabdo/shared";
 import type { CalendarCommand, CalendarCommands, CalendarResults } from "@tabdo/shared";
 import type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteCreateReceipt } from "@tabdo/shared";
@@ -51,6 +52,23 @@ export function createClient(options: ClientOptions) {
     const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
+  async function blogCommand<K extends BlogCommand>(command: K, input: BlogCommands[K], request?: RequestOptions): Promise<BlogResults[K]> {
+    const read = ["getBlog", "getBlogSources"].includes(command);
+    const result = await graphql<Record<K, BlogResults[K]>>(`${read ? "query" : "mutation"} BlogCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
+    return result[command];
+  }
+  const blogApi = {
+    getBlogSources: (input: BlogCommands["getBlogSources"], request?: RequestOptions) => blogCommand("getBlogSources", input, request),
+    getBlog: (input: BlogCommands["getBlog"], request?: RequestOptions) => blogCommand("getBlog", input, request),
+    saveBlog: (input: BlogCommands["saveBlog"], request?: RequestOptions) => blogCommand("saveBlog", input, request),
+    buildBlog: (input: BlogCommands["buildBlog"], request?: RequestOptions) => blogCommand("buildBlog", input, request),
+    publishBlog: (input: BlogCommands["publishBlog"], request?: RequestOptions) => blogCommand("publishBlog", input, request),
+    withdrawBlogArticle: (input: BlogCommands["withdrawBlogArticle"], request?: RequestOptions) => blogCommand("withdrawBlogArticle", input, request),
+    unpublishBlog: (input: BlogCommands["unpublishBlog"], request?: RequestOptions) => blogCommand("unpublishBlog", input, request),
+    restoreBlogRevision: (input: BlogCommands["restoreBlogRevision"], request?: RequestOptions) => blogCommand("restoreBlogRevision", input, request),
+    createBlogPreview: (input: BlogCommands["createBlogPreview"], request?: RequestOptions) => blogCommand("createBlogPreview", input, request),
+    revokeBlogPreviews: (input: BlogCommands["revokeBlogPreviews"], request?: RequestOptions) => blogCommand("revokeBlogPreviews", input, request),
+  };
   async function documentCommand<K extends DocumentCommand>(command: K, input: DocumentCommands[K], request?: RequestOptions): Promise<DocumentResults[K]> {
     const read = ["getDocument", "listDocumentRevisions", "getDocumentRevision", "renderDocument", "getDocumentImage"].includes(command);
     const result = await graphql<Record<K, DocumentResults[K]>>(`${read ? "query" : "mutation"} DocumentCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
@@ -122,7 +140,7 @@ export function createClient(options: ClientOptions) {
       },
     };
   }
-  return { graphql, table, calendar: calendarApi, documents: documentApi,
+  return { graphql, table, blogs: blogApi, calendar: calendarApi, documents: documentApi,
     queryCalendarView: (input: import("@tabdo/shared").QueryCalendarViewInput, request?: RequestOptions) => graphql<{ queryCalendarView: import("@tabdo/shared").CalendarViewResult }>("query CalendarView($input: JSON!) { queryCalendarView(input: $input) }", { input }, request).then(value => value.queryCalendarView),
     updateAutomation: (input: import("@tabdo/shared").UpdateAutomationInput & { expectedVersion: number }, request?: RequestOptions) => graphql<{ updateAutomation: Pick<import("@tabdo/shared").AutomationRule, "name" | "enabled" | "source" | "version"> & { automationId: string } }>("mutation UpdateAutomation($input: JSON!) { updateAutomation(input: $input) }", { input }, request).then(value => value.updateAutomation), async tables(request?: RequestOptions): Promise<SiteTable[]> {
     return (await graphql<{ tables: SiteTable[] }>(`query Tables { tables { id name description columns { ${columnFields} } } }`, {}, request)).tables;

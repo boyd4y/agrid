@@ -1,4 +1,7 @@
 import { siteQueryCalendarView } from "../data-api/calendar-views.js";
+import { isBlogCommand, blogTransportInput } from "../blogs/transport.js";
+import { executeBlog } from "../blogs/service.js";
+import { BlogError } from "../blogs/errors.js";
 import { updateScheduledAutomation } from "../calendar/schedules.js";
 import { CALENDAR_READ_COMMANDS } from "@tabdo/shared";
 import { DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
@@ -50,7 +53,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       c.header("Cache-Control", "private, no-store");
       return c.json(await fn({ scope, context, c, body }), status);
     } catch (error) {
-      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, error.status as 400);
+      if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof BlogError || error instanceof CalendarError || error instanceof DocumentError ? { code: error.code } : {}) }, error.status as 400);
       if (error instanceof z.ZodError) return c.json({ error: "Invalid request data" }, 400);
       return c.json({ error: "Request could not be completed" }, 500);
     } finally { try { await scope?.close(); } catch { /* Committed responses survive cleanup failures. */ } }
@@ -77,6 +80,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
     const deps = scope.commands;
     if (command === "queryCalendarView") return { ok: true, command, result: await siteQueryCalendarView(deps, context, args) };
+    if (isBlogCommand(command)) return { ok: true, command, result: await executeBlog(deps, { kind: "key", secret: context.secret }, command, blogTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (command === "updateAutomation") return { ok: true, command, result: await updateScheduledAutomation(deps, context.secret, args) };
     if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
     if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };

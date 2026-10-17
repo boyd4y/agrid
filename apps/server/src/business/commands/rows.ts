@@ -1,3 +1,4 @@
+import { requireUnpublishedBlogSource } from "../blogs/source-deletion.js";
 import { workspaceMatches, requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 import { readRow } from "./relation-reads.js";
@@ -425,6 +426,7 @@ async function deleteRowInTransaction(
   prepared: Awaited<ReturnType<typeof prepareBatchRowWrites>>,
 ) {
   const row = prepared.rowsById.get(input.rowId)!;
+  await requireUnpublishedBlogSource(tx, row.tableId, row.id);
   const context = { table: prepared.tablesById.get(row.tableId)! };
   const cols = prepared.colsByTable.get(row.tableId)!;
   const defs = prepared.definitions.filter((definition) => definition.sourceTableId === row.tableId || definition.targetTableId === row.tableId);
@@ -480,6 +482,11 @@ export async function batchDeleteRows(deps: CommandDependencies, input: BatchDel
   assertUniqueRowIds(input.rowIds);
   return inTransaction(deps, transaction, async (tx) => {
     const prepared = await prepareBatchRowWrites(deps, tx, input.rowIds.map((rowId) => ({ rowId })), input);
+    // Preflight the entire batch before deleting any row, including in a host transaction.
+    for (const rowId of input.rowIds) {
+      const row = prepared.rowsById.get(rowId)!;
+      await requireUnpublishedBlogSource(tx, row.tableId, row.id);
+    }
     const affected = new Set<string>();
     for (const rowId of input.rowIds) {
       const row = prepared.rowsById.get(rowId)!;
@@ -499,6 +506,7 @@ export async function deleteTable(deps: CommandDependencies, input: { tableId: s
       .for("update");
     if (!table || table.organizationId !== input.organizationId || !(await workspaceMatches(deps, table, tx)))
       throw new Error("表格不存在");
+    await requireUnpublishedBlogSource(tx, table.id);
     const dependencies = await tx
       .select()
       .from(tableRelations)

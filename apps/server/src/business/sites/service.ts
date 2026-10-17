@@ -1,8 +1,10 @@
+import { blogStorageKey, collectBlogStorage } from "../blogs/storage.js";
+import { BlogError } from "../blogs/errors.js";
 import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { z } from "zod";
 import { SITE_FILES_SCHEMA, SITE_SAVE_SCHEMA, type SiteConfig, type SiteDetail, type SiteSummary } from "@tabdo/shared";
-import { sites, siteRevisions, sitePreviews } from "../db/schema.js";
+import { sites, siteRevisions, sitePreviews, blogStorageGarbage } from "../db/schema.js";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
 import { inTransaction } from "../db/context.js";
@@ -27,7 +29,7 @@ async function owned(deps: CommandDependencies, input: Scope & { siteId: string 
   if (!site) throw new ServiceError(404, { message: "Site not found" }); return site;
 }
 function summary(deps: CommandDependencies, site: typeof sites.$inferSelect, publishedVersion: number | null): SiteSummary {
-  return { id: site.id, workspaceId: site.workspaceId, name: site.name, version: site.version, publishedRevisionId: site.publishedRevisionId, publishedVersion,
+  return { kind: site.kind, id: site.id, workspaceId: site.workspaceId, name: site.name, version: site.version, publishedRevisionId: site.publishedRevisionId, publishedVersion,
     publicUrl: new URL(`/s/${site.id}/`, capabilities(deps).publicOrigin).href, updatedAt: site.updatedAt.toISOString() };
 }
 export async function listSites(deps: CommandDependencies, input: Scope, tx?: Transaction) {
@@ -52,6 +54,7 @@ export async function saveSite(deps: CommandDependencies, raw: Scope & Record<st
     let site;
     if (input.siteId) {
       site = await owned(deps, { siteId: input.siteId, organizationId }, tx, true);
+      if (site.kind === "blog") throw new ServiceError(400, { message: "Use blog commands for a blog site" });
       if (site.version !== input.expectedVersion) throw new ServiceError(409, { message: "Site version conflict; reload before saving" });
       [site] = await tx.update(sites).set({ name: input.name, version: site.version + 1, updatedAt: deps.now() }).where(eq(sites.id, site.id)).returning();
     } else [site] = await tx.insert(sites).values({ id: deps.uuid(), organizationId, workspaceId: (await requireWorkspace(deps, organizationId, tx)).id, name: input.name }).returning();
@@ -69,6 +72,7 @@ export async function publishSite(deps: CommandDependencies, input: Scope & { si
   const caps = capabilities(deps);
   return inTransaction(deps, transaction, async tx => {
     const site = await owned(deps, input, tx, true);
+    if (site.kind === "blog") throw new ServiceError(400, { message: "Use publishBlog for a blog site" });
     const [revision] = await tx.select().from(siteRevisions).where(and(eq(siteRevisions.siteId, site.id), eq(siteRevisions.id, uuid(input.revisionId)))).for("update");
     if (!revision) throw new ServiceError(404, { message: "Site version not found" });
     if (!revision.assets) {
@@ -88,6 +92,7 @@ export async function publishSite(deps: CommandDependencies, input: Scope & { si
 export async function unpublishSite(deps: CommandDependencies, input: Scope & { siteId: string }, transaction?: Transaction) {
   return inTransaction(deps, transaction, async tx => {
     const site = await owned(deps, input, tx, true);
+    if (site.kind === "blog") throw new ServiceError(400, { message: "Use unpublishBlog for a blog site" });
     await tx.update(sites).set({ publishedRevisionId: null, updatedAt: deps.now() }).where(eq(sites.id, site.id));
     return getSite(deps, input, tx);
   });
@@ -96,8 +101,16 @@ export async function deleteSite(deps: CommandDependencies, input: Scope & { sit
   // Deletion makes every public URL inaccessible before removing immutable objects.
   return inTransaction(deps, transaction, async tx => {
     const site = await owned(deps, input, tx, true);
-    const revisions = await tx.select({ assets: siteRevisions.assets, driver: siteRevisions.storageDriver }).from(siteRevisions).where(eq(siteRevisions.siteId, site.id));
+    if (site.kind === "blog" && site.publishedRevisionId) throw new BlogError(409, "UNPUBLISH_REQUIRED", "Unpublish the blog before deleting it");
+    const revisions = await tx.select({ id: siteRevisions.id, files: siteRevisions.files, manifest: siteRevisions.blogManifest, assets: siteRevisions.assets, driver: siteRevisions.storageDriver }).from(siteRevisions).where(eq(siteRevisions.siteId, site.id));
+    if (site.kind === "blog") {
+      for (const revision of revisions) if (revision.driver) {
+        const planned = await Promise.all([...revision.files.map(f => f.path), ...revision.manifest?.assets.map(a => a.path) ?? []].map(path => blogStorageKey(revision.id, path)));
+        await tx.insert(blogStorageGarbage).values({ driver: revision.driver, keys: [...new Set([...planned, ...Object.values(revision.assets ?? {})])] });
+      }
+    }
     const cleanup = async () => {
+      if (site.kind === "blog") { await collectBlogStorage(deps); return; }
       const caps = capabilities(deps);
       await Promise.allSettled(revisions.flatMap(revision => revision.driver ? Object.values(revision.assets ?? {}).map(key => caps.storage(revision.driver!).remove(key)) : []));
     };
@@ -108,7 +121,9 @@ export async function deleteSite(deps: CommandDependencies, input: Scope & { sit
   });
 }
 export async function previewSite(deps: CommandDependencies, input: Scope & { siteId: string; files: unknown; token?: string; generation?: number }) {
-  await owned(deps, input); const files = SITE_FILES_SCHEMA.parse(input.files), now = deps.now();
+  const site = await owned(deps, input);
+  if (site.kind === "blog") throw new ServiceError(400, { message: "Use createBlogPreview for a blog site" });
+  const files = SITE_FILES_SCHEMA.parse(input.files), now = deps.now();
   await deps.database.delete(sitePreviews).where(and(eq(sitePreviews.siteId, input.siteId), lt(sitePreviews.expiresAt, now)));
   const expiresAt = new Date(now.getTime() + 2 * 3600_000), generation = input.generation ?? 1;
   const [preview] = input.token

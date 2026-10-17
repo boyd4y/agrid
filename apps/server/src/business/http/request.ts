@@ -6,6 +6,7 @@ import type { AgentToolCatalog, SkillDocument } from "@tabdo/shared";
 import type { IntegrationCapabilities } from "../integrations/dependencies.js";
 import type { FileCapabilities } from "../services/files.js";
 import { ServiceError } from "../errors.js";
+import { BlogError } from "../blogs/errors.js";
 
 /** Deployment-owned resources and capabilities, captured once for this request. */
 export type RequestScope = Readonly<{
@@ -42,7 +43,7 @@ export function createRequestRoute(acquire: RequestScopeResolver) {
     } finally { await scope.close(); }
   });
   route.onError((error, c) => {
-    if (error instanceof ServiceError) return c.json({ error: error.message }, error.status as ContentfulStatusCode);
+    if (error instanceof ServiceError) return c.json({ error: error.message, ...(error instanceof BlogError ? { code: error.code } : {}) }, error.status as ContentfulStatusCode);
     if (error.name === "ZodError") return c.json({ error: "参数错误", details: error }, 400);
     c.get("resources")?.logger?.error("http.request", error);
     return c.json({ error: error.message || "服务器错误" }, error.message.includes("版本冲突") ? 409 : 500);
