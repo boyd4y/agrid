@@ -134,7 +134,7 @@
     "noMatch": "没有匹配的技能"
   },
   "settings": {
-    "description": "偏好设置、API Key 与工作区集成",
+    "description": "偏好设置、API Key 与企业集成",
     "tabs": {
       "label": "设置分类",
       "general": "常规",
@@ -146,14 +146,14 @@
     "languageAria": "界面语言",
     "apiKeys": {
       "title": "API Key",
-      "description": "管理各表格的访问权限。",
+      "description": "点击名称查看或编辑逐表权限。",
       "create": "创建 API Key",
       "edit": "编辑 API Key",
       "editNamed": "编辑 {{name}}",
       "emptyTitle": "创建你的第一个 API Key",
       "emptyDescription": "为每张表格独立设置操作权限。",
       "noTables": "先创建一张表格，再连接你的站点。",
-      "adminOnly": "请联系工作区所有者或管理员管理 API Key。",
+      "adminOnly": "请联系企业所有者或管理员管理 API Key。",
       "name": "名称",
       "permissions": "权限",
       "tables": "表格",
@@ -173,7 +173,11 @@
       "deleteNamed": "删除 {{name}}",
       "deleteTitle": "删除 API Key？",
       "deleteDescription": "使用“{{name}}”的应用将立即失去访问权限。",
-      "removedTable": "已删除的表格",
+      "removedTable": "不可用的表格",
+      "workspaceCount": "{{count}} 个工作区",
+      "tableCount": "{{count}} 张表",
+      "scopeSummary": "{{workspaces}} · {{tables}}",
+      "unavailableSummary": "另有 {{count}} 张不可用的表",
       "noAuthorizedTables": "已无可访问的表格",
       "operations": {
         "canRead": "读取",

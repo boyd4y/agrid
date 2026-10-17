@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, KeyRound, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ApiKeyInfo, ApiKeyInput, TablePermission, TableMeta } from "@tabdo/shared";
+import type { ApiKeyInfo, ApiKeyInput, TablePermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
@@ -17,15 +17,15 @@ import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
+import { groupPermissionTables, operations, summarizePermissions, type ApiKeyTable } from "@/components/settings/api-key-permissions";
 
 const blank = (): ApiKeyInput => ({ name: "", permissions: [] });
-const operations = ["canRead", "canCreate", "canUpdate", "canDelete"] as const;
 
 export function ApiKeysSettings() {
   const { t } = useTranslation(["app", "common"]);
   const text = (key: string, values?: Record<string, string | number>) => t(`settings.apiKeys.${key}`, values);
   const id = useId();
-  const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<TableMeta[]>([]);
+  const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<ApiKeyTable[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
   const [secret, setSecret] = useState(""), [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
@@ -42,8 +42,7 @@ export function ApiKeysSettings() {
       setCanManage(allowed);
       if (!allowed) return;
       const saved = await api.listApiKeys(controller.signal);
-      const allTables = saved.tables.map(table => ({ ...table, name: `${table.workspaceName} / ${table.name}` }));
-      if (!controller.signal.aborted) { setKeys(saved.keys); setTables(allTables); }
+      if (!controller.signal.aborted) { setKeys(saved.keys); setTables(saved.tables); }
     })().catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -79,7 +78,13 @@ export function ApiKeysSettings() {
       return { ...current, permissions: [...current.permissions.filter(p => p.tableId !== tableId), ...(operations.some(op => grant[op]) ? [grant] : [])] };
     });
   }
-  const create = canManage && <Button size="sm" disabled={!tables.length} onClick={() => edit()}><Plus data-icon="inline-start" />{text("create")}</Button>;
+  function permissionRow(tableId: string, name: string, label: string) {
+    return <div key={tableId} className="grid grid-cols-[minmax(0,1fr)_repeat(4,2rem)] items-center gap-1 border-b p-2 text-sm last:border-b-0 hover:bg-muted focus-within:bg-muted sm:grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)]">
+      <span className="min-w-0 break-words" title={name}>{name}</span>
+      {operations.map(op => <label key={op} className="flex min-h-8 cursor-pointer items-center justify-center rounded-sm hover:bg-accent"><Checkbox aria-label={`${label} · ${text(`operations.${op}`)}`} disabled={saving} checked={input.permissions.find(p => p.tableId === tableId)?.[op] ?? false} onCheckedChange={checked => toggle(tableId, op, checked === true)} /></label>)}
+    </div>;
+  }
+  const create = canManage && <Button size="sm" disabled={!tables.length} onClick={() => edit()}><Plus className="hidden sm:block" data-icon="inline-start" />{text("create")}</Button>;
   return <section className="flex min-w-0 flex-col gap-6" data-testid="api-keys-settings">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-2"><CardTitle>{text("title")}</CardTitle><CardDescription>{text("description")}</CardDescription></div>
@@ -89,18 +94,27 @@ export function ApiKeysSettings() {
       : error ? <ListErrorState title={text("loadFailed")} onRetry={() => setRevision(value => value + 1)} />
       : !canManage ? <p className="py-5 text-sm text-muted-foreground">{text("adminOnly")}</p>
       : !keys.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("emptyTitle")} description={text(tables.length ? "emptyDescription" : "noTables")} action={create} />
-      : <><ul className="flex flex-col gap-3" aria-label={text("title")}>
-        {pagination.items.map(key => <ListItem key={key.id} className="flex items-start gap-3">
-          <button type="button" className="absolute inset-0 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={text("editNamed", { name: key.name })} onClick={() => edit(key)} />
-          <span className="pointer-events-none flex size-9 shrink-0 items-center justify-center rounded-md bg-muted"><KeyRound className="size-4 text-muted-foreground" aria-hidden /></span>
-          <div className="pointer-events-none flex min-w-0 flex-1 flex-col gap-2">
-            <h3 className="truncate text-sm font-medium">{key.name}</h3>
-            <p className="line-clamp-2 break-words text-xs text-muted-foreground">{key.permissions.map(grant => `${tables.find(table => table.id === grant.tableId)?.name ?? text("removedTable")}：${operations.filter(op => grant[op]).map(op => text(`operations.${op}`)).join(" / ")}`).join(" · ") || text("noAuthorizedTables")}</p>
-            <div className="flex flex-wrap items-center gap-2"><code className="text-xs text-muted-foreground">{key.prefix}…</code></div>
-          </div>
-          <Button className="relative" variant="destructive-ghost" size="icon" aria-label={text("deleteNamed", { name: key.name })} onClick={() => setDeleting(key)}><Trash2 data-icon="inline-start" /></Button>
-        </ListItem>)}
-      </ul><ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} /></>}
+      : <><ul className="border-y border-border" aria-label={text("title")}>
+        {pagination.items.map(key => {
+          const scope = summarizePermissions(key.permissions, tables);
+          return <ListItem key={key.id} className="flex items-center gap-0 rounded-none border-x-0 border-t-0 p-0 last:border-b-0 sm:gap-2">
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-sm py-3 text-left sm:px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset" aria-label={text("editNamed", { name: key.name })} onClick={() => edit(key)}>
+              <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate pr-8 text-sm font-medium sm:pr-0" title={key.name}>{key.name}</span>
+                  <code className="text-xs text-muted-foreground">{key.prefix}…</code>
+                </span>
+                <span className="flex shrink-0 flex-col gap-1 text-xs text-muted-foreground">
+                  <span>{scope.tableCount ? text("scopeSummary", { workspaces: text("workspaceCount", { count: scope.workspaceCount }), tables: text("tableCount", { count: scope.tableCount }) }) : text("noAuthorizedTables")}</span>
+                  {scope.unavailableCount > 0 && <span>{text("unavailableSummary", { count: scope.unavailableCount })}</span>}
+                </span>
+              </span>
+              <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden />
+            </button>
+            <Button className="absolute right-0 top-2 sm:static" variant="destructive-ghost" size="icon" aria-label={text("deleteNamed", { name: key.name })} onClick={() => setDeleting(key)}><Trash2 data-icon="inline-start" /></Button>
+          </ListItem>;
+        })}
+      </ul>{pagination.totalPages > 1 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}</>}
     <Dialog open={editor !== null} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>{text(secret ? "createdTitle" : editor?.key ? "edit" : "create")}</DialogTitle><DialogDescription>{text(secret ? "once" : "grantDescription")}</DialogDescription></DialogHeader>
@@ -112,11 +126,12 @@ export function ApiKeysSettings() {
             <Field><FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel><Input id={`${id}-name`} value={input.name} maxLength={100} autoComplete="off" disabled={saving} required onChange={event => setInput(current => ({ ...current, name: event.target.value }))} /></Field>
             <FieldSet className="gap-3"><FieldLegend variant="label">{text("permissions")}</FieldLegend><FieldDescription>{text("tablesHint")}</FieldDescription>
               <div className="max-h-72 overflow-y-auto rounded-md border">
-                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)] items-center gap-1 border-b bg-muted/50 p-2 text-xs text-muted-foreground"><span>{text("tables")}</span>{operations.map(op => <span className="text-center" key={op}>{text(`operations.${op}`)}</span>)}</div>
-                {tables.map(table => <div key={table.id} className="grid grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)] items-center gap-1 border-b p-2 text-sm last:border-b-0 hover:bg-muted focus-within:bg-muted">
-                  <span className="min-w-0 truncate" title={table.name}>{table.name}</span>
-                  {operations.map(op => <label key={op} className="flex min-h-8 cursor-pointer items-center justify-center rounded-sm hover:bg-accent"><Checkbox aria-label={`${table.name} · ${text(`operations.${op}`)}`} disabled={saving} checked={input.permissions.find(p => p.tableId === table.id)?.[op] ?? false} onCheckedChange={checked => toggle(table.id, op, checked === true)} /></label>)}
+                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,2rem)] sm:grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)] items-center gap-1 border-b bg-muted/50 p-2 text-xs text-muted-foreground"><span>{text("tables")}</span>{operations.map(op => <span className="text-center" key={op}>{text(`operations.${op}`)}</span>)}</div>
+                {groupPermissionTables(tables).map(group => <div key={group.workspaceId} role="group" aria-label={group.name}>
+                  <div className="break-words border-b bg-muted/50 px-2 py-1.5 text-xs font-medium" title={group.workspaceId}>{group.name}</div>
+                  {group.tables.map(table => permissionRow(table.id, table.name, `${group.name} / ${table.name}`))}
                 </div>)}
+                {input.permissions.filter(grant => !tables.some(table => table.id === grant.tableId)).map(grant => permissionRow(grant.tableId, `${text("removedTable")} (${grant.tableId})`, `${text("removedTable")} (${grant.tableId})`))}
               </div>
             </FieldSet>
           </FieldGroup>

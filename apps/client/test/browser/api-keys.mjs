@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import { createBrowserFixture, frontend, pause, artifact } from './fixture.mjs';
+import { createBrowserFixture, frontend, artifact, postgres, databaseUrl } from './fixture.mjs';
 const fixture=await createBrowserFixture({name:'API key settings'});
-const {page,api,errors}=fixture;
+const {page,api,errors,ctx,base}=fixture;
+const db=postgres(databaseUrl);
+page.setDefaultTimeout(15000);
 try{
  const table=await api('/tables',{name:'Permissions fixture'});
  const current=(await api('/commands',{command:'getWorkspace'})).result.workspace;
@@ -19,20 +21,36 @@ try{
  assert.equal(await dialog.locator('select:not([aria-hidden=true])').count(),0);
  await dialog.getByRole('button',{name:'创建 API Key',exact:true}).click();
  const secret=await dialog.getByRole('textbox',{name:'API Key',exact:true}).inputValue();assert.match(secret,/^tab_[A-Za-z0-9_-]{43}$/);
+ await ctx.grantPermissions(['clipboard-read','clipboard-write']);
+ await dialog.getByRole('button',{name:'复制 Key',exact:true}).click();
+ assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),secret);
  await dialog.getByRole('button',{name:'关闭',exact:true}).last().click();
- await settings.getByRole('button',{name:'编辑 Script',exact:true}).click();
+ await settings.getByText('1 个工作区 · 1 张表',{exact:true}).waitFor();
+ assert.equal(await settings.getByRole('navigation',{name:'分页',exact:true}).count(),0);
+ assert.equal(await settings.getByText(tableLabel,{exact:true}).count(),0);
+ assert.equal(await settings.locator('button button').count(),0);
+ assert.equal(await settings.getByText(secret,{exact:true}).count(),0);
+ await settings.getByRole('button',{name:'编辑 Script',exact:true}).focus();
+ await page.keyboard.press('Enter');
+ assert.equal(await dialog.getByRole('textbox',{name:'API Key',exact:true}).count(),0);
  assert(await dialog.getByRole('checkbox',{name:`${tableLabel} · 读取`,exact:true}).isChecked());
  assert(await dialog.getByRole('checkbox',{name:`${tableLabel} · 更新`,exact:true}).isChecked());
  assert.equal(await dialog.getByRole('checkbox',{name:`${tableLabel} · 删除`,exact:true}).isChecked(),false);
  await dialog.getByRole('checkbox',{name:`${tableLabel} · 更新`,exact:true}).uncheck();
  await dialog.getByRole('checkbox',{name:`${tableLabel} · 删除`,exact:true}).check();
  await page.screenshot({path:artifact('api-key-matrix-desktop.png'),fullPage:true,animations:'disabled'});
+ const failSave=route=>route.fulfill({status:503,json:{message:'Fixture save failure'}});
+ await page.route('**/api/user/api-keys/*',failSave);
+ await dialog.getByRole('button',{name:'保存',exact:true}).click();
+ await dialog.getByRole('alert').waitFor();
+ assert(await dialog.getByRole('checkbox',{name:`${tableLabel} · 删除`,exact:true}).isChecked());
+ await page.unroute('**/api/user/api-keys/*',failSave);
  await dialog.getByRole('button',{name:'保存',exact:true}).click();
  await dialog.waitFor({state:'hidden'});
  const saved=(await api('/user/api-keys')).keys[0];assert.equal(saved.permissions[0].canUpdate,false);assert.equal(saved.permissions[0].canDelete,true);
  assert.equal(saved.permissions[0].tableId,table.id);assert(!JSON.stringify(saved).includes(secret));
  await page.getByRole('button',{name:'收起侧栏',exact:true}).click();
- await page.setViewportSize({width:390,height:844});
+ await page.setViewportSize({width:320,height:844});
  await settings.getByRole('button',{name:'编辑 Script',exact:true}).click();
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -41,16 +59,90 @@ try{
  await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
  await page.screenshot({path:artifact('api-key-matrix-mobile-dark.png'),fullPage:true,animations:'disabled'});
  await page.emulateMedia({colorScheme:'light'});
+ await dialog.getByRole('checkbox',{name:`${tableLabel} · 读取`,exact:true}).uncheck();
  await dialog.getByRole('button',{name:'取消',exact:true}).click();
+ assert.equal((await api('/user/api-keys')).keys[0].permissions[0].canRead,true,'cancel preserves grants');
+ await settings.getByRole('button',{name:'删除 Script',exact:true}).click();
+ await page.getByRole('alertdialog').getByRole('button',{name:'取消',exact:true}).click();
+ assert.equal((await api('/user/api-keys')).keys.length,1);
  await settings.getByRole('button',{name:'删除 Script',exact:true}).click();
  await page.getByRole('alertdialog').getByRole('button',{name:'确认删除',exact:true}).click();
  await settings.getByText('创建你的第一个 API Key',{exact:true}).waitFor();
  assert.equal((await api('/user/api-keys')).keys.length,0);
+ // Real same-name workspaces/tables retain separate identities in counts and editing.
+ const b=(await api('/commands',{command:'createWorkspace',input:{name:'Second workspace'}})).result;
+ await db`update workspaces set name=${current.name} where id=${b.id} and organization_id=${fixture.organizations[0]}`;
+ const response=await ctx.request.post(base+'/api/tables',{headers:{Origin:frontend,'X-Workspace-Id':b.id},data:{name:'Permissions fixture'}});
+ assert(response.ok()); const otherTable=await response.json();
+ const grants=[table,otherTable].map(item=>({tableId:item.id,canRead:true,canCreate:false,canUpdate:false,canDelete:false}));
+ await api('/user/api-keys',{name:'Cross workspace',permissions:grants});
+ const longName='长名称 API integration '.repeat(5).slice(0,100);
+ await api('/user/api-keys',{name:longName,permissions:grants.slice(0,1)});
+ const disposable=await api('/tables',{name:'Disposable'});
+ const emptyKey=(await api('/user/api-keys',{name:'Removed target',permissions:[{...grants[0],tableId:disposable.id}]})).key;
+ await api('/tables/'+disposable.id,undefined,'DELETE');
+ await settings.getByRole('button',{name:'刷新',exact:true}).click();
+ await settings.getByText('2 个工作区 · 2 张表',{exact:true}).waitFor();
+ await settings.getByText('已无可访问的表格',{exact:true}).waitFor();
+ const fits=async()=>{assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert(await settings.evaluate(el=>el.scrollWidth<=el.clientWidth+1));};
+ for(const width of [1440,320]){
+  await page.setViewportSize({width,height:900});
+  for(const theme of ['light','dark']){
+   await page.emulateMedia({colorScheme:theme});
+   await page.waitForFunction(theme=>document.documentElement.dataset.theme===theme,theme);
+   await fits();
+   await page.screenshot({path:artifact(`api-key-list-${width}-${theme}.png`),fullPage:true,animations:'disabled'});
+  }
+ }
+ await settings.getByRole('button',{name:'编辑 Cross workspace',exact:true}).click();
+ const aLabel=`${current.name} (${current.id}) / Permissions fixture`;
+ const bLabel=`${current.name} (${b.id}) / Permissions fixture`;
+ assert(await dialog.getByRole('checkbox',{name:`${aLabel} · 读取`,exact:true}).isChecked());
+ assert(await dialog.getByRole('checkbox',{name:`${bLabel} · 读取`,exact:true}).isChecked());
+ await fits(); assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+ await page.screenshot({path:artifact('api-key-grouped-320-dark.png'),fullPage:true,animations:'disabled'});
+ await dialog.getByRole('button',{name:'取消',exact:true}).click();
+ // Defensive missing metadata keeps original grants visible and cancellation does not drop them.
+ const missingId=crypto.randomUUID();
+ const stale=async route=>{const r=await route.fetch({url:base+'/api/user/api-keys'});const data=await r.json();data.keys.find(key=>key.id===emptyKey.id).permissions=[{...grants[0],tableId:missingId}];await route.fulfill({response:r,json:data});};
+ await page.route('**/api/user/api-keys',stale);
+ await settings.getByRole('button',{name:'刷新',exact:true}).click();
+ await settings.getByText('另有 1 张不可用的表',{exact:true}).waitFor();
+ await settings.getByRole('button',{name:'编辑 Removed target',exact:true}).click();
+ assert(await dialog.getByRole('checkbox',{name:`不可用的表格 (${missingId}) · 读取`,exact:true}).isChecked());
+ await dialog.getByRole('button',{name:'取消',exact:true}).click();
+ await page.unroute('**/api/user/api-keys',stale);
+ // Multi-page navigation and removing the only item on the last page.
+ for(let index=0;index<18;index++)await api('/user/api-keys',{name:`Pagination ${index}`,permissions:index===0?grants:grants.slice(0,1)});
+ await settings.getByRole('button',{name:'刷新',exact:true}).click();
+ const pager=settings.getByRole('navigation',{name:'分页',exact:true});
+ await pager.getByRole('button',{name:'下一页',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelectorAll('[data-testid=api-keys-settings] li[data-slot=list-item]').length===1);
+ assert(await pager.getByRole('button',{name:'下一页',exact:true}).isDisabled());
+ await settings.getByRole('button',{name:/^删除 /}).click();
+ await page.getByRole('alertdialog').getByRole('button',{name:'确认删除',exact:true}).click();
+ await pager.waitFor({state:'hidden'});
+ assert.equal(await settings.locator('li[data-slot=list-item]').count(),20);
+ // Read failure offers retry; retry uses the real endpoint again.
+ const fail=route=>route.fulfill({status:500,json:{message:'Fixture read failure'}});
+ await page.route('**/api/user/api-keys',fail);
+ await settings.getByRole('button',{name:'刷新',exact:true}).click();
+ await settings.getByText('API Key 加载失败',{exact:true}).waitFor();
+ await page.unroute('**/api/user/api-keys',fail);
+ await settings.getByRole('button',{name:'重新加载',exact:true}).click();
+ await settings.locator('li[data-slot=list-item]').first().waitFor();
  await page.getByRole('tab',{name:'常规',exact:true}).click();await page.getByLabel('English',{exact:true}).click();
  await page.getByRole('tab',{name:'API Key',exact:true}).click();
+ await settings.getByText('1 workspace · 1 table',{exact:true}).first().waitFor();
+ await settings.getByText('2 workspaces · 2 tables',{exact:true}).waitFor();
  await settings.getByRole('heading',{name:'API Key',exact:true}).waitFor();
  assert.equal(await page.getByRole('tab',{name:'Site API',exact:true}).count(),0);
  await page.goto(frontend+'/app/settings?tab=site-api');await page.waitForURL(url=>url.searchParams.get('tab')==='api-keys');
+ await db`update member set role='member' where organization_id=${fixture.organizations[0]} and user_id=${fixture.users[0]}`;
+ await page.reload();
+ await settings.getByText('Contact an organization owner or admin to manage API keys.',{exact:true}).waitFor();
+ assert.equal(await settings.getByRole('button',{name:'Create API key',exact:true}).count(),0);
+ assert.equal(await settings.locator('li[data-slot=list-item]').count(),0);
  assert.deepEqual(errors,[]);
- console.log('PASS unified API keys: one tab, independent table CRUD, edit persistence, one-time key, compact permission matrix, deletion and old-link redirect.');
-}finally{await fixture.close();}
+ console.log('PASS API keys: concise identity-based scope, grouped permissions, keyboard, one-time secret/copy, save failure/retry/cancel/delete, empty/unavailable grants, 21-key pagination/delete clamp, retry, no management role, English pluralization, 320px/desktop light/dark.');
+}finally{await db.end();await fixture.close();}

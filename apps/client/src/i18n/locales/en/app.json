@@ -134,7 +134,7 @@
     "noMatch": "No matching skills"
   },
   "settings": {
-    "description": "Preferences, API keys, and workspace integrations",
+    "description": "Preferences, API keys, and organization integrations",
     "tabs": {
       "label": "Settings sections",
       "general": "General",
@@ -146,14 +146,14 @@
     "languageAria": "Interface language",
     "apiKeys": {
       "title": "API Key",
-      "description": "Manage access to your tables.",
+      "description": "Select a key to view or edit its table permissions.",
       "create": "Create API key",
       "edit": "Edit API key",
       "editNamed": "Edit {{name}}",
       "emptyTitle": "Create your first API key",
       "emptyDescription": "Choose which operations each table allows.",
       "noTables": "Create a table first, then connect your site.",
-      "adminOnly": "Ask a workspace owner or admin to manage API keys.",
+      "adminOnly": "Contact an organization owner or admin to manage API keys.",
       "name": "Name",
       "permissions": "Permissions",
       "tables": "Table",
@@ -173,7 +173,14 @@
       "deleteNamed": "Delete {{name}}",
       "deleteTitle": "Delete API key?",
       "deleteDescription": "Applications using “{{name}}” will immediately lose access.",
-      "removedTable": "Deleted table",
+      "removedTable": "Unavailable table",
+      "workspaceCount_one": "1 workspace",
+      "workspaceCount_other": "{{count}} workspaces",
+      "tableCount_one": "1 table",
+      "tableCount_other": "{{count}} tables",
+      "unavailableSummary_one": "1 additional unavailable table",
+      "unavailableSummary_other": "{{count}} additional unavailable tables",
+      "scopeSummary": "{{workspaces}} · {{tables}}",
       "noAuthorizedTables": "No remaining authorized tables",
       "operations": {
         "canRead": "Read",
