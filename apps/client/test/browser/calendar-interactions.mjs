@@ -7,6 +7,7 @@ const command = async (command, input) => (await api('/commands', { command, inp
 const key = () => crypto.randomUUID();
 const today = new Date().toISOString().slice(0, 10);
 const time = (hour) => ({ start: `${today}T${hour}:00:00Z`, end: `${today}T${hour}:30:00Z`, timeZone: 'UTC' });
+let releasePending = () => {};
 try {
   const calendar = await command('createCalendar', { name: '交互预约日历', timeZone: 'UTC', idempotencyKey: key() });
   const person = await command('createCalendarPerson', { calendarId: calendar.id, name: '拖拽医生', timeZone: 'UTC', idempotencyKey: key() });
@@ -34,18 +35,20 @@ try {
   assert.match((await command('getBooking', { calendarId: calendar.id, bookingId: a.id })).start, /T10:00:00/);
   await sheet.getByRole('button', { name: '关闭', exact: true }).click();
   await sheet.waitFor({ state: 'hidden' });
+  const refreshed = page.waitForResponse(response => response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'queryBookings');
   await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await refreshed;
   await event.waitFor();
-  let release;
-  const gate = new Promise(resolve => { release = resolve; });
+  const gate = new Promise(resolve => { releasePending = resolve; });
   const delayed = async route => {
     if (route.request().postDataJSON()?.command === 'rescheduleBooking') { await gate; await route.fallback(); } else await route.fallback();
   };
   await page.route('**/api/commands', delayed);
   const successResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'rescheduleBooking');
+  void successResponse.catch(() => {});
   await drag(2);
   await page.waitForFunction(() => document.querySelector('.tabdo-booking-calendar')?.getAttribute('aria-busy') === 'true');
-  release(); assert.equal((await successResponse).status(), 200);
+  releasePending(); assert.equal((await successResponse).status(), 200);
   await page.unroute('**/api/commands', delayed);
   await page.waitForFunction(() => document.querySelector('.tabdo-booking-calendar')?.getAttribute('aria-busy') === 'false');
   const moved = await command('getBooking', { calendarId: calendar.id, bookingId: a.id }); assert.match(moved.start, /T12:00:00/); assert.equal(moved.version, 2);
@@ -79,4 +82,4 @@ try {
   assert.deepEqual(fixture.errors, []);
   console.log('PASS: real pointer drag conflict rollback with preserved form, pending feedback, successful drag/resize through versioned commands, calendar grants UI persists without dropping table grants.');
 } catch (error) { await page.screenshot({ path: fixture.artifact('calendar-interactions-failure.png'), fullPage: true }); throw error; }
-finally { await fixture.close(); }
+finally { releasePending(); await fixture.close(); }
