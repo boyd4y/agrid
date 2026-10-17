@@ -67,7 +67,7 @@ async function request<T>(url: string, init?: ApiRequestInit): Promise<T> {
     const message =
       res.status >= 500
         ? i18n.t("errors:systemUnavailable")
-        : err.error || i18n.t("errors:requestFailed", { status: res.status });
+        : ["SOURCE_CHANGED", "UNPUBLISH_REQUIRED"].includes(err.code) ? i18n.t(`blogs:errors.${err.code}`) : err.error || i18n.t("errors:requestFailed", { status: res.status });
     if (res.status >= 500 && shouldToast) toast.error(message, { id: "api-system-error" });
     throw new Error(message);
   }
@@ -385,6 +385,9 @@ export const api = {
     );
   },
 
+  createCalendarView: async (input: import("@tabdo/shared").CreateCalendarViewInput) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "createCalendarView", input }) })).result,
+  updateCalendarView: async (input: import("@tabdo/shared").UpdateCalendarViewInput) => (await request<{ result: TableView }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "updateCalendarView", input }) })).result,
+  queryCalendarView: async (input: import("@tabdo/shared").QueryCalendarViewInput, signal?: AbortSignal) => (await request<{ result: import("@tabdo/shared").CalendarViewResult }>("/api/commands", { method: "POST", body: JSON.stringify({ command: "queryCalendarView", input }), signal, errorToast: false })).result,
   listViews: async (tableId: string) => {
     const r = await request<{ ok: boolean; result: TableView[] }>("/api/commands", {
       method: "POST",
@@ -575,4 +578,3 @@ reorderFormFields: async (viewId: string, columnIds: string[]) => {
   },
 
 };
-

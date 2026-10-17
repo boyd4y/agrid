@@ -31,6 +31,7 @@ try {
   await sheet.getByLabel('IANA 时区', { exact: true }).fill('UTC');
   await sheet.getByRole('button', { name: '保存', exact: true }).click();
   await sheet.waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: '新建预约', exact: true }).click();
   await page.getByRole('button', { name: '添加人员', exact: true }).click();
   sheet = page.getByRole('dialog');
   await sheet.getByLabel('名称', { exact: true }).fill('陈医生');
@@ -61,9 +62,17 @@ try {
   const booking = (await command('queryBookings', query)).items[0]; assert(booking); assert.equal(booking.title, '智能体牙医预约');
   // Display the actual native-tool booking in the page's fetched range.
   await page.getByRole('button', { name: '刷新', exact: true }).click();
-  await page.getByRole('radio', { name: '议程', exact: true }).click();
+  const agendaRead = page.waitForResponse(response => {
+    if (!response.url().endsWith('/api/commands')) return false;
+    const body = response.request().postDataJSON();
+    return body?.command === 'queryBookings' && Date.parse(body.input.rangeEnd) - Date.parse(body.input.rangeStart) === 7 * 86400000;
+  });
+  await page.getByRole('combobox', { name: '日历视图', exact: true }).click(); await page.getByRole('option', { name: '议程', exact: true }).click();
+  const displayedRange = (await agendaRead).request().postDataJSON().input;
   const event = page.locator('.tabdo-booking-calendar').getByText(/智能体牙医预约/).first();
-  if (!await event.count()) await page.getByRole('button', { name: '下一时段', exact: true }).click();
+  // A pending read is not evidence that the booking lies outside this week.
+  if (Date.parse(booking.start) >= Date.parse(displayedRange.rangeEnd)) await page.getByRole('button', { name: '下一时段', exact: true }).click();
+  else if (Date.parse(booking.start) < Date.parse(displayedRange.rangeStart)) await page.getByRole('button', { name: '上一时段', exact: true }).click();
   await event.waitFor(); await event.click();
   sheet = page.getByRole('dialog');
   await sheet.getByLabel('开始时间', { exact: true }).fill('15:00');
@@ -84,7 +93,7 @@ try {
   await page.screenshot({ path: fixture.artifact('calendar-dark.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForFunction(() => document.querySelector('[data-testid=app-sidebar]')?.getBoundingClientRect().width <= 60);
-  await page.getByRole('radio', { name: '议程', exact: true }).waitFor();
+  await page.getByRole('combobox', { name: '日历视图', exact: true }).waitFor();
   assert.equal(await page.getByTestId('calendar-workspace').evaluate(element => element.scrollWidth > element.clientWidth), false);
   await page.screenshot({ path: fixture.artifact('calendar-narrow.png'), fullPage: true });
   await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en')); await page.reload();

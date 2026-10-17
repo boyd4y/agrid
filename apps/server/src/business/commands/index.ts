@@ -1,3 +1,7 @@
+export { createCalendarView, updateCalendarView, queryCalendarView } from "./calendar-views.js";
+import * as calendarViewCmds from "./calendar-views.js";
+import * as blogCommands from "./blogs.js";
+export * from "./blogs.js";
 import * as documentCommands from "./documents.js";
 export * from "./documents.js";
 export * from "./calendar.js";
@@ -47,6 +51,7 @@ export { getRow, queryRelationRecords } from "./relations.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 
 export const commands = {
+  ...blogCommands,
   ...documentCommands,
   ...calendarCommands,
   batchSetRelations,
@@ -88,6 +93,9 @@ export const commands = {
   renameView: viewCmds.renameView,
   setDefaultView: viewCmds.setDefaultView,
   updateBoardView: viewCmds.updateBoardView,
+  createCalendarView: calendarViewCmds.createCalendarView,
+  updateCalendarView: calendarViewCmds.updateCalendarView,
+  queryCalendarView: calendarViewCmds.queryCalendarView,
   createFormView: viewCmds.createFormView,
   createGridView: viewCmds.createGridView,
   createBoardView: viewCmds.createBoardView,

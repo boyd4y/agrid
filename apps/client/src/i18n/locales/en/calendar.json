@@ -260,5 +260,20 @@
       "authorization_revoked": "The creator or original API key no longer has the required permissions.",
       "invalid_event": "The stored event format or scope is invalid; no request was sent."
     }
-  }
+  },
+  "calendarList": "Calendars",
+  "calendarMore": "More for {{name}}",
+  "hideCalendars": "Hide calendars",
+  "showCalendars": "Show calendars",
+  "noCalendars": "No calendars yet",
+  "chooseCalendar": "Choose a calendar to view its appointments.",
+  "bookingSetup": "Set up appointment scheduling",
+  "bookingSetupAdmin": "Add a service person or link an existing member, then set their working hours. Days without working hours cannot be booked.",
+  "bookingSetupMember": "Ask a workspace administrator to add a service person and working hours to this calendar. You can still view appointments and scheduled plans.",
+  "view": "Calendar view",
+  "moreEvents": "{{count}} more",
+  "availability": "Choose an available time",
+  "manageTarget": "People and hours · {{name}}",
+  "archiveTarget": "Archive {{name}}?",
+  "personMore": "More for {{name}}"
 }

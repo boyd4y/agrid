@@ -1,3 +1,5 @@
+import blogsZh from "./locales/zh-CN/blogs.json";
+import blogsEn from "./locales/en/blogs.json";
 import documentsZh from "./locales/zh-CN/documents.json";
 import documentsEn from "./locales/en/documents.json";
 import calendarZh from "./locales/zh-CN/calendar.json";
@@ -90,7 +92,7 @@ const initial = readStoredLocale();
 void i18n.use(initReactI18next).init({
   resources: {
     "zh-CN": {
-      sites: sitesZh,
+      blogs: blogsZh, sites: sitesZh,
       documents: documentsZh, calendar: calendarZh,
       icons: iconsZh,
       common: commonZh,
@@ -109,7 +111,7 @@ void i18n.use(initReactI18next).init({
       integrations: integrationsZh,
     },
     en: {
-      sites: sitesEn,
+      blogs: blogsEn, sites: sitesEn,
       documents: documentsEn, calendar: calendarEn,
       icons: iconsEn,
       common: commonEn,

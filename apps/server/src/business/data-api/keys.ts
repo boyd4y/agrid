@@ -2,23 +2,24 @@ import { suspendKeySubscriptions, lockSubscriptionCalendarsForKey } from "../cal
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sha256 } from "@tabdo/core/crypto";
-import { documentPermissionSchema, type DocumentPermission, schedulePermissionSchema, calendarPermissionSchema, type CalendarPermission, type ApiKeyInfo, type TablePermission } from "@tabdo/shared";
+import { blogPermissionSchema, type BlogPermission, documentPermissionSchema, type DocumentPermission, schedulePermissionSchema, calendarPermissionSchema, type CalendarPermission, type ApiKeyInfo, type TablePermission } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
 import type { RuntimeDependencies } from "../dependencies.js";
 import type { Database, Transaction } from "../db/types.js";
-import { userApiKeys, apiKeyTables, apiKeyCalendars, apiKeyDocuments, apiKeySchedules, automations, calendars, tables, workspaces } from "../db/schema.js";
+import { userApiKeys, apiKeyTables, apiKeyCalendars, apiKeyDocuments, apiKeyBlogs, apiKeySchedules, automations, calendars, tables, workspaces } from "../db/schema.js";
 import { ServiceError } from "../errors.js";
 
 const permission = z.strictObject({ tableId: z.uuid(), canRead: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canDelete: z.boolean() })
   .refine(p => p.canRead || p.canCreate || p.canUpdate || p.canDelete, "Choose at least one operation per table");
 export const siteKeyInput = z.strictObject({ name: z.string().trim().min(1).max(100),
   permissions: z.array(permission).max(100).refine(all => new Set(all.map(p => p.tableId)).size === all.length),
+  blogPermissions: z.array(blogPermissionSchema).max(100).refine(all => new Set(all.map(p => p.tableId)).size === all.length).default([]),
   documentPermissions: z.array(documentPermissionSchema).max(100).refine(all => new Set(all.map(p => p.tableId)).size === all.length).default([]),
   schedulePermissions: z.array(schedulePermissionSchema).max(100).refine(all => new Set(all.map(p => p.automationId)).size === all.length).default([]),
   calendarPermissions: z.array(calendarPermissionSchema).max(100).refine(all => new Set(all.map(p => p.calendarId)).size === all.length).default([]),
-}).refine(input => input.permissions.length + input.calendarPermissions.length + input.schedulePermissions.length + input.documentPermissions.length > 0, "Choose at least one grant");
+}).refine(input => input.permissions.length + input.calendarPermissions.length + input.schedulePermissions.length + input.documentPermissions.length + input.blogPermissions.length > 0, "Choose at least one grant");
 export type Operation = "read" | "create" | "update" | "delete";
-export type SitePrincipal = Readonly<{ id: string; userId?: string | null; organizationId: string; schedulePermissions?: ReadonlyMap<string, import("@tabdo/shared").SchedulePermission>; tableIds: ReadonlySet<string>; permissions: ReadonlyMap<string, TablePermission>; documentPermissions: ReadonlyMap<string, DocumentPermission>; calendarPermissions: ReadonlyMap<string, CalendarPermission> }>;
+export type SitePrincipal = Readonly<{ blogPermissions: ReadonlyMap<string, BlogPermission>; id: string; userId?: string | null; organizationId: string; schedulePermissions?: ReadonlyMap<string, import("@tabdo/shared").SchedulePermission>; tableIds: ReadonlySet<string>; permissions: ReadonlyMap<string, TablePermission>; documentPermissions: ReadonlyMap<string, DocumentPermission>; calendarPermissions: ReadonlyMap<string, CalendarPermission> }>;
 export type SiteRateLimit = (input: { keyId: string; ip: string; kind: "read" | "create" }) => Promise<void>;
 export const isApiKey = (secret: string) => /^tab_(?:pub_)?[A-Za-z0-9_-]{43}$/.test(secret);
 export function requestApiKey(request: Request) {
@@ -41,8 +42,10 @@ async function summaries(database: Database, organizationId: string): Promise<Ap
   const grants = await database.select().from(apiKeyTables).where(inArray(apiKeyTables.keyId, keys.map(key => key.id))).orderBy(asc(apiKeyTables.tableId));
   const calendarGrants = await database.select().from(apiKeyCalendars).where(inArray(apiKeyCalendars.keyId, keys.map(key => key.id)));
   const documentGrants = await database.select().from(apiKeyDocuments).where(inArray(apiKeyDocuments.keyId, keys.map(key => key.id)));
+  const blogGrants = await database.select().from(apiKeyBlogs).where(inArray(apiKeyBlogs.keyId, keys.map(key => key.id)));
   const scheduleGrants = await database.select().from(apiKeySchedules).where(inArray(apiKeySchedules.keyId, keys.map(key => key.id)));
   return keys.map(key => ({ id: key.id, name: key.name, prefix: key.prefix, createdAt: key.createdAt.toISOString(),
+    blogPermissions: blogGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
     schedulePermissions: scheduleGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
     documentPermissions: documentGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
     calendarPermissions: calendarGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
@@ -79,11 +82,13 @@ export async function createSiteKey(deps: RuntimeDependencies, actor: Actor, raw
     await grantTables(tx, actor.organizationId, input.permissions.map(p => p.tableId));
     await grantCalendars(tx, actor.organizationId, input.calendarPermissions.map(p => p.calendarId));
     await grantTables(tx, actor.organizationId, input.documentPermissions.map(p => p.tableId));
+    await grantTables(tx, actor.organizationId, input.blogPermissions.map(p => p.tableId));
     const [saved] = await tx.insert(userApiKeys).values({ id: deps.uuid(), organizationId: actor.organizationId, userId: actor.userId,
       name: input.name, keyHash: hash, prefix: secret.slice(0, 12) }).returning();
     if (input.permissions.length) await tx.insert(apiKeyTables).values(input.permissions.map(grant => ({ keyId: saved.id, ...grant })));
     if (input.schedulePermissions.length) await tx.insert(apiKeySchedules).values(input.schedulePermissions.map(grant => ({ keyId: saved.id, ...grant })));
     if (input.documentPermissions.length) await tx.insert(apiKeyDocuments).values(input.documentPermissions.map(grant => ({ keyId: saved.id, ...grant })));
+    if (input.blogPermissions.length) await tx.insert(apiKeyBlogs).values(input.blogPermissions.map(grant => ({ keyId: saved.id, ...grant })));
     if (input.calendarPermissions.length) await tx.insert(apiKeyCalendars).values(input.calendarPermissions.map(grant => ({ keyId: saved.id, ...grant })));
     return { key: (await summaries(tx, actor.organizationId)).find(key => key.id === saved.id)!, secret };
   });
@@ -98,11 +103,14 @@ export async function updateSiteKey(deps: RuntimeDependencies, actor: Actor, key
     await grantTables(tx, actor.organizationId, input.permissions.map(p => p.tableId));
     await grantCalendars(tx, actor.organizationId, input.calendarPermissions.map(p => p.calendarId));
     await grantTables(tx, actor.organizationId, input.documentPermissions.map(p => p.tableId));
+    await grantTables(tx, actor.organizationId, input.blogPermissions.map(p => p.tableId));
     await tx.update(userApiKeys).set({ name: input.name }).where(eq(userApiKeys.id, keyId));
     await tx.delete(apiKeySchedules).where(eq(apiKeySchedules.keyId, keyId));
     if (input.schedulePermissions.length) await tx.insert(apiKeySchedules).values(input.schedulePermissions.map(grant => ({ keyId, ...grant })));
     await tx.delete(apiKeyTables).where(eq(apiKeyTables.keyId, keyId));
     if (input.permissions.length) await tx.insert(apiKeyTables).values(input.permissions.map(grant => ({ keyId, ...grant })));
+    await tx.delete(apiKeyBlogs).where(eq(apiKeyBlogs.keyId, keyId));
+    if (input.blogPermissions.length) await tx.insert(apiKeyBlogs).values(input.blogPermissions.map(grant => ({ keyId, ...grant })));
     await tx.delete(apiKeyDocuments).where(eq(apiKeyDocuments.keyId, keyId));
     if (input.documentPermissions.length) await tx.insert(apiKeyDocuments).values(input.documentPermissions.map(grant => ({ keyId, ...grant })));
     await suspendKeySubscriptions(deps, tx, keyId, input.calendarPermissions.filter(g => g.canRead && g.canSubscribe).map(g => g.calendarId));
@@ -131,7 +139,8 @@ export async function resolveSiteKey(database: Database, secret: string, lock = 
   const calendarGrants = await database.select({ calendarId: calendars.id, canRead: apiKeyCalendars.canRead, canReadAvailability: apiKeyCalendars.canReadAvailability, canCreate: apiKeyCalendars.canCreate, canUpdate: apiKeyCalendars.canUpdate, canCancel: apiKeyCalendars.canCancel, canManage: apiKeyCalendars.canManage, canTriggerAgent: apiKeyCalendars.canTriggerAgent, canSubscribe: apiKeyCalendars.canSubscribe, canReadDeliveries: apiKeyCalendars.canReadDeliveries, canManageSubscriptions: apiKeyCalendars.canManageSubscriptions }).from(apiKeyCalendars).innerJoin(calendars, eq(calendars.id, apiKeyCalendars.calendarId)).where(and(eq(apiKeyCalendars.keyId, key.id), eq(calendars.organizationId, key.organizationId)));
   const scheduleGrants = await database.select().from(apiKeySchedules).where(eq(apiKeySchedules.keyId, key.id));
   const documentGrants = await database.select({ tableId: apiKeyDocuments.tableId, canRead: apiKeyDocuments.canRead, canCreate: apiKeyDocuments.canCreate, canUpdate: apiKeyDocuments.canUpdate, canReadHistory: apiKeyDocuments.canReadHistory, canRestore: apiKeyDocuments.canRestore, canUpload: apiKeyDocuments.canUpload }).from(apiKeyDocuments).innerJoin(tables, eq(tables.id, apiKeyDocuments.tableId)).where(and(eq(apiKeyDocuments.keyId, key.id), eq(tables.organizationId, key.organizationId)));
-  return { documentPermissions: new Map(documentGrants.map(g => [g.tableId, g])), userId: key.userId, schedulePermissions: new Map(scheduleGrants.map(g => [g.automationId, g])), calendarPermissions: new Map(calendarGrants.map(g => [g.calendarId, g])), id: key.id, organizationId: key.organizationId, tableIds: new Set(grants.map(g => g.tableId)), permissions: new Map(grants.map(g => [g.tableId, g])) };
+  const blogGrants = await database.select().from(apiKeyBlogs).innerJoin(tables, eq(tables.id, apiKeyBlogs.tableId)).where(and(eq(apiKeyBlogs.keyId, key.id), eq(tables.organizationId, key.organizationId)));
+  return { blogPermissions: new Map(blogGrants.map(g => [g.api_key_blogs.tableId, g.api_key_blogs])), documentPermissions: new Map(documentGrants.map(g => [g.tableId, g])), userId: key.userId, schedulePermissions: new Map(scheduleGrants.map(g => [g.automationId, g])), calendarPermissions: new Map(calendarGrants.map(g => [g.calendarId, g])), id: key.id, organizationId: key.organizationId, tableIds: new Set(grants.map(g => g.tableId)), permissions: new Map(grants.map(g => [g.tableId, g])) };
 }
 export function requireSiteTable(principal: SitePrincipal, tableId: string, operation?: Operation) {
   if (!principal.tableIds.has(tableId)) throw new ServiceError(404, { message: "Table not found" });

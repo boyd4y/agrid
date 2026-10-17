@@ -5,7 +5,7 @@ import { z } from "zod";
 import { SITE_FILES_SCHEMA, SITE_SAVE_SCHEMA } from "@tabdo/shared";
 import { createRequestRoute, requireActorOrg, type RequestScopeResolver } from "./request.js";
 import * as service from "../sites/service.js";
-import { sites, siteRevisions, sitePreviews } from "../db/schema.js";
+import { sites, siteRevisions, sitePreviews, blogPreviews, blogAssetSnapshots } from "../db/schema.js";
 
 export function createSitesRoute(acquire: RequestScopeResolver) {
   const route = createRequestRoute(acquire);
@@ -53,39 +53,63 @@ export function createSitesRoute(acquire: RequestScopeResolver) {
 /** Untrusted documents always get an opaque browser origin, including top-level navigation. */
 export function createSiteAssetsRoute(acquire: RequestScopeResolver) {
   const route = new Hono();
+  route.get("/blog-preview/:token/*", c => serve(c.req.raw, c.req.param("token"), true, true));
   route.get("/site-preview/:token/*", c => serve(c.req.raw, c.req.param("token"), true));
   route.get("/s/:id/*", c => serve(c.req.raw, c.req.param("id"), false));
-  async function serve(request: Request, id: string, preview: boolean) {
+  async function serve(request: Request, id: string, preview: boolean, blogPreview = false) {
     const scope = await acquire(request);
     try {
       const deps = scope.commands, caps = service.capabilities(deps), url = new URL(request.url);
-      const prefix = preview ? `/site-preview/${id}/` : `/s/${id}/`;
+      const prefix = preview ? `/${blogPreview ? "blog-preview" : "site-preview"}/${id}/` : `/s/${id}/`;
       let path: string;
       try { path = decodeURIComponent(url.pathname.slice(prefix.length)); } catch { return new Response("Not found", { status: 404 }); }
       if (!path || path.endsWith("/")) path += "index.html";
       if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(path) || path.split("/").some(part => !part || part === "." || part === "..")) return new Response("Not found", { status: 404 });
-      let body: string | ReadableStream<Uint8Array>;
-      if (preview) {
+      let body: string | Uint8Array | ReadableStream<Uint8Array>, mime: string | undefined, isBlog = blogPreview;
+      if (blogPreview) {
+        const [record] = await deps.database.select().from(blogPreviews).where(and(eq(blogPreviews.token, id), gt(blogPreviews.expiresAt, deps.now())));
+        if (!record) return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+        const [revision] = await deps.database.select().from(siteRevisions).where(eq(siteRevisions.id, record.revisionId));
+        const file = revision?.files.find(f => f.path === path);
+        if (file) body = file.content;
+        else {
+          const asset = revision?.blogManifest?.assets.find(a => a.path === path);
+          const [snapshot] = asset ? await deps.database.select().from(blogAssetSnapshots).where(and(eq(blogAssetSnapshots.revisionId, record.revisionId), eq(blogAssetSnapshots.path, path))) : [];
+          if (!asset || !snapshot) return new Response("Not found", { status: 404 });
+          body = Uint8Array.from(atob(snapshot.base64), c => c.charCodeAt(0)); mime = asset.mimeType;
+        }
+      } else if (preview) {
         const [record] = await deps.database.select().from(sitePreviews).where(and(eq(sitePreviews.token, id), gt(sitePreviews.expiresAt, deps.now())));
         const file = record?.files.find(file => file.path === path);
         if (!file) return new Response("Not found", { status: 404 }); body = file.content;
       } else {
         if (!z.uuid().safeParse(id).success) return new Response("Not found", { status: 404 });
         const [site] = await deps.database.select().from(sites).where(eq(sites.id, id));
+        isBlog = site?.kind === "blog";
         if (!site?.publishedRevisionId) return new Response("Not found", { status: 404 });
         const versionPath = path.match(/^v\/([a-f0-9-]{36})\/(.+)$/);
         if (!versionPath) return new Response(null, { status: 302, headers: { Location: new URL(`/s/${id}/v/${site.publishedRevisionId}/${path}`, caps.publicOrigin).href, "Cache-Control": "no-store" } });
         const [revision] = await deps.database.select().from(siteRevisions).where(and(eq(siteRevisions.siteId, id), eq(siteRevisions.id, versionPath[1])));
         path = versionPath[2];
-        const key = revision?.assets?.[path], driver = revision?.storageDriver;
-        if (!key || !driver) return new Response("Not found", { status: 404 }); body = await caps.storage(driver).open(key);
+        // Blog recall invalidates every historical path; code sites retain their historical URLs.
+        if (site.kind === "blog" && revision?.id !== site.publishedRevisionId) return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+        const file = site.kind === "blog" ? revision?.files.find(f => f.path === path) : undefined;
+        if (file) body = file.content;
+        else {
+          const key = revision?.assets?.[path], driver = revision?.storageDriver;
+          if (!key || !driver) return new Response("Not found", { status: 404 });
+          if (site.kind === "blog") { const asset = revision?.blogManifest?.assets.find(a => a.path === path); if (!asset) return new Response("Not found", { status: 404 }); mime = asset.mimeType; }
+          body = await caps.storage(driver).open(key);
+        }
       }
       const csp = ["sandbox allow-scripts allow-forms allow-downloads", "default-src 'none'",
         `script-src 'unsafe-inline' https: ${url.origin} ${new URL(caps.sdkUrl).origin}`, `style-src 'unsafe-inline' https: ${url.origin}`,
         `img-src https: data: blob: ${url.origin}`, `font-src https: data: ${url.origin}`,
         `connect-src ${caps.apiOrigin} ${url.origin}`, "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join("; ");
-      return new Response(body, { headers: { "Content-Type": service.siteMime(path), "Content-Security-Policy": csp,
+      const blogCsp = ["sandbox", "default-src 'none'", "script-src 'none'", `style-src 'unsafe-inline' ${url.origin}`, `img-src ${url.origin}`, "connect-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"].join("; ");
+      return new Response(body as BodyInit, { headers: { "Content-Type": mime ?? service.siteMime(path), "Content-Security-Policy": isBlog ? blogCsp : csp,
         "Access-Control-Allow-Origin": "*", "Cross-Origin-Resource-Policy": "cross-origin", "Cache-Control": "no-store",
+        ...(preview ? { "X-Robots-Tag": "noindex, nofollow, noarchive" } : {}),
         "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff", "Permissions-Policy": "camera=(), microphone=(), geolocation=()" } });
     } catch { return new Response("Site unavailable", { status: 503 }); }
     finally { await scope.close(); }

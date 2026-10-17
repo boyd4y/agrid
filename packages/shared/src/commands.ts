@@ -1,3 +1,5 @@
+import type { CreateCalendarViewInput, UpdateCalendarViewInput, QueryCalendarViewInput, CalendarViewResult } from "./calendar-view.js";
+import { BLOG_COMMANDS, type BlogCommands, type BlogResults } from "./blogs.js";
 import { DOCUMENT_COMMANDS, type DocumentCommands, type DocumentResults } from "./documents.js";
 import { CALENDAR_COMMANDS, type CalendarCommands, type CalendarResults } from "./calendar.js";
 import type { SiteCommands, SiteResults } from "./sites.js";
@@ -43,6 +45,7 @@ import type {
 export const COMMANDS = [
   ...CALENDAR_COMMANDS,
   ...DOCUMENT_COMMANDS,
+  ...BLOG_COMMANDS,
   "getWorkspace", "listWorkspaces", "createWorkspace", "listMembers",
   "listSites", "getSite", "saveSite", "restoreSiteRevision", "publishSite", "unpublishSite", "deleteSite",
   "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
@@ -74,6 +77,7 @@ export const COMMANDS = [
   "renameView",
   "setDefaultView",
   "updateBoardView",
+  "createCalendarView", "updateCalendarView", "queryCalendarView",
   "createFormView",
   "updateFormView",
   "setFormFields",
@@ -167,7 +171,7 @@ export type ReorderColumnsInput = {
 
 export type Workspace = { id: string; organizationId: string; name: string; isDefault: boolean; createdAt: string | Date };
 
-export type CommandInputMap = DocumentCommands & CalendarCommands & SiteCommands & RelationCommands & {
+export type CommandInputMap = BlogCommands & DocumentCommands & CalendarCommands & SiteCommands & RelationCommands & {
   listWorkspaces: Record<string, never>;
   createWorkspace: { name: string };
   batchAddColumns: BatchAddColumnsInput;
@@ -203,6 +207,9 @@ export type CommandInputMap = DocumentCommands & CalendarCommands & SiteCommands
   renameView: RenameViewInput;
   setDefaultView: SetDefaultViewInput;
   updateBoardView: UpdateBoardViewInput;
+  createCalendarView: CreateCalendarViewInput;
+  updateCalendarView: UpdateCalendarViewInput;
+  queryCalendarView: QueryCalendarViewInput;
   createFormView: CreateFormViewInput;
   updateFormView: UpdateFormViewInput;
   setFormFields: SetFormFieldsInput;
@@ -218,7 +225,7 @@ export type CommandInputMap = DocumentCommands & CalendarCommands & SiteCommands
   setFormChrome: SetFormChromeInput;
 };
 
-export type CommandResultMap = DocumentResults & CalendarResults & SiteResults & RelationResults & {
+export type CommandResultMap = BlogResults & DocumentResults & CalendarResults & SiteResults & RelationResults & {
   listWorkspaces: Workspace[];
   createWorkspace: Workspace;
   batchAddColumns: BatchColumnsResult;
@@ -254,6 +261,9 @@ export type CommandResultMap = DocumentResults & CalendarResults & SiteResults &
   renameView: TableView;
   setDefaultView: TableView;
   updateBoardView: TableView;
+  createCalendarView: TableView;
+  updateCalendarView: TableView;
+  queryCalendarView: CalendarViewResult;
   createFormView: ResolvedFormView;
   updateFormView: ResolvedFormView;
   setFormFields: ResolvedFormView;

@@ -1,3 +1,5 @@
+export { createCalendarView, updateCalendarView, queryCalendarView } from "./calendar-views.js";
+import * as calendarViewCmds from "./calendar-views.js";
 export * from "./documents.js";
 import * as documentCommands from "./documents.js";
 export * from "./calendar.js";
@@ -133,6 +135,9 @@ export const commands = {
   renameView: viewCmds.renameView,
   setDefaultView: viewCmds.setDefaultView,
   updateBoardView: viewCmds.updateBoardView,
+  createCalendarView: calendarViewCmds.createCalendarView,
+  updateCalendarView: calendarViewCmds.updateCalendarView,
+  queryCalendarView: calendarViewCmds.queryCalendarView,
   createFormView: viewCmds.createFormView,
   createGridView: viewCmds.createGridView,
   createBoardView: viewCmds.createBoardView,

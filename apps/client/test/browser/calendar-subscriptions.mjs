@@ -74,6 +74,8 @@ try {
   await page.screenshot({ path: f.artifact('subscriptions-mobile-dark.png') });
   await dialog.getByRole('button', { name: '关闭', exact: true }).first().click(); await dialog.waitFor({ state: 'hidden' });
   await panel.getByRole('button', { name: '投递记录', exact: true }).click();
+  await dialog.getByRole('button').filter({ hasText: delivery.id }).click();
+  await dialog.getByText('第 1 次尝试 · 失败 · HTTP 503', { exact: true }).waitFor();
   assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth), false);
   await page.screenshot({ path: f.artifact('subscription-history-mobile-dark.png') });
   await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });

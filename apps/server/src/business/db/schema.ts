@@ -150,7 +150,7 @@ export const rows = pgTable(
 );
 
 
-/* ───────────── Table views (grid / board / form) ───────────── */
+/* ───────────── Table views (grid / board / form / calendar) ───────────── */
 
 export const reports = pgTable("reports", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -164,7 +164,7 @@ export const reports = pgTable("reports", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [index("reports_org_created_idx").on(t.organizationId, t.createdAt), index("reports_workspace_created_idx").on(t.workspaceId, t.createdAt)]);
 
-export const VIEW_TYPES = ["grid", "board", "form"] as const;
+export const VIEW_TYPES = ["grid", "board", "form", "calendar"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
 
 export type FormFieldConfigJson = {
@@ -196,7 +196,7 @@ export type FormViewConfigJson = {
   ending?: { title?: string; description?: string; ctaLabel?: string };
 };
 
-export type ViewConfigJson = FormViewConfigJson | Record<string, unknown>;
+export type ViewConfigJson = FormViewConfigJson | import("@tabdo/shared").CalendarViewConfig | Record<string, unknown>;
 
 export const tableViews = pgTable(
   "table_views",
@@ -551,3 +551,4 @@ export const apiKeySchedules = pgTable("api_key_schedules", {
 export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
 
 export { calendarEvents, calendarSubscriptions, calendarDeliveries, calendarDeliveryAttempts } from "./calendar-subscriptions-schema.js";
+export * from "./blogs-schema.js";
