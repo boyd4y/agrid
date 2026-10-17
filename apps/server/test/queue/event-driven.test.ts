@@ -305,3 +305,52 @@ test("same-enterprise workspaces keep queued table events and schedules in their
     assert((await commands.queryRows(boundA, { ...scope, tableId: first.id })).rows.some(row => row.cells[firstTitle] === "scheduled in A"));
   } finally { await service.close(); service = undefined; }
 });
+
+test("authenticated enterprise webhook delivery fans out through Redis into original workspace scopes once", async () => {
+  const commands = await import("../../src/business/commands/index.js");
+  const { createEndpoint, receiveWebhook } = await import("../../src/business/services/webhooks.js");
+  const { workspaces, integrationDeliveries } = await import("../../src/db/schema.js");
+  const base = commandDependencies();
+  const [a] = await db.select().from(workspaces).where(and(eq(workspaces.organizationId, org), eq(workspaces.isDefault, true)));
+  const [b] = await db.insert(workspaces).values({ organizationId: org, name: "Ingress B" }).returning();
+  const boundA = { ...base, workspaceId: a.id }, boundB = { ...base, workspaceId: b.id };
+  const tableA = await commands.createTable(boundA, { ...scope, name: "Webhook destination" });
+  const tableB = await commands.createTable(boundB, { ...scope, name: "Webhook destination" });
+  const integrations = { ...boundB, publicUrl: "https://fixture.local.test", encryptionKey: "", bodyLimit: 4096,
+    fetch: async () => { throw new Error("Plain webhook must not call an external provider"); } };
+  const actor = { kind: "human" as const, userId: owner, memberId: "fixture", organizationId: org,
+    workspaceId: b.id, name: "Fixture", email: `${owner}@local.test`, role: "owner" };
+  const endpoint = await createEndpoint(integrations, actor, new Request("https://fixture.local.test/api/webhook-endpoints", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Enterprise shared source" }),
+  }));
+  const source = { kind: "webhook" as const, endpointId: endpoint.endpoint.id };
+  const ruleA = await commands.createAutomation(boundA, { ...scope, name: "Ingress A", source, trigger: { type: "webhook_received" },
+    actions: [{ type: "command", command: "addRow", input: { tableId: tableA.id } }] });
+  const ruleB = await commands.createAutomation(boundB, { ...scope, name: "Ingress B", source, trigger: { type: "webhook_received" },
+    actions: [{ type: "command", command: "addRow", input: { tableId: tableB.id } }] });
+  const key = randomUUID();
+  const deliver = () => receiveWebhook(integrations, new Request(`https://fixture.local.test/api/webhooks/${source.endpointId}`, {
+    method: "POST", headers: { Authorization: `Bearer ${endpoint.token}`, "Idempotency-Key": key, "Content-Type": "application/json" },
+    body: JSON.stringify({ tableId: tableB.id }),
+  }), source.endpointId);
+  assert.equal((await deliver()).duplicate, false);
+  assert.equal((await deliver()).duplicate, true);
+  const [delivery] = await db.select().from(integrationDeliveries).where(and(eq(integrationDeliveries.endpointId, source.endpointId), eq(integrationDeliveries.dedupeKey, key)));
+  assert(delivery.eventId);
+  // A foreground B invocation precedes actual worker reload; it cannot redirect A's rule.
+  assert((await commands.listTables(boundB, scope)).some(table => table.id === tableB.id));
+  service = createAutomationService({ closeDatabase: false }); await service.ready;
+  try {
+    await eventually(async () => (await db.select().from(automationEvents).where(eq(automationEvents.id, delivery.eventId!)))[0]?.status === "completed");
+    const runs = await db.select().from(automationRuns).where(eq(automationRuns.eventId, delivery.eventId));
+    assert.equal(runs.length, 2);
+    assert.deepEqual(new Map(runs.map(run => [run.automationId, run.workspaceId])), new Map([[ruleA.id, a.id], [ruleB.id, b.id]]));
+    for (const run of runs) assert.equal((await db.select().from(automationStepReceipts).where(eq(automationStepReceipts.runId, run.id))).length, 1);
+    assert.equal((await commands.queryRows(boundA, { ...scope, tableId: tableA.id })).rows.length, 1);
+    assert.equal((await commands.queryRows(boundB, { ...scope, tableId: tableB.id })).rows.length, 1);
+    assert.equal((await deliver()).duplicate, true);
+    await settled();
+    assert.equal((await commands.queryRows(boundA, { ...scope, tableId: tableA.id })).rows.length, 1);
+    assert.equal((await commands.queryRows(boundB, { ...scope, tableId: tableB.id })).rows.length, 1);
+  } finally { await service.close(); service = undefined; }
+});
