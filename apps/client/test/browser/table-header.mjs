@@ -83,7 +83,9 @@ try {
     }
     // Many long view names stay within their own scroll area; keyboard navigation
     // scrolls the selected tab into view without moving the whole page.
-    for (let i = 0; i < 4; i++) await command('createGridView', { tableId: table.id, name: `Very long view name ${locale} ${i}` });
+    const extraViews = [];
+    for (let i = 0; i < 4; i++) extraViews.push(await command('createGridView', { tableId: table.id, name: `Very long view name ${locale} ${i}` }));
+    const lastViewId = extraViews.at(-1).id;
     await page.reload(); await title.waitFor();
     for (const width of [320, 390, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
@@ -94,10 +96,20 @@ try {
       await page.getByTestId('board-properties').waitFor();
       await page.keyboard.press('Escape');
       await gridTab.focus(); await gridTab.press('End');
-      const selected = page.getByTestId('view-switcher').locator('[role="tab"][data-state="active"]');
-      const tabBox = await selected.boundingBox(), listBox = await page.getByTestId('view-switcher').boundingBox();
-      const visibleWidth = Math.min(tabBox.x + tabBox.width, listBox.x + listBox.width) - Math.max(tabBox.x, listBox.x);
-      assert(visibleWidth >= Math.min(tabBox.width, listBox.width) - 8, `keyboard-selected tab fills the available scroll area: ${JSON.stringify({ tabBox, listBox })}`);
+      // Roving focus is deferred: wait for the expected last tab, not whichever
+      // tab happens to still be active immediately after the key event.
+      await page.waitForFunction(viewId => {
+        const tab = document.querySelector(`[data-view-id="${viewId}"]`);
+        return tab === document.activeElement && tab?.getAttribute('data-state') === 'active';
+      }, lastViewId, { timeout: 10000 });
+      await page.waitForFunction(viewId => {
+        const tab = document.querySelector(`[data-view-id="${viewId}"]`);
+        const list = document.querySelector('[data-testid="view-switcher"]');
+        if (!tab || !list) return false;
+        const tabBox = tab.getBoundingClientRect(), listBox = list.getBoundingClientRect();
+        const visibleWidth = Math.min(tabBox.right, listBox.right) - Math.max(tabBox.left, listBox.left);
+        return visibleWidth >= Math.min(tabBox.width, listBox.width) - 8;
+      }, lastViewId, { timeout: 10000 });
       await gridTab.click();
     }
   }
