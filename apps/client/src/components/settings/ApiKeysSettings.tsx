@@ -2,11 +2,12 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, Copy, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ApiKeyInfo, ApiKeyInput, CalendarPermission, BlogPermission, DocumentPermission, TablePermission } from "@tabdo/shared";
+import type { ApiKeyInfo, ApiKeyInput, CalendarPermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { enableGrokBot } from "@/components/settings/grok-bot";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tabdo/ui/components/collapsible";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
@@ -18,7 +19,7 @@ import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
-import { groupPermissionTables, operations, summarizePermissions, type ApiKeyTable } from "@/components/settings/api-key-permissions";
+import { authorizedTableIds, getTableAccess, groupPermissionResources, setTableAccess, summarizePermissions, tableOperations, type ApiKeyTable, type PermissionResource } from "@/components/settings/api-key-permissions";
 
 const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], schedulePermissions: [], documentPermissions: [], blogPermissions: [] });
 
@@ -27,11 +28,9 @@ export function ApiKeysSettings() {
   const text = (key: string, values?: Record<string, string | number>) => t(`settings.apiKeys.${key}`, values);
   const id = useId();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<ApiKeyTable[]>([]);
-  const [calendars, setCalendars] = useState<{ id: string; name: string; workspaceName: string }[]>([]);
-  const [schedules, setSchedules] = useState<{ id: string; name: string; workspaceName: string }[]>([]);
+  const [calendars, setCalendars] = useState<PermissionResource[]>([]);
+  const [schedules, setSchedules] = useState<PermissionResource[]>([]);
   const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage", "canTriggerAgent", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"] as const;
-  const blogOperations = ["canRead", "canConfigure", "canBuild", "canPublish", "canRestore"] as const;
-  const documentOperations = ["canRead", "canCreate", "canUpdate", "canUpload"] as const;
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
   const [secret, setSecret] = useState(""), [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
@@ -100,30 +99,14 @@ export function ApiKeysSettings() {
     if (!canManage || grokBusy.current) return;
     grokBusy.current = true; setEnablingGrok(true);
     try {
-      const saved = await enableGrokBot(api, grokTableIds);
+      const saved = await enableGrokBot({ ...api, createApiKey: input => api.createApiKey(input.permissions.reduce(
+        (current, grant) => setTableAccess(current, grant.tableId, { ...grant, canPublish: false }), input,
+      )) }, grokTableIds);
       if (!saved) { toast.error(text("grok.selectTables")); return; }
       setKeys(current => [saved.key, ...current.filter(key => key.id !== saved.key.id)]); pagination.resetPage();
       setGrokPicker(false); setGrok(saved);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
     finally { grokBusy.current = false; setEnablingGrok(false); }
-  }
-  function toggle(tableId: string, operation: typeof operations[number], checked: boolean) {
-    setInput(current => {
-      const grant: TablePermission = { tableId, canRead: false, canCreate: false, canUpdate: false, canDelete: false, ...current.permissions.find(p => p.tableId === tableId), [operation]: checked };
-      return { ...current, permissions: [...current.permissions.filter(p => p.tableId !== tableId), ...(operations.some(op => grant[op]) ? [grant] : [])] };
-    });
-  }
-  function toggleBlog(tableId: string, operation: typeof blogOperations[number], checked: boolean) {
-    setInput(current => {
-      const grant: BlogPermission = { tableId, canRead: false, canConfigure: false, canBuild: false, canPublish: false, canRestore: false, ...current.blogPermissions?.find(p => p.tableId === tableId), [operation]: checked };
-      return { ...current, blogPermissions: [...(current.blogPermissions ?? []).filter(p => p.tableId !== tableId), ...(blogOperations.some(op => grant[op]) ? [grant] : [])] };
-    });
-  }
-  function toggleDocument(tableId: string, operation: typeof documentOperations[number], checked: boolean) {
-    setInput(current => {
-      const grant: DocumentPermission = { tableId, canRead: false, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false, ...current.documentPermissions?.find(p => p.tableId === tableId), [operation]: checked };
-      return { ...current, documentPermissions: [...(current.documentPermissions ?? []).filter(p => p.tableId !== tableId), ...(documentOperations.some(op => grant[op]) ? [grant] : [])] };
-    });
   }
   function toggleCalendar(calendarId: string, operation: typeof calendarOperations[number], checked: boolean) {
     setInput(current => {
@@ -132,10 +115,34 @@ export function ApiKeysSettings() {
     });
   }
   function permissionRow(tableId: string, name: string, label: string) {
-    return <div key={tableId} className="grid grid-cols-[minmax(0,1fr)_repeat(4,2rem)] items-center gap-1 border-b p-2 text-sm last:border-b-0 hover:bg-muted focus-within:bg-muted sm:grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)]">
-      <span className="min-w-0 break-words" title={name}>{name}</span>
-      {operations.map(op => <label key={op} className="flex min-h-8 cursor-pointer items-center justify-center rounded-sm hover:bg-accent"><Checkbox aria-label={`${label} · ${text(`operations.${op}`)}`} disabled={saving} checked={input.permissions.find(p => p.tableId === tableId)?.[op] ?? false} onCheckedChange={checked => toggle(tableId, op, checked === true)} /></label>)}
-    </div>;
+    const { access, legacy } = getTableAccess(input, tableId);
+    const legacySummary = () => {
+      const summary = (grant: object | undefined, namespace: string) => Object.entries(grant ?? {})
+        .filter(([key, value]) => key !== "tableId" && value === true)
+        .map(([key]) => t(`${namespace}.${key}`)).join("、") || text("notGranted");
+      const document = input.documentPermissions?.find(p => p.tableId === tableId);
+      const blog = input.blogPermissions?.find(p => p.tableId === tableId);
+      return [
+        `${text("recordFields")}: ${summary(input.permissions.find(p => p.tableId === tableId), "app:settings.apiKeys.operations")}`,
+        `${text("recordBody")}: ${summary(document && { canRead: document.canRead, canCreate: document.canCreate, canUpdate: document.canUpdate, canUpload: document.canUpload }, "documents:grants")}`,
+        `${text("publication")}: ${summary(blog && { canRead: blog.canRead, canConfigure: blog.canConfigure, canBuild: blog.canBuild, canPublish: blog.canPublish }, "blogs:grants")}`,
+        ...([document?.canReadHistory, document?.canRestore, blog?.canRestore].some(Boolean) ? [text("otherLegacyGrants")] : []),
+      ].join("；");
+    };
+    return <FieldSet key={tableId} className="min-w-0 gap-2 border-b py-3 last:border-b-0" data-testid={`table-access-${tableId}`}>
+      <FieldLegend variant="label" className="mb-0 break-words">{name}</FieldLegend>
+      {legacy ? <>
+        <FieldDescription>{text("legacyPreserved")}</FieldDescription>
+        <p className="break-words text-xs text-muted-foreground">{legacySummary()}</p>
+        <FieldDescription>{text("legacyConversion")}</FieldDescription>
+        <Button type="button" variant="outline" size="sm" className="self-start" disabled={saving} aria-label={text("modifyTableNamed", { name: label })} onClick={() => setInput(current => setTableAccess(current, tableId, getTableAccess(current, tableId).access))}>{text("modifyTable")}</Button>
+      </> : <FieldGroup className="flex flex-row flex-wrap gap-x-4 gap-y-1">
+        {tableOperations.map(op => <Field key={op} orientation="horizontal" className="w-auto min-h-8" data-disabled={saving}>
+          <Checkbox id={`${id}-${tableId}-${op}`} aria-label={`${label} · ${text(`operations.${op}`)}`} aria-describedby={op === "canPublish" ? `${id}-publish-description` : undefined} disabled={saving} checked={access[op]} onCheckedChange={checked => setInput(current => setTableAccess(current, tableId, { ...getTableAccess(current, tableId).access, [op]: checked === true }))} />
+          <FieldLabel htmlFor={`${id}-${tableId}-${op}`}>{text(`operations.${op}`)}</FieldLabel>
+        </Field>)}
+      </FieldGroup>}
+    </FieldSet>;
   }
   const create = canManage && <Button size="sm" disabled={!tables.length && !calendars.length && !schedules.length} onClick={() => edit()}><Plus className="hidden sm:block" data-icon="inline-start" />{text("create")}</Button>;
   return <section className="flex min-w-0 flex-col gap-6" data-testid="api-keys-settings">
@@ -186,7 +193,7 @@ export function ApiKeysSettings() {
       : !keys.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("emptyTitle")} description={text(tables.length || calendars.length || schedules.length ? "emptyDescription" : "noTables")} action={create} />
       : <><ul className="border-y border-border" aria-label={text("title")}>
         {pagination.items.map(key => {
-          const scope = summarizePermissions(key.permissions, tables);
+          const scope = summarizePermissions(authorizedTableIds(key).map(tableId => ({ tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false })), tables);
           return <ListItem key={key.id} className="flex items-center gap-0 rounded-none border-x-0 border-t-0 p-0 last:border-b-0 sm:gap-2">
             <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-sm py-3 text-left sm:px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset" aria-label={text("editNamed", { name: key.name })} onClick={() => edit(key)}>
               <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -196,9 +203,7 @@ export function ApiKeysSettings() {
                 </span>
                 <span className="flex shrink-0 flex-col gap-1 text-xs text-muted-foreground">
                   <span>{scope.tableCount ? text("scopeSummary", { workspaces: text("workspaceCount", { count: scope.workspaceCount }), tables: text("tableCount", { count: scope.tableCount }) }) : text("noAuthorizedTables")}</span>
-                  {!!key.blogPermissions?.length && <span>{t("blogs:grantCount", { count: key.blogPermissions.length })}</span>}
                   {!!key.schedulePermissions?.length && <span>{t("calendar:plans.scope", { count: key.schedulePermissions.length })}</span>}
-                  {!!key.documentPermissions?.length && <span>{t("documents:documentScope", { count: key.documentPermissions.length })}</span>}
                   {!!key.calendarPermissions?.length && <span>{t("calendar:calendarScope", { count: key.calendarPermissions.length })}</span>}
                   {scope.unavailableCount > 0 && <span>{text("unavailableSummary", { count: scope.unavailableCount })}</span>}
                 </span>
@@ -218,27 +223,34 @@ export function ApiKeysSettings() {
         </div> : <form noValidate onSubmit={save} className="flex flex-col gap-5">
           <FieldGroup>
             <Field><FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel><Input id={`${id}-name`} value={input.name} maxLength={100} autoComplete="off" disabled={saving} required onChange={event => setInput(current => ({ ...current, name: event.target.value }))} /></Field>
-            <FieldSet className="gap-3"><FieldLegend variant="label">{text("permissions")}</FieldLegend><FieldDescription>{text("tablesHint")}</FieldDescription>
-              <div className="max-h-72 overflow-y-auto rounded-md border">
-                <div className="grid grid-cols-[minmax(0,1fr)_repeat(4,2rem)] sm:grid-cols-[minmax(0,1fr)_repeat(4,2.5rem)] items-center gap-1 border-b bg-muted/50 p-2 text-xs text-muted-foreground"><span>{text("tables")}</span>{operations.map(op => <span className="text-center" key={op}>{text(`operations.${op}`)}</span>)}</div>
-                {groupPermissionTables(tables).map(group => <div key={group.workspaceId} role="group" aria-label={group.name}>
-                  <div className="break-words border-b bg-muted/50 px-2 py-1.5 text-xs font-medium" title={group.workspaceId}>{group.name}</div>
-                  {group.tables.map(table => permissionRow(table.id, table.name, `${group.name} / ${table.name}`))}
-                </div>)}
-                {input.permissions.filter(grant => !tables.some(table => table.id === grant.tableId)).map(grant => permissionRow(grant.tableId, `${text("removedTable")} (${grant.tableId})`, `${text("removedTable")} (${grant.tableId})`))}
+            <FieldDescription>{text("tablesHint")}</FieldDescription>
+            <p id={`${id}-publish-description`} className="sr-only">{text("publishDescription")}</p>
+            {groupPermissionResources(tables, calendars, schedules).map(group => <FieldSet key={group.workspaceId} className="min-w-0 gap-3" aria-label={group.name}>
+              <FieldLegend>{group.name}</FieldLegend>
+              <div className="min-w-0 border-y">
+                {group.tables.map(table => permissionRow(table.id, table.name, `${group.name} / ${table.name}`))}
               </div>
-            </FieldSet>
-            <FieldSet className="gap-3"><FieldLegend variant="label">{t("blogs:grantsTitle")}</FieldLegend><FieldDescription>{t("blogs:grantsHint")}</FieldDescription>
-              {tables.map(table => <div key={table.id} className="flex flex-col gap-2 rounded-md border p-3"><span className="break-words text-sm font-medium">{table.workspaceName} / {table.name}</span><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{blogOperations.map(operation => <label key={operation} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} aria-label={`${table.name} · ${t(`blogs:grants.${operation}`)}`} checked={input.blogPermissions?.find(p => p.tableId === table.id)?.[operation] ?? false} onCheckedChange={checked => toggleBlog(table.id, operation, checked === true)} />{t(`blogs:grants.${operation}`)}</label>)}</div></div>)}
-            </FieldSet>
-            <FieldSet className="gap-3"><FieldLegend variant="label">{t("documents:grantsTitle")}</FieldLegend><FieldDescription>{t("documents:grantsHint")}</FieldDescription>
-              {tables.map(table => <div key={table.id} className="flex flex-col gap-2 rounded-md border p-3"><span className="break-words text-sm font-medium">{table.workspaceName} / {table.name}</span><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{documentOperations.map(operation => <label key={operation} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} aria-label={`${table.name} · ${t(`documents:grants.${operation}`)}`} checked={input.documentPermissions?.find(p => p.tableId === table.id)?.[operation] ?? false} onCheckedChange={checked => toggleDocument(table.id, operation, checked === true)} />{t(`documents:grants.${operation}`)}</label>)}</div></div>)}
-            </FieldSet>
-            <FieldSet className="gap-3"><FieldLegend variant="label">{t("calendar:calendarGrants")}</FieldLegend><FieldDescription>{t("calendar:calendarGrantsHint")}</FieldDescription>
-              {calendars.map(calendar => <div key={calendar.id} className="flex flex-col gap-2 rounded-md border p-3"><span className="break-words text-sm font-medium">{calendar.workspaceName} / {calendar.name}</span><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{calendarOperations.map(operation => <label key={operation} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} aria-label={`${calendar.name} · ${t(`calendar:grants.${operation}`)}`} checked={input.calendarPermissions?.find(p => p.calendarId === calendar.id)?.[operation] ?? false} onCheckedChange={checked => toggleCalendar(calendar.id, operation, checked === true)} />{t(`calendar:grants.${operation}`)}</label>)}</div></div>)}
-            </FieldSet>
+              {(group.calendars.length > 0 || group.schedules.length > 0) && <Collapsible className="min-w-0">
+                <CollapsibleTrigger asChild><Button type="button" variant="ghost" size="sm" className="max-w-full" aria-label={text("otherResourcesNamed", { name: group.name })}><ChevronRight className="size-4 in-data-[state=open]:rotate-90" aria-hidden />{text("otherResources", { count: (input.calendarPermissions ?? []).filter(p => group.calendars.some(c => c.id === p.calendarId)).length + (input.schedulePermissions ?? []).filter(p => group.schedules.some(c => c.id === p.automationId)).length })}</Button></CollapsibleTrigger>
+                <CollapsibleContent className="pt-3">
+                  <FieldGroup>
+                    {group.calendars.map(calendar => <Collapsible key={calendar.id}>
+                      <CollapsibleTrigger asChild><Button type="button" variant="outline" size="sm" className="h-auto max-w-full whitespace-normal text-left">{text("calendarResource", { name: calendar.name })} · {input.calendarPermissions?.some(p => p.calendarId === calendar.id) ? text("granted") : text("notGranted")}</Button></CollapsibleTrigger>
+                      <CollapsibleContent className="pt-2"><FieldSet><FieldLegend variant="label" className="sr-only">{calendar.name}</FieldLegend><FieldGroup className="grid grid-cols-1 gap-1 sm:grid-cols-2">{calendarOperations.map(operation => <Field key={operation} orientation="horizontal" data-disabled={saving}>
+                        <Checkbox id={`${id}-${calendar.id}-${operation}`} disabled={saving} aria-label={`${group.name} / ${calendar.name} · ${t(`calendar:grants.${operation}`)}`} checked={input.calendarPermissions?.find(p => p.calendarId === calendar.id)?.[operation] ?? false} onCheckedChange={checked => toggleCalendar(calendar.id, operation, checked === true)} />
+                        <FieldLabel htmlFor={`${id}-${calendar.id}-${operation}`}>{t(`calendar:grants.${operation}`)}</FieldLabel>
+                      </Field>)}</FieldGroup></FieldSet></CollapsibleContent>
+                    </Collapsible>)}
+                    {group.schedules.map(schedule => <FieldSet key={schedule.id} className="gap-2"><FieldLegend variant="label">{text("scheduleResource", { name: schedule.name })}</FieldLegend><FieldGroup className="flex flex-row flex-wrap gap-3">{(["canRead", "canUpdate"] as const).map(operation => <Field key={operation} orientation="horizontal" className="w-auto" data-disabled={saving}>
+                      <Checkbox id={`${id}-${schedule.id}-${operation}`} disabled={saving} aria-label={`${group.name} / ${schedule.name} · ${t(`calendar:plans.${operation}`)}`} checked={input.schedulePermissions?.find(p => p.automationId === schedule.id)?.[operation] ?? false} onCheckedChange={checked => setInput(current => { const grant = { automationId: schedule.id, canRead: false, canUpdate: false, ...current.schedulePermissions?.find(p => p.automationId === schedule.id), [operation]: checked === true }; return { ...current, schedulePermissions: [...(current.schedulePermissions ?? []).filter(p => p.automationId !== schedule.id), ...(grant.canRead || grant.canUpdate ? [grant] : [])] }; })} />
+                      <FieldLabel htmlFor={`${id}-${schedule.id}-${operation}`}>{t(`calendar:plans.${operation}`)}</FieldLabel>
+                    </Field>)}</FieldGroup></FieldSet>)}
+                  </FieldGroup>
+                </CollapsibleContent>
+              </Collapsible>}
+            </FieldSet>)}
+            {authorizedTableIds(input).filter(tableId => !tables.some(table => table.id === tableId)).map(tableId => permissionRow(tableId, `${text("removedTable")} (${tableId})`, `${text("removedTable")} (${tableId})`))}
           </FieldGroup>
-          {!!schedules.length && <FieldSet className="gap-3"><FieldLegend variant="label">{t("calendar:plans.grants")}</FieldLegend><FieldDescription>{t("calendar:plans.grantHint")}</FieldDescription><div className="divide-y border-y">{schedules.map(schedule => <div key={schedule.id} className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"><span className="min-w-0 break-words">{schedule.workspaceName} · {schedule.name}</span><div className="flex gap-3">{(["canRead", "canUpdate"] as const).map(operation => <label key={operation} className="flex items-center gap-2"><Checkbox disabled={saving} aria-label={`${schedule.workspaceName} · ${schedule.name} · ${t(`calendar:plans.${operation}`)}`} checked={input.schedulePermissions?.find(p => p.automationId === schedule.id)?.[operation] ?? false} onCheckedChange={checked => setInput(current => { const grant = { automationId: schedule.id, canRead: false, canUpdate: false, ...current.schedulePermissions?.find(p => p.automationId === schedule.id), [operation]: checked === true }; return { ...current, schedulePermissions: [...(current.schedulePermissions ?? []).filter(p => p.automationId !== schedule.id), ...(grant.canRead || grant.canUpdate ? [grant] : [])] }; })} />{t(`calendar:plans.${operation}`)}</label>)}</div></div>)}</div></FieldSet>}
           {formError && <FieldError role="alert">{formError}</FieldError>}
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length && !input.documentPermissions?.length && !input.blogPermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
         </form>}
