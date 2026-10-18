@@ -17,7 +17,7 @@
 
 - 文件列只引用已通过 UI 上传、归属同一列的 UUID，遵守单/多文件配置；不承诺聊天附件上传、解析产品文件或自动映射到执行环境。
 - 人员值与 run_agent 选择使用真实 userId，不是 member.id。list_members 按姓名/邮箱查询当前工作区真实 userId，kind=agent 查询智能体。负责人和 run_agent 都使用 userId，不按姓名猜 ID。
-- AgentMail 仅入站；正文可在执行前由受控官方 API 补取，HTML-only 与缺纯文本有区别。附件只有元数据，不支持发信/回复/附件下载；ISO 接收时间与数组收件人不可直接写成 date/text。
+- AgentMail 支持入站及已连接收件箱的发送/回复服务；自动化 send_email / reply_email 动作已接入，agent 工具尚未接入。正文可在执行前由受控官方 API 补取，HTML-only 与缺纯文本有区别。附件只有元数据，不支持发送附件或附件下载；ISO 接收时间与数组收件人不可直接写成 date/text。
 - 自动化 command 结果引用 `steps[n].result`，原生 Agent 结果为 `steps[n].text` 等字段；JSON 精确引用保留类型，prompt 插值是文字，不执行 JS。
 - 原生提问在关联对话回答，unknown 状态先查看原运行，不复制任务重放。无自建 plan/goal 工具、门禁或额外工具循环。
 - 四来源的工具查询缺口已经由独立工具提交 `5f635d1` 整改：list_automations 支持工作区 offset/limit 与可选 tableId；list_automation_runs 可按 automationId 查询非表格来源，并保持工作区归属校验。
@@ -40,3 +40,7 @@
 全局运行提示同步允许生成 HTML 并接入现有数据 API。站点闭环现已通过 save_site 持久保存完整文件集、open_preview(kind=site) 打开预览，并在编辑器查看和下载文件、保存和恢复版本、发布或撤下。生成文件、保存版本和公开发布仍是不同状态。当前按表 CRUD 权限不提供行级身份控制，客户端必填/限额也不等于服务端业务约束；相关场景必须明确差异。
 
 验证入口沿用上文的 `test:skills` 与原生 bundle 测试，覆盖第五个技能的加载、分配持久化、按工作区停用和引用文件挂载。此项不代表真实模型建站、公开发布或完整访客提交旅程已验收。
+
+## AgentMail 智能体工具
+
+已提供 list_mail_inboxes、send_email、reply_email 和只读 get_message，工具开关归入“邮件”。须先在工作区设置中连接 AgentMail，再使用列表中的 connectionId 和 inboxId；宿主校验工作区连接与实时邮箱归属，API key 不进入工具结果。发送/回复不支持附件，供应商投递后不可撤回；读取仅返回正文和附件元信息。协议 fixture 不代表真实邮箱验收。

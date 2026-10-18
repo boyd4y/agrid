@@ -1,3 +1,6 @@
+import { ServiceError } from "../errors.js";
+import type { sendAgentMailMessage, replyAgentMailMessage } from "../integrations/agentmail.js";
+import { sendAgentMailMessageSchema, replyAgentMailMessageSchema, type MailAutomationAction } from "@tabdo/shared";
 import * as commands from "../commands/index.js";
 import { and, asc, eq, inArray, sql, isNull } from "drizzle-orm";
 import { validateCell, parseAutomationCommand, resolveAutomationBindings, type AutomationRule, type AutomationAction,
@@ -12,6 +15,8 @@ import { automationEvents, automationOutbox, automationRuns, automationStepRecei
 import { loadTableColumns } from "../commands/formulas.js";
 import { eventConditionsMatch, eventBindingContext, type AnyEventSnapshot } from "./events.js";
 export type AutomationExecutionDependencies = CommandDependencies & Readonly<{
+  sendAgentMailMessage?: (input: Parameters<typeof sendAgentMailMessage>[1]) => ReturnType<typeof sendAgentMailMessage>;
+  replyAgentMailMessage?: (input: Parameters<typeof replyAgentMailMessage>[1]) => ReturnType<typeof replyAgentMailMessage>;
   runAgentAction(input: ActionInput): Promise<AutomationAgentActionResult>;
   hydrateAgentMailEvent?(event: ExternalAutomationEvent): Promise<ExternalAutomationEvent>;
 }>;
@@ -72,7 +77,7 @@ async function completeStep(deps: AutomationExecutionDependencies, tx: Transacti
   const complete = run.nextStep + 1 === rule.actions.length;
   await tx.update(automationRuns).set({ nextStep: run.nextStep + 1, status: complete ? "completed" : "running",
     finishedAt: complete ? deps.now() : null, error: null, detail: { ...run.detail, awaitingNative: false,
-      ...(typeof result.threadId === "string" ? { threadId: result.threadId, agentRunId: result.agentRunId } : {}),
+      ...(result.type === "run_agent" && typeof result.threadId === "string" ? { threadId: result.threadId, agentRunId: result.agentRunId } : {}),
       actions: [...(Array.isArray(run.detail.actions) ? run.detail.actions : []), result] } }).where(eq(automationRuns.id, run.id));
   if (event.rowId) {
     const [row] = await tx.select({ version: rows.version }).from(rows).where(eq(rows.id, event.rowId));
@@ -98,6 +103,33 @@ async function dataAction(deps: AutomationExecutionDependencies, tx: Transaction
   const result = await fn(deps, { ...input, organizationId: event.organizationId, actorId: actorId ?? undefined, skipAutomation: true }, tx);
   return { type: action.type, command: action.command, result };
 }
+/** Resolve and validate before making any provider request. Called outside DB transactions. */
+export async function executeMailAction(deps: Pick<AutomationExecutionDependencies, "sendAgentMailMessage" | "replyAgentMailMessage">,
+  action: MailAutomationAction, organizationId: string, context: Record<string, unknown>, steps: readonly unknown[]) {
+  const { type, ...fields } = action;
+  let resolved: unknown;
+  try { resolved = resolveAutomationBindings(fields, { event: context, steps }); }
+  catch (error) { throw new PermanentError(error instanceof Error ? error.message : "Invalid mail bindings"); }
+  try {
+    if (type === "send_email") {
+      const parsed = sendAgentMailMessageSchema.safeParse(resolved);
+      if (!parsed.success) throw new PermanentError(parsed.error.message);
+      if (!deps.sendAgentMailMessage) throw new PermanentError("邮件发送服务未配置");
+      const result = await deps.sendAgentMailMessage({ ...parsed.data, organizationId });
+      return { type, ...result, connectionId: parsed.data.connectionId, inboxId: parsed.data.inboxId };
+    }
+    const parsed = replyAgentMailMessageSchema.safeParse(resolved);
+    if (!parsed.success) throw new PermanentError(parsed.error.message);
+    if (!deps.replyAgentMailMessage) throw new PermanentError("邮件回复服务未配置");
+    const result = await deps.replyAgentMailMessage({ ...parsed.data, organizationId });
+    return { type, ...result, connectionId: parsed.data.connectionId, inboxId: parsed.data.inboxId };
+  } catch (error) {
+    if (error instanceof ServiceError && error.status >= 400 && error.status < 500)
+      throw new PermanentError(error.message);
+    throw error;
+  }
+}
+type MailPlan = { event: EventRow; run: RunRow; rule: AutomationRule; action: MailAutomationAction; actorId: string | null; context: Record<string, unknown>; steps: readonly unknown[] };
 type NativePlan = { event: EventRow; run: RunRow; rule: AutomationRule; action: RunAgentAction; actorId: string;
   context: Record<string, unknown>; steps: readonly unknown[] };
 /** Data + receipt commit atomically. Native SDK work happens after the short transaction. */
@@ -114,7 +146,7 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
       hydrated = { ...saved, event: { ...enriched, data: { ...enriched.data, message: { ...(enriched.data.message as Record<string, unknown>), bodyHydrated: true } } } };
     }
   }
-  const plan = await deps.database.transaction(async (tx): Promise<NativePlan | "continue" | "done"> => {
+  const plan = await deps.database.transaction(async (tx): Promise<NativePlan | MailPlan | "continue" | "done"> => {
     const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
     if (!event || event.finishedAt) return "done";
     if (event.fence !== fence) throw new FenceLostError("执行租约已被接管");
@@ -162,10 +194,32 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
       if (!scope.currentRule.createdByUserId) throw new PermanentError("请重新保存此自动化以设置真实执行者");
       return { event, run, rule, action, actorId: scope.currentRule.createdByUserId, context, steps };
     }
+    if (action.type === "send_email" || action.type === "reply_email")
+      return { event, run, rule, action, actorId: scope.actorId, context, steps };
     const result = await dataAction({ ...deps, workspaceId: run.workspaceId }, tx, event, action, context, steps, scope.actorId);
     await completeStep(deps, tx, event, run, rule, result);return "continue";
   });
   if (typeof plan === "string") return plan;
+  if (plan.action.type === "send_email" || plan.action.type === "reply_email") {
+    const receipt = await executeMailAction(deps, plan.action, plan.event.organizationId, plan.context, plan.steps);
+    // AgentMail outbound is at-least-once: ACK before receipt commit, or fence loss
+    // between them, can duplicate a send.
+    try {
+      return await deps.database.transaction(async tx => {
+        const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
+        if (!event || event.finishedAt) return "done";
+        if (event.fence !== fence) throw new FenceLostError("执行租约已被接管");
+        const [run] = await tx.select().from(automationRuns).where(eq(automationRuns.id, plan.run.id)).for("update");
+        if (!run || run.nextStep !== plan.run.nextStep || !unfinishedRuns.includes(run.status)) return "continue";
+        await completeStep(deps, tx, event, run, plan.rule, receipt);
+        return "continue";
+      });
+    } catch (error) {
+      if (error instanceof FenceLostError) throw error;
+      throw new PermanentError("AgentMail accepted the message, but saving the receipt failed; delivery may have succeeded", { cause: error });
+    }
+  }
+  if (plan.action.type !== "run_agent" || !plan.actorId) throw new PermanentError("Invalid native action");
   const result = await deps.runAgentAction({ runId: plan.run.id, step: plan.run.nextStep, organizationId: plan.event.organizationId,
     actorUserId: plan.actorId, action: plan.action, eventContext: plan.context, steps: plan.steps, tableId: plan.event.tableId });
   return deps.database.transaction(async tx => {

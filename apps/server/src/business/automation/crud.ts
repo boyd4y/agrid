@@ -9,7 +9,7 @@ import { automations, automationRuns, automationEvents, automationOutbox, rows, 
   columns, agentProfile, integrationConnections, webhookEndpoints } from "../db/schema.js";
 
 import { requireTableInOrg, requireOrgId } from "../tenant/scope.js";
-import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA, parseAutomationCommand, validateAutomationActionReferences,
+import { AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA, parseAutomationCommand, validateAutomationActionReferences, sendAgentMailMessageSchema, replyAgentMailMessageSchema,
   type AutomationRule, type AutomationRun, type AutomationSource, type CreateAutomationInput, type UpdateAutomationInput,
   type ListAutomationsInput, type DeleteAutomationInput, type ListAutomationRunsInput } from "@tabdo/shared";
 import { schedulePreview, syncSchedule } from "./schedule.js";
@@ -85,6 +85,16 @@ async function validateRule(deps: CommandDependencies, tx: Transaction, rule: Pi
         .innerJoin(member, eq(member.id, agentProfile.memberId)).where(and(eq(agentProfile.userId, action.agentUserId!), eq(member.organizationId, organizationId)));
       if (!agent) throw new Error("智能体不存在或不属于当前工作区");
     }
+    if (action.type === "send_email" || action.type === "reply_email") {
+      const [connection] = await tx.select().from(integrationConnections).where(and(
+        eq(integrationConnections.id, action.connectionId), eq(integrationConnections.organizationId, organizationId),
+        isNull(integrationConnections.deletedAt)));
+      if (!connection) throw new Error("邮件连接不存在或不属于当前工作区");
+      const { type, ...fields } = action;
+      const encoded = JSON.stringify(fields);
+      if (!encoded.includes('"$event"') && !encoded.includes('"$step"'))
+        (type === "send_email" ? sendAgentMailMessageSchema : replyAgentMailMessageSchema).parse(fields);
+    }
     if (action.type === "command") {
       // Fully literal inputs are validated now; references retain their real types and are validated at execution.
       await assertCommandReferences(deps, tx, organizationId, action.input);
@@ -138,7 +148,7 @@ export async function updateAutomation(deps: CommandDependencies, input: UpdateA
     if (expectedVersion !== undefined && existing.version !== expectedVersion) throw new CalendarError(409, "VERSION_CONFLICT", "The rule changed; refresh before editing");
     const rule = { ...mapRule(existing), ...body };
     if (rule.source.kind !== existing.source.kind || (existing.source.kind === "table" && rule.source.kind === "table" && rule.source.tableId !== existing.source.tableId)) throw new Error("已保存自动化的来源类型不可更改");
-    if (body.enabled !== false) await validateRule(deps, tx, rule, existing.organizationId);
+    if (body.enabled !== false || body.actions !== undefined) await validateRule(deps, tx, rule, existing.organizationId);
     // Migrated rules have no invented owner. A real editor adopts them explicitly.
     const [row] = await tx.update(automations).set({ ...body, createdByUserId: existing.createdByUserId ?? actorId ?? null,
       version: sql`${automations.version} + 1`, updatedAt: deps.now() }).where(eq(automations.id, automationId)).returning();

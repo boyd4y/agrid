@@ -1,7 +1,11 @@
 import { z } from "zod";
 
+/** New agents require an explicit opt-in to outbound mail. */
+export const DEFAULT_DISABLED_PLATFORM_TOOLS = ["send_email", "reply_email"] as const;
+
 /** Configurable platform wire IDs. Native tool availability belongs to the Harness. */
 export const PLATFORM_TOOL_IDS = [
+  "list_mail_inboxes", "send_email", "reply_email", "get_message",
   "list_calendar_subscriptions", "get_calendar_subscription", "create_calendar_subscription", "update_calendar_subscription", "revoke_calendar_subscription", "rotate_calendar_subscription_secret", "list_calendar_deliveries", "get_calendar_delivery", "retry_calendar_delivery",
   "create_blog", "start_blog_article", "get_blog_sources", "get_blog", "save_blog", "build_blog", "publish_blog", "withdraw_blog_article", "unpublish_blog", "restore_blog_revision", "create_blog_preview", "revoke_blog_previews",
   "query_scheduled_occurrences", "set_booking_reminders", "list_booking_reminders",

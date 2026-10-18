@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import { z } from "zod";
-import type { IntegrationInbox } from "@tabdo/shared";
+import { sendAgentMailMessageSchema, replyAgentMailMessageSchema, type IntegrationInbox, type SendAgentMailMessageInput, type ReplyAgentMailMessageInput } from "@tabdo/shared";
 import type { ExternalAutomationEvent } from "../automation/events.js";
 import type { IntegrationDependencies, IntegrationCapabilities } from "./dependencies.js";
 type ProviderDependencies = Pick<IntegrationCapabilities, "fetch">;
@@ -20,12 +20,13 @@ export async function agentMailRequest(deps: ProviderDependencies, apiKey: strin
       ...(init?.body === undefined ? {} : { body: JSON.stringify(init.body) }), redirect: "error", signal: AbortSignal.timeout(10_000) });
   } catch { throw new ServiceError(503, { message: "AgentMail 暂时无法连接，请重试" }); }
   if (response.status === 404 && init?.method === "DELETE" && init.allowNotFound) { await response.body?.cancel(); return {}; }
-  if (!response.ok) { await response.body?.cancel(); throw new ServiceError(502, { message: `AgentMail 请求失败（HTTP ${response.status}），请检查凭证、权限和公网地址` }); }
+  if (!response.ok) { await response.body?.cancel(); throw new ServiceError(response.status >= 400 && response.status < 500 && response.status !== 429 ? response.status : 502, { message: `AgentMail 请求失败（HTTP ${response.status}），请检查凭证、权限和公网地址` }); }
   if (response.status === 204) return {};
   try { return jsonObject(await boundedBody(response, 10 * 1024 * 1024)); }
   catch { throw new ServiceError(502, { message: "AgentMail 响应格式或大小不正确" }); }
 }
 export async function connectionKey(deps: CredentialDependencies, connection: typeof integrationConnections.$inferSelect) {
+  if (connection.provider !== "agentmail") throw new ServiceError(400, { message: "此连接不是 AgentMail 连接" });
   return await decryptSecret(deps, connection.encryptedCredential, { organizationId: connection.organizationId, id: connection.id, purpose: "agentmail-key" });
 }
 export async function changeRemoteWebhook(deps: ProviderDependencies & CredentialDependencies, connection: typeof integrationConnections.$inferSelect, endpoint: typeof webhookEndpoints.$inferSelect, enabled: boolean | "delete") {
@@ -70,10 +71,89 @@ export async function hydrateAgentMailEvent(deps: IntegrationDependencies, event
   if (!message?.bodyMissing) return event;
   if (message.inboxId !== event.source.inboxId || typeof message.messageId !== "string") throw new Error("Invalid verified message context");
   if ([event.source.inboxId, message.messageId].some(id => id === "." || id === "..")) throw new Error("Invalid AgentMail message identity");
-  const [connection] = await deps.database.select().from(integrationConnections).where(and(eq(integrationConnections.id, event.source.connectionId), eq(integrationConnections.organizationId, event.organizationId), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
+  const [connection] = await deps.database.select().from(integrationConnections).where(and(eq(integrationConnections.id, event.source.connectionId), eq(integrationConnections.organizationId, event.organizationId), eq(integrationConnections.provider, "agentmail"), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
   if (!connection) throw new Error("AgentMail connection is no longer available");
   const full = await agentMailRequest(deps, await connectionKey(deps, connection), `/v0/inboxes/${encodeURIComponent(event.source.inboxId)}/messages/${encodeURIComponent(message.messageId)}`);
   const normalized = normalizeAgentMailMessage(full, event.occurredAt);
   if (normalized.inboxId !== event.source.inboxId || normalized.messageId !== message.messageId) throw new Error("AgentMail message identity mismatch");
   return { ...event, data: { ...event.data, message: normalized } };
+}
+
+const outboundResultSchema = z.object({ message_id: z.string().min(1), thread_id: z.string().min(1) });
+type OutboundDependencies = Pick<IntegrationDependencies, "database" | "fetch" | "encryptionKey">;
+
+async function outboundAgentMailMessage(deps: OutboundDependencies, organizationId: string,
+  input: SendAgentMailMessageInput | ReplyAgentMailMessageInput): Promise<{ messageId: string; threadId: string }> {
+  const key = await verifiedAgentMailKey(deps, organizationId, input);
+  const reply = "messageId" in input;
+  const path = `/v0/inboxes/${encodeURIComponent(input.inboxId)}/messages/${reply ? `${encodeURIComponent(input.messageId)}/reply` : "send"}`;
+  const body = {
+    ...(input.to?.length ? { to: input.to } : {}),
+    ...(input.cc?.length ? { cc: input.cc } : {}),
+    ...(input.bcc?.length ? { bcc: input.bcc } : {}),
+    ...(input.replyTo?.length ? { reply_to: input.replyTo } : {}),
+    ...("subject" in input && input.subject !== undefined ? { subject: input.subject } : {}),
+    ...(reply && input.replyAll !== undefined ? { reply_all: input.replyAll } : {}),
+    ...(input.text !== undefined ? { text: input.text } : {}),
+    ...(input.html !== undefined ? { html: input.html } : {}),
+  };
+  const result = outboundResultSchema.safeParse(await agentMailRequest(deps, key, path, { method: "POST", body }));
+  if (!result.success) throw new ServiceError(502, { message: "AgentMail 发信响应格式不正确" });
+  return { messageId: result.data.message_id, threadId: result.data.thread_id };
+}
+
+export async function sendAgentMailMessage(deps: OutboundDependencies, input: SendAgentMailMessageInput & { organizationId: string }): Promise<{ messageId: string; threadId: string }> {
+  const { organizationId, ...message } = input;
+  const parsed = sendAgentMailMessageSchema.safeParse(message);
+  if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 发信参数不正确" });
+  return outboundAgentMailMessage(deps, organizationId, parsed.data);
+}
+
+export async function replyAgentMailMessage(deps: OutboundDependencies, input: ReplyAgentMailMessageInput & { organizationId: string }): Promise<{ messageId: string; threadId: string }> {
+  const { organizationId, ...message } = input;
+  const parsed = replyAgentMailMessageSchema.safeParse(message);
+  if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 回复参数不正确" });
+  return outboundAgentMailMessage(deps, organizationId, parsed.data);
+}
+
+/** Shared boundary for reads and sends: tenant, enabled connection, and live inbox membership. */
+async function verifiedAgentMailKey(deps: OutboundDependencies, organizationId: string, input: { connectionId: string; inboxId: string }) {
+  const [connection] = await deps.database.select().from(integrationConnections).where(and(
+    eq(integrationConnections.id, input.connectionId), eq(integrationConnections.organizationId, organizationId),
+    eq(integrationConnections.provider, "agentmail"), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt),
+  ));
+  if (!connection) throw new ServiceError(404, { message: "集成不存在或已停用" });
+  const key = await connectionKey(deps, connection);
+  const inboxes = await agentMailInboxes(deps, key);
+  if (!inboxes.some(inbox => inbox.inboxId === input.inboxId)) throw new ServiceError(400, { message: "AgentMail 收件箱不属于此连接" });
+  return key;
+}
+
+export async function listAgentMailInboxes(deps: OutboundDependencies, organizationId: string, connectionId?: string) {
+  const connections = await deps.database.select().from(integrationConnections).where(and(
+    eq(integrationConnections.organizationId, organizationId), eq(integrationConnections.enabled, true),
+    eq(integrationConnections.provider, "agentmail"), isNull(integrationConnections.deletedAt),
+    ...(connectionId ? [eq(integrationConnections.id, connectionId)] : []),
+  ));
+  if (!connections.length) throw new ServiceError(404, { message: "请先在设置中连接 AgentMail，或选择当前工作区已启用的连接" });
+  const result = [];
+  for (const connection of connections) {
+    result.push({ connectionId: connection.id, name: connection.name,
+      inboxes: await agentMailInboxes(deps, await connectionKey(deps, connection)) });
+  }
+  return { connections: result };
+}
+
+export const getAgentMailMessageSchema = z.strictObject({ connectionId: replyAgentMailMessageSchema.shape.connectionId, inboxId: replyAgentMailMessageSchema.shape.inboxId, messageId: replyAgentMailMessageSchema.shape.messageId });
+
+export async function getAgentMailMessage(deps: OutboundDependencies, input: z.infer<typeof getAgentMailMessageSchema> & { organizationId: string }) {
+  const { organizationId, ...message } = input;
+  const parsed = getAgentMailMessageSchema.safeParse(message);
+  if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 读取参数不正确" });
+  const { inboxId, messageId } = parsed.data;
+  const key = await verifiedAgentMailKey(deps, organizationId, parsed.data);
+  const raw = await agentMailRequest(deps, key, `/v0/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(messageId)}`);
+  const normalized = normalizeAgentMailMessage(raw, new Date().toISOString());
+  if (normalized.inboxId !== inboxId || normalized.messageId !== messageId) throw new ServiceError(502, { message: "AgentMail 邮件身份不匹配" });
+  return normalized;
 }

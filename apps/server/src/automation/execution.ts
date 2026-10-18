@@ -1,10 +1,14 @@
+import { sendAgentMailMessage, replyAgentMailMessage } from "../business/integrations/agentmail.js";
+import { integrationDependencies } from "../integrations/dependencies.js";
 import * as service from "../business/automation/execution.js";
 import { commandDependencies } from "../services/dependencies.js";
 import { hydrateAgentMailEvent } from "../integrations/agentmail.js";
 import { runAutomationAgentAction } from "./agent-action.js";
 export { PermanentError, FenceLostError, terminal } from "../business/automation/execution.js";
 type Arguments<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown,...infer Rest] ? Rest : never;
-const dependencies = () => ({ ...commandDependencies(),runAgentAction: runAutomationAgentAction,hydrateAgentMailEvent });
+const dependencies = () => ({ ...commandDependencies(),runAgentAction: runAutomationAgentAction,hydrateAgentMailEvent,
+  sendAgentMailMessage: (input: Parameters<typeof sendAgentMailMessage>[1]) => sendAgentMailMessage(integrationDependencies(), input),
+  replyAgentMailMessage: (input: Parameters<typeof replyAgentMailMessage>[1]) => replyAgentMailMessage(integrationDependencies(), input) });
 export const finishEvent = (...args: Arguments<typeof service.finishEvent>) => service.finishEvent(dependencies(),...args);
 export const claimExecution = (...args: Arguments<typeof service.claimExecution>) => service.claimExecution(dependencies(),...args);
 export const executeNext = (...args: Arguments<typeof service.executeNext>) => service.executeNext(dependencies(),...args);

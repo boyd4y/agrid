@@ -13,6 +13,9 @@ import { sha256 } from "../auth/hash.js";
 import { secretToken, verifyToken } from "../integrations/secrets.js";
 const name = z.string().trim().min(1).max(100), apiKey = z.string().trim().min(1).max(4096);
 const tokenHash = sha256;
+function assertAgentMailConnection(connection: typeof integrationConnections.$inferSelect) {
+  if (connection.provider !== "agentmail") throw new ServiceError(400, { message: "此连接不是 AgentMail 连接" });
+}
 export async function listConnections(deps: IntegrationDependencies, actor: Actor, request: Request, id: string = "") {
   const header = (name: string) => request.headers.get(name) ?? undefined;
   const records = await deps.database.select(connectionFields).from(integrationConnections).where(and(eq(integrationConnections.organizationId, actor.organizationId), isNull(integrationConnections.deletedAt))).orderBy(desc(integrationConnections.createdAt));
@@ -29,6 +32,7 @@ export async function createConnection(deps: IntegrationDependencies, actor: Act
 export async function updateConnection(deps: IntegrationDependencies, actor: Actor, request: Request, id: string = "") {
   const header = (name: string) => request.headers.get(name) ?? undefined;
   const connection = await ownedConnection(deps, id, actor.organizationId);
+  assertAgentMailConnection(connection);
   const body = await parseBody(request, z.strictObject({ name: name.optional(), apiKey: apiKey.optional(), enabled: z.boolean().optional() }).refine(value => Object.keys(value).length > 0));
   const encryptedCredential = body.apiKey === undefined ? connection.encryptedCredential : await encryptSecret(deps, body.apiKey, { organizationId: actor.organizationId, id: connection.id, purpose: "agentmail-key" });
   const remoteConnection = { ...connection, encryptedCredential };
@@ -55,6 +59,7 @@ export async function updateConnection(deps: IntegrationDependencies, actor: Act
 export async function deleteConnection(deps: IntegrationDependencies, actor: Actor, request: Request, id: string = "") {
   const header = (name: string) => request.headers.get(name) ?? undefined;
   const connection = await ownedConnection(deps, id, actor.organizationId);
+  assertAgentMailConnection(connection);
   await deps.database.update(integrationConnections).set({ enabled: false }).where(eq(integrationConnections.id, connection.id));
   const endpoints = await deps.database.select().from(webhookEndpoints).where(and(eq(webhookEndpoints.connectionId, connection.id), isNull(webhookEndpoints.deletedAt)));
   try {
@@ -77,6 +82,7 @@ export async function deleteConnection(deps: IntegrationDependencies, actor: Act
 export async function testConnection(deps: IntegrationDependencies, actor: Actor, request: Request, id: string = "") {
   const header = (name: string) => request.headers.get(name) ?? undefined;
   const connection = await ownedConnection(deps, id, actor.organizationId);
+  assertAgentMailConnection(connection);
   if (!connection.enabled)
     throw new ServiceError(400, { message: "请先启用集成" });
   let state = "connected", lastError: string | null = null;
@@ -93,6 +99,7 @@ export async function testConnection(deps: IntegrationDependencies, actor: Actor
 export async function listInboxes(deps: IntegrationDependencies, actor: Actor, request: Request, id: string = "") {
   const header = (name: string) => request.headers.get(name) ?? undefined;
   const connection = await ownedConnection(deps, id, actor.organizationId);
+  assertAgentMailConnection(connection);
   if (!connection.enabled)
     throw new ServiceError(400, { message: "此集成已停用" });
   return { inboxes: await agentMailInboxes(deps, await connectionKey(deps, connection)) };
@@ -100,6 +107,7 @@ export async function listInboxes(deps: IntegrationDependencies, actor: Actor, r
 export async function registerWebhook(deps: IntegrationDependencies, actor: Actor, request: Request, connectionId: string) {
   const header = (name: string) => request.headers.get(name) ?? undefined;
   const connection = await ownedConnection(deps, connectionId, actor.organizationId);
+  assertAgentMailConnection(connection);
   if (!connection.enabled)
     throw new ServiceError(400, { message: "请先启用集成" });
   const body = await parseBody(request, z.strictObject({ inboxIds: z.array(z.string().trim().min(1).max(300)).min(1).max(10).refine(values => new Set(values).size === values.length) }));

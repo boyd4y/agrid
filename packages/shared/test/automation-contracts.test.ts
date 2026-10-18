@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import {
-  AUTOMATION_DATA_COMMANDS, AUTOMATION_DATA_COMMAND_SCHEMAS, AUTOMATION_SOURCE_SCHEMA,
+  AUTOMATION_ACTION_SCHEMA, AUTOMATION_DATA_COMMANDS, AUTOMATION_DATA_COMMAND_SCHEMAS, AUTOMATION_SOURCE_SCHEMA,
   AUTOMATION_FILTER_SCHEMA, AUTOMATION_EVENT_CONDITION_SCHEMA,
   automationPath, parseAutomationCommand, renderAutomationPrompt, resolveAutomationBindings, validateAutomationActionReferences,
   type AutomationDataCommand,
@@ -104,4 +104,18 @@ test("own-path lookup blocks inherited/prototype paths and prompt interpolation 
   assert.equal(renderAutomationPrompt("ordinary {braces} and {{other.value}}", context), "ordinary {braces} and {{other.value}}");
   assert.throws(() => renderAutomationPrompt("{{event.secret}}", context));
   assert.throws(() => renderAutomationPrompt("{{steps.1.count}}", context));
+});
+
+test("mail actions round-trip typed bindings and reject unsafe or forward references", () => {
+  const action = AUTOMATION_ACTION_SCHEMA.parse({ type: "send_email", connectionId: tableId,
+    inboxId: "out@example.com", to: { $event: "message.senders" }, subject: { $event: "message.subject" }, text: { $event: "message.text" } });
+  assert.equal(action.type, "send_email");
+  if (action.type !== "send_email") throw new Error("Expected send action");
+  assert.deepEqual(AUTOMATION_ACTION_SCHEMA.parse(JSON.parse(JSON.stringify(action))), action);
+  assert.doesNotThrow(() => validateAutomationActionReferences([action]));
+  assert.throws(() => validateAutomationActionReferences([{ ...action, text: { $step: { index: 0, path: "messageId" } } }]), /前面/);
+  assert.throws(() => validateAutomationActionReferences([{ ...action, text: { $event: "constructor.secret" } }]));
+  assert.equal(AUTOMATION_ACTION_SCHEMA.safeParse({ ...action, connectionId: { $event: "connectionId" } }).success, false);
+  assert.equal(AUTOMATION_ACTION_SCHEMA.safeParse({ type: "reply_email", connectionId: tableId,
+    inboxId: "out@example.com", messageId: { $event: "message.messageId" }, replyAll: true, text: "Reply" }).success, true);
 });

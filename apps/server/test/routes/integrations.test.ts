@@ -183,7 +183,7 @@ test("official AgentMail/Svix protocol, encrypted credentials, tenant permission
     assert.equal((await request(`/webhook-endpoints/${secondEndpoint.id}`, { enabled: true }, "PATCH")).status, 200);
     assert.equal((await receive(secondEndpoint.id, payload)).status, 200);
     failProvider = true;
-    assert.equal((await request(`/webhook-endpoints/${secondEndpoint.id}`, undefined, "DELETE")).status, 502);
+    assert.equal((await request(`/webhook-endpoints/${secondEndpoint.id}`, undefined, "DELETE")).status, 401);
     assert.equal((await receive(secondEndpoint.id, payload)).status, 410, "failed provider removal still revokes locally");
     assert.equal((await (await request("/webhook-endpoints")).json()).endpoints.find((item: { id: string }) => item.id === secondEndpoint.id).state, "error");
     failProvider = false;

@@ -12,7 +12,9 @@
   "actions": {
     "update_field": "Update field",
     "run_agent": "Run agent",
-    "command": "Data operation"
+    "command": "Data operation",
+    "send_email": "Send email",
+    "reply_email": "Reply to email"
   },
   "updateFieldNamed": "Update \"{{name}}\"",
   "field": "Field",
@@ -247,5 +249,9 @@
       "description": "Create an inbox in AgentMail, then reload to select it."
     },
     "pickConnection": "Choose an email connection to see its inboxes."
+  },
+  "mail": {
+    "fields": "Email fields (JSON)",
+    "hint": "Set connectionId, inboxId and text or html. Send requires to (an address array); reply requires messageId and supports replyAll. Use {\"$event\":\"message.subject\"} or {\"$step\":{\"index\":0,\"path\":\"messageId\"}} for dynamic values."
   }
 }

@@ -75,3 +75,5 @@
 定时任务在 `/app/schedules` 中使用左侧任务导航、右侧运行卡片布局。新建与编辑在右侧表单中完成；运行卡片显示触发时间、状态、当时的任务描述与最新回复摘要。选择运行后，在 `/app/schedules/:id/runs/:threadId` 中打开同一聊天会话，可继续发送消息、处理原生问题与停止/恢复。
 
 迁移 `0025_scheduled_sessions.sql` 在 `chat_threads` 增加 `kind`（`chat` / `scheduled_task`）和 `scheduled_task_id`，并用数据库检查约束绑定类型与任务 ID。历史定时运行按真实动作映射补齐类型，不复制消息或原生状态。普通 `/threads` 列表在 SQL 层仅查询 `chat`，任务会话的分页与读取保持创建者账户和工作区隔离。消息、run、checkpoint 和 Harness session 仍复用现有聊天链路；继续任务运行不会变成普通对话，也不能切换到其他智能体。
+
+邮件动作支持 `send_email` / `reply_email`，可用于表格、Webhook、邮件和定时来源。动作保存为平铺字段：connectionId、inboxId、to（地址数组）、text/html；发送可指定 subject，回复需 messageId，可指定 replyAll。JSON 编辑器支持 `{"$event":"message.senders"}` 或 `{"$step":{"index":0,"path":"messageId"}}`，字符串不作模板插值。连接必须属于当前组织且未删除，执行时检查启用状态与邮箱归属。网络发送在短数据库事务之外进行，只有发送成功才提交 messageId/threadId 凭据；400/404 等客户端错误不重试，503 等临时失败沿用 worker 重试。提供商成功后、凭据提交前崩溃仍可能重复发信，不能保证 exactly-once。Agent 工具仍待 slice 3。

@@ -2,6 +2,7 @@ import { CREATE_CALENDAR_VIEW_SCHEMA, UPDATE_CALENDAR_VIEW_SCHEMA, QUERY_CALENDA
 import { createBlogTools } from "./blogs.js";
 import { createDocumentTools } from "./documents.js";
 import { createCalendarTools } from "./calendar.js";
+import { createMailTools } from "./mail.js";
 import { createSiteTools } from "./sites.js";
 import { getSite } from "../../sites/service.js";
 import type { CommandDependencies } from "../../dependencies.js";
@@ -54,6 +55,7 @@ export function createTableTools(
   };
   return {
     ...createReportTools(deps, organizationId, transaction),
+    ...createMailTools(deps, organizationId),
     ...createSiteTools(deps, organizationId, actorId, transaction),
     ...createBlogTools(deps, organizationId, actorId, transaction),
     ...createDocumentTools(deps, organizationId, actorId, transaction),

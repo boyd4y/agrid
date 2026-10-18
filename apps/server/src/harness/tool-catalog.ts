@@ -11,6 +11,7 @@ function group(id: string) {
   if (Object.hasOwn(BLOG_TOOLS, id)) return "站点";
   if (Object.hasOwn(DOCUMENT_TOOLS, id)) return "记录正文";
   if (Object.hasOwn(CALENDAR_TOOLS, id)) return "日历与预约";
+  if (["list_mail_inboxes", "send_email", "reply_email", "get_message"].includes(id)) return "邮件";
   if (id.includes("site")) return "站点";
   if (id.includes("report")) return "报告";
   if (id.includes("automation")) return "自动化";
