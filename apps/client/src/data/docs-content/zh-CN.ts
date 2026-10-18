@@ -142,7 +142,7 @@ export const docsPages: DocsPage[] = [
           { title: "表格、字段与记录", description: "了解附件上传、关联记录、汇总与公式。", href: "/docs/tables", badge: "数据" },
           { title: "视图与看板", description: "创建视图、配置筛选排序，并查看记录。", href: "/docs/views", badge: "视图" },
           { title: "表单", description: "设计同一张表上的填报界面。", href: "/docs/forms", badge: "收集" },
-          { title: "日历与预约", description: "设置服务人员排班、查看空档并管理预约。", href: "/docs/calendar-booking", badge: "日历" },
+          { title: "日历与事件", description: "为工作区成员和智能体创建事件，并查看定时计划。", href: "/docs/calendar-booking", badge: "日历" },
           { title: "表格日历视图", description: "把表格日期记录显示为全天日历。", href: "/docs/table-calendar", badge: "视图" },
           { title: "自动化与定时任务", description: "用表格事件、外部事件或时间计划触发操作。", href: "/docs/automations", badge: "行动" },
           { title: "报告", description: "把表格数据汇总成指标与图表。", href: "/docs/reports", badge: "洞察" },
@@ -215,8 +215,8 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         { title: "REST API", description: "完整路由、查询与响应细节。", href: "/docs/rest", badge: "REST" },
         { title: "GraphQL", description: "GraphQL 查询和变更参考。", href: "/docs/graphql", badge: "GraphQL" },
         { title: "TypeScript SDK", description: "通过 @tabdo/sdk 调用同一数据 API。", href: "/docs/sdk", badge: "SDK" },
-        { title: "日历预约 API", description: "日历权限、空档查询、预约与智能体提醒。", href: "/docs/calendar-booking", badge: "日历" },
-        { title: "日历出站事件 API", description: "订阅预约和排班变更，并验证签名投递。", href: "/docs/calendar-events", badge: "API" },
+        { title: "日历事件 API", description: "日历授权、成员事件、定时计划和智能体提醒。", href: "/docs/calendar-booking", badge: "日历" },
+        { title: "日历出站事件 API", description: "订阅日历事件变更，并验证签名投递。", href: "/docs/calendar-events", badge: "API" },
         { title: "表格日历 API", description: "配置日期字段映射并查询全天记录。", href: "/docs/table-calendar", badge: "API" },
       ] },
     ],
@@ -384,106 +384,100 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
   {
     slug: "calendar-booking",
     sectionId: "humans",
-    title: "日历与预约",
-    description: "为服务人员设置工作时间和临时休息，查询空档，并通过日历或 API 管理预约。",
+    title: "日历与事件",
+    description: "在日历中或通过 API 为工作区成员和智能体创建、管理事件。",
     body: [
-      { type: "p", text: "日历用于安排工作区内的服务预约。你可以为不同服务建立多个日历，添加服务人员、设置其工作时间和临时不可用时段，再由成员、智能体或获权的外部应用创建和维护预约。服务人员是预约负责人；它与执行操作的 AI 智能体是不同对象。" },
-      { type: "h2", text: "在日历中设置排班" },
+      { type: "p", text: "日历用于整理工作区成员和智能体的事件。你可以创建多个日历，为每个事件选择一位当前工作区成员或智能体，并检查不同日历之间的重叠事件。创建事件前无需单独添加人员或配置工作时间。" },
+      { type: "h2", text: "创建和管理日历事件" },
       { type: "ol", items: [
-        "打开应用中的「日历」。桌面端在日程左侧的列表中切换日历；窄屏先点「日历列表」。点列表标题旁的加号创建日历，选择名称和显示时区。",
-        "在目标日历列表项的更多菜单中打开人员与排班，添加服务人员并选择其时区。需要时可关联一位当前工作区成员；避免为同一人重复创建身份。",
-        "为服务人员设置每周工作时段。时段按所选时区重复；如需临时休息，按日期添加不可用时段，之后可编辑或撤销。",
-        "在主日程工具栏点击「新建预约」，选择服务人员和时长，展开「选择可约时间」，再点「查未来7天空档」发起查询。选中时段后填写预约标题，并点击「确认预约」。若当前日历没有服务人员，按页面提示由管理员添加，或联系管理员。",
-        "打开预约详情可查看、改期或取消预约。改期和取消会按当前版本检查；发生冲突时，原预约保留。",
+        "打开应用中的「日历」。在日程旁的列表中切换日历；窄屏先点「日历列表」。点列表标题旁的加号创建日历，并在对话框中填写名称和显示时区；在日历更多菜单中也可打开同一对话框编辑日历。",
+        "点击工具栏「新建事件」，或在月、周、日视图中选择空白日期或时段，也可以拖选时间范围。事件对话框会带入所选时间；选择一位成员或智能体，填写标题和时长后保存。系统会检查工作区各日历中的重叠事件。",
+        "选择日历事件可修改标题、时间或成员/智能体，也可取消事件。拖动或调整事件大小会修改时间。如果修改与其他事件冲突，原事件会保留。",
       ] },
       { type: "h2", text: "提醒与定时计划" },
       { type: "ul", items: [
-        "有权限的成员可在预约中设置由指定工作区智能体执行的开始前或结束时提醒。提醒详情会显示真实执行状态；它不是邮件或短信通知。",
-        "开始前提醒超过预约开始时间后会跳过。预约改期或取消后，尚未接受的旧提醒会失效；已开始执行的智能体操作不保证能撤回。",
-        "日历也可叠加查看工作区定时任务的预计时间和已记录的运行。预计时间只是计划预览，不表示任务已执行或占用了预约时段。要编辑计划，请打开对应定时任务。",
+        "有权限的成员可在事件中设置由现有工作区智能体执行的开始前或结束时提醒。事件详情会显示真实执行状态；提醒是智能体操作，不是邮件或短信通知。",
+        "开始前提醒超过事件开始时间后会跳过。事件改期或取消后，尚未接受的旧提醒会失效；已开始执行的智能体操作不保证能撤回。",
+        "定时计划默认显示在日历中，与事件同时查看。预计时间是预览，已记录的时间点表示运行记录；两者都不会占用事件时段。选择计划时间点可查看详情；要修改计划规则，请打开对应定时计划。查看计划还需单独获得所选计划的读取权限。",
       ] },
       { type: "h2", text: "通过 REST API 接入" },
-      { type: "p", text: "工作区 owner/admin 可在「设置 → API Key」创建 Key，并在对应日历上单独选择权限。预约详情读取、空档读取、新建、改期、取消、日历管理和触发智能体提醒是彼此独立的授权；详情读取不包含空档读取，新建也不包含详情读取。设置提醒同时需要预约更新权和触发智能体权。定时任务投影还需要单独授予对应任务的读取权限。只勾选集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
+      { type: "p", text: "工作区 owner/admin 可在「设置 → API Key」创建 Key，并为每个日历单独授权。事件详情、新建、更新、取消、日历管理和触发智能体提醒是不同权限；新建权限不包含事件详情读取。读取成员目录需要日历读取、新建、更新或管理权限中的至少一项。设置提醒还需要事件更新权和触发智能体权。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
-export PERSON_ID="00000000-0000-4000-8000-000000000002"
 
-# 查询未来七天、每次30分钟的完整空档
-curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/availability/query" \\
+# 列出可用于创建事件的当前工作区成员和智能体（最多500项）
+curl -s -X POST "$TABDO_API_URL/api/commands" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"personId":"'"$PERSON_ID"'","rangeStart":"2026-10-19T00:00:00Z","rangeEnd":"2026-10-26T00:00:00Z","durationMinutes":30,"stepMinutes":30}'
+  -d '{"command":"listCalendarMembers","input":{"calendarId":"'"$CALENDAR_ID"'"}}'
 
-# 创建预约；每次写入使用新的幂等键，遇到网络中断时以原键和原请求重试
+# 创建事件；每次写入使用新的幂等键，网络中断时以原键和原请求重试
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"personId":"'"$PERSON_ID"'","title":"示例预约","time":{"start":"2026-10-20T09:00:00+08:00","end":"2026-10-20T09:30:00+08:00","timeZone":"Asia/Shanghai"},"idempotencyKey":"booking-create-demo-001"}'` },
-      { type: "p", text: "空档结果包含完整标记和时区。查询只是当时的快照；创建时系统会重新检查人员排班、临时休息和已占用时间。时间请传带 UTC offset 的 RFC 3339 时刻，并提供 IANA 时区。成功写入会返回预约 ID、版本、修订号和状态。" },
+  -d '{"userId":"workspace-user-demo","title":"项目讨论","time":{"start":"2026-10-20T09:00:00+08:00","end":"2026-10-20T09:30:00+08:00","timeZone":"Asia/Shanghai"},"idempotencyKey":"calendar-event-create-demo-001"}'` },
+      { type: "p", text: "使用所选成员或智能体的 userId。时间需传带 UTC offset 的 RFC 3339 时刻，并提供 IANA 时区；应用会默认使用日历显示时区。成功写入会返回事件 ID、版本、修订号和状态。同一 createBooking 命令也可通过 GraphQL 或 MCP 工具 create_booking 调用。" },
       { type: "h2", text: "统一命令入口与 GraphQL" },
-      { type: "p", text: "也可以把同一操作发送到 POST /api/commands，请求体使用 {\"command\": \"queryAvailability\", \"input\": {…}} 或 {\"command\": \"createBooking\", \"input\": {…}}。REST、GraphQL 与此入口使用相同的日历权限和预约校验；写入可把幂等键放在请求体，也可通过 Idempotency-Key 请求头传入。" },
+      { type: "p", text: "成员目录可通过 POST /api/commands 和 GraphQL 的 listCalendarMembers 查询，也可在已连接且获权的 MCP 客户端中使用 list_calendar_members。结果最多包含 500 项，并提供 userId、name 和 kind（human 或 agent）。不同入口使用相同命令和授权检查。日历路由与命令名为兼容保留了 booking/person 标识；普通事件使用 userId，无需先设置人员。新建请求必须且只能传入 userId 或旧 personId 之一。更新可修改标题；只有通过 userId 创建的事件才可更换成员。" },
       { type: "table", headers: ["操作", "REST 路径"], rows: [
         ["列出日历（GET）", "/api/calendars"],
-        ["列出 / 添加服务人员（GET / POST）", "/api/calendars/:calendarId/people"],
-        ["读取 / 替换每周工作时间（GET / POST）", "/api/calendars/:calendarId/people/:personId/hours"],
-        ["查询日期临时休息（POST）", "/api/calendars/:calendarId/people/:personId/exceptions/query"],
-        ["添加 / 编辑临时休息（POST）", "/api/calendars/:calendarId/people/:personId/exceptions"],
-        ["撤销临时休息（POST）", "/api/calendars/:calendarId/people/:personId/exceptions/:exceptionId/remove"],
-        ["查询空档（POST）", "/api/calendars/:calendarId/availability/query"],
-        ["查询预约（POST）", "/api/calendars/:calendarId/bookings/query"],
-        ["读取预约（GET）", "/api/calendars/:calendarId/bookings/:bookingId"],
-        ["创建预约（POST）", "/api/calendars/:calendarId/bookings"],
-        ["改期（POST）", "/api/calendars/:calendarId/bookings/:bookingId/reschedule"],
-        ["取消（POST）", "/api/calendars/:calendarId/bookings/:bookingId/cancel"],
-        ["批量创建 / 改期 / 取消（POST）", "/api/calendars/:calendarId/bookings/batch"],
+        ["旧接口：列出 / 添加人员（GET / POST）", "/api/calendars/:calendarId/people"],
+        ["旧接口：读取 / 替换工作时间（GET / POST）", "/api/calendars/:calendarId/people/:personId/hours"],
+        ["旧接口：查询不可用时间（POST）", "/api/calendars/:calendarId/people/:personId/exceptions/query"],
+        ["旧接口：添加 / 编辑不可用时间（POST）", "/api/calendars/:calendarId/people/:personId/exceptions"],
+        ["旧接口：撤销不可用时间（POST）", "/api/calendars/:calendarId/people/:personId/exceptions/:exceptionId/remove"],
+        ["旧 personId 空档查询（POST）", "/api/calendars/:calendarId/availability/query"],
+        ["查询事件（POST）", "/api/calendars/:calendarId/bookings/query"],
+        ["读取事件（GET）", "/api/calendars/:calendarId/bookings/:bookingId"],
+        ["创建事件（POST）", "/api/calendars/:calendarId/bookings"],
+        ["更新事件（POST）", "/api/calendars/:calendarId/bookings/:bookingId/reschedule"],
+        ["取消事件（POST）", "/api/calendars/:calendarId/bookings/:bookingId/cancel"],
+        ["批量写入事件（POST）", "/api/calendars/:calendarId/bookings/batch"],
         ["设置 / 读取提醒（POST / GET）", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["查询定时任务时间（POST）", "/api/schedules/occurrences/query"],
       ] },
-      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → API Key」为 Key 授权。" },
-      { type: "p", text: "批量路径接受 1–100 项创建、改期或取消操作，并作为一个整体应用。任一项校验失败或发生冲突，整批都会回滚。" },
-      { type: "code", lang: "bash", code: `# 改期：expectedVersion 取自最近读取的预约
+      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → API Key」为 Key 授权。上表中的人员、工作时间、不可用时间和空档路由继续供旧 personId 预约使用，不是普通事件的配置前置。" },
+      { type: "p", text: "新建事件时使用 userId，而不是 personId；事件查询也可按 userId 筛选，personId 仍可用于查询旧记录。旧 personId 预约继续遵守工作时间和临时休息规则；所有事件仍会检查同一工作区各日历间的重叠。批量路径接受 1–100 项事件创建、更新或取消，并作为一个整体应用；任一项校验失败或冲突，整批都会回滚。" },
+      { type: "code", lang: "bash", code: `# 更新事件：expectedVersion 取自最近读取的事件
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
 
-# 只有已确认预约可以设置提醒。上面的改期成功后返回版本 2。
+# 只有已确认事件可以设置提醒。上面的更新成功后返回版本 2。
 # 设置提醒需要预约更新权与「触发智能体」权；空 reminders 可撤销未接受的提醒
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"expectedVersion":2,"idempotencyKey":"booking-reminder-demo-001","reminders":[{"kind":"before_start","offsetMinutes":60,"agentUserId":"agent-user-demo","prompt":"准备这次预约所需的信息。","maxLatenessMinutes":60}]}'
 
-# 设置提醒后返回版本 3；使用该版本取消仍处于已确认状态的预约
+# 设置提醒后返回版本 3；使用该版本取消仍处于已确认状态的事件
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/cancel" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"expectedVersion":3,"idempotencyKey":"booking-cancel-demo-001"}'` },
-      { type: "code", lang: "graphql", code: `query FindSlots($input: JSON!) {
-  queryAvailability(input: $input)
+      { type: "code", lang: "graphql", code: `query Members($input: JSON!) {
+  listCalendarMembers(input: $input)
 }` },
-      { type: "code", lang: "bash", code: `curl -s -X POST "$TABDO_API_URL/api/graphql" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"query":"query FindSlots($input: JSON!) { queryAvailability(input: $input) }","variables":{"input":{"calendarId":"'"$CALENDAR_ID"'","personId":"'"$PERSON_ID"'","rangeStart":"2026-10-19T00:00:00Z","rangeEnd":"2026-10-26T00:00:00Z","durationMinutes":30,"stepMinutes":30}}}'` },
-      { type: "p", text: "写入可使用 createBooking(input: $input)。GraphQL 端点为 POST /api/graphql，请求头使用 Authorization: Bearer <API Key>。" },
+      { type: "p", text: "使用 GraphQL 的 listCalendarMembers(input: $input) 查询当前成员和智能体，用 createBooking(input: $input) 并传入 userId 创建事件。新增的 listCalendarMembers 方法尚未包含在当前已发布的 @tabdo/sdk 中；正式发布前可使用 REST、GraphQL 或已获权的 MCP 连接。端点为 POST /api/graphql，请求头使用 Authorization: Bearer <API Key>。" },
       { type: "h2", text: "提醒和 MCP 工具" },
-      { type: "p", text: "在已经连接且获权的 Tabdo MCP 客户端中，可使用 query_availability、create_booking、reschedule_booking、cancel_booking 等日历工具。管理排班时使用 create_calendar_person、set_working_hours 和 set_availability_exception。提醒使用 set_booking_reminders 与 list_booking_reminders；查询定时计划投影使用 query_scheduled_occurrences。日历工具遵循目标日历的授权；定时任务投影还需单独拥有所选任务的读取权限。" },
-      { type: "p", text: "设置提醒时传入预约当前 expectedVersion、幂等键及 0–10 项规则。before_start 的 offsetMinutes 为距开始的分钟数；at_end 使用 0。每项指定要执行的工作区智能体和任务说明。读取记录会返回配置与执行状态；运行链接仅对有权查看该对话的用户显示。" },
+      { type: "p", text: "已连接且获权的 Tabdo MCP 客户端可用 list_calendar_members 选择当前活跃成员或智能体，再用 create_booking 并传入其 userId 创建事件；用 reschedule_booking 和 cancel_booking 管理事件。旧 query_availability、create_calendar_person、set_working_hours 和 set_availability_exception 工具仍供遵守排班规则的 personId 预约使用。提醒使用 set_booking_reminders 与 list_booking_reminders；query_scheduled_occurrences 可查询定时计划投影。日历工具遵循目标日历授权；读取定时计划还需单独获得所选计划的读取权限。" },
+      { type: "p", text: "设置提醒时传入事件当前 expectedVersion、幂等键及 0–10 项规则。before_start 的 offsetMinutes 为距开始的分钟数；at_end 使用 0。每项指定要执行的工作区智能体和任务说明。读取记录会返回配置与执行状态；运行链接仅对有权查看该对话的用户显示。" },
       { type: "h2", text: "范围、权限与排错" },
       { type: "ul", items: [
-        "普通成员可依其工作区身份查看和管理预约；日历、服务人员、工作时间和临时休息设置仅 owner/admin 可管理。API Key 只访问明确授权的日历，不能通过创建预约来读取客户详情；日历权限也不会自动授予定时任务权限。",
-        "预约和服务人员按工作区隔离；系统不会汇总其他工作区的忙闲。单个服务人员同一时段只能接一项预约。当前支持已确认和已取消状态，不支持预约系列、访客自助预约、支付或外部日历同步。",
-        "空档结果只包含可约时段，不会返回预约标题或客户详情。读取预约详情需要单独的读取授权。",
-        "预约查询范围最长 93 天、最多 500 项；空档查询最长 31 天、最多 5000 个时段。结果没有游标分页；超出查询预算会明确返回错误，不会静默截断并把遗漏时间当成空档。",
-        "改期、取消与排班修改需要提交读取到的 expectedVersion。收到 VERSION_CONFLICT 时重新读取并确认最新预约或排班后再操作；收到 RESOURCE_CONFLICT 或 OUTSIDE_AVAILABILITY 时重新查询空档。",
-        "创建和其他写入均需幂等键。同一请求因网络中断重试时，复用原输入和原幂等键；不要用相同键发送不同内容。已取消预约不能恢复，可另建预约。",
-        "若收到 FORBIDDEN，请 owner/admin 检查该 Key 对目标日历是否有对应授权；若收到 QUERY_LIMIT，请缩小日期范围。归档前须先处理未来预约，历史记录会保留。",
+        "工作区成员可按其工作区权限查看和管理事件；只有 owner/admin 可管理日历。API Key 只能访问明确授权的日历；创建事件不会同时授予事件详情读取权。日历授权不会自动授予定时计划读取权。",
+        "事件按工作区隔离，但同一工作区不同日历间也会检查时间重叠。每位成员或智能体同一时段只能有一个事件。事件支持已确认和已取消状态；暂不支持重复事件、访客自助预约、支付或外部日历同步。",
+        "成员目录完整返回当前活跃的 human 成员和智能体，最多 500 项；工作区活跃成员超过 500 人时会返回 QUERY_LIMIT。API Key 至少需要日历读取、新建、更新或管理权限之一才能读取目录。",
+        "旧 personId 预约继续按工作时间和临时休息规则校验。对应的旧人员与排班 API 仍可使用；新 userId 事件不受这些排班规则限制，历史事件保留原人员和规则。",
+        "事件查询范围最长 93 天、最多 500 项；结果没有游标分页，超过查询预算会明确报错，不会静默截断。",
+        "更新、取消与计划变更需要提交当前 expectedVersion。收到 VERSION_CONFLICT 时重新读取事件或计划并确认最新版本；收到 RESOURCE_CONFLICT 时换一个时间。OUTSIDE_AVAILABILITY 仅适用于旧 personId 预约，可重新查询其空档。",
+        "写入均需幂等键。网络中断时用原输入和原键重试，不要用同一键发送不同内容。已取消事件不能恢复，但可以另建事件。",
+        "若收到 FORBIDDEN，请 owner/admin 检查该 Key 对目标日历是否拥有相应权限；若收到 QUERY_LIMIT，请缩小日期范围或减少所选计划。归档日历前须处理未来事件，历史记录会保留。",
       ] },
       { type: "cards", items: [
         { title: "自动化与定时任务", description: "创建定时任务并查看运行记录。", href: "/docs/automations", badge: "自动化" },
-        { title: "日历出站事件", description: "接收预约与排班变更，并查看投递状态。", href: "/docs/calendar-events", badge: "API" },
+        { title: "日历出站事件", description: "接收日历变更，并查看投递状态。", href: "/docs/calendar-events", badge: "API" },
         { title: "表格日历视图", description: "查看表格中的日期记录，不创建预约。", href: "/docs/table-calendar", badge: "视图" },
         { title: "HTTP API", description: "了解 API Key 与 REST、GraphQL 接入基础。", href: "/docs/api-quickstart", badge: "API" },
       ] },
@@ -495,7 +489,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/c
     title: "表格日历视图",
     description: "将表格中的日期字段映射为全天日历，并查看或编辑原记录。",
     body: [
-      { type: "p", text: "表格日历视图把已有记录按日期排列，适合查看计划、内容或其他有日期的事项。它仍是原表的一种视图：记录和日期保存在表格中，不会创建服务预约，也不会检查服务人员空档或阻止日期重叠。" },
+      { type: "p", text: "表格日历视图把已有记录按日期排列，适合查看计划、内容或其他有日期的事项。它仍是原表的一种视图：记录和日期保存在表格中，不会创建日历事件，也不会检查成员空档或阻止日期重叠。" },
       { type: "h2", text: "创建和配置视图" },
       { type: "ol", items: [
         "打开一张表，在视图切换器旁点加号并选择日历视图。",
@@ -544,11 +538,11 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
         "日期字段按 YYYY-MM-DD 保存，不带时刻或时区；映射的开始日期必需，结束日期可选。未填写结束日期时记录只占一天。默认将结束日视为包含在内；选择排他结束时，结束日不显示为占用日期。API 返回的 end 一律排他。",
         "日历只显示与查询日期范围相交的记录。查询范围的 rangeStart 包含、rangeEnd 不包含；每页默认 100 项、最多 200 项，可用游标继续读取。游标与视图配置和日期范围绑定；更改映射或范围后从第一页重新查询。",
         "计算字段不能用作日期映射。字段被隐藏、删除或改成不兼容类型时，视图会显示映射诊断；修复字段映射后即可继续使用。diagnostics 中的空起始日期、无效日期和结束早于开始计数用于定位未显示的记录。",
-        "API Key 的表读取权限只允许查询日历投影；它不会授予视图管理权。读取结果不包含整行内容。若要编辑原记录，仍需单独的表更新权限，并通过既有记录 API 提交最新 version。表格日历视图不提供预约系统的防重、排班、空档或预约状态。",
+        "API Key 的表读取权限只允许查询日历投影；它不会授予视图管理权。读取结果不包含整行内容。若要编辑原记录，仍需单独的表更新权限，并通过既有记录 API 提交最新 version。表格日历视图不会创建日历事件，也不提供事件冲突检查、服务排班、空档或事件状态。",
       ] },
       { type: "cards", items: [
         { title: "表格、字段与行", description: "了解日期字段和原记录的编辑方式。", href: "/docs/tables", badge: "数据" },
-        { title: "日历与预约", description: "设置服务人员排班并管理服务预约。", href: "/docs/calendar-booking", badge: "预约" },
+        { title: "日历与事件", description: "为工作区成员和智能体创建事件。", href: "/docs/calendar-booking", badge: "事件" },
       ] },
     ],
   },
@@ -556,9 +550,9 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
     slug: "calendar-events",
     sectionId: "humans",
     title: "日历出站事件订阅 API",
-    description: "订阅日历预约与排班变更，安全验证投递并处理重试。",
+    description: "订阅日历变更，安全验证投递并处理重试。",
     body: [
-      { type: "p", text: "出站事件订阅会把获权日历中的预约或排班变更发送到你的 HTTPS 接收地址，适合让自己的应用及时获知 tabdo 中发生的变化。它不是 Google、Outlook 或其他日历的双向同步，也不会发送邮件或短信。" },
+      { type: "p", text: "出站事件订阅会把获权日历的变更发送到你的 HTTPS 接收地址。应用界面将日历 booking 显示为事件，但现有订阅事件类型（例如 booking.created、person.updated）为兼容而保留原名称。它适合让自己的应用及时获知 tabdo 中发生的变化；不是 Google、Outlook 或其他日历的双向同步，也不会发送邮件或短信。" },
       { type: "h2", text: "准备权限和接收地址" },
       { type: "ol", items: [
         "在「设置 → API Key」创建或编辑 Key，由 owner/admin 为目标日历分别授予订阅、投递记录读取和订阅管理权限。创建订阅还需要该日历的读取权限。新 Key 默认没有这些授权。",
@@ -587,7 +581,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions" \\
   "occurredAt": "2026-10-20T01:00:00.000Z",
   "deliveryId": "00000000-0000-4000-8000-000000000013"
 }` },
-      { type: "p", text: "事件仅提供事件、日历、工作区和目标记录的 ID、类型、版本与发生时间，不包含预约标题、客户资料、人员姓名或提醒正文。需要详情时，使用另行授权的日历 API 查询。按 deliveryId 或 eventId 去重，并按 aggregateVersion 处理可能乱序的事件；筛选事件类型后，同一对象的版本号可能不连续。" },
+      { type: "p", text: "事件仅提供事件、日历、工作区和目标记录的 ID、类型、版本与发生时间，不包含事件标题、客户资料、成员或智能体姓名、提醒正文。需要详情时，使用另行授权的日历 API 查询。按 deliveryId 或 eventId 去重，并按 aggregateVersion 处理可能乱序的事件；筛选事件类型后，同一对象的版本号可能不连续。" },
       { type: "h2", text: "管理订阅和投递" },
       { type: "table", headers: ["操作", "REST 路径", "权限"], rows: [
         ["创建订阅（POST）", "/api/calendars/:calendarId/subscriptions", "订阅 + 日历读取"],
@@ -630,7 +624,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
         "若创建或重试返回 FORBIDDEN，请 owner/admin 检查对应 Key 是否同时有订阅和日历读取权限；重试还需管理订阅权限。查询投递记录需要单独的投递记录读取权限。若密钥遗失，轮换并保存新密钥。若投递为 deadletter，先检查接收服务的可用性与 HTTP 状态，再重试当前启用订阅版本的记录。",
       ] },
       { type: "cards", items: [
-        { title: "日历与预约", description: "配置服务人员、空档和预约。", href: "/docs/calendar-booking", badge: "日历" },
+        { title: "日历与事件", description: "为工作区成员和智能体创建事件。", href: "/docs/calendar-booking", badge: "日历" },
         { title: "HTTP API", description: "了解 API Key、REST 与 GraphQL 的使用方式。", href: "/docs/api-quickstart", badge: "API" },
       ] },
     ],
