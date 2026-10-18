@@ -72,7 +72,7 @@ export function createClient(options: ClientOptions) {
     revokeBlogPreviews: (input: BlogCommands["revokeBlogPreviews"], request?: RequestOptions) => blogCommand("revokeBlogPreviews", input, request),
   };
   async function documentCommand<K extends DocumentCommand>(command: K, input: DocumentCommands[K], request?: RequestOptions): Promise<DocumentResults[K]> {
-    const read = ["getDocument", "listDocumentRevisions", "getDocumentRevision", "renderDocument", "getDocumentImage"].includes(command);
+    const read = ["getDocument", "renderDocument", "getDocumentImage"].includes(command);
     const result = await graphql<Record<K, DocumentResults[K]>>(`${read ? "query" : "mutation"} DocumentCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
@@ -80,9 +80,6 @@ export function createClient(options: ClientOptions) {
     getDocument: (input: DocumentCommands["getDocument"], request?: RequestOptions) => documentCommand("getDocument", input, request),
     createDocument: (input: DocumentCommands["createDocument"], request?: RequestOptions) => documentCommand("createDocument", input, request),
     replaceDocument: (input: DocumentCommands["replaceDocument"], request?: RequestOptions) => documentCommand("replaceDocument", input, request),
-    listDocumentRevisions: (input: DocumentCommands["listDocumentRevisions"], request?: RequestOptions) => documentCommand("listDocumentRevisions", input, request),
-    getDocumentRevision: (input: DocumentCommands["getDocumentRevision"], request?: RequestOptions) => documentCommand("getDocumentRevision", input, request),
-    restoreDocumentRevision: (input: DocumentCommands["restoreDocumentRevision"], request?: RequestOptions) => documentCommand("restoreDocumentRevision", input, request),
     renderDocument: (input: DocumentCommands["renderDocument"], request?: RequestOptions) => documentCommand("renderDocument", input, request),
     uploadDocumentImage: (input: DocumentCommands["uploadDocumentImage"], request?: RequestOptions) => documentCommand("uploadDocumentImage", input, request),
     getDocumentImage: (input: DocumentCommands["getDocumentImage"], request?: RequestOptions) => documentCommand("getDocumentImage", input, request),

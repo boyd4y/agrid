@@ -203,11 +203,12 @@ export function FormFieldControl({
   if (multiline) {
     return (
       <Textarea
+        size={size}
         value={typeof value === "string" ? value : ""}
         placeholder={placeholder}
         maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
-        rows={tf ? 3 : 4}
+        rows={tf ? 3 : size === "sm" ? 2 : 4}
         className={cn(
           tf &&
             "min-h-[96px] border-0 border-b-2 border-[color-mix(in_srgb,var(--form-answer)_25%,transparent)] bg-transparent px-0 text-lg shadow-none focus-visible:border-[var(--form-accent)] focus-visible:ring-0"

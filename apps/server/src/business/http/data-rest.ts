@@ -143,9 +143,6 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.get(documentPath, document("getDocument"));
   route.post(documentPath, document("createDocument"));
   route.put(documentPath, document("replaceDocument"));
-  route.get(`${documentPath}/revisions`, document("listDocumentRevisions", ({ c }) => ({ ...(c.req.query("beforeVersion") ? { beforeVersion: Number(c.req.query("beforeVersion")) } : {}), ...(c.req.query("limit") ? { limit: Number(c.req.query("limit")) } : {}) })));
-  route.get(`${documentPath}/revisions/:version`, document("getDocumentRevision", ({ c }) => ({ version: Number(c.req.param("version")) })));
-  route.post(`${documentPath}/restore`, document("restoreDocumentRevision"));
   route.get(`${documentPath}/render`, document("renderDocument", ({ c }) => c.req.query("version") ? { version: Number(c.req.query("version")) } : {}));
   route.post(`${documentPath}/images`, document("uploadDocumentImage"));
   route.get(`${documentPath}/images/:fileId`, document("getDocumentImage", ({ c }) => ({ fileId: c.req.param("fileId") })));

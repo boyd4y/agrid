@@ -13,5 +13,5 @@ test("direct writing commands are available to every transport and configurable 
   const body = { tableId: randomUUID(), rowId: randomUUID(), content: EMPTY_DOCUMENT, idempotencyKey: "body" };
   assert(DOCUMENT_SCHEMAS.replaceDocument.safeParse({ ...body, expectedVersion: 0 }).success);
   assert(!DOCUMENT_SCHEMAS.replaceDocument.safeParse({ ...body, expectedVersion: -1 }).success);
-  assert(!DOCUMENT_SCHEMAS.restoreDocumentRevision.safeParse({ ...body, expectedVersion: 0, version: 1 }).success);
+
 });

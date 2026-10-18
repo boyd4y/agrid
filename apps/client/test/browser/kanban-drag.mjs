@@ -110,19 +110,22 @@ try {
     .waitFor();
   assert.equal(
     await page.evaluate(() => getComputedStyle(document.body).pointerEvents),
-    "auto",
-    "nonmodal Sheet does not block the board",
+    "none",
+    "modal record blocks the board",
   );
-  await move(second.id, "done", { x: 140, y: 18 });
-  await sheet
-    .locator('input[value="第一张卡片"]')
-    .waitFor();
+  assert.equal(await sheet.getAttribute("aria-modal"), "true");
+  await card(second.id).locator("h3").dragTo(page.locator('[data-kanban-group="done"]'), { force: true, targetPosition: { x: 150, y: 75 } });
+  await page.waitForTimeout(250);
+  assert.equal((await command("getRow", { rowId: second.id })).cells[status.id], "todo", "the modal surface prevents background native drag");
+  // An outside pointer may dismiss the modal; no background drop may be delivered.
+  if (!await sheet.isVisible()) { await card(first.id).click(); await sheet.locator('input[value="第一张卡片"]').waitFor(); }
   await page.screenshot({
     path: artifact("kanban-drag-sheet-open.png"),
     animations: "disabled",
   });
   await sheet.getByRole("button", { name: "关闭记录", exact: true }).click();
   await sheet.waitFor({ state: "hidden" });
+  await move(second.id, "done", { x: 140, y: 18 });
   await move(second.id, "todo", { x: 160, y: 40 });
   assert.equal(
     await sheet.count(),
@@ -257,7 +260,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "PASS native whole-card title/body drag before/open/closed Sheet, status persistence, control drag protection, hover menu delete cancel/failure/retry/reload, no accidental details, click/keyboard details",
+    "PASS native whole-card title/body drag before/after record modal, blocked background drag, status persistence, control drag protection, hover menu delete cancel/failure/retry/reload, no accidental details, click/keyboard details",
   );
 } catch (error) {
   console.log(await page.evaluate(() => window.dragTrace));

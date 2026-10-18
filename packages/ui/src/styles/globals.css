@@ -1,3 +1,4 @@
+@import "./rich-text-editor.css";
 @import "tailwindcss";
 @import "react-day-picker/style.css";
 @source "../";

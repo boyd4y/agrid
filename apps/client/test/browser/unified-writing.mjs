@@ -18,6 +18,7 @@ try {
   await page.goto(frontend + `/app/tables/${table.id}`);
   await page.getByTestId(`open-grid-record-${first.id}`).click();
   const panel = page.getByTestId('related-record-panel'); await body(panel).waitFor();
+  assert.equal(await panel.locator('[data-rich-text-editor]').count(), 1);
   assert.equal(await panel.getByRole('button', { name: '启用正文', exact: true }).count(), 0);
   assert.equal(await panel.getByRole('button', { name: '正文', exact: true }).count(), 0);
   assert.equal(await command('getDocument', identity), null, 'opening does not create a document');
@@ -69,6 +70,7 @@ try {
   assert.deepEqual(blog.config.articles, []); assert.equal(blog.publishedRevisionId, null);
   await page.getByTestId(`blog-source-${article.rowId}`).getByRole('button', { name: '写作', exact: true }).click(); await body(writer).waitFor();
   assert((await body(writer).innerText()).includes('表格里也是同一篇'));
+  assert.equal(await writer.locator('[data-rich-text-editor]').count(), 1);
   for (const width of process.env.BROWSER_SKIP_VISUALS ? [] : [1440, 390, 320]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 }); await page.evaluate(value => document.documentElement.classList.toggle('dark', value === 'dark'), theme); await pause(150);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)); assert.equal(await writer.evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
@@ -111,5 +113,5 @@ try {
   assert((await body(writer).innerText()).includes('切换失败后保留在原工作区'));
   assert.deepEqual(nativeDialogs, []); assert.deepEqual(f.errors, []);
   console.log('PASS unified writing: lazy open, inline title/properties/body, immediate close flush, partial save failure/dialog/retry, per-record drafts, default blog, Chinese/stable slug, immediate return/select/preview/publish, refresh, table reuse and workspace flush/cancel/draft recovery; 1440/390/320 light+dark.');
-} catch (error) { await page.screenshot({ path: artifact('unified-writing-failure.png'), fullPage: false }).catch(() => {}); console.error(await page.locator('body').innerText().catch(() => 'no page')); throw error; }
+} catch (error) { await page.screenshot({ path: artifact('unified-writing-failure.png'), fullPage: false }).catch(() => {}); console.error(f.errors); console.error(await page.locator('body').innerText().catch(() => 'no page')); throw error; }
 finally { await f.close(); await rm(directory, { recursive: true, force: true }); }
