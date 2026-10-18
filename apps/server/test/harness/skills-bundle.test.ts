@@ -9,7 +9,10 @@ import { createNativeAgent, openNativeSandbox } from "../../src/harness/runtime.
 
 test("real builtin skill bundles load progressively through official Pi read/bash, with real Python, Node, binary files and isolated process environment", { timeout: 25000 }, async () => {
   const bundles = loadBuiltinSkillDocuments();
-  assert.deepEqual(bundles.map((skill) => skill.name), ["automation", "form", "report", "site", "table"]);
+  assert.deepEqual(bundles.map((skill) => skill.name), ["automation", "form", "playbook", "report", "site", "table"]);
+  const playbook = bundles.find((skill) => skill.name === "playbook")!;
+  assert.equal(playbook.id, "builtin:playbook");
+  assert.ok(playbook.files.some((file) => file.path === "references/real-estate-broker/overview.md"));
   const report = bundles.find((skill) => skill.name === "report")!;
   const script = report.files.find((file) => file.path === "scripts/summarize-csv.py")!;
   assert(script);

@@ -1,5 +1,10 @@
 # Scenario A：房产经纪人
 
+## 产品路径与本地 fixture
+
+- **产品路径**：给智能体分配内置 `playbook` 技能，对话要求按 `real-estate-broker` reference 搭建或修改当前工作区（见 `apps/server/skills/playbook/`）。
+- **本地/CI**：`pnpm db:seed:scenario-a` 仍是金样 fixture，不删除；下述 seed 操作保留。
+
 在完成依赖安装、基础包构建与数据库迁移后运行：
 
 ```sh
@@ -16,7 +21,7 @@ pnpm db:seed:scenario-a
 - **意向客户**：置顶 Contact 表，客户姓名、手机、邮箱、状态、下次跟进、预算、意向区域、备注、跟进邮件草稿、意向房源。状态依次为新线索 / 跟进中 / 已约看 / 已带看 / 成交 / 流失；稳定 ID 为 `lead / follow / scheduled / shown / won / lost`。
 - **房源**：标题/小区、状态（在售 / 已定 / 下架）、价格、面积、地址、下次跟进、备注。价格和预算单位为万元，面积为平方米。
 - 五位虚构客户、三套虚构房源，通过正式命令创建多对多关联及反向「意向客户」字段；手机号留空，邮箱使用 `example.com`。两张表各有表格和状态看板。
-- **房产经纪人**：本地 Pi，分配内置 `table`、`automation` 技能，`disabledTools: []`。使用运行环境默认模型，需另外配置可用的 Pi 模型凭证。
+- **房产经纪人**：本地 Pi，分配内置 `table`、`automation` 技能，`disabledTools: ["send_email", "reply_email"]`。使用运行环境默认模型，需另外配置可用的 Pi 模型凭证。
 - **状态进入已约看 → 提醒**：真实 `enter_status` 触发，提醒显示在智能体运行结果并写入备注；有可靠日期时更新下次跟进，不虚构预约，也不发送外部通知。
 - **每日跟进检查（定时）**：真实 `schedule_due`，`0 9 * * *`，`Asia/Shanghai`；查询今天/逾期且未成交、未流失的客户，汇总并追加备注。
 - **带看后起草跟进邮件**：进入已带看，读取关联房源，将短邮件保存到跟进邮件草稿，不发送。
