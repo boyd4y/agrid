@@ -107,12 +107,12 @@ test("every shared command has real native, MCP and disable registrations; nativ
   assert.equal((await invoke("query_availability", { calendarId, personId, ...range, durationMinutes: 30, workspaceId: randomUUID() })).error.code, "BAD_INPUT");
 });
 test("actual MCP stdio round-trip queries availability, creates and cancels through authenticated HTTP", { timeout: 30000 }, async () => {
-  const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
+  const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
   const address = server.address(); assert(address && typeof address !== "string");
   try {
     const runner = fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url));
-    const result = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ availability: { calendarId, personId, ...range, durationMinutes: 30 }, booking: { calendarId, personId, title: "Real MCP", idempotencyKey: key() } }) } });
+    const result = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://${process.env.BROWSER_API_HOST ?? "127.0.0.1"}:${address.port}`, TABDO_API_KEY: secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ availability: { calendarId, personId, ...range, durationMinutes: 30 }, booking: { calendarId, personId, title: "Real MCP", idempotencyKey: key() } }) } });
     assert.equal(JSON.parse(result.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
@@ -133,7 +133,7 @@ test("subscription CRUD, delivery history and explicit retry align across REST, 
   await resource.db.update(calendarDeliveries).set({ status: "deadletter" }).where(eq(calendarDeliveries.id, deliveryId));
   assert.equal((await client.calendar.retryCalendarDelivery({ calendarId, subscriptionId, deliveryId, expectedVersion: 1, idempotencyKey: key() })).id, deliveryId);
   assert.equal((await client.calendar.getBooking({ calendarId, bookingId: b.id })).version, 1);
-  const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
+  const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
   const address = server.address(); assert(address && typeof address !== "string");
   try {
@@ -143,7 +143,7 @@ test("subscription CRUD, delivery history and explicit retry align across REST, 
       { name: "list_calendar_deliveries", input: { calendarId, subscriptionId }, expect: { "items.0.id": deliveryId } },
       { name: "get_calendar_delivery", input: { calendarId, subscriptionId, deliveryId }, expect: { "delivery.id": deliveryId } },
     ];
-    const result = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls }) } });
+    const result = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: { ...process.env, TABDO_API_URL: `http://${process.env.BROWSER_API_HOST ?? "127.0.0.1"}:${address.port}`, TABDO_API_KEY: secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls }) } });
     assert.equal(JSON.parse(result.stdout).operations, calls.length);
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
   const paused = await client.calendar.updateCalendarSubscription({ calendarId, subscriptionId, name: subscription.name, endpoint: subscription.endpoint, eventTypes: subscription.eventTypes, status: "paused", expectedVersion: 1, idempotencyKey: key() }); assert.equal(paused.version, 2);
@@ -176,4 +176,33 @@ test("a key revoked after HTTP resolution is rechecked inside the write transact
     assert.equal(response.status, 403); assert.equal((await response.json()).code, "FORBIDDEN");
     assert((await call("checkBookingConflicts", { calendarId, personId, time: time(15) })).available);
   } finally { release(); rateHook = async () => {}; }
+});
+
+test("system-member event contract reaches command, typed SDK, native tools and actual MCP", { timeout: 30000 }, async () => {
+  const eventKey = await createSiteKey(deps, actor, { name: "Member event contract", permissions: [], calendarPermissions: grants() });
+  const transport: typeof fetch = async (url, options) => app.request(String(url), options);
+  const sdk = createClient({ url: "http://fixture.test", key: eventKey.secret, fetch: transport });
+  const directory = await sdk.calendar.listCalendarMembers({ calendarId }); assert(directory.items.some(item => item.userId === uid));
+  const response = await publicCall("createBooking", { calendarId, userId: uid, title: "System member", time: time(1), idempotencyKey: key() }, { Authorization: `Bearer ${eventKey.secret}` });
+  assert.equal(response.status, 200); const created = (await response.json()).result;
+  const actual = await sdk.calendar.getBooking({ calendarId, bookingId: created.id }); assert.equal(actual.schedulingMode, "member"); assert.equal(actual.userId, uid);
+  await sdk.calendar.rescheduleBooking({ calendarId, bookingId: created.id, expectedVersion: 1, title: "SDK edited", time: time(2), idempotencyKey: key() });
+  const tools = createCalendarTools(deps, org, uid);
+  const invoke = (name: string, input: any) => tools[name].execute!(input, { toolCallId: key(), messages: [], context: undefined }) as any;
+  assert((await invoke("list_calendar_members", { calendarId })).items.some((item: any) => item.userId === uid));
+  const native = await invoke("create_booking", { calendarId, userId: uid, title: "Native member", time: time(3), idempotencyKey: key() });
+  assert.equal((await sdk.calendar.getBooking({ calendarId, bookingId: native.id })).userId, uid);
+  const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
+  if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
+  const address = server.address(); assert(address && typeof address !== "string");
+  try {
+    const runner = fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url));
+    const result = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://${process.env.BROWSER_API_HOST ?? "127.0.0.1"}:${address.port}`, TABDO_API_KEY: eventKey.secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls: [
+      { name: "list_calendar_members", input: { calendarId }, includes: [uid] },
+      { name: "create_booking", input: { calendarId, userId: uid, title: "MCP member", time: time(4), idempotencyKey: key() }, expect: { status: "confirmed", version: 1 } },
+      { name: "reschedule_booking", input: { calendarId, bookingId: created.id, expectedVersion: 2, title: "MCP edited", time: time(5), idempotencyKey: key() }, expect: { version: 3 } },
+      { name: "cancel_booking", input: { calendarId, bookingId: created.id, expectedVersion: 3, idempotencyKey: key() }, expect: { status: "cancelled" } },
+    ] }) } });
+    assert.equal(JSON.parse(result.stdout).mcp, "PASS");
+  } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });

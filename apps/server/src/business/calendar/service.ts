@@ -102,7 +102,11 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
     };
     const permission = permissions[command] ?? (read ? "canRead" : "canManage");
     const configurationRead = ["listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions"].includes(command);
-    if (configurationRead && principal) {
+    if (command === "listCalendarMembers" && principal) {
+      const grant = principal.calendarPermissions.get(calendar!.id);
+      if (!grant) fail(404, "NOT_FOUND", "Calendar not found");
+      if (!grant.canRead && !grant.canCreate && !grant.canUpdate && !grant.canManage) fail(403, "FORBIDDEN", "Reading event members is not granted");
+    } else if (configurationRead && principal) {
       const grant = principal.calendarPermissions.get(calendar!.id);
       if (!grant) fail(404, "NOT_FOUND", "Calendar not found");
       if (!grant.canRead && !grant.canReadAvailability && !grant.canManage) fail(403, "FORBIDDEN", "Reading service configuration is not granted");
@@ -139,18 +143,18 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
     };
     const exceptions = (personId: string) => tx.select().from(availabilityExceptions).where(eq(availabilityExceptions.personId, personId)).limit(5001).then(items => page(items, 5000).items);
     const busyFor = (personId: string, range: Interval) => tx.select().from(bookings).where(and(eq(bookings.personId, personId), eq(bookings.workspaceId, workspaceId), eq(bookings.status, "confirmed"), lt(bookings.start, new Date(range.end)), gt(bookings.end, new Date(range.start)))).limit(5001).then(items => page(items, 5000).items);
-    const activePerson = async (person: Person) => {
-      if (person.archived) fail(409, "ARCHIVED", "The service person is archived");
+    const activePerson = async (person: Person, memberEvent = false) => {
+      if (person.archived && !memberEvent) fail(409, "ARCHIVED", "The service person is archived");
       if (person.userId) {
-        const [bound] = await tx.select({ id: user.id }).from(member).innerJoin(user, eq(user.id, member.userId)).where(and(eq(member.organizationId, organizationId), eq(member.userId, person.userId), eq(user.kind, "human"))).for("share", { of: member });
-        if (!bound) fail(409, "INVALID_STATE", "The bound service person is no longer an active human member");
+        const [bound] = await tx.select({ id: user.id }).from(member).innerJoin(user, eq(user.id, member.userId)).where(and(eq(member.organizationId, organizationId), eq(member.userId, person.userId))).for("share", { of: member });
+        if (!bound) fail(409, "INVALID_STATE", "The bound service person is no longer an active workspace member");
       }
     };
     const withinHours = (person: Person, rest: Awaited<ReturnType<typeof exceptions>>, interval: Interval) => openIntervals(person.timeZone, person.windows, rest, interval).some(window => window.start <= interval.start && window.end >= interval.end);
     const validateFuture = async (person: Person) => {
       const future = page(await tx.select().from(bookings).where(and(eq(bookings.personId, person.id), eq(bookings.status, "confirmed"), gt(bookings.end, deps.now()))).limit(5001), 5000).items;
       const rest = await exceptions(person.id);
-      if (future.some(booking => !withinHours(person, rest, { start: +booking.start, end: +booking.end }))) fail(409, "RESOURCE_CONFLICT", "Working hours would invalidate an existing booking; reschedule or cancel it first");
+      if (future.some(booking => booking.schedulingMode === "working_hours" && !withinHours(person, rest, { start: +booking.start, end: +booking.end }))) fail(409, "RESOURCE_CONFLICT", "Working hours would invalidate an existing booking; reschedule or cancel it first");
     };
     const serializeBooking = async (booking: StoredBooking) => {
       let linkedRowId = booking.linkedRowId;
@@ -158,7 +162,8 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         const [row] = await tx.select({ workspaceId: tables.workspaceId, tableId: tables.id }).from(rows).innerJoin(tables, eq(rows.tableId, tables.id)).where(eq(rows.id, linkedRowId));
         if (!row || row.workspaceId !== workspaceId || principal && !principal.permissions.get(row.tableId)?.canRead) linkedRowId = null;
       }
-      return { ...booking, workspaceId: undefined, start: booking.start.toISOString(), end: booking.end.toISOString(), linkedRowId };
+      const [identity] = await tx.select({ userId: calendarPeople.userId }).from(calendarPeople).where(eq(calendarPeople.id, booking.personId));
+      return { ...booking, userId: identity?.userId ?? null, workspaceId: undefined, start: booking.start.toISOString(), end: booking.end.toISOString(), linkedRowId };
     };
     let output: unknown;
     switch (command) {
@@ -175,6 +180,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         }
         const [saved] = await tx.update(calendars).set({ ...(command === "archiveCalendar" ? { archived: true } : { name: input.name, timeZone: input.timeZone }), version: calendar!.version + 1 }).where(eq(calendars.id, calendar!.id)).returning(); output = publicCalendar(saved); break;
       }
+      case "listCalendarMembers": output = page(await tx.select({ userId: user.id, name: user.name, kind: user.kind }).from(member).innerJoin(user, eq(user.id, member.userId)).where(eq(member.organizationId, organizationId)).orderBy(asc(user.id)).limit(501)); break;
       case "listCalendarPeople": output = page((await tx.select().from(calendarPeople).where(and(peopleScope, input.includeArchived ? undefined : eq(calendarPeople.archived, false))).orderBy(asc(calendarPeople.id)).limit(501)).map(serializePerson)); break;
       case "createCalendarPerson": {
         if (input.userId) {
@@ -222,7 +228,7 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         break;
       }
       case "queryBookings": {
-        const found = await tx.select().from(bookings).where(and(eq(bookings.calendarId, calendar!.id), lt(bookings.start, new Date(input.rangeEnd)), gt(bookings.end, new Date(input.rangeStart)), input.personId ? eq(bookings.personId, input.personId) : undefined, input.includeCancelled ? undefined : eq(bookings.status, "confirmed"))).orderBy(asc(bookings.start), asc(bookings.id)).limit(501);
+        const found = await tx.select().from(bookings).where(and(eq(bookings.calendarId, calendar!.id), lt(bookings.start, new Date(input.rangeEnd)), gt(bookings.end, new Date(input.rangeStart)), input.personId ? eq(bookings.personId, input.personId) : undefined, input.userId ? inArray(bookings.personId, tx.select({ id: calendarPeople.id }).from(calendarPeople).where(and(peopleScope, eq(calendarPeople.userId, input.userId)))) : undefined, input.includeCancelled ? undefined : eq(bookings.status, "confirmed"))).orderBy(asc(bookings.start), asc(bookings.id)).limit(501);
         page(found); output = page(await Promise.all(found.map(serializeBooking))); break;
       }
       case "getBooking": output = await serializeBooking(await loadBooking(input.bookingId)); break;
@@ -248,7 +254,20 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
         if (new Set(ids).size !== ids.length) fail(400, "BAD_INPUT", "A batch cannot change the same booking twice");
         const initial = new Map<string, StoredBooking>();
         for (const id of [...ids].sort()) initial.set(id, await loadBooking(id));
-        const people = await loadPeople(operations.map(op => op.kind === "create" ? op.personId : initial.get(op.bookingId)!.personId));
+        // Resolve system identities only in writes, in a deterministic order. The unique
+        // workspace/user key preserves historical identity under concurrent first use.
+        const resolved = new Map<string, string>();
+        for (const userId of [...new Set<string>(operations.map(op => op.userId).filter(Boolean))].sort()) {
+          const [bound] = await tx.select({ id: user.id, name: user.name }).from(member).innerJoin(user, eq(user.id, member.userId)).where(and(eq(member.organizationId, organizationId), eq(user.id, userId))).for("share", { of: member });
+          if (!bound) fail(400, "BAD_INPUT", "Choose an active workspace member userId");
+          await tx.insert(calendarPeople).values({ workspaceId, userId, name: bound.name, timeZone: calendar!.timeZone }).onConflictDoNothing({ target: [calendarPeople.workspaceId, calendarPeople.userId] });
+          const [mapped] = await tx.select({ id: calendarPeople.id }).from(calendarPeople).where(and(peopleScope, eq(calendarPeople.userId, userId)));
+          resolved.set(userId, mapped.id);
+        }
+        const people = await loadPeople(operations.flatMap(op => [
+          ...(op.kind === "create" ? [op.userId ? resolved.get(op.userId)! : op.personId] : [initial.get(op.bookingId)!.personId]),
+          ...(op.kind === "reschedule" && op.userId ? [resolved.get(op.userId)!] : []),
+        ]));
         // Stable person locks precede booking locks; reload after waiting for any earlier writer.
         for (const id of [...ids].sort()) {
           const [current] = await tx.select().from(bookings).where(eq(bookings.id, id)).for("update"); initial.set(id, current);
@@ -263,24 +282,25 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
               if (principal && !principal.permissions.get(row.tableId)?.canRead) fail(403, "FORBIDDEN", "Linking a record requires table read permission");
             }
             const time = parseBookingTime(operation.time);
-            changed.push({ id: deps.uuid(), workspaceId, calendarId: calendar!.id, personId: operation.personId, title: operation.title, start: new Date(time.start), end: new Date(time.end), timeZone: operation.time.timeZone, status: "confirmed", version: 1, revision: 1, linkedRowId: operation.linkedRowId ?? null });
+            changed.push({ id: deps.uuid(), workspaceId, calendarId: calendar!.id, personId: operation.userId ? resolved.get(operation.userId)! : operation.personId, schedulingMode: operation.userId ? "member" : "working_hours", title: operation.title, start: new Date(time.start), end: new Date(time.end), timeZone: operation.time.timeZone, status: "confirmed", version: 1, revision: 1, linkedRowId: operation.linkedRowId ?? null });
           } else {
             const current = initial.get(operation.bookingId)!; cas(current.version, operation.expectedVersion);
             if (current.status !== "confirmed") fail(409, "INVALID_STATE", "Only confirmed bookings can be rescheduled or cancelled");
+            if (operation.userId && current.schedulingMode !== "member") fail(400, "BAD_INPUT", "Legacy bookings retain their original person and working-hours policy");
             const time = operation.kind === "reschedule" ? parseBookingTime(operation.time) : { start: +current.start, end: +current.end };
-            changed.push({ ...current, start: new Date(time.start), end: new Date(time.end), timeZone: operation.time?.timeZone ?? current.timeZone, status: operation.kind === "cancel" ? "cancelled" : "confirmed", version: current.version + 1, revision: current.revision + 1 });
+            changed.push({ ...current, personId: operation.userId ? resolved.get(operation.userId)! : current.personId, title: operation.title ?? current.title, start: new Date(time.start), end: new Date(time.end), timeZone: operation.time?.timeZone ?? current.timeZone, status: operation.kind === "cancel" ? "cancelled" : "confirmed", version: current.version + 1, revision: current.revision + 1 });
           }
         }
         for (const person of people) {
           const candidates = changed.filter(booking => booking.personId === person.id && booking.status === "confirmed");
           if (!candidates.length) continue;
-          await activePerson(person);
-          const rest = await exceptions(person.id);
+          await activePerson(person, candidates.every(booking => booking.schedulingMode === "member"));
+          const rest = candidates.some(booking => booking.schedulingMode === "working_hours") ? await exceptions(person.id) : [];
           const range = { start: Math.min(...candidates.map(b => +b.start)), end: Math.max(...candidates.map(b => +b.end)) };
           const existing = (await busyFor(person.id, range)).filter(booking => !initial.has(booking.id));
           for (const candidate of candidates) {
             const time = { start: +candidate.start, end: +candidate.end };
-            if (!withinHours(person, rest, time)) fail(409, "OUTSIDE_AVAILABILITY", "The booking is outside the person's working hours or overlaps time off");
+            if (candidate.schedulingMode === "working_hours" && !withinHours(person, rest, time)) fail(409, "OUTSIDE_AVAILABILITY", "The booking is outside the person's working hours or overlaps time off");
             if ([...existing, ...candidates.filter(b => b.id !== candidate.id)].some(b => overlaps(time, { start: +b.start, end: +b.end }))) fail(409, "RESOURCE_CONFLICT", "The service person is already booked during this time");
           }
         }

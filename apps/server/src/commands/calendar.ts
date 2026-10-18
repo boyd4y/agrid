@@ -7,6 +7,7 @@ export const getCalendar = (...args: Args<typeof implementation.getCalendar>) =>
 export const createCalendar = (...args: Args<typeof implementation.createCalendar>) => businessCall(() => implementation.createCalendar(commandDependencies(), ...args));
 export const updateCalendar = (...args: Args<typeof implementation.updateCalendar>) => businessCall(() => implementation.updateCalendar(commandDependencies(), ...args));
 export const archiveCalendar = (...args: Args<typeof implementation.archiveCalendar>) => businessCall(() => implementation.archiveCalendar(commandDependencies(), ...args));
+export const listCalendarMembers = (...args: Args<typeof implementation.listCalendarMembers>) => businessCall(() => implementation.listCalendarMembers(commandDependencies(), ...args));
 export const listCalendarPeople = (...args: Args<typeof implementation.listCalendarPeople>) => businessCall(() => implementation.listCalendarPeople(commandDependencies(), ...args));
 export const getCalendarPerson = (...args: Args<typeof implementation.getCalendarPerson>) => businessCall(() => implementation.getCalendarPerson(commandDependencies(), ...args));
 export const createCalendarPerson = (...args: Args<typeof implementation.createCalendarPerson>) => businessCall(() => implementation.createCalendarPerson(commandDependencies(), ...args));

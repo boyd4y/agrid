@@ -23,14 +23,14 @@ export const launchOptions = process.env.BROWSER_EXECUTABLE_PATH ? { executableP
 export async function createBrowserFixture({ name = 'Builder Browser', modelRequest, serverEnv = {} } = {}) {
   const port = Number(process.env.BROWSER_API_PORT ?? 3112);
   const probe = createServer();
-  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(port, '127.0.0.1', resolve); });
+  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(port, process.env.BROWSER_API_HOST?.replace(/^\[|\]$/g, '') ?? '127.0.0.1', resolve); });
   await new Promise((resolve) => probe.close(resolve));
   const model = createServer(async (req, res) => {
     if (modelRequest) await modelRequest(req, res);
     else { res.writeHead(500); res.end('No model calls expected in this browser regression'); }
   });
   await new Promise((resolve) => model.listen(0, '127.0.0.1', resolve));
-  const base = `http://localhost:${port}`;
+  const base = `http://${process.env.BROWSER_API_HOST ?? "localhost"}:${port}`;
   const log = createWriteStream(artifact('api.log'));
   const server = spawn('pnpm', ['--filter', '@tabdo/server', 'exec', 'tsx', '--conditions=development', 'src/index.ts'], {
     cwd: workspace, detached: true, env: { ...process.env, DATABASE_URL: databaseUrl, PORT: String(port), APP_URL: frontend, BETTER_AUTH_URL: base,

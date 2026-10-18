@@ -100,12 +100,12 @@ test("native configuration/query and real MCP stdio use the same scoped record p
   assert((await sdk.calendar.listCalendarSubscriptions({ calendarId: calendar.id })).items.some(item => item.id === subscription.subscription.id));
   assert.deepEqual((await sdk.calendar.listCalendarDeliveries({ calendarId: calendar.id, subscriptionId: subscription.subscription.id })).items, []);
 
-  const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
+  const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
   const address = server.address(); assert(address && typeof address !== "string");
   try {
     const runner = fileURLToPath(new URL("../../../mcp/test/calendar-view-client.mjs", import.meta.url));
-    const response = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: mixed.secret, CALENDAR_VIEW_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_VIEW_MCP_CASE: JSON.stringify({ viewId, rowId, startId, tableId, calendarId: calendar.id, subscriptionId: subscription.subscription.id }) } });
+    const response = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://${process.env.BROWSER_API_HOST ?? "127.0.0.1"}:${address.port}`, TABDO_API_KEY: mixed.secret, CALENDAR_VIEW_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_VIEW_MCP_CASE: JSON.stringify({ viewId, rowId, startId, tableId, calendarId: calendar.id, subscriptionId: subscription.subscription.id }) } });
     assert.equal(JSON.parse(response.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });

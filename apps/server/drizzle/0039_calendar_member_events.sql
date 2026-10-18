@@ -1,0 +1,2 @@
+ALTER TABLE "bookings" ADD COLUMN "scheduling_mode" text DEFAULT 'working_hours' NOT NULL;--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_scheduling_mode_check" CHECK ("bookings"."scheduling_mode" IN ('working_hours', 'member'));

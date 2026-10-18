@@ -147,8 +147,8 @@
       "description": "Create custom pages, save versions, preview and publish."
     },
     "calendar": {
-      "name": "Calendars and appointments",
-      "description": "Find availability, book, reschedule and cancel with member permissions."
+      "name": "Calendars and events",
+      "description": "Create, edit and cancel events for workspace members and agents, and view scheduled plans."
     },
     "documents": {
       "name": "Record bodies",
