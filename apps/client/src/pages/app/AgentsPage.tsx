@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Cloud, Monitor, Pencil, Plus, RefreshCw } from "lucide-react";
+import { BookOpen, Cloud, Monitor, Pencil, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Badge } from "@tabdo/ui/components/badge";
 import { api, type MemberOption } from "@/lib/api";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
@@ -46,7 +47,7 @@ export function AgentsPage() {
   useEffect(() => pagination.resetPage(), [query, pagination.resetPage]);
   const create = canManage ? <Button asChild size="sm"><Link to="/app/agents/new"><Plus data-icon="inline-start" />{t("agents.create")}</Link></Button> : undefined;
   return <AppPage contentWidth="standard" data-testid="agents-page" className="items-center" header={<AppPageHeader page="agents" description={t("agents.description")}>
-    <Button variant="ghost" size="icon" aria-label={t("agents.refreshAria")} disabled={loading} onClick={() => void refresh()}><RefreshCw data-icon="inline-start" /></Button>{create}
+    <DataRefreshButton label={t("agents.refreshAria")} disabled={loading} onRefresh={() => void refresh()} />{create}
   </AppPageHeader>}>
     <MemberDirectory label={t("nav.agents")} count={agents.length} query={query} onQueryChange={setQuery} loading={loading} error={error} onRetry={() => void refresh()}
       pagination={visible.length > 0 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}

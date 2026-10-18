@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Input } from "@tabdo/ui/components/input";
 import { Skeleton } from "@tabdo/ui/components/skeleton";
+import { SearchInput } from "@tabdo/ui/components/search-input";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { MemberAvatar } from "./MemberAvatar";
 import type { MemberOption } from "@/lib/api";
@@ -15,10 +14,7 @@ export function MemberDirectory({ label, count, query, onQueryChange, loading, e
   const { t } = useTranslation(["app", "common"]);
   return <div className="flex w-full flex-1 flex-col gap-5" data-testid="member-directory">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <label className="relative w-full max-w-sm">
-        <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input aria-label={t("directory.searchAria", { label })} placeholder={t("directory.searchPlaceholder", { label })} className="pl-9" value={query} disabled={loading && count === 0} onChange={(e) => onQueryChange(e.target.value)} />
-      </label>
+      <SearchInput containerClassName="w-full max-w-sm" aria-label={t("directory.searchAria", { label })} placeholder={t("directory.searchPlaceholder", { label })} value={query} disabled={loading && count === 0} onChange={(e) => onQueryChange(e.target.value)} />
       <p className="text-sm text-muted-foreground">{loading ? t("common:loading") : error ? t("directory.loadFailed") : t("directory.count", { count, label })}</p>
     </div>
     {loading ? <div role="status" aria-label={t("directory.loadingLabel", { label })} className="flex flex-col gap-3">{[0, 1, 2].map((id) => <Skeleton key={id} className="h-28 w-full" />)}</div>

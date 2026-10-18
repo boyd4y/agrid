@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Copy, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ApiKeyInfo, ApiKeyInput, CalendarPermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { enableGrokBot } from "@/components/settings/grok-bot";
 import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Input } from "@tabdo/ui/components/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@tabdo/ui/components/collapsible";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
@@ -148,7 +149,7 @@ export function ApiKeysSettings() {
   return <section className="flex min-w-0 flex-col gap-6" data-testid="api-keys-settings">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-2"><CardTitle>{text("title")}</CardTitle><CardDescription>{text("description")}</CardDescription></div>
-      <div className="flex items-center gap-2"><Button variant="ghost" size="icon" aria-label={t("common:refresh")} disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw data-icon="inline-start" /></Button>{!loading && !error && keys.length > 0 && create}</div>
+      <div className="flex items-center gap-2"><DataRefreshButton label={t("common:refresh")} disabled={loading} onRefresh={() => setRevision(value => value + 1)} />{!loading && !error && keys.length > 0 && create}</div>
     </header>
     {!loading && !error && canManage && <div className="flex flex-wrap items-center justify-between gap-3 border-y py-4">
       <div className="flex min-w-0 flex-col gap-1"><h3 className="text-sm font-medium">Grok Bot</h3><p className="text-sm text-muted-foreground">{text("grok.description")}</p></div>

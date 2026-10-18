@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Loader2, Search } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SkillLibrary, SkillSummary } from "@tabdo/shared";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { Button } from "@tabdo/ui/components/button";
-import { Input } from "@tabdo/ui/components/input";
+import { SearchInput } from "@tabdo/ui/components/search-input";
 import { Switch } from "@tabdo/ui/components/switch";
 import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListPagination } from "@/components/controls/list-pagination";
@@ -29,7 +29,7 @@ export function SkillsPage() {
   const pagination = useArrayPagination(visible);
   useEffect(() => pagination.resetPage(), [search, pagination.resetPage]);
   return <AppPage contentWidth="standard" className="gap-4" header={<AppPageHeader page="skills" description={t("skills.description")} />}>
-    <div className="relative w-full max-w-sm"><Search aria-hidden className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label={t("skills.searchAria")} className="pl-9" placeholder={t("skills.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+    <SearchInput containerClassName="w-full max-w-sm" aria-label={t("skills.searchAria")} placeholder={t("skills.searchPlaceholder")} value={search} onChange={(e) => setSearch(e.target.value)} />
     {!library && error ? <ListErrorState title={t("errors:listLoadFailedNamed", { name: t("nav.skills") })} description={error} onRetry={() => void load().catch((e: Error) => setError(e.message))} />
       : !library ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t("skills.loading")}</p>
       : <>

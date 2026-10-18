@@ -9,7 +9,7 @@ import themePlugin from "@fullcalendar/react/themes/monarch";
 import zhLocale from "@fullcalendar/react/locales/zh-cn";
 import "@fullcalendar/react/skeleton.css";
 import "@fullcalendar/react/themes/monarch/theme.css";
-import { ChevronLeft, ChevronRight, PanelLeft, Plus, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, PanelLeft, Plus } from "lucide-react";
 import type { Booking, Calendar, CalendarPerson, CalendarMember, ScheduledOccurrence } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { calendarCommand } from "@/lib/calendar-api";
@@ -25,6 +25,7 @@ import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@tabdo/ui/components/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@tabdo/ui/components/sheet";
 import { Skeleton } from "@tabdo/ui/components/skeleton";
@@ -147,7 +148,7 @@ export function CalendarPage() {
           <div className="flex items-center gap-1"><Button variant="outline" size="icon" aria-label={t("previous")} onClick={() => calendarRef.current?.getApi().prev()}><ChevronLeft /></Button><Button variant="outline" size="sm" onClick={() => calendarRef.current?.getApi().today()}>{t("today")}</Button><Button variant="outline" size="icon" aria-label={t("next")} onClick={() => calendarRef.current?.getApi().next()}><ChevronRight /></Button></div>
           <Select value={effectiveView} onValueChange={value => { setView(value); try { localStorage.setItem(viewKey, value); } catch { /* Keep the in-memory preference. */ } calendarRef.current?.getApi().changeView(value); }}><SelectTrigger className="w-24" aria-label={t("view")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{views.map(value => <SelectItem key={value} value={value}>{t(`views.${value}`)}</SelectItem>)}</SelectGroup></SelectContent></Select>
           {calendar && <Button size="sm" disabled={pending || peopleLoading || !!peopleError || !!error} onClick={() => startDraft(new Date(Math.ceil(Date.now() / 1800000) * 1800000).toISOString())}><Plus data-icon="inline-start" />{t("newBooking")}</Button>}
-          <Button variant="ghost" size="icon" aria-label={t("refresh")} disabled={loading || pending} onClick={() => setRevision(value => value + 1)}><RefreshCw /></Button>
+          <DataRefreshButton label={t("refresh")} disabled={loading || pending} onRefresh={() => setRevision(value => value + 1)} />
         </div>
         {(error || peopleError) && <ListErrorState className="min-h-0 py-3" description={error || peopleError} onRetry={() => setRevision(value => value + 1)} />}
         {planError && <ListErrorState className="min-h-0 py-3" description={planError} onRetry={() => setRevision(value => value + 1)} />}
