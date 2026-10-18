@@ -15,5 +15,5 @@ test("Scenario A actions validate and bind the real agent user identity", () => 
   }
   assert.match(SCENARIO_A_PROMPT, /list_mail_inboxes/);
   assert.match(SCENARIO_A_PROMPT, /send_email 成功/);
-  assert.match(actions[2].type === "run_agent" ? actions[2].prompt : "", /跟进邮件草稿/);
+  assert.match(actions[2].type === "run_agent" ? (actions[2].prompt ?? "") : "", /跟进邮件草稿/);
 });
