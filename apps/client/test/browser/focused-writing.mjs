@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { assertToolbarFits, assertOrdinaryEditorActions } from './helpers/editor-layout.mjs';
 import { createBrowserFixture } from './fixture.mjs';
 const f = await createBrowserFixture({ name: 'Focused writing controls' });
 const { page, api, frontend } = f;
@@ -52,8 +53,7 @@ try {
   await toolbar.getByRole('button', { name: '撤销', exact: true }).click(); assert.equal(await body.locator('blockquote').count(), 0);
   await toolbar.getByRole('button', { name: '重做', exact: true }).click(); await body.locator('blockquote').waitFor();
   await saved(panel);
-  await panel.getByRole('button', { name: '正文更多操作', exact: true }).click(); await page.getByRole('menuitem', { name: '写作帮助与容量', exact: true }).click();
-  const help = page.getByRole('dialog', { name: '写作帮助与容量' }); await help.getByText(/64 KiB/).waitFor(); await help.getByRole('button', { name: '关闭正文', exact: true }).click();
+  await assertOrdinaryEditorActions(panel);
   await body.fill('x'.repeat(66000)); await panel.getByRole('status').filter({ hasText: '部分内容保存失败' }).waitFor();
   await panel.getByRole('alert').getByText(/容量超出/).waitFor();
   await panel.getByRole('button', { name: '重试保存', exact: true }).waitFor();
@@ -74,13 +74,7 @@ try {
     assert.equal(await touchBody.locator('ul').innerText(), '触屏点击直接写作'); await saved(touchPanel);
     assert(JSON.stringify((await command('getDocument', touchIdentity)).content).includes('触屏点击直接写作'));
     const touchToolbar = touchPanel.getByTestId('editor-toolbar');
-    const viewport = touchToolbar.locator('[data-slot="scroll-area-viewport"]');
-    await viewport.evaluate(el => { el.scrollLeft = 0; });
-    const bounds = await viewport.boundingBox(), cdp = await mobile.newCDPSession(touch);
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bounds.x + bounds.width - 20, y: bounds.y + bounds.height / 2 }] });
-    for (let offset = 0; offset < 200; offset += 25) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: bounds.x + bounds.width - 20 - offset, y: bounds.y + bounds.height / 2 }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await cdp.detach();
-    await touch.waitForFunction(() => document.querySelector('[data-testid="editor-toolbar"] [data-slot="scroll-area-viewport"]').scrollLeft > 0);
+    await assertToolbarFits(touchToolbar);
     await touchToolbar.getByRole('button', { name: '搜索与替换', exact: true }).tap();
     await touch.getByRole('dialog', { name: '搜索与替换', exact: true }).waitFor();
     await touch.screenshot({ path: f.artifact('focused-touch-formatting-390.png') });
@@ -88,6 +82,6 @@ try {
     await touchPanel.getByRole('button', { name: '关闭记录', exact: true }).tap(); await touchPanel.waitFor({ state: 'hidden' });
   } catch (error) { const touch = mobile.pages()[0]; console.error(await touch.locator('[data-testid=related-record-panel]').innerText()); console.error(await touch.getByRole('textbox', { name: '正文内容', exact: true }).innerHTML()); await touch.screenshot({ path: f.artifact('focused-touch-failure.png') }); throw error; } finally { await mobile.close(); }
   assert.deepEqual(f.errors, []);
-  console.log('PASS focused writing: modal first-viewport content, shared editor, real selection bubble/link, keyboard dropdown/Escape focus return and command/dialog focus, heading/quote/undo/redo, contextual limits and actionable overflow/retry, real touch formatting and autosave.');
+  console.log('PASS focused writing: modal first-viewport content, shared editor, real selection bubble/link, keyboard dropdown/Escape focus return and command/dialog focus, heading/quote/undo/redo, no ordinary export/help and actionable overflow/retry, real touch formatting and autosave.');
 } catch (error) { console.error(f.errors); await page.screenshot({ path: f.artifact('focused-writing-failure.png') }).catch(() => {}); throw error; }
 finally { await f.close(); }

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { RichTextEditor, useRichTextEditor, type RichTextLabels } from "@tabdo/ui/components/rich-text-editor";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@tabdo/ui/components/dropdown-menu";
-import { MoreHorizontal, Info, Download, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@tabdo/ui/components/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
 import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { documentContentSchema, EMPTY_DOCUMENT, safeDocumentLink, type DocumentContent, type RecordDocument, type DocumentCommands } from "@tabdo/shared";
 import { documentCommand, DocumentApiError } from "@/lib/document-api";
@@ -25,7 +23,6 @@ export default function DocumentBody(scope: Scope) {
   const [doc, setDoc] = useState<RecordDocument | null>(), [error, setError] = useState("");
   const [status, setStatus] = useState("loading"), [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0), [comparing, setComparing] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [preview, setPreview] = useState<RecordDocument | null>(null);
   const [loadRevision, setLoadRevision] = useState(0);
   const [pasteNotice, setPasteNotice] = useState(false);
@@ -171,12 +168,10 @@ export default function DocumentBody(scope: Scope) {
   useEffect(() => { scope.onStateChange?.({ dirty: dirty.current, busy: busy || inFlight.current, status }); }, [tick, busy, status, scope.onStateChange]);
   const toolbarDisabled = busy || !!preview || doc === undefined;
   const labels: RichTextLabels = { paragraph: t("paragraph"), underline: t("underline"), strike: t("strike"), code: t("code"), horizontalRule: t("horizontalRule"), alignment: t("alignment"), colorHighlight: t("colorHighlight"), color: t("color"), highlight: t("highlight"), defaultColor: t("defaultColor"), searchReplace: t("searchReplace"), search: t("search"), replaceWith: t("replaceWith"), replace: t("replace"), replaceAll: t("replaceAll"), previousMatch: t("previousMatch"), nextMatch: t("nextMatch"), matchCase: t("matchCase"), slashCommands: t("slashCommands"), noResults: t("noResults"), basicBlocks: t("basicBlocks"), inline: t("inline"), align: value => t(value), colorName: name => t(`colors.${name}`), commandDescription: key => t(`commands.${key}`), insertFormat: t("insertFormat"), formatting: t("formatting"), selectionFormatting: t("selectionFormatting"), bold: t("bold"), italic: t("italic"), heading: level => t("heading", { level }), bulletList: t("bulletList"), orderedList: t("orderedList"), quote: t("quote"), codeBlock: t("codeBlock"), link: t("link"), image: t("image"), undo: t("undo"), redo: t("redo"), close: t("close"), linkHint: t("linkHint"), url: t("url"), applyLink: t("applyLink"), removeLink: t("removeLink") };
-  const actions = <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={t("more")}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuGroup>
-    {scope.onRefresh && <DropdownMenuItem disabled={scope.refreshDisabled} onSelect={scope.onRefresh}><RefreshCw />{t("table:refreshRecord")}</DropdownMenuItem>}
-    {!scope.embedded && <DropdownMenuItem disabled={busy || status === "saving" || !dirty.current || status === "conflict"} onSelect={() => void save()}>{t("save")}</DropdownMenuItem>}
-    <DropdownMenuItem onSelect={exportDraft}><Download />{t("downloadDraft")}</DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => setHelpOpen(true)}><Info />{t("writingHelp")}</DropdownMenuItem>
-  </DropdownMenuGroup></DropdownMenuContent></DropdownMenu>;
+  const actions = <>
+    {scope.onRefresh && <Button type="button" variant="ghost" size="icon" className="size-8" aria-label={t("table:refreshRecord")} title={t("table:refreshRecord")} disabled={scope.refreshDisabled} onClick={scope.onRefresh}><RefreshCw /></Button>}
+    {!scope.embedded && <Button type="button" variant="ghost" size="sm" disabled={busy || status === "saving" || !dirty.current || status === "conflict"} onClick={() => void save()}>{t("save")}</Button>}
+  </>;
   return <div data-testid="document-editor" className="flex min-w-0 flex-col">
     {!scope.embedded && <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{t(`status.${status}`)}</p>}
     {error && <div role="alert" className="flex flex-col gap-2 py-3 text-sm text-destructive"><p>{error}</p>{status === "conflict" && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={comparing} onClick={() => void viewServer()}>{t("viewServer")}</Button><Button size="sm" variant="outline" onClick={exportDraft}>{t("downloadDraft")}</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void exportAndReload()}>{t("downloadAndReload")}</Button></div>}</div>}
@@ -187,6 +182,5 @@ export default function DocumentBody(scope: Scope) {
       <RichTextEditor editor={editor} labels={labels} disabled={toolbarDisabled} isAllowedUri={safeDocumentLink} onImage={() => fileInput.current?.click()} imageDisabled={status === "conflict"} imageSources={images} actions={actions} />
       {busy && <p role="status" className="text-xs text-muted-foreground">{t("uploading")}</p>}
     </>}
-    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent closeLabel={t("close")}><DialogHeader><DialogTitle>{t("writingHelp")}</DialogTitle><DialogDescription>{t("budget")}</DialogDescription></DialogHeader><p className="text-sm text-muted-foreground">{t("draftRetained")}</p></DialogContent></Dialog>
   </div>;
 }

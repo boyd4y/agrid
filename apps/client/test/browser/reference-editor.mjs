@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { assertToolbarFits, assertOrdinaryEditorActions } from './helpers/editor-layout.mjs';
 import { rm } from 'node:fs/promises';
 import { createBrowserFixture, artifact as artifactPath } from './fixture.mjs';
 const directory = artifactPath('reference-editor-files');
@@ -13,6 +14,8 @@ try {
   await page.goto(frontend + `/app/tables/${table.id}`); await page.getByTestId(`open-grid-record-${row.id}`).click();
   const panel = page.getByTestId('related-record-panel'), body = panel.getByRole('textbox', { name: '正文内容', exact: true }), toolbar = panel.getByTestId('editor-toolbar');
   await body.waitFor();
+  await assertOrdinaryEditorActions(panel);
+  await assertToolbarFits(toolbar);
   for (const name of ['撤销', '重做', '正文', '引用', '行内代码', '代码块', '加粗', '斜体', '下划线', '删除线', '链接', '无序列表', '有序列表', '分隔线', '对齐', '上传图片', '文字颜色与高亮', '搜索与替换']) assert.equal(await toolbar.getByRole('button', { name, exact: true }).count(), 1, name);
   const menu = page.getByRole('dialog', { name: '块命令', exact: true });
   const item = key => menu.locator(`[cmdk-item][data-value="${key}"]`);
@@ -93,15 +96,15 @@ try {
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 }); await page.evaluate(theme => document.documentElement.classList.toggle('dark', theme === 'dark'), theme);
     await body.fill('reset'); await body.fill('/'); await menu.waitFor(); const box = await menu.boundingBox(); assert(box.x >= 0 && box.x + box.width <= width + 1); assert(box.y >= 0 && box.y + box.height <= (width < 500 ? 844 : 1000) + 1);
     assert.equal(await panel.evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
-    assert((await toolbar.boundingBox()).height < 50, 'single-line toolbar');
+    await assertToolbarFits(toolbar);
     await page.screenshot({ path: artifact(`reference-record-${width}-${theme}.png`) }); await page.keyboard.press('Escape');
   }
-  // Keyboard focus scrolls the last control into the toolbar viewport without page overflow.
+  // The last actions are immediately reachable, without scrolling the toolbar.
   await toolbar.getByRole('button', { name: '搜索与替换', exact: true }).focus();
-  const viewport = toolbar.locator('[data-slot="scroll-area-viewport"]');
-  assert(await viewport.evaluate(el => el.scrollLeft > 0));
-  const vp = await viewport.boundingBox(), searchBounds = await toolbar.getByRole('button', { name: '搜索与替换', exact: true }).boundingBox();
-  assert(searchBounds.x >= vp.x - 1 && searchBounds.x + searchBounds.width <= vp.x + vp.width + 1);
+  assert(await toolbar.getByRole('button', { name: '搜索与替换', exact: true }).evaluate(el => el === document.activeElement));
+  await toolbar.getByRole('button', { name: '搜索与替换', exact: true }).press('Enter'); await search.waitFor();
+  await page.keyboard.press('Escape'); await search.waitFor({ state: 'hidden' });
+  await toolbar.getByRole('button', { name: '刷新记录', exact: true }).click();
   await body.fill('直接关闭保存'); await panel.getByRole('button', { name: '关闭记录', exact: true }).click(); await panel.waitFor({ state: 'hidden' }); assert(JSON.stringify((await command('getDocument', identity)).content).includes('直接关闭保存'));
   assert.deepEqual(f.errors, []);
   console.log('PASS reference editor: complete persistent toolbar; slash filters, keyboard/mouse/Escape, ordinary slashes, real IME; retained selection; persistent safe formats; search/replace and session undo; private image; close flush; desktop/390/320 light-dark.');
