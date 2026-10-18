@@ -246,7 +246,19 @@
     "emptyHint": "从上方菜单打开表格、表单或自动化。",
     "openTabs": "已打开的工作内容",
     "closeTab": "关闭{{label}} Tab",
-    "noContent": "暂无内容"
+    "noContent": "暂无内容",
+    "title": "预览",
+    "site": "站点",
+    "report": "报告",
+    "home": "预览首页",
+    "chooseResource": "选择资源",
+    "selectResource": "选择资源 · {{name}}",
+    "searchResources": "搜索资源…",
+    "noMatches": "没有匹配的资源",
+    "noSites": "还没有站点",
+    "noReports": "还没有报告",
+    "selectHint": "在左上角选择要预览的{{type}}。",
+    "duplicateResource": "同名资源 {{index}}"
   },
   "automationPanel": {
     "newRule": "新建规则",

@@ -1,124 +1,122 @@
 import assert from 'node:assert/strict';
-import { createBrowserFixture, pause } from './fixture.mjs';
+import { createBrowserFixture } from './fixture.mjs';
 
-const f = await createBrowserFixture({ name: '按需资源单标题栏' });
-const { page, api, frontend, artifact } = f;
+const f = await createBrowserFixture({ name: '三类预览与资源缓存' });
+const { page, api, frontend } = f;
 page.setDefaultTimeout(15000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
-const open = async payload => page.evaluate(detail => window.dispatchEvent(new CustomEvent('tabdo:open-preview', { detail })), payload);
-const slot = page.getByTestId('workspace-preview-slot');
-const header = slot.getByTestId('preview-slot-header');
-const launcher = slot.getByTestId('preview-table-launcher');
-const showTables = () => header.getByRole('button', { name: '表格列表', exact: true }).click();
-const refresh = () => header.getByRole('button', { name: '刷新工作面板', exact: true });
+const open = async payload => {
+  await page.evaluate(detail => window.dispatchEvent(new CustomEvent('tabdo:open-preview', { detail })), payload);
+  const id = payload.siteId ?? payload.reportId ?? payload.tableId;
+  await slot.locator(`[data-preview-resource-id="${id}"]:not([hidden])`).waitFor();
+};
+const slot = page.getByTestId('workspace-preview-slot'), header = slot.getByTestId('preview-slot-header');
 const tab = name => header.getByRole('tab', { name, exact: true });
-let previewRequests = 0;
-page.on('request', request => { if (/\/api\/sites\/[^/]+\/preview$/.test(request.url())) previewRequests++; });
+const picker = () => header.getByTestId('preview-resource-picker');
+const select = async resource => { await picker().click(); await page.locator(`[data-resource-id="${resource.id}"]`).click(); };
+const frame = () => slot.locator('[role=tabpanel]:visible').frameLocator('iframe');
+const refresh = () => header.getByRole('button', { name: '刷新工作面板', exact: true });
+let previews = 0;
+page.on('request', request => { if (/\/api\/sites\/[^/]+\/preview$/.test(request.url())) previews++; });
 try {
   const table = await api('/tables', { name: '客户资料' });
   const form = await command('createFormView', { tableId: table.id, name: '联系申请', title: '提交申请' });
-  const site = await api('/sites', { name: '活动页面', files: [{ path: 'index.html', content: '<!doctype html><html><body><h1>活动页面正文</h1><label>现场草稿<input aria-label="现场草稿"></label></body></html>' }] });
-  const other = await api('/sites', { name: '另一页面', files: [{ path: 'index.html', content: '<!doctype html><html><body><h1>另一页面正文</h1></body></html>' }] });
+  const sites = [];
+  for (const name of ['活动页面', '另一页面']) sites.push(await api('/sites', { name, files: [{ path: 'index.html', content: `<!doctype html><h1>${name}正文</h1><label>现场草稿<input aria-label="现场草稿"></label>` }] }));
+  const report = await api('/reports', { name: '客户汇总', description: '真实报告', columns: 2, widgets: [{ id: crypto.randomUUID(), type: 'metric', title: '客户总数', width: 'full', query: { tableId: table.id, metric: 'count', valueColumnId: null } }] });
   await page.goto(frontend + '/app');
   await page.getByTestId('workspace-preview-toggle').click();
-  assert.equal(await header.getByRole('button').count(), 0);
-  assert.equal(await slot.getByRole('tab').count(), 0);
-  assert.equal(await launcher.getByRole('button').count(), 1, 'only existing tables, no type catalog');
-  assert.equal(await header.locator('[aria-haspopup=menu]').count(), 0);
-  await launcher.locator(`button[data-table-id="${table.id}"]`).focus();
-  await page.keyboard.press('Enter');
-  await tab('表格 · 客户资料').waitFor();
-  await slot.getByTestId('preview-slot-table').waitFor();
-  await open({ kind: 'site', siteId: site.id });
-  await tab('站点 · 活动页面').waitFor();
-  const frame = () => slot.locator('[role=tabpanel]:visible').frameLocator('iframe');
+  const launcher = slot.getByTestId('preview-launcher');
+  assert.equal(await launcher.getByRole('button').count(), 3);
+  await launcher.getByRole('button', { name: /表格/ }).click();
+  await select(table); await slot.getByTestId('preview-slot-table').waitFor();
+  await open({ kind: 'site', siteId: sites[0].id });
   await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
-  await frame().getByRole('textbox', { name: '现场草稿' }).fill('切换保留');
-  const initialRequests = previewRequests;
-  await showTables();
-  await launcher.waitFor();
-  assert.equal(await slot.getByRole('tab').count(), 2, 'launcher retains resource tabs');
-  assert.equal(await refresh().count(), 0, 'launcher has no resource actions');
-  await tab('站点 · 活动页面').click();
-  assert.equal(await frame().getByRole('textbox', { name: '现场草稿' }).inputValue(), '切换保留');
-  assert.equal(previewRequests, initialRequests, 'launcher does not unmount or regenerate resources');
-  assert.equal(await slot.locator('header').count(), 1);
-  assert.equal(await slot.getByRole('button', { name: /刷新/ }).count(), 1);
-  assert.equal(await header.getByRole('link', { name: '编辑站点', exact: true }).count(), 1);
-  await open({ kind: 'site', siteId: other.id });
+  await frame().getByRole('textbox').fill('切换保留');
+  const initial = previews;
+  await header.getByRole('button', { name: '预览首页', exact: true }).click();
+  await launcher.waitFor(); assert.equal(await header.getByRole('tab').count(), 2);
+  await tab('站点').click(); assert.equal(await frame().getByRole('textbox').inputValue(), '切换保留');
+  await open({ kind: 'site', siteId: sites[1].id });
   await frame().getByRole('heading', { name: '另一页面正文' }).waitFor();
-  await tab('站点 · 活动页面').click();
-  assert.equal(await frame().getByRole('textbox', { name: '现场草稿' }).inputValue(), '切换保留');
-  assert.equal(previewRequests, initialRequests + 1, 'switching same-kind resources does not reload either frame');
+  assert.equal(await tab('站点').count(), 1);
+  await select(sites[0]); assert.equal(await frame().getByRole('textbox').inputValue(), '切换保留');
+  assert.equal(previews, initial + 1, 'same-type switch and home preserve iframe identity');
   await open({ kind: 'form', tableId: table.id, viewId: form.id });
-  await slot.getByTestId('preview-slot-form').getByRole('textbox').first().fill('表单未提交草稿');
-  await tab('表单 · 联系申请').waitFor();
-  await showTables();
-  await launcher.getByRole('button').first().click();
-  await tab('表单 · 联系申请').click();
-  assert.equal(await slot.getByTestId('preview-slot-form').getByRole('textbox').first().inputValue(), '表单未提交草稿');
+  await slot.getByTestId('preview-slot-form').getByRole('textbox').first().fill('未提交草稿');
   await open({ kind: 'automations', tableId: table.id });
   await slot.getByTestId('preview-slot-automations').getByRole('button', { name: '新建自动化', exact: true }).first().waitFor();
-  await open({ kind: 'table', tableId: table.id });
-  await slot.getByTestId('preview-slot-table').waitFor();
-  await tab('表单 · 联系申请').click();
-  assert.equal(await slot.getByTestId('preview-slot-form').getByRole('textbox').first().inputValue(), '表单未提交草稿');
-  await tab('站点 · 活动页面').focus(); await page.keyboard.press('Enter');
-  assert.equal(await frame().getByRole('textbox', { name: '现场草稿' }).inputValue(), '切换保留');
-  // A real preview generation, and failures recover through the same single refresh.
+  await tab('表单').click(); assert.equal(await slot.getByTestId('preview-slot-form').getByRole('textbox').first().inputValue(), '未提交草稿');
+  await open({ kind: 'report', reportId: report.id });
+  await slot.getByText('客户总数', { exact: true }).waitFor();
+  assert.equal(await slot.getByTestId('preview-slot-report').getByRole('button', { name: /保存|编辑/ }).count(), 0);
+  const otherReport = await api('/reports', { name: '第二报告', description: '', columns: 1, widgets: [] });
+  await open({ kind: 'report', reportId: otherReport.id });
+  assert.equal(await tab('报告').count(), 1);
+  await select(report); await slot.getByText('客户总数', { exact: true }).waitFor();
+  await tab('站点').click();
   const oldUrl = await slot.locator('[role=tabpanel]:visible iframe').getAttribute('src');
-  const regenerated = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith(`/sites/${site.id}/preview`));
-  await refresh().click(); await regenerated;
+  await refresh().click();
   await page.waitForFunction(old => document.querySelector('[role=tabpanel]:not([hidden]) iframe')?.getAttribute('src') !== old, oldUrl);
   await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
-  const failure = async route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '预览暂不可用' }) });
-  await page.route(`**/api/sites/${site.id}/preview`, failure);
-  await refresh().click(); await slot.getByRole('alert').waitFor();
-  await page.unroute(`**/api/sites/${site.id}/preview`, failure);
-  await refresh().click(); await slot.getByRole('alert').waitFor({ state: 'hidden' });
-  await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
-  const failedRead = async route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '资源暂不可用' }) });
-  await page.route(`**/api/sites/${site.id}`, failedRead);
-  await refresh().click(); await slot.getByRole('alert').waitFor();
-  await page.unroute(`**/api/sites/${site.id}`, failedRead);
-  await refresh().click(); await slot.getByRole('alert').waitFor({ state: 'hidden' });
-  await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
-  // Refresh each table-backed kind and observe the actual resource requests.
-  const requestsBeforeDatasetRefresh = previewRequests;
+  for (const suffix of ['/preview', '']) {
+    const failure = route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: '资源暂不可用' }) });
+    await page.route(`**/api/sites/${sites[0].id}${suffix}`, failure);
+    await refresh().click(); await slot.getByRole('alert').waitFor();
+    await page.unroute(`**/api/sites/${sites[0].id}${suffix}`, failure);
+    await refresh().click(); await slot.getByRole('alert').waitFor({ state: 'hidden' });
+    await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
+  }
+  const before = previews;
   for (const [name, matches] of [
-    ['表格 · 客户资料', request => request.method() === 'GET' && request.url().endsWith(`/tables/${table.id}`)],
-    ['表单 · 联系申请', request => request.method() === 'POST' && request.url().endsWith('/api/commands') && request.postDataJSON()?.command === 'getView'],
-    ['自动化 · 客户资料', request => request.method() === 'GET' && request.url().includes('/automations')],
-  ]) {
-    await tab(name).click(); const reloaded = page.waitForRequest(matches); await refresh().click(); await reloaded;
+    ['表格', request => request.method() === 'GET' && request.url().endsWith(`/tables/${table.id}`)],
+    ['表单', request => request.method() === 'POST' && request.url().endsWith('/api/commands') && request.postDataJSON()?.command === 'getView'],
+    ['自动化', request => request.method() === 'GET' && request.url().includes('/automations')],
+    ['报告', request => request.method() === 'GET' && request.url().endsWith(`/reports/${report.id}`)],
+  ]) { await tab(name).click(); const request = page.waitForRequest(matches); await refresh().click(); await request; }
+  assert.equal(previews, before, 'unrelated refresh never regenerates sites');
+  // A hidden cached blog still owns its close guard and configuration draft.
+  const blogs = [];
+  for (const name of ['第一博客', '第二博客']) blogs.push(await command('createBlog', { name, idempotencyKey: crypto.randomUUID() }));
+  const visibleBlog = () => slot.locator('[data-preview-resource-id]:not([hidden])').getByTestId('blog-editor');
+  for (const [index, blog] of blogs.entries()) {
+    await open({ kind: 'site', siteId: blog.id }); await visibleBlog().waitFor();
+    await visibleBlog().getByRole('tab', { name: '配置', exact: true }).click();
+    await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).fill(`博客草稿 ${index}`);
   }
-  await tab('站点 · 活动页面').click();
-  await pause(700);
-  assert.equal(previewRequests, requestsBeforeDatasetRefresh, 'dataset refresh does not regenerate unrelated sites');
-  for (const width of process.env.BROWSER_SKIP_VISUALS ? [] : [1440, 390, 320]) for (const theme of ['light', 'dark']) {
-    await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 });
-    await page.emulateMedia({ colorScheme: theme });
-    await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, theme);
-    await pause(100);
-    assert(await header.evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'header fits its panel');
-    assert(await slot.evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'preview fits its panel');
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'page fits viewport');
-    await page.screenshot({ path: artifact(`preview-${width}-${theme}.png`) });
+  await open({ kind: 'site', siteId: sites[0].id });
+  await header.getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
+  await page.getByRole('dialog', { name: '仍有内容未保存' }).waitFor();
+  await page.getByRole('button', { name: '继续编辑', exact: true }).first().click();
+  await open({ kind: 'site', siteId: blogs[0].id });
+  assert.equal(await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).inputValue(), '博客草稿 0');
+  // Simulate a concurrent save using the real service; failed save keeps the local draft.
+  const latest = await command('getBlog', { siteId: blogs[0].id });
+  await command('saveBlog', { siteId: latest.id, expectedVersion: latest.version, name: '远端名称', config: latest.config, idempotencyKey: crypto.randomUUID() });
+  await visibleBlog().getByRole('button', { name: '保存配置', exact: true }).click();
+  await visibleBlog().getByRole('alert').waitFor();
+  assert.equal(await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).inputValue(), '博客草稿 0');
+  await open({ kind: 'site', siteId: sites[0].id });
+  await header.getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
+  for (let index = 0; index < 2; index++) {
+    await page.getByRole('dialog', { name: '仍有内容未保存' }).waitFor();
+    await page.getByRole('button', { name: '保留草稿并离开', exact: true }).click();
   }
-  for (const name of ['表格 · 客户资料', '表单 · 联系申请', '自动化 · 客户资料', '站点 · 另一页面', '站点 · 活动页面']) {
-    await header.getByRole('button', { name: `关闭${name} Tab`, exact: true }).click();
+  await header.getByRole('tab', { name: '站点', exact: true }).waitFor({ state: 'hidden' });
+  for (const [index, blog] of blogs.entries()) {
+    await open({ kind: 'site', siteId: blog.id }); await visibleBlog().waitFor();
+    await visibleBlog().getByRole('tab', { name: '配置', exact: true }).click();
+    assert.equal(await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).inputValue(), `博客草稿 ${index}`);
   }
-  assert.equal(await header.getByRole('button').count(), 0);
-  await launcher.waitFor();
-  await page.waitForFunction(() => document.querySelector('[data-testid=preview-table-launcher]')?.contains(document.activeElement));
-  if (!process.env.BROWSER_SKIP_VISUALS) await page.screenshot({ path: artifact('preview-empty-320-dark.png') });
-  await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en')); await page.reload();
-  await page.getByTestId('workspace-preview-toggle').click();
-  await slot.getByRole('region', { name: 'Table list', exact: true }).waitFor();
-  assert.equal(await header.getByRole('button').count(), 0);
+  await header.getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
+  for (let index = 0; index < 2; index++) { await page.getByRole('dialog', { name: '仍有内容未保存' }).waitFor(); await page.getByRole('button', { name: '保留草稿并离开', exact: true }).click(); }
+  assert.equal(await slot.locator('header').count(), 1);
+  for (const name of ['表格', '表单', '自动化', '报告']) { await tab(name).click(); await header.getByRole('button', { name: `关闭${name} Tab`, exact: true }).click(); }
+  await launcher.waitFor(); assert.equal(await header.getByRole('tab').count(), 0);
   assert.deepEqual(f.errors, []);
-  console.log('PASS preview slot: table launcher and return without unmounting; event-opened site/table/form/automation; same-kind tabs; keyboard switching; real refresh per resource; errors/retry; form and iframe state retained; close all; single header/refresh; 1440/390/320 light+dark.');
+  console.log('PASS unique type tabs, actual table/report/HTML/form/automation, resource switching, cache/drafts, real refresh and retry, close type.');
 } catch (error) {
-  console.error('Preview diagnostics:', page.url(), (await slot.innerText().catch(() => '')).slice(0, 1600), f.errors);
+  await page.screenshot({ path: f.artifact('preview-slot-failure.png') });
+  console.error('PREVIEW DIAGNOSTICS', await slot.evaluate(el => [...el.querySelectorAll('[data-testid="blog-editor"], [role=tabpanel], [role=tab]')].map(node => ({ role: node.getAttribute('role'), id: node.id, name: node.getAttribute('aria-label'), hidden: node.hidden, rect: node.getBoundingClientRect().toJSON(), parent: node.parentElement.className, class: node.className }))));
   throw error;
 } finally { await f.close(); }

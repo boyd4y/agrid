@@ -1,3 +1,4 @@
+import type { OpenPreviewInput } from "@tabdo/shared";
 import { workspaceHeaders } from "@/lib/workspace-scope";
 import { FloatingAssistantFrame } from "./FloatingAssistantFrame";
 import { FloatingThreadControls } from "./FloatingThreadControls";
@@ -59,12 +60,11 @@ import { prepareNativeChatRequest, shouldContinueNativeQuestions } from "@/lib/n
 
 export type { HarnessId } from "@/lib/harness";
 
-export type OpenPreviewPayload = {
+export type OpenPreviewPayload = Omit<OpenPreviewInput, "tableId" | "siteId" | "reportId" | "viewId"> & {
   siteId?: string | null;
-  kind?: string;
+  reportId?: string | null;
   tableId?: string | null;
   viewId?: string | null;
-  open?: boolean;
 };
 
 type Props = {
@@ -182,6 +182,7 @@ function extractOpenPreview(message: {
       kind: output.kind ?? input.kind ?? "table",
       tableId: (output.tableId ?? input.tableId) as string | null | undefined,
       siteId: output.siteId ?? input.siteId,
+      reportId: output.reportId ?? input.reportId,
       viewId: (output.viewId ?? input.viewId) as string | null | undefined,
     };
   }

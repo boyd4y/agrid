@@ -22,7 +22,7 @@ try {
     await editor.getByRole('tab', { name: l.settings, exact: true }).click();
     const draftText = `${mode} version 1 configuration draft`, serverText = `${mode} saved server version 2`;
     await editor.getByLabel(l.description, { exact: true }).fill(draftText);
-    if (mode === 'embedded') await page.getByTestId('preview-slot-header').getByRole('button', { name: `关闭站点 · ${blog.name} Tab`, exact: true }).click();
+    if (mode === 'embedded') await page.getByTestId('preview-slot-header').getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
     else await editor.getByRole('link', { name: l.back, exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: l.leave, exact: true }).click();
     await editor.waitFor({ state: 'hidden' });
