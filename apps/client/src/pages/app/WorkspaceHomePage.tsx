@@ -114,7 +114,7 @@ export function WorkspaceHomePage() {
           <ChatPanel tableId={null} resourceKey="workspace" onMutated={notifyTableMutated} onOpenPreview={handleOpenPreview} previewOpen={previewOpen} onTogglePreview={() => setPreviewOpen((open) => !open)} variant="home" />
         </ResizablePanel>
         <ResizableHandle withHandle data-testid="workspace-resize-handle" className={previewOpen ? undefined : "hidden"} />
-        <ResizablePanel id="workspace-preview" panelRef={previewPanelRef} defaultSize="50%" minSize="22%" maxSize="78%" collapsible collapsedSize="0%" onResize={(size) => {
+        <ResizablePanel id="workspace-preview" panelRef={previewPanelRef} defaultSize="50%" minSize={narrow ? "22%" : "264px"} maxSize="78%" collapsible collapsedSize="0%" onResize={(size) => {
           if (size.asPercentage > 0) expandedSize.current = size.asPercentage;
           setPreviewOpen(size.asPercentage > 0);
         }} className="flex h-full min-h-0 flex-col">
