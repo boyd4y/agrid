@@ -38,6 +38,8 @@ export function ApiKeysSettings() {
   const [deleting, setDeleting] = useState<ApiKeyInfo | null>(null);
   const [grok, setGrok] = useState<{ key: ApiKeyInfo; secret?: string } | null>(null);
   const [enablingGrok, setEnablingGrok] = useState(false);
+  const [grokPicker, setGrokPicker] = useState(false);
+  const [grokTableIds, setGrokTableIds] = useState<string[]>([]);
   const grokBusy = useRef(false);
   const busy = useRef(false);
   const pagination = useArrayPagination(keys);
@@ -81,14 +83,27 @@ export function ApiKeysSettings() {
     try { await navigator.clipboard.writeText(value); toast.success(text("copied")); }
     catch { toast.error(text("copyFailed")); }
   }
+  async function startGrok() {
+    if (!canManage || grokBusy.current) return;
+    grokBusy.current = true; setEnablingGrok(true);
+    try {
+      const current = await api.listApiKeys();
+      setKeys(current.keys); setTables(current.tables);
+      const existing = current.keys.find(key => key.name === "Grok Bot");
+      if (existing) { setGrok({ key: existing }); return; }
+      if (!current.tables.length) { toast.error(text("grok.noTables")); return; }
+      setGrokTableIds([]); setGrokPicker(true);
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
+    finally { grokBusy.current = false; setEnablingGrok(false); }
+  }
   async function enableGrok() {
     if (!canManage || grokBusy.current) return;
     grokBusy.current = true; setEnablingGrok(true);
     try {
-      const saved = await enableGrokBot(api);
-      if (!saved) { toast.error(text("grok.noTables")); return; }
+      const saved = await enableGrokBot(api, grokTableIds);
+      if (!saved) { toast.error(text("grok.selectTables")); return; }
       setKeys(current => [saved.key, ...current.filter(key => key.id !== saved.key.id)]); pagination.resetPage();
-      setGrok(saved);
+      setGrokPicker(false); setGrok(saved);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
     finally { grokBusy.current = false; setEnablingGrok(false); }
   }
@@ -130,8 +145,24 @@ export function ApiKeysSettings() {
     </header>
     {!loading && !error && canManage && <div className="flex flex-wrap items-center justify-between gap-3 border-y py-4">
       <div className="flex min-w-0 flex-col gap-1"><h3 className="text-sm font-medium">Grok Bot</h3><p className="text-sm text-muted-foreground">{text("grok.description")}</p></div>
-      <Button variant="outline" size="sm" disabled={enablingGrok} onClick={() => void enableGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
+      <Button variant="outline" size="sm" disabled={enablingGrok} onClick={() => void startGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
     </div>}
+    <Dialog open={grokPicker} onOpenChange={open => { if (!grokBusy.current) setGrokPicker(open); }}>
+      <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+        <DialogHeader><DialogTitle>{text("grok.enable")}</DialogTitle><DialogDescription>{text("grok.selectTables")}</DialogDescription></DialogHeader>
+        <FieldSet>
+          <FieldLegend variant="label">{text("permissions")} · {text("operations.canRead")}</FieldLegend>
+          <FieldGroup className="max-h-64 overflow-y-auto rounded-md border p-3">
+            {tables.map(table => <Field key={table.id} orientation="horizontal" data-disabled={enablingGrok}>
+              <Checkbox id={`${id}-grok-table-${table.id}`} disabled={enablingGrok} checked={grokTableIds.includes(table.id)} onCheckedChange={checked => setGrokTableIds(current => checked === true ? [...current, table.id] : current.filter(value => value !== table.id))} />
+              <FieldLabel htmlFor={`${id}-grok-table-${table.id}`} className="min-w-0 break-words">{table.workspaceName} / {table.name}</FieldLabel>
+            </Field>)}
+          </FieldGroup>
+          <FieldDescription>{text("grok.selected", { tables: tables.filter(table => grokTableIds.includes(table.id)).map(table => `${table.workspaceName} / ${table.name}`).join(", ") || text("grok.none") })}</FieldDescription>
+        </FieldSet>
+        <Button disabled={enablingGrok || !grokTableIds.length} onClick={() => void enableGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
+      </DialogContent>
+    </Dialog>
     <Dialog open={grok !== null} onOpenChange={open => { if (!open) setGrok(null); }}>
       <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>{text("grok.title")}</DialogTitle><DialogDescription>{text(grok?.secret ? "once" : "grok.existing")}</DialogDescription></DialogHeader>

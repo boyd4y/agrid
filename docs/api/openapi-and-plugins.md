@@ -13,7 +13,7 @@ GraphQL is available separately at `POST /api/graphql`; its full schema and cale
 ## Enable Grok Bot
 
 1. As a workspace owner or admin, open **Settings → API Key → Enable Grok Bot**.
-2. Have at least one table. The action creates a `Grok Bot` key with **Read only** on all tables currently returned by key management. Future tables are not granted automatically.
+2. Select at least one table in the picker and confirm the listed table names. Selection starts empty. The action creates a `Grok Bot` key with **Read only** on the selected tables. Future tables are not granted automatically; edit the key later to expand access.
 3. Save the secret displayed once. The dialog includes copy controls for the secret, OpenAPI URL, and plugin manifest URL.
 4. Import the OpenAPI URL into your Grok Bot connector and paste the secret into its Bearer authentication field. When configuring a header manually, send `Authorization: Bearer tab_...`.
 

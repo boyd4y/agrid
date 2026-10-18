@@ -6,13 +6,14 @@ type KeyApi = {
 };
 
 /** Refresh active keys before enabling; secrets are only available on creation. */
-export async function enableGrokBot(api: KeyApi) {
+export async function enableGrokBot(api: KeyApi, tableIds: readonly string[]) {
   const current = await api.listApiKeys();
   const existing = current.keys.find(key => key.name === "Grok Bot");
   if (existing) return { key: existing };
-  if (!current.tables.length) return null;
+  const selected = current.tables.filter(table => tableIds.includes(table.id));
+  if (!selected.length) return null;
   return api.createApiKey({
     name: "Grok Bot",
-    permissions: current.tables.map(table => ({ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false })),
+    permissions: selected.map(table => ({ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false })),
   });
 }
