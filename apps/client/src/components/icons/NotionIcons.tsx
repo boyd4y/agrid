@@ -177,3 +177,22 @@ export function NiX(props: IconProps) {
   );
 }
 
+
+export function NiCalendar(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" {...s} />
+      <path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17M7.5 14h2M14.5 14h2M7.5 17.5h2" {...s} />
+    </Ni>
+  );
+}
+
+export function NiMoreHorizontal(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+    </Ni>
+  );
+}

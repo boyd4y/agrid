@@ -46,7 +46,7 @@ export function CalendarPage() {
   const narrow = useMediaQuery("(max-width: 767px)");
   const [calendars, setCalendars] = useState<Calendar[]>([]), [calendarId, setCalendarId] = useState("");
   const [members, setMembers] = useState<CalendarMember[]>([]);
-  const [people, setPeople] = useState<CalendarPerson[]>([]), [personId, setPersonId] = useState("all"), [bookings, setBookings] = useState<Booking[]>([]);
+  const [people, setPeople] = useState<CalendarPerson[]>([]), [bookings, setBookings] = useState<Booking[]>([]);
   const [range, setRange] = useState<{ rangeStart: string; rangeEnd: string }>(initialRange), [view, setView] = useState(savedView), [viewTitle, setViewTitle] = useState(""), [visibleRange, setVisibleRange] = useState<{ start: Date; end: Date }>();
   const [loading, setLoading] = useState(true), [peopleLoading, setPeopleLoading] = useState(false), [bookingsLoading, setBookingsLoading] = useState(false);
   const [error, setError] = useState(""), [peopleError, setPeopleError] = useState(""), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
@@ -71,7 +71,7 @@ export function CalendarPage() {
   function rememberFocus() { const element = document.activeElement; if (element instanceof HTMLElement && !element.closest("[role=menu]")) focusReturn.current = element; }
   function chooseCalendar(id: string) {
     if (id === activeId.current) return;
-    activeId.current = id; setCalendarId(id); setPeople([]); setMembers([]); setPersonId("all"); setBookings([]); setPeopleError(""); setError(""); setPeopleLoading(!!id);
+    activeId.current = id; setCalendarId(id); setPeople([]); setMembers([]); setBookings([]); setPeopleError(""); setError(""); setPeopleLoading(!!id);
   }
   const loadDirectory = async () => {
     const result = await calendarCommand("listCalendars", {});
@@ -95,9 +95,9 @@ export function CalendarPage() {
   }, [calendarId, revision]);
   const loadBookings = useCallback(async (signal?: AbortSignal) => {
     if (!calendarId || !range) return;
-    const result = await calendarCommand("queryBookings", { calendarId, ...range, ...(personId === "all" ? {} : { userId: personId }) }, signal);
+    const result = await calendarCommand("queryBookings", { calendarId, ...range }, signal);
     if (!signal?.aborted && activeId.current === calendarId) setBookings(result.items);
-  }, [calendarId, personId, range]);
+  }, [calendarId, range]);
   useEffect(() => {
     const controller = new AbortController(); setError(""); setBookings([]); setBookingsLoading(!!calendarId && !!range);
     void loadBookings(controller.signal).catch(cause => { if (!controller.signal.aborted) setError(cause.message); }).finally(() => { if (!controller.signal.aborted) setBookingsLoading(false); });
@@ -143,17 +143,11 @@ export function CalendarPage() {
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
         <div className="flex flex-wrap items-center gap-3 border-b px-3 py-3 md:px-5" data-testid="calendar-toolbar">
           <Button ref={listTrigger} variant="ghost" size="icon" aria-label={t(narrow ? "calendarList" : sidebarOpen ? "hideCalendars" : "showCalendars")} aria-expanded={narrow ? mobileList : sidebarOpen} onClick={() => narrow ? setMobileList(true) : setSidebarOpen(value => !value)}><PanelLeft /></Button>
-          <div className="min-w-0 flex-1 basis-3/4 md:basis-auto"><h2 className="text-base font-semibold">{viewTitle}</h2><p className="hidden text-xs text-muted-foreground md:block">{dateRange}</p></div>
+          <div className="min-w-0 flex-1 basis-3/4 md:basis-auto"><h2 className="text-base font-semibold">{viewTitle}</h2><p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground"><span className="hidden md:inline">{dateRange}</span><span className="truncate" title={displayZone}>{displayZone}</span>{(loading || peopleLoading || bookingsLoading) && <span role="status" className="shrink-0">{t("loading")}</span>}</p></div>
           <div className="flex items-center gap-1"><Button variant="outline" size="icon" aria-label={t("previous")} onClick={() => calendarRef.current?.getApi().prev()}><ChevronLeft /></Button><Button variant="outline" size="sm" onClick={() => calendarRef.current?.getApi().today()}>{t("today")}</Button><Button variant="outline" size="icon" aria-label={t("next")} onClick={() => calendarRef.current?.getApi().next()}><ChevronRight /></Button></div>
           <Select value={effectiveView} onValueChange={value => { setView(value); try { localStorage.setItem(viewKey, value); } catch { /* Keep the in-memory preference. */ } calendarRef.current?.getApi().changeView(value); }}><SelectTrigger className="w-24" aria-label={t("view")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{views.map(value => <SelectItem key={value} value={value}>{t(`views.${value}`)}</SelectItem>)}</SelectGroup></SelectContent></Select>
           {calendar && <Button size="sm" disabled={pending || peopleLoading || !!peopleError || !!error} onClick={() => startDraft(new Date(Math.ceil(Date.now() / 1800000) * 1800000).toISOString())}><Plus data-icon="inline-start" />{t("newBooking")}</Button>}
           <Button variant="ghost" size="icon" aria-label={t("refresh")} disabled={loading || pending} onClick={() => setRevision(value => value + 1)}><RefreshCw /></Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2 md:px-5">
-          {calendar && <span className="max-w-48 truncate text-sm font-medium">{calendar.name}</span>}
-          {members.length > 0 && <Select value={personId} onValueChange={value => { setBookings([]); setPersonId(value); }} disabled={pending || peopleLoading}><SelectTrigger className="w-36" aria-label={t("person")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">{t("allPeople")}</SelectItem>{members.map(item => <SelectItem key={item.userId} value={item.userId}>{item.name} · {t(`memberKind.${item.kind}`)} · {item.userId}</SelectItem>)}</SelectGroup></SelectContent></Select>}
-          <span className="text-xs text-muted-foreground">{displayZone}</span>
-          {(loading || peopleLoading || bookingsLoading) && <span role="status" className="text-xs text-muted-foreground">{t("loading")}</span>}
         </div>
         {(error || peopleError) && <ListErrorState className="min-h-0 py-3" description={error || peopleError} onRetry={() => setRevision(value => value + 1)} />}
         {planError && <ListErrorState className="min-h-0 py-3" description={planError} onRetry={() => setRevision(value => value + 1)} />}
@@ -168,7 +162,7 @@ export function CalendarPage() {
     <Sheet open={mobileList} onOpenChange={setMobileList}><SheetContent className="overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); listTrigger.current?.focus(); }}><SheetHeader><SheetTitle>{t("calendarList")}</SheetTitle><SheetDescription>{t("chooseCalendar")}</SheetDescription><Button variant="ghost" size="sm" onClick={() => setMobileList(false)}>{t("close")}</Button></SheetHeader>{sidebar}</SheetContent></Sheet>
     {selectedPlan && <ScheduledOccurrenceSheet occurrence={selectedPlan} onClose={() => setSelectedPlan(undefined)} onSaved={() => setRevision(value => value + 1)} />}
     {(management?.kind === "new" || management?.kind === "edit") && <CalendarEditor calendar={management.kind === "edit" ? management.calendar : undefined} onClose={() => setManagement(undefined)} onSaved={async savedCalendar => { await loadDirectory(); if (management.kind === "new") chooseCalendar(savedCalendar.id); }} />}
-    {draft && calendar && <BookingDialog calendarId={calendarId} people={people} members={members} userId={personId === "all" ? undefined : personId} timeZone={zone} start={draft.start} duration={draft.duration} booking={draft.booking} initialError={draft.error} onClose={() => { draftOpen.current = false; setDraft(undefined); }} onSaved={saved} />}
+    {draft && calendar && <BookingDialog calendarId={calendarId} people={people} members={members} timeZone={zone} start={draft.start} duration={draft.duration} booking={draft.booking} initialError={draft.error} onClose={() => { draftOpen.current = false; setDraft(undefined); }} onSaved={saved} />}
     {management?.kind === "archive" && <DeleteConfirmation open onOpenChange={open => { if (!open) setManagement(undefined); }} labels={{ confirmDelete: t("confirmArchive"), deleting: t("archiving") }} title={t("archiveTarget", { name: management.calendar.name })} description={t("archiveHint")} onConfirm={async () => { const item = management.calendar; await calendarCommand("archiveCalendar", { calendarId: item.id, expectedVersion: item.version, idempotencyKey: `archive:${item.id}:${item.version}` }); await loadDirectory(); }} />}
   </div>;
 }
