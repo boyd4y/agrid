@@ -255,6 +255,8 @@
     "report": "Reports",
     "home": "Preview home",
     "chooseResource": "Choose resource",
+    "back": "Back",
+    "chooseType": "Select {{type}}",
     "selectResource": "Select resource · {{name}}",
     "searchResources": "Search resources…",
     "noMatches": "No matching resources",
