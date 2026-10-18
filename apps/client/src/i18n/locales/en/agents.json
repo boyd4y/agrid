@@ -2,7 +2,7 @@
   "defaultPersona": "You are tabdo's AI assistant. Help users with data in concise English.",
   "statusLoadFailed": "Failed to load runtime config",
   "notFound": "Agent not found or not in this workspace",
-  "fillRequired": "Fill in name, persona, and model.",
+  "fillRequired": "Fill in name and persona.",
   "saved": "Agent configuration saved",
   "created": "Agent created",
   "saveFailed": "Failed to save",

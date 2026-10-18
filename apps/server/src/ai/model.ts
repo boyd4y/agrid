@@ -25,7 +25,7 @@ export function listHarnesses(): HarnessStatus[] {
     const runtimeProviders = listRuntimeProviders(process.env, harness);
     const local = runtimeProviders.some(entry => entry.id === "local" && entry.available);
     const remote = runtimeProviders.some(entry => entry.id !== "local" && entry.available);
-    return { runtimeProviders, configured: local || remote, defaultRuntime: harness === "pi" && local ? "local" : remote ? "sandbox" : "local" };
+    return { runtimeProviders, configured: local || remote, defaultRuntime: harness === "pi" && local && env("NODE_ENV") !== "production" ? "local" : remote ? "sandbox" : "local" };
   };
   const codexRuntime = runtimes("codex"), claudeRuntime = runtimes("claude"), piRuntime = runtimes("pi"), selectedPi = resolvePiProvider(process.env);
   const codex = Boolean(env("OPENAI_API_KEY") || env("CODEX_API_KEY")), claude = Boolean(env("ANTHROPIC_API_KEY") || env("CLAUDE_API_KEY"));

@@ -6,7 +6,11 @@ const value = (env: RuntimeEnvironment, key: string) => env[key]?.trim();
 
 export function resolveRuntimeProvider(mode: RuntimeMode, selected: SandboxProvider | undefined, env: RuntimeEnvironment): RuntimeProvider {
   if (mode === "local") return "local";
-  const provider = sandboxProviderSchema.safeParse(selected ?? value(env, "SANDBOX_PROVIDER") ?? "vercel");
+  // Keep a stable schema fallback when no remote credentials are configured.
+  const preferred = ["e2b", "vercel", "railway"].find(id =>
+    listRuntimeProviders(env).some(entry => entry.id === id && entry.available),
+  ) ?? "vercel";
+  const provider = sandboxProviderSchema.safeParse(selected ?? value(env, "SANDBOX_PROVIDER") ?? preferred);
   if (!provider.success) throw new ServiceError(503, { message: "SANDBOX_PROVIDER 必须为 vercel、e2b 或 railway" });
   return provider.data;
 }

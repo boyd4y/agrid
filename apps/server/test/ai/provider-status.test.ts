@@ -50,3 +50,26 @@ test("Node status follows the same complete provider selection as native Pi", ()
     }
   }
 });
+
+test("Pi defaults to local in development and sandbox in production when remote is available", () => {
+  const fixture = { NODE_ENV: "development", HARNESS_LOCAL_ENABLED: "true", E2B_API_KEY: "fixture",
+    VERCEL_OIDC_TOKEN: "", VERCEL_TOKEN: "", RAILWAY_API_TOKEN: "" };
+  const previous = new Map(Object.keys(fixture).map(name => [name, process.env[name]]));
+  try {
+    Object.assign(process.env, fixture);
+    const pi = () => listHarnesses().find(harness => harness.id === "pi")!;
+    assert.equal(pi().defaultRuntime, "local");
+    process.env.NODE_ENV = "production";
+    assert.equal(pi().defaultRuntime, "sandbox");
+    process.env.E2B_API_KEY = "";
+    assert.equal(pi().defaultRuntime, "local");
+    process.env.E2B_API_KEY = "fixture";
+    process.env.HARNESS_LOCAL_ENABLED = "false";
+    process.env.NODE_ENV = "development";
+    assert.equal(pi().defaultRuntime, "sandbox");
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+});

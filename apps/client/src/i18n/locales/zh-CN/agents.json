@@ -2,7 +2,7 @@
   "defaultPersona": "你是 tabdo 的 AI 助手，用简洁中文帮助用户处理数据。",
   "statusLoadFailed": "运行配置加载失败",
   "notFound": "智能体不存在或不属于当前工作区",
-  "fillRequired": "请填写名称、人设和模型。",
+  "fillRequired": "请填写名称和人设。",
   "saved": "智能体配置已保存",
   "created": "智能体已创建",
   "saveFailed": "保存失败",

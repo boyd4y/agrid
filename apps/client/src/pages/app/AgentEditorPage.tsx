@@ -45,9 +45,9 @@ export function AgentEditorPage() {
     if (patch.sandboxProvider !== undefined) setSandboxProvider(patch.sandboxProvider);
     if (patch.runtime !== undefined) setRuntime(patch.runtime);
   };
-  const configuration = { name: agentName.trim(), image, persona: { systemPrompt: persona.trim(), defaultHarness: harness, defaultModel: model.trim(), runtime, sandboxProvider, skillNames: selectedSkills.map((skill) => skill.name), disabledTools: [...disabledTools].sort() } };
+  const configuration = { name: agentName.trim(), image, persona: { systemPrompt: persona.trim(), defaultHarness: "pi" as const, defaultModel: "__harness_default__", runtime, sandboxProvider, skillNames: selectedSkills.map((skill) => skill.name), disabledTools: [...disabledTools].sort() } };
   const dirty = JSON.stringify(configuration) !== initialConfiguration;
-  const basicValid = Boolean(agentName.trim() && persona.trim() && model.trim());
+  const basicValid = Boolean(agentName.trim() && persona.trim());
   useEffect(() => {
     let cancelled = false;setSection("basic");setLoading(true);setReady(false);setCreateError(null);setEditing(null);
     void Promise.all([api.listSkills(), agentId ? api.listMembers() : Promise.resolve(null), fetch("/api/chat/status").then((r) => { if (!r.ok) throw new Error(t("statusLoadFailed"));return r.json(); })]).then(([library, members, status]) => {
@@ -57,7 +57,7 @@ export function AgentEditorPage() {
       if (agentId && !agent) throw new Error(t("notFound"));
       const selected = agent?.agent?.persona?.defaultHarness ?? "pi";
       setImage(agent?.image ?? null);setEditing(agent ?? null);setAgentName(agent?.name ?? "");setPersona(agent?.agent?.persona?.systemPrompt ?? t("defaultPersona"));
-      setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__");
+      setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel("__harness_default__");
       setRuntime(agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"));
       const selectedSandboxProvider = agent?.agent?.persona?.sandboxProvider ?? (agent ? "vercel" : status.defaultSandboxProvider ?? "vercel");
       setSandboxProvider(selectedSandboxProvider);
@@ -67,8 +67,8 @@ export function AgentEditorPage() {
       setSkillNames(selectedNames); setDisabledTools(selectedDisabledTools);
       setInitialConfiguration(JSON.stringify({ name: (agent?.name ?? "").trim(), image: agent?.image ?? null, persona: {
         systemPrompt: (agent?.agent?.persona?.systemPrompt ?? t("defaultPersona")).trim(),
-        defaultHarness: selected,
-        defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__").trim(),
+        defaultHarness: "pi",
+        defaultModel: "__harness_default__",
         runtime: agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"),
         sandboxProvider: selectedSandboxProvider,
         skillNames: selectedNames, disabledTools: [...selectedDisabledTools].sort(),

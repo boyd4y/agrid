@@ -1,4 +1,4 @@
-import { BookOpen, Lock, Monitor, Cloud, X } from "lucide-react";
+import { BookOpen, Monitor, Cloud, X } from "lucide-react";
 import type { SkillSummary, SandboxProvider, RuntimeProviderStatus } from "@tabdo/shared";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@tabdo/ui/components/field";
 import { Card, CardHeader, CardTitle, CardDescription } from "@tabdo/ui/components/card";
@@ -6,7 +6,6 @@ import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@tabdo/ui/components/select";
-import { HarnessLogo } from "@/components/icons/HarnessLogos";
 import { SkillPicker } from "@/components/skills/SkillPicker";
 import type { HarnessId } from "@/lib/harness";
 import { AvatarPicker } from "@/components/members/AvatarPicker";
@@ -15,18 +14,23 @@ import { useTranslation } from "react-i18next";
 export type HarnessStatus = { id: HarnessId; label: string; available: boolean; models: { id: string; label: string }[]; defaultModel: string; provider?: string; hint?: string; runtimeProviders?: RuntimeProviderStatus[]; runtimeModes: ("local" | "sandbox")[]; defaultRuntime: "local" | "sandbox" };
 export type AgentBasicValues = { name: string; image: string | null; persona: string; harness: HarnessId; model: string; runtime: "local" | "sandbox"; sandboxProvider: SandboxProvider };
 
-export function AgentBasicFields({ value, onChange, harnesses, harnessLocked, disabled, onAvatarProcessingChange }: {
+export function AgentBasicFields({ value, onChange, harnesses, disabled, onAvatarProcessingChange }: {
   value: AgentBasicValues;
   onChange: (patch: Partial<AgentBasicValues>) => void;
   harnesses: HarnessStatus[];
-  harnessLocked: boolean;
+  harnessLocked?: boolean;
   disabled?: boolean;
   onAvatarProcessingChange?: (processing: boolean) => void;
 }) {
   const { t } = useTranslation("agents");
   const current = harnesses.find((harness) => harness.id === value.harness);
   const selectedProvider = current?.runtimeProviders?.find(entry => entry.id === value.sandboxProvider);
-  const customModel = !current?.models.some((model) => model.id === value.model);
+  const availableModes = (current?.runtimeModes ?? []).filter(mode => current?.runtimeProviders?.some(
+    entry => entry.available && (mode === "local" ? entry.id === "local" : entry.id !== "local"),
+  ));
+  const providerOptions = current?.runtimeProviders?.filter(entry =>
+    entry.id !== "local" && (entry.available || entry.id === value.sandboxProvider),
+  ) ?? [];
   return <FieldGroup className="gap-4">
     <FieldGroup className="gap-4 @lg/field-group:grid @lg/field-group:grid-cols-[auto_1fr]">
     <AvatarPicker name={value.name || t("agent")} image={value.image} kind="agent" onChange={(image) => onChange({ image })} disabled={disabled} onProcessingChange={onAvatarProcessingChange} />
@@ -39,55 +43,30 @@ export function AgentBasicFields({ value, onChange, harnesses, harnessLocked, di
       <FieldLabel htmlFor="persona">{t("persona")}</FieldLabel>
       <Textarea id="persona" required maxLength={20_000} value={value.persona} onChange={(e) => onChange({ persona: e.target.value })} rows={4} placeholder={t("personaPlaceholder")} />
     </Field>
-    <FieldGroup className="gap-4 @xl/field-group:grid @xl/field-group:grid-cols-2">
-      <Field className="gap-2" data-disabled={harnessLocked}>
-        <FieldLabel htmlFor="agent-harness">Harness</FieldLabel>
-        <Select value={value.harness} disabled={harnessLocked} onValueChange={(id) => {
-          if (!id) return;
-          const selected = harnesses.find((item) => item.id === id);
-          onChange({ harness: id as HarnessId, model: selected?.defaultModel ?? "__harness_default__", runtime: selected?.defaultRuntime ?? "sandbox" });
-        }}>
-          <SelectTrigger id="agent-harness"><SelectValue placeholder={t("pickHarness")}>{current && <span className="flex items-center gap-2"><HarnessLogo id={current.id} />{current.label}</span>}</SelectValue></SelectTrigger>
-          <SelectContent><SelectGroup>{harnesses.map((item) => <SelectItem key={item.id} value={item.id}><HarnessLogo id={item.id} />{item.label}{!item.available && t("notConfigured")}</SelectItem>)}</SelectGroup></SelectContent>
-        </Select>
-        {harnessLocked && <FieldDescription><Lock className="mr-1 inline size-3" />{t("harnessLocked")}</FieldDescription>}
-      </Field>
-      <Field className="gap-2">
-        <FieldLabel htmlFor="agent-model">{t("model")}</FieldLabel>
-        <Select value={customModel ? "__custom_model__" : value.model} onValueChange={(id) => { if (id) onChange({ model: id === "__custom_model__" ? "" : id }); }}>
-          <SelectTrigger id="agent-model"><SelectValue placeholder={t("pickModel")} /></SelectTrigger>
-          <SelectContent><SelectGroup>{(current?.models ?? []).map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}<SelectItem value="__custom_model__">{t("customModel")}</SelectItem></SelectGroup></SelectContent>
-        </Select>
-        <FieldDescription>{t("modelHint")}</FieldDescription>
-      </Field>
-    </FieldGroup>
-    {customModel && <Field className="gap-2">
-      <FieldLabel htmlFor="agent-custom-model">{t("modelId")}</FieldLabel>
-      <Input id="agent-custom-model" required maxLength={200} value={value.model} onChange={(event) => onChange({ model: event.target.value })} placeholder={t("modelIdPlaceholder")} />
-    </Field>}
-    <Field className="gap-2">
+    {availableModes.length > 1 && <Field className="gap-2">
       <FieldLabel htmlFor="agent-runtime">{t("runtime")}</FieldLabel>
       <Select value={value.runtime} onValueChange={(mode) => { if (mode === "local" || mode === "sandbox") onChange({ runtime: mode }); }}>
         <SelectTrigger id="agent-runtime" data-testid="agent-runtime-select"><SelectValue /></SelectTrigger>
-        <SelectContent><SelectGroup>{(current?.runtimeModes ?? ["local", "sandbox"]).map((mode) => <SelectItem key={mode} value={mode} disabled={mode === "local" && current?.runtimeProviders?.find(entry => entry.id === "local")?.available === false}>{mode === "local" ? <Monitor /> : <Cloud />}{mode === "local" ? t("runtimeLocal") : "Sandbox"}</SelectItem>)}</SelectGroup></SelectContent>
+        <SelectContent><SelectGroup>{availableModes.map((mode) => <SelectItem key={mode} value={mode} disabled={mode === "local" && current?.runtimeProviders?.find(entry => entry.id === "local")?.available === false}>{mode === "local" ? <Monitor /> : <Cloud />}{mode === "local" ? t("runtimeLocal") : "Sandbox"}</SelectItem>)}</SelectGroup></SelectContent>
       </Select>
       <FieldDescription>{t("runtimeChangeHint")}</FieldDescription>
       {!current?.available && current?.hint && <FieldDescription>{current.hint}</FieldDescription>}
-    </Field>
-    {value.runtime === "sandbox" && <Field className="gap-2">
+    </Field>}
+    {value.runtime === "sandbox" && providerOptions.length > 1 && <Field className="gap-2">
       <FieldLabel htmlFor="agent-sandbox-provider">{t("sandboxProvider")}</FieldLabel>
       <Select value={value.sandboxProvider} onValueChange={(id) => { if (id === "vercel" || id === "e2b" || id === "railway") onChange({ sandboxProvider: id }); }}>
         <SelectTrigger id="agent-sandbox-provider" data-testid="agent-sandbox-provider-select"><SelectValue /></SelectTrigger>
-        <SelectContent><SelectGroup>{(["vercel", "e2b", "railway"] as const).map(id => {
-          const available = current?.runtimeProviders?.find(entry => entry.id === id)?.available ?? false;
+        <SelectContent><SelectGroup>{providerOptions.map(({ id, available }) => {
           return <SelectItem key={id} value={id} disabled={!available}>{id === "e2b" ? "E2B" : id === "railway" ? "Railway" : "Vercel"}{!available && t("providerUnavailable")}</SelectItem>;
         })}</SelectGroup></SelectContent>
       </Select>
       <FieldDescription>{t("sandboxProviderHint")}</FieldDescription>
+    </Field>}
+    {value.runtime === "sandbox" && <>
       {value.sandboxProvider === "railway" && <FieldDescription>{t("railwayLifecycleHint")}</FieldDescription>}
       {value.sandboxProvider === "railway" && selectedProvider?.available === false && <FieldDescription>{selectedProvider.reason === "railway_harness_unavailable" ? t("railwayHarnessUnavailable") : selectedProvider.hint}</FieldDescription>}
       {value.sandboxProvider === "e2b" && value.harness !== "pi" && <FieldDescription>{t("e2bBridgeUnavailable")}</FieldDescription>}
-    </Field>}
+    </>}
     {value.runtime === "local" && <FieldDescription>{t("runtimeLocalTrust")}</FieldDescription>}
   </FieldGroup>;
 }

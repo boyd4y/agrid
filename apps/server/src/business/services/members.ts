@@ -1,3 +1,4 @@
+import { listHarnesses } from "../../ai/model.js";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { DEFAULT_DISABLED_PLATFORM_TOOLS, DISABLED_TOOLS_SCHEMA, sandboxProviderSchema, type SkillDocument, type AgentToolCatalog } from "@tabdo/shared";
@@ -86,10 +87,8 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
           systemPrompt: z.string().trim().min(1).max(20_000).optional(),
           skillNames: z.array(z.string().min(1).max(64)).max(80).optional(),
           disabledTools: DISABLED_TOOLS_SCHEMA.optional(),
-          defaultHarness: z.enum(["codex", "claude", "pi"]).optional(),
           runtime: z.enum(["local", "sandbox"]).optional(),
           sandboxProvider: sandboxProviderSchema.optional(),
-          defaultModel: z.string().optional(),
           avatarColor: z.string().optional(),
         })
         .optional(),
@@ -108,13 +107,12 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
     systemPrompt: body.persona?.systemPrompt,
     skillNames: body.persona?.skillNames,
     disabledTools: body.persona?.disabledTools ?? [...DEFAULT_DISABLED_PLATFORM_TOOLS],
-    defaultHarness: body.persona?.defaultHarness ?? ("pi" as const),
-    defaultModel: body.persona?.defaultModel?.trim() || NATIVE_DEFAULT_MODEL,
-    runtime: body.persona?.runtime ?? (body.persona?.defaultHarness && body.persona.defaultHarness !== "pi" ? "sandbox" as const : "local" as const),
+    defaultHarness: "pi" as const,
+    defaultModel: NATIVE_DEFAULT_MODEL,
+    runtime: body.persona?.runtime ?? listHarnesses().find(harness => harness.id === "pi")!.defaultRuntime,
     sandboxProvider: body.persona?.sandboxProvider,
     avatarColor: body.persona?.avatarColor,
   };
-  if (persona.defaultHarness !== "pi" && ["openrouter/free", "auto"].includes(persona.defaultModel)) throw new ServiceError(400, {message: "请选择此 Harness 的原生模型或 Harness 默认模型"});
 
   persona.disabledTools = validateDisabledTools(persona.defaultHarness, persona.disabledTools);
 
@@ -176,10 +174,7 @@ export async function updateAgent(deps: MemberDependencies, actor: Actor, raw: u
           systemPrompt: z.string().trim().min(1).max(20_000).optional(),
           skillNames: z.array(z.string().min(1).max(64)).max(80).optional(),
           disabledTools: DISABLED_TOOLS_SCHEMA.optional(),
-          defaultModel: z.string().optional(),
           avatarColor: z.string().optional(),
-          /** Rejected if present and differs — harness locked at create */
-          defaultHarness: z.enum(["codex", "claude", "pi"]).optional(),
           runtime: z.enum(["local", "sandbox"]).optional(),
           sandboxProvider: sandboxProviderSchema.optional(),
         })
@@ -206,18 +201,10 @@ export async function updateAgent(deps: MemberDependencies, actor: Actor, raw: u
     .limit(1);
   if (!profile) throw new ServiceError(400, {message: "不是智能体成员"});
 
-  const lockedHarness = profile.persona?.defaultHarness ?? ("pi" as const);
   if (body.persona?.skillNames) {
     try { await checkSkills(deps, actor.organizationId, body.persona.skillNames); }
     catch (error) { throw new ServiceError(400, {message: (error as Error).message}); }
   }
-  if (
-    body.persona?.defaultHarness !== undefined &&
-    body.persona.defaultHarness !== lockedHarness
-  ) {
-    throw new ServiceError(400, {message: "Harness 创建后不可更换。请新建智能体并选择其他 Harness。"});
-  }
-
   const nextPersona = {
     ...(profile.persona ?? {}),
     ...(body.persona
@@ -228,17 +215,15 @@ export async function updateAgent(deps: MemberDependencies, actor: Actor, raw: u
           disabledTools: body.persona.disabledTools ?? profile.persona?.disabledTools,
           runtime: body.persona.runtime ?? profile.persona?.runtime,
           sandboxProvider: body.persona.sandboxProvider ?? profile.persona?.sandboxProvider,
-          defaultModel:
-            body.persona.defaultModel ?? profile.persona?.defaultModel,
           avatarColor:
             body.persona.avatarColor ?? profile.persona?.avatarColor,
         }
       : {}),
-    defaultHarness: lockedHarness,
+    defaultHarness: "pi" as const,
+    defaultModel: NATIVE_DEFAULT_MODEL,
   };
-  if (lockedHarness !== "pi" && ["openrouter/free", "auto"].includes(nextPersona.defaultModel ?? "")) throw new ServiceError(400, {message: "请选择此 Harness 的原生模型或 Harness 默认模型"});
 
-  nextPersona.disabledTools = validateDisabledTools(lockedHarness, nextPersona.disabledTools);
+  nextPersona.disabledTools = validateDisabledTools("pi", nextPersona.disabledTools);
 
   await deps.database.transaction(async (tx) => {
   if (body.name || body.image !== undefined) {
