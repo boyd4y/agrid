@@ -14,12 +14,10 @@ try {
   const open = async (label = '正文') => {
     await page.getByTestId('global-ai-toggle').waitFor();
     await page.getByTestId(`open-grid-record-${row.id}`).click();
-    await page.getByTestId('related-record-panel').getByRole('button', { name: label, exact: true }).click();
     await page.getByTestId('document-editor').waitFor();
   };
   await page.goto(frontend + `/app/tables/${table.id}`); await open();
-  const modal = page.getByTestId('document-editor');
-  await modal.getByRole('button', { name: '启用正文', exact: true }).click();
+  const modal = page.getByTestId('related-record-panel');
   const body = modal.getByRole('textbox', { name: '正文内容', exact: true });
   const text = '长文内容应按需保存，不进入表格列表。'.repeat(800);
   await body.fill(text); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('Enter');

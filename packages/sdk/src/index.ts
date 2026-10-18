@@ -58,6 +58,8 @@ export function createClient(options: ClientOptions) {
     return result[command];
   }
   const blogApi = {
+    createBlog: (input: BlogCommands["createBlog"], request?: RequestOptions) => blogCommand("createBlog", input, request),
+    startBlogArticle: (input: BlogCommands["startBlogArticle"], request?: RequestOptions) => blogCommand("startBlogArticle", input, request),
     getBlogSources: (input: BlogCommands["getBlogSources"], request?: RequestOptions) => blogCommand("getBlogSources", input, request),
     getBlog: (input: BlogCommands["getBlog"], request?: RequestOptions) => blogCommand("getBlog", input, request),
     saveBlog: (input: BlogCommands["saveBlog"], request?: RequestOptions) => blogCommand("saveBlog", input, request),

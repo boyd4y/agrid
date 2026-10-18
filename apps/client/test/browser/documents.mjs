@@ -18,12 +18,10 @@ try {
   const open = async (target = page) => {
     await target.getByTestId("global-ai-toggle").waitFor();
     await target.getByTestId(`open-grid-record-${row.id}`).click();
-    await target.getByTestId('related-record-panel').getByRole('button', { name: '正文', exact: true }).click();
     await target.getByTestId('document-editor').waitFor();
   };
   console.log("stage open"); await open();
-  const modal = page.getByTestId('document-editor'), body = modal.getByRole('textbox', { name: '正文内容' });
-  await modal.getByRole('button', { name: '启用正文' }).click(); await body.waitFor();
+  const modal = page.getByTestId('related-record-panel'), body = modal.getByRole('textbox', { name: '正文内容' });
   await body.fill('中文正文：让想法动起来。');
   await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor();
   assert(JSON.stringify((await command('getDocument', identity)).content).includes('中文正文'));
@@ -67,7 +65,7 @@ try {
   await page.route('**/api/commands', failSave);
   await body.locator('p').last().click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.type(' Network draft');
   await modal.getByRole('status').filter({ hasText: '保存失败' }).waitFor(); assert((await body.innerText()).includes('Network draft'));
-  await modal.getByRole('button', { name: '关闭正文', exact: true }).click(); await modal.waitFor({ state: 'hidden' });
+  await modal.getByRole('button', { name: '关闭记录', exact: true }).click(); await page.getByRole('button', { name: '保留草稿并离开', exact: true }).click(); await modal.waitFor({ state: 'hidden' });
   rejectSave = false; await page.unroute('**/api/commands', failSave); await open();
   await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor(); assert(JSON.stringify((await command('getDocument', identity)).content).includes('Network draft')); assert(JSON.stringify((await command('getDocument', identity)).content).includes('fileId'));
   // A later save response must not replace text typed after that request started.
@@ -86,15 +84,15 @@ try {
   const second = await page.context().newPage(); second.setDefaultTimeout(12000); second.on("dialog", dialog => dialog.accept());
   await second.route('**/api/**', async route => { const url = new URL(route.request().url()); const response = await route.fetch({ url: fixture.base + url.pathname + url.search }); await route.fulfill({ response }); });
   await second.goto(frontend + `/app/tables/${table.id}`); await second.getByTestId('global-ai-toggle').waitFor(); await open(second);
-  const secondModal = second.getByTestId('document-editor'), secondBody = secondModal.getByRole('textbox', { name: '正文内容' }); await secondBody.waitFor();
+  const secondModal = second.getByTestId('related-record-panel'), secondBody = secondModal.getByRole('textbox', { name: '正文内容' }); await secondBody.waitFor();
   await body.locator('p').last().click(); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.type(' Server change'); await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor();
   await secondBody.locator('p').last().click(); await second.keyboard.press('Meta+ArrowDown'); await second.keyboard.type(' Local conflict draft');
-  await secondModal.getByRole('status').filter({ hasText: '版本冲突' }).waitFor(); assert((await secondBody.innerText()).includes('Local conflict draft'));
-  await second.reload(); await open(second); await secondModal.getByRole('status').filter({ hasText: '版本冲突' }).waitFor(); assert((await secondBody.innerText()).includes('Local conflict draft'));
+  await secondModal.getByRole('status').filter({ hasText: '部分内容保存失败' }).waitFor(); assert((await secondBody.innerText()).includes('Local conflict draft'));
+  await second.reload(); await open(second); await secondModal.getByRole('status').filter({ hasText: '部分内容保存失败' }).waitFor(); assert((await secondBody.innerText()).includes('Local conflict draft'));
   await secondModal.getByRole('button', { name: '查看服务器版本' }).click(); await secondModal.getByText(/正在查看版本/).waitFor(); assert(!(await secondBody.innerText()).includes('Local conflict draft'));
   await secondModal.getByRole('button', { name: '返回当前草稿' }).click(); assert((await secondBody.innerText()).includes('Local conflict draft')); await second.close();
   await modal.getByRole('button', { name: '历史', exact: true }).click(); await modal.getByRole('button', { name: /^v1\b/ }).click(); await modal.getByText('正在查看版本 1', { exact: true }).waitFor();
-  await modal.getByRole('button', { name: '恢复为新版本' }).click(); await modal.getByText('正在查看版本 1', { exact: true }).waitFor({ state: 'hidden' }); await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor(); assert.deepEqual((await command('getDocument', identity)).content, { type: 'doc', content: [{ type: 'paragraph' }] });
+  await modal.getByRole('button', { name: '恢复为新版本' }).click(); await modal.getByText('正在查看版本 1', { exact: true }).waitFor({ state: 'hidden' }); await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor(); assert(JSON.stringify((await command('getDocument', identity)).content).includes('中文正文'));
   // Seed realistic content through the same public command for the visual matrix.
   const doc = await command('getDocument', identity); await command('replaceDocument', { ...identity, expectedVersion: doc.version, content: withImage.content, idempotencyKey: crypto.randomUUID() });
   await page.reload(); await open(); await body.waitFor(); await page.waitForFunction(() => document.querySelector('[data-testid="document-editor"] figure img')?.naturalWidth > 0);
@@ -112,12 +110,12 @@ try {
   const plan = await command('createAutomation', { name: '正文 Key 兼容计划', source: { kind: 'schedule', cron: '0 10 * * *', timeZone: 'UTC' }, trigger: { type: 'schedule_due' }, actions: [{ type: 'run_agent', agentUserId: agent.userId, prompt: 'Read only' }] });
   const scheduleGrants = [{ automationId: plan.id, canRead: true, canUpdate: false }];
   const oldTableGrants = [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }];
-  const oldCalendarGrants = [{ calendarId: calendar.id, canRead: true, canReadAvailability: true, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canTriggerAgent: false }];
+  const oldCalendarGrants = [{ calendarId: calendar.id, canRead: true, canReadAvailability: true, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canTriggerAgent: false, canSubscribe: false, canReadDeliveries: false, canManageSubscriptions: false }];
   const key = await api('/user/api-keys', { name: 'Document MCP', schedulePermissions: scheduleGrants, permissions: oldTableGrants, calendarPermissions: oldCalendarGrants, documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canReadHistory: false, canRestore: false, canUpload: false }] });
   const transport = new StdioClientTransport({ command: 'pnpm', args: ['--filter', '@tabdo/mcp', 'exec', 'tsx', 'src/index.ts'], cwd: new URL('../../../../', import.meta.url).pathname, env: { PATH: process.env.PATH, TABDO_API_URL: fixture.base, TABDO_API_KEY: key.secret } });
   const client = new Client({ name: 'document-browser-smoke', version: '1.0.0' });
   try {
-    console.log('stage MCP connect'); await client.connect(transport); console.log('stage MCP list tools'); const tools = await client.listTools(); assert(tools.tools.some(t => t.name === 'replace_document')); assert(tools.tools.some(t => t.name === 'list_booking_reminders'));
+    console.log('stage MCP connect'); await client.connect(transport); console.log('stage MCP list tools'); const tools = await client.listTools(); assert(tools.tools.some(t => t.name === 'replace_document')); assert(tools.tools.some(t => t.name === 'create_blog')); assert(tools.tools.some(t => t.name === 'start_blog_article')); assert(tools.tools.some(t => t.name === 'list_booking_reminders'));
     console.log('stage MCP read calendar'); const calendarRead = await client.callTool({ name: 'get_calendar', arguments: { calendarId: calendar.id } }); assert(!calendarRead.isError); assert.equal(JSON.parse(calendarRead.content[0].text).id, calendar.id);
     console.log('stage MCP read plan');
     const rangeStart = new Date().toISOString(), rangeEnd = new Date(Date.now() + 86400000).toISOString();

@@ -23,3 +23,5 @@
 .document-prose img { display: block; max-width: 100%; height: auto; border-radius: var(--radius); }
 .document-prose hr { border-color: var(--border); margin-block: 1.5em; }
 .document-prose .ProseMirror-selectednode { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.document-prose[contenteditable="true"]:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before { content: attr(data-placeholder); color: var(--muted-foreground); float: left; height: 0; pointer-events: none; }

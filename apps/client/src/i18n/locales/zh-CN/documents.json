@@ -2,10 +2,10 @@
   "open": "正文",
   "close": "关闭正文",
   "body": "正文内容",
-  "description": "正文独立保存，表格继续管理文章属性。",
+  "description": "标题、属性和正文自动保存。保存草稿不会发布。",
   "status": {
     "loading": "读取正文…",
-    "empty": "尚未启用正文",
+    "empty": "开始写作",
     "saving": "正在保存…",
     "saved": "已保存",
     "unsaved": "尚未保存",
@@ -69,11 +69,16 @@
     "NOT_FOUND": "记录、正文或图片不存在，或不在当前授权范围。",
     "FORBIDDEN": "没有执行此正文操作的权限。",
     "VERSION_CONFLICT": "另一客户端已保存新版本。你的草稿已保留，请查看服务器版本并导出草稿后再处理。",
-    "ALREADY_EXISTS": "此记录已启用正文，请关闭后重新打开。",
+    "ALREADY_EXISTS": "此记录已有正文，请保留草稿后重新打开。",
     "IDEMPOTENCY_MISMATCH": "重试标识与原请求不一致，请保留草稿后重新打开。",
     "ATTACHMENT_LIMIT": "已超过正文累计图片预算：40 张或 50 MiB。",
     "STORAGE_UNAVAILABLE": "图片存储暂时不可用，请重试。",
     "REQUEST_FAILED": "正文请求失败，草稿已保留，请重试。"
   },
-  "dismiss": "知道了"
+  "dismiss": "知道了",
+  "leaveDraft": "部分内容未能保存。草稿保留在当前标签页，重新打开可继续。",
+  "placeholder": "开始写作…",
+  "leaveTitle": "仍有内容未保存",
+  "keepEditing": "继续编辑",
+  "leaveWithDraft": "保留草稿并离开"
 }

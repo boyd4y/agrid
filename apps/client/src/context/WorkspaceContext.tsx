@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import type { Workspace } from "@tabdo/shared";
-import { setWorkspaceScope } from "@/lib/workspace-scope";
+import { setWorkspaceScope, prepareWorkspaceLeave } from "@/lib/workspace-scope";
 import { Button } from "@tabdo/ui/components/button";
 
 type Workspaces = { current: Workspace; workspaces: Workspace[]; switchWorkspace(id: string): Promise<void>; createWorkspace(name: string): Promise<void> };
@@ -70,7 +70,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   if (!ready || !state) return <div className="flex h-full items-center justify-center text-muted-foreground" role="status">{t("workspaces.loading")}</div>;
   async function switchWorkspace(id: string) {
     await command("getWorkspace", {}, id);
-    // A new document removes stale responses, streams, caches and unsaved drafts together.
+    if (!await prepareWorkspaceLeave()) return;
+    // A new document removes stale responses, streams and caches. Scoped writing drafts survive.
     // Accepted server runs continue independently of the browser stream.
     window.location.assign(`/app?workspace=${encodeURIComponent(id)}`);
   }

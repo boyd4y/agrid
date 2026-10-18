@@ -75,7 +75,7 @@ const version = z.number().int().positive();
 export const DOCUMENT_SCHEMAS = {
   getDocument: z.strictObject(scope),
   createDocument: z.strictObject({ ...scope, ...write, content: documentContentSchema }),
-  replaceDocument: z.strictObject({ ...scope, ...write, expectedVersion: version, content: documentContentSchema }),
+  replaceDocument: z.strictObject({ ...scope, ...write, expectedVersion: z.number().int().nonnegative(), content: documentContentSchema }),
   listDocumentRevisions: z.strictObject({ ...scope, beforeVersion: version.optional(), limit: z.number().int().min(1).max(50).default(20) }),
   getDocumentRevision: z.strictObject({ ...scope, version }),
   restoreDocumentRevision: z.strictObject({ ...scope, ...write, expectedVersion: version, version }),
@@ -106,7 +106,7 @@ export type DocumentResults = {
 export const DOCUMENT_TOOLS = {
   get_document: { command: "getDocument", description: "按tableId和rowId按需读取独立正文（不存在为null），不通过query_rows读取全文。" },
   create_document: { command: "createDocument", description: "为记录创建唯一正文；schemaVersion=1，受限Tiptap JSON。最多64KiB/4000节点/12层/20图片。带幂等key，仅返回版本回执，不隐含读取权限。" },
-  replace_document: { command: "replaceDocument", description: "以expectedVersion整篇替换正文；409时保留草稿并重新读取，绝不覆盖。未知节点/属性及危险链接拒绝。" },
+  replace_document: { command: "replaceDocument", description: "以expectedVersion整篇替换正文；0仅在不存在时创建（另需canCreate）；409时保留草稿并重新读取，绝不覆盖。未知节点/属性及危险链接拒绝。" },
   list_document_revisions: { command: "listDocumentRevisions", description: "分页列出正文历史元数据，最多50条；需独立历史读取授权。" },
   get_document_revision: { command: "getDocumentRevision", description: "读取指定不可变正文历史版本，需历史读取权。" },
   restore_document_revision: { command: "restoreDocumentRevision", description: "恢复历史正文为新版本；需CAS/幂等key及恢复和历史读取授权，原历史不变。" },

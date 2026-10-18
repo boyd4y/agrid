@@ -291,7 +291,7 @@
   "backToPrevRecord": "Back to previous record",
   "refreshRecord": "Refresh record",
   "closeRecord": "Close record",
-  "recordSheetDesc": "View or edit the record. Saves sync to grid and board.",
+  "recordSheetDesc": "Title, properties and body save automatically. Closing finishes pending saves.",
   "staleRecordHint": "Record was updated; your draft is kept. On conflict, reload and reconcile.",
   "discardDraftReload": "Discard draft and reload",
   "readingRecord": "Loading record…",
@@ -382,5 +382,15 @@
     "empty": "No dated records in this range",
     "partial": "Loaded {{count}} records; more are available",
     "loadMore": "Load more records"
+  },
+  "propertiesUnsaved": "Title and properties have unsaved changes",
+  "propertiesSaved": "Title and properties saved",
+  "retrySave": "Retry save",
+  "pageStatus": {
+    "saved": "All changes saved",
+    "unsaved": "Unsaved changes",
+    "saving": "Saving…",
+    "loading": "Loading…",
+    "failed": "Some changes could not be saved. Drafts retained."
   }
 }

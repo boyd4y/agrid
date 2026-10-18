@@ -9,3 +9,14 @@ export function workspaceUrl(path: string) {
   if (workspaceId) url.searchParams.set("workspace", workspaceId);
   return url.pathname + url.search;
 }
+
+const leaveGuards = new Set<() => Promise<boolean>>();
+let unloadApproved = false;
+export function registerWorkspaceLeaveGuard(guard: () => Promise<boolean>) {
+  leaveGuards.add(guard); return () => { leaveGuards.delete(guard); };
+}
+export async function prepareWorkspaceLeave() {
+  for (const guard of leaveGuards) if (!await guard()) return false;
+  unloadApproved = true; return true;
+}
+export function workspaceUnloadApproved() { return unloadApproved; }

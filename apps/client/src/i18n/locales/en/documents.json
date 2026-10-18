@@ -2,10 +2,10 @@
   "open": "Body",
   "close": "Close body",
   "body": "Document body",
-  "description": "The body saves independently. Article properties remain in the table.",
+  "description": "Title, properties and body save automatically. Saving drafts does not publish.",
   "status": {
     "loading": "Loading body…",
-    "empty": "No body yet",
+    "empty": "Start writing",
     "saving": "Saving…",
     "saved": "Saved",
     "unsaved": "Unsaved changes",
@@ -69,11 +69,16 @@
     "NOT_FOUND": "Record, body or image not found within your authorized scope.",
     "FORBIDDEN": "This body operation is not authorized.",
     "VERSION_CONFLICT": "Another client saved a newer version. Your draft is retained. Review the server version and export your draft before continuing.",
-    "ALREADY_EXISTS": "This record already has a body. Close and reopen it.",
+    "ALREADY_EXISTS": "This record already has a body. Keep your draft and reopen it.",
     "IDEMPOTENCY_MISMATCH": "The retry identifier does not match the original request. Retain your draft and reopen.",
     "ATTACHMENT_LIMIT": "Body attachment budget exceeded: 40 files or 50 MiB total.",
     "STORAGE_UNAVAILABLE": "Image storage is unavailable. Please retry.",
     "REQUEST_FAILED": "Body request failed. Your draft is retained. Please retry."
   },
-  "dismiss": "Dismiss"
+  "dismiss": "Dismiss",
+  "leaveDraft": "Some changes could not be saved. Drafts remain in this browser tab so you can reopen and continue.",
+  "placeholder": "Start writing…",
+  "leaveTitle": "Some changes are not saved",
+  "keepEditing": "Keep editing",
+  "leaveWithDraft": "Keep draft and leave"
 }

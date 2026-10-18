@@ -20,7 +20,7 @@ export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState<string>();
   async function run(operation: () => Promise<void>) {
     setBusy(true); setError(undefined);
-    try { await operation(); } catch { const message = t("workspaces.operationFailed"); setError(message); if (!open) toast.error(message); setBusy(false); }
+    try { await operation(); } catch { const message = t("workspaces.operationFailed"); setError(message); if (!open) toast.error(message); } finally { setBusy(false); }
   }
   return <>
     <DropdownMenu>

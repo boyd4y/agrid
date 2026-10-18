@@ -38,6 +38,7 @@ try {
   await page.getByRole('button', { name: '创建博客', exact: true }).click();
   const create = page.getByRole('dialog'); await create.getByLabel('博客名称', { exact: true }).fill('团队手记');
   const choose = async (label, value, root = page) => { await root.getByRole('combobox', { name: label, exact: true }).click(); await page.getByRole('option', { name: value, exact: true }).click(); };
+  await create.getByRole('button', { name: '高级：绑定已有内容表', exact: true }).click();
   await choose('内容表', '团队手记', create); await choose('标题', title.name, create); await choose('网址 slug', '网址', create);
   await create.getByRole('button', { name: '创建博客', exact: true }).click(); await page.getByTestId('blog-editor').waitFor();
   const siteId = new URL(page.url()).pathname.split('/').at(-1);
@@ -46,9 +47,10 @@ try {
   await page.getByTestId(`blog-source-${articles[0].row.id}`).getByRole('checkbox').nth(1).check();
   await page.getByRole('tab', { name: '配置', exact: true }).click();
   await page.getByLabel('博客简介', { exact: true }).fill('分享实践中的观察、方法和未完待续的想法。');
+  await page.getByRole('button', { name: '高级设置', exact: true }).click();
   await choose('摘要', '导语'); await choose('分类', '栏目');
   await page.getByRole('button', { name: '保存配置', exact: true }).click();
-  await page.getByRole('button', { name: '构建预览', exact: true }).first().click();
+  await page.getByRole('button', { name: '预览文章', exact: true }).first().click();
   const frame = page.frameLocator('iframe[title="博客模板预览"]'); await frame.getByRole('heading', { name: '团队手记', exact: true }).waitFor();
   assert.equal((await fetch(base + `/s/${siteId}/`)).status, 404);
   let blog = await command('getBlog', { siteId }); const buildId = blog.revisionId;
@@ -83,7 +85,7 @@ try {
   await command('replaceDocument', { tableId: table.id, rowId: articles[0].row.id, expectedVersion: 2, content: { type: 'doc', content: [text('更新后的正文仅在再次发布后可见。')] }, idempotencyKey: request() });
   assert(!(await (await fetch(blog.publicUrl + 'articles/note-0.html')).text()).includes('更新后的正文'));
   await page.reload(); await page.getByRole('status').filter({ hasText: '有待发布变更' }).waitFor();
-  await page.getByRole('button', { name: '构建预览', exact: true }).first().click(); await page.getByRole('button', { name: '发布博客', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: '确认操作', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: '预览文章', exact: true }).first().click(); await page.getByRole('button', { name: '发布博客', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: '确认操作', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
   blog = await command('getBlog', { siteId }); assert((await (await fetch(blog.publicUrl + 'articles/note-0.html')).text()).includes('更新后的正文'));
   const oldRevision = blog.revisionId;
   await page.getByRole('tab', { name: '文章', exact: true }).click();

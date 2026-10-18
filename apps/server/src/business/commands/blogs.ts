@@ -14,3 +14,6 @@ export const restoreBlogRevision = (deps: CommandDependencies, input: BlogComman
 export const createBlogPreview = (deps: CommandDependencies, input: BlogCommands["createBlogPreview"] & Identity, tx?: Transaction) => memberBlogCommand(deps, "createBlogPreview", input, tx);
 export const revokeBlogPreviews = (deps: CommandDependencies, input: BlogCommands["revokeBlogPreviews"] & Identity, tx?: Transaction) => memberBlogCommand(deps, "revokeBlogPreviews", input, tx);
 export const authorizeBlogPublication = (deps: CommandDependencies, input: BlogCommands["authorizeBlogPublication"] & Identity, tx?: Transaction) => memberBlogCommand(deps, "authorizeBlogPublication", input, tx);
+
+export const createBlog = (deps: CommandDependencies, input: BlogCommands["createBlog"] & Identity, tx?: Transaction) => memberBlogCommand(deps, "createBlog", input, tx);
+export const startBlogArticle = (deps: CommandDependencies, input: BlogCommands["startBlogArticle"] & Identity, tx?: Transaction) => memberBlogCommand(deps, "startBlogArticle", input, tx);

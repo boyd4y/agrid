@@ -75,7 +75,7 @@ try {
   assert(relationGeometry.inside && relationGeometry.countWidth > 0 && relationGeometry.truncated, 'long first title truncates while remaining badge stays entirely visible');
   await relationCell.getByRole('button').click();
   const sheet = page.getByTestId('related-record-panel');
-  await sheet.getByRole('heading', { name: firstRelated.title, exact: true }).waitFor();
+  await sheet.locator(`input[value=${JSON.stringify(firstRelated.title)}]`).waitFor();
   await sheet.getByRole('button', { name: '关闭记录', exact: true }).click();
   await sheet.waitFor({ state: 'hidden' });
   assert.deepEqual(await selectedIds(), originalIds, 'opening the first record preserves all relations');

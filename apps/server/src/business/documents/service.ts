@@ -39,7 +39,7 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
     if (principal) {
       const grant = principal.documentPermissions.get(input.tableId);
       if (!grant) fail(404, "NOT_FOUND", "Record document not found");
-      if (!grant[permission] || (command === "restoreDocumentRevision" || command === "renderDocument" && input.version !== undefined) && !grant.canReadHistory) fail(403, "FORBIDDEN", "This document operation is not granted");
+      if (!grant[permission] || command === "replaceDocument" && input.expectedVersion === 0 && !grant.canCreate || (command === "restoreDocumentRevision" || command === "renderDocument" && input.version !== undefined) && !grant.canReadHistory) fail(403, "FORBIDDEN", "This document operation is not granted");
     }
     const [table] = await tx.select().from(tables).where(and(eq(tables.id, input.tableId), eq(tables.organizationId, organizationId))).for("key share");
     if (!table) fail(404, "NOT_FOUND", "Record document not found");
@@ -63,7 +63,7 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
       }
       requestId = reservation.id;
     }
-    if (command !== "createDocument" && command !== "getDocument" && !doc) fail(404, "NOT_FOUND", "Document is not enabled");
+    if (command !== "createDocument" && command !== "getDocument" && !(command === "replaceDocument" && input.expectedVersion === 0) && !doc) fail(404, "NOT_FOUND", "Document is not enabled");
     const cas = () => { if (doc!.version !== input.expectedVersion) fail(409, "VERSION_CONFLICT", "Document changed; retain your draft and reload"); };
     const revision = async () => {
       const [found] = await tx.select().from(documentRevisions).where(and(eq(documentRevisions.documentId, doc!.id), eq(documentRevisions.version, input.version)));
@@ -79,16 +79,22 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
     let result: unknown;
     switch (command) {
       case "getDocument": result = doc ? current() : null; break;
-      case "createDocument": {
-        if (doc) fail(409, "ALREADY_EXISTS", "Document already exists");
+      case "createDocument": case "replaceDocument": {
+        if (command === "replaceDocument" && input.expectedVersion !== 0) {
+          cas(); await assets(input.content);
+          [doc] = await tx.update(recordDocuments).set({ content: input.content, version: doc!.version + 1, updatedAt: deps.now() }).where(eq(recordDocuments.id, doc!.id)).returning();
+          await tx.insert(documentRevisions).values({ documentId: doc.id, version: doc.version, content: doc.content, createdAt: deps.now() });
+          result = receipt(); break;
+        }
+        if (doc) fail(409, command === "createDocument" ? "ALREADY_EXISTS" : "VERSION_CONFLICT", "Document already exists; retain your draft");
         if (documentImageIds(input.content).length) fail(400, "BAD_INPUT", "Create the document before uploading images");
         [doc] = await tx.insert(recordDocuments).values({ workspaceId: table.workspaceId, organizationId, sourceTableId: table.id, sourceRowId: row.id, content: input.content, updatedAt: deps.now() }).returning();
         await tx.insert(recordDocumentLinks).values({ documentId: doc.id, rowId: row.id, tableId: table.id, workspaceId: table.workspaceId, organizationId });
         await tx.insert(documentRevisions).values({ documentId: doc.id, version: 1, content: doc.content, createdAt: deps.now() });
         result = receipt(); break;
       }
-      case "replaceDocument": case "restoreDocumentRevision": {
-        cas(); const content = command === "replaceDocument" ? input.content : (await revision()).content;
+      case "restoreDocumentRevision": {
+        cas(); const content = (await revision()).content;
         await assets(content);
         [doc] = await tx.update(recordDocuments).set({ content, version: doc!.version + 1, updatedAt: deps.now() }).where(eq(recordDocuments.id, doc!.id)).returning();
         await tx.insert(documentRevisions).values({ documentId: doc.id, version: doc.version, content: doc.content, restoredFrom: command === "restoreDocumentRevision" ? input.version : null, createdAt: deps.now() });

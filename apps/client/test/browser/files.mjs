@@ -211,8 +211,7 @@ try {
   await sheetFiles.getByLabel('上传文件', { exact: true }).setInputFiles([attachments[0]]);
   await page.waitForFunction(({ columnId, count }) => document.querySelector(`[data-testid="related-record-panel"] [data-record-field="${columnId}"] [data-testid="file-editor"]`)?.querySelectorAll('[data-file-id]').length === count, { columnId: column.id, count: draftIds.length + 1 });
   const sheetIds = await sheetFiles.locator('[data-file-id]').evaluateAll(nodes => nodes.map(node => node.dataset.fileId));
-  assert.deepEqual(await rowValue(row.id), draftIds, 'sheet upload stages IDs until its explicit Save');
-  await save(row.id, () => sheet.getByRole('button', { name: '保存修改', exact: true }).click());
+  await sheet.getByRole('status').filter({ hasText: '全部更改已保存' }).waitFor();
   assert.deepEqual(await rowValue(row.id), sheetIds);
   await sheet.getByRole('button', { name: '关闭记录', exact: true }).click();
   await sheet.waitFor({ state: 'hidden' });
