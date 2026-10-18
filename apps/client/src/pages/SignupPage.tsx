@@ -6,7 +6,7 @@ import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
 import { authClient } from "@/lib/auth-client";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, type SessionUser } from "@/hooks/useAuth";
 import { GoogleSignIn } from "@/components/auth/GoogleSignIn";
 
 export function SignupPage() {
@@ -19,6 +19,7 @@ export function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
+  const authenticated = useRef<{ name: string; email: string; password: string; user?: SessionUser } | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,9 +28,13 @@ export function SignupPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await authClient.signUp.email({ name, email, password });
-      if (res.error) throw new Error(res.error.message || t("signupFailed"));
-      await ensureOrganizationForUser(res.data?.user);
+      // The account already exists if only organization initialization failed.
+      if (authenticated.current?.name !== name || authenticated.current?.email !== email || authenticated.current?.password !== password) {
+        const res = await authClient.signUp.email({ name, email, password });
+        if (res.error) throw new Error(res.error.message || t("signupFailed"));
+        authenticated.current = { name, email, password, user: res.data?.user };
+      }
+      await ensureOrganizationForUser(authenticated.current.user);
       navigate("/app", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("signupFailed"));

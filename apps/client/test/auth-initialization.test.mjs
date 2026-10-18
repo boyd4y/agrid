@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
+import { organization as organizationPlugin } from "better-auth/plugins";
 
 // Execute the real pages, hook and initializer together. Only React's rendering
 // boundary, routing, translation and the HTTP client are in-memory fixtures.
@@ -106,7 +109,59 @@ function fixture({ activeOrganizationId = null, hookData = null, authUser = user
       submit: () => find(render(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} }),
     };
   };
-  return { client, calls, page, hook: () => load("@/hooks/useAuth").useAuth() };
+  return { client, calls, page, hook: () => load("@/hooks/useAuth").useAuth(), setSession: (data) => { currentSession = data; } };
+}
+
+// Exercise real account uniqueness, cookies, session identity and organization
+// persistence without a network listener or external database.
+function memoryAuth(f) {
+  const database = { user: [], account: [], session: [], verification: [], organization: [], member: [], invitation: [] };
+  const auth = betterAuth({
+    database: memoryAdapter(database),
+    baseURL: "http://auth-retry.local.test",
+    secret: "0082-test-only-secret-not-used-outside-this-process",
+    emailAndPassword: { enabled: true, minPasswordLength: 8 },
+    plugins: [organizationPlugin()],
+    logger: { disabled: true },
+  });
+  const cookies = new Map();
+  const request = async (path, input) => {
+    const response = await auth.handler(new Request(`http://auth-retry.local.test/api/auth/${path}`, {
+      method: input ? "POST" : "GET",
+      headers: {
+        "content-type": "application/json",
+        origin: "http://auth-retry.local.test",
+        cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join("; "),
+      },
+      ...(input ? { body: JSON.stringify(input) } : {}),
+    }));
+    for (const cookie of response.headers.getSetCookie()) {
+      const pair = cookie.split(";")[0];
+      const separator = pair.indexOf("=");
+      const key = pair.slice(0, separator);
+      const value = pair.slice(separator + 1);
+      if (value) cookies.set(key, value);
+      else cookies.delete(key);
+    }
+    const data = await response.json();
+    return response.ok ? { data } : { error: data };
+  };
+  for (const [method, path] of [["signUp", "sign-up"], ["signIn", "sign-in"]]) {
+    f.client[method].email = async (input) => {
+      f.calls.auth.push(input);
+      return request(`${path}/email`, input);
+    };
+  }
+  f.client.getSession = async (options) => {
+    f.calls.session.push(options);
+    const result = await request("get-session?disableCookieCache=true");
+    if (result.data) f.setSession(result.data);
+    return result;
+  };
+  f.client.organization.list = async () => { f.calls.list++; return request("organization/list"); };
+  f.client.organization.create = async (input) => { f.calls.create.push(input); return request("organization/create", input); };
+  f.client.organization.setActive = async (input) => { f.calls.setActive.push(input); return request("organization/set-active", input); };
+  return { database, request };
 }
 
 for (const pageName of ["LoginPage", "SignupPage"]) {
@@ -173,6 +228,7 @@ for (const pageName of ["LoginPage", "SignupPage"]) {
         await page.submit();
         assert.equal(page.error(), undefined);
         assert.equal(f.calls.navigation[0][0], target);
+        assert.equal(f.calls.auth.length, 1, "retry must resume initialization without repeating successful authentication");
       });
     }
   }
@@ -210,6 +266,111 @@ for (const pageName of ["LoginPage", "SignupPage"]) {
     assert.equal(f.calls.navigation.length, 0);
   });
 }
+
+for (const pageName of ["LoginPage", "SignupPage"]) {
+  const prefix = pageName === "LoginPage" ? "login" : "signup";
+  const credentials = { name: "Owned user", email: "owned-retry@example.test", password: "Owned-Test-Password" };
+
+  for (const stage of ["getSession", "list", "create", "setActive"]) {
+    test(`${pageName}: real Better Auth session resumes after ${stage} failure without repeating authentication`, async () => {
+      const f = fixture();
+      const { database, request } = memoryAuth(f);
+      if (prefix === "login") {
+        const seeded = await request("sign-up/email", credentials);
+        assert.ok(seeded.data?.user);
+        await request("sign-out", {});
+      }
+      const owner = stage === "getSession" ? f.client : f.client.organization;
+      const original = owner[stage];
+      let attempts = 0;
+      owner[stage] = async (...args) => {
+        if (attempts++ === 0) return { error: { message: `${stage} temporarily unavailable` } };
+        return original(...args);
+      };
+      const page = f.page(pageName);
+      page.change(`${prefix}-email`, credentials.email);
+      page.change(`${prefix}-password`, credentials.password);
+      if (prefix === "signup") page.change("signup-name", credentials.name);
+      await page.submit();
+      assert.equal(page.error(), `${stage} temporarily unavailable`);
+      assert.equal(database.user.length, 1, "account already exists before initialization retry");
+      assert.equal(f.calls.navigation.length, 0);
+      await page.submit();
+      assert.equal(page.error(), undefined);
+      assert.equal(f.calls.auth.length, 1);
+      assert.equal(database.user.length, 1);
+      assert.equal(database.organization.length, 1);
+      assert.equal(database.session.length, 1, "retry must preserve the authenticated session");
+      assert.equal(f.calls.navigation[0][0], prefix === "login" ? "/invite/test-invitation" : "/app");
+      const latest = await request("get-session?disableCookieCache=true");
+      assert.equal(latest.data.session.activeOrganizationId, database.organization[0].id);
+      if (prefix === "signup") {
+        const duplicate = await request("sign-up/email", credentials);
+        assert.equal(duplicate.error?.code, "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL", "fixture must enforce actual registration uniqueness");
+      }
+    });
+  }
+
+  for (const field of prefix === "signup" ? ["email", "password", "name"] : ["email", "password"]) {
+    test(`${pageName}: changing ${field} after initialization failure performs new authentication and preserves its errors`, async () => {
+      const f = fixture();
+      const list = f.client.organization.list;
+      f.client.organization.list = async () => ({ error: { message: "offline" } });
+      const page = f.page(pageName);
+      await page.submit();
+      assert.equal(page.error(), "offline");
+      page.change(`${prefix}-${field}`, "changed input");
+      f.client[prefix === "signup" ? "signUp" : "signIn"].email = async (input) => {
+        f.calls.auth.push(input);
+        return { error: { message: "new authentication failed" } };
+      };
+      await page.submit();
+      assert.equal(f.calls.auth.length, 2);
+      assert.equal(page.error(), "new authentication failed");
+      assert.equal(f.calls.navigation.length, 0);
+      page.change(`${prefix}-${field}`, "");
+      f.client.organization.list = list;
+      await page.submit();
+      assert.equal(page.error(), undefined, "restoring the authenticated inputs can still resume initialization");
+      assert.equal(f.calls.auth.length, 2);
+      assert.equal(f.calls.navigation.length, 1);
+    });
+  }
+
+  for (const activeOrganizationId of [null, "another-users-workspace"]) {
+    test(`${pageName}: initialization retry refuses a switched session identity (${activeOrganizationId ?? "no workspace"})`, async () => {
+      const f = fixture();
+      const list = f.client.organization.list;
+      f.client.organization.list = async () => ({ error: { message: "offline" } });
+      const page = f.page(pageName);
+      await page.submit();
+      assert.equal(page.error(), "offline");
+      f.client.organization.list = list;
+      f.setSession(sessionData(activeOrganizationId, { ...user, id: "different-user" }));
+      await page.submit();
+      assert.equal(page.error(), "common:orgLoadFailed");
+      assert.equal(f.calls.auth.length, 1);
+      assert.equal(f.calls.navigation.length, 0);
+      assert.equal(f.calls.list, 0);
+      assert.equal(f.calls.create.length, 0);
+      assert.equal(f.calls.setActive.length, 0);
+    });
+  }
+}
+
+test("SignupPage: an existing account's real duplicate registration error is never treated as a resumable success", async () => {
+  const f = fixture();
+  const { request } = memoryAuth(f);
+  const credentials = { name: "Existing user", email: "existing@example.test", password: "Owned-Test-Password" };
+  assert.ok((await request("sign-up/email", credentials)).data?.user);
+  const page = f.page("SignupPage");
+  for (const [field, value] of Object.entries(credentials)) page.change(`signup-${field}`, value);
+  await page.submit();
+  assert.equal(page.error(), "User already exists. Use another email.");
+  assert.equal(f.calls.navigation.length, 0);
+  assert.equal(f.calls.session.length, 0);
+  assert.equal(f.calls.list, 0);
+});
 
 test("login, signup and background hook instances share the same in-flight initializer", async () => {
   const f = fixture({ hookData: sessionData(), organizations: [] });

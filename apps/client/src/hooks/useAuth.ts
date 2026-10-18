@@ -34,7 +34,7 @@ export function useAuth() {
   // instead of using the user/workspace captured by the submitting render.
   const ensureOrganizationForUser = useCallback(async (authenticatedUser?: SessionUser) => {
     const current = await authClient.getSession({ query: { disableCookieCache: true } });
-    if (current.error || !current.data) {
+    if (current.error || !current.data || (authenticatedUser && current.data.user.id !== authenticatedUser.id)) {
       throw new Error(current.error?.message || i18n.t("common:orgLoadFailed"));
     }
     const organization = await initializeOrganization(
