@@ -10,7 +10,7 @@ try {
  await page.goto(frontend+'/app/tables/'+colorTable.id);
  await page.locator('[data-col-header="阶段"]').hover();await page.getByRole('button',{name:'阶段列设置',exact:true}).click();
  const settings=page.getByTestId('column-settings-editor');await settings.waitFor();
- await settings.getByRole('combobox').first().click();assert.equal(await page.getByRole('option').count(),10);for(const option of await page.getByRole('option').all())assert((await option.locator('svg').count())>=1,'every field type has an icon');await page.keyboard.press('Escape');
+ await settings.getByRole('combobox').first().click();assert.deepEqual((await page.getByRole('option').allTextContents()).map(label=>label.trim()),['文件','文本','数字','单选','多选','日期','勾选','人员','公式','关联','汇总']);for(const option of await page.getByRole('option').all())assert((await option.locator('svg').count())>=1,'every field type has an icon');await page.keyboard.press('Escape');
  await settings.getByRole('button',{name:'待办的颜色',exact:true}).click();
  const picker=page.getByTestId('color-picker');await picker.waitFor();assert.equal(await picker.getByRole('button',{pressed:false}).count()>0,true);
  await picker.getByRole('textbox',{name:'HEX 颜色',exact:true}).fill('#GGG');await picker.getByRole('textbox',{name:'HEX 颜色',exact:true}).press('Enter');await picker.getByText('请输入有效的 3 位或 6 位 HEX。',{exact:true}).waitFor();
