@@ -8,6 +8,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@ta
 import { authClient } from "@/lib/auth-client";
 import { useAuth } from "@/hooks/useAuth";
 import i18n from "@/i18n";
+import { GoogleSignIn } from "@/components/auth/GoogleSignIn";
 
 async function bootstrapOrg(userName: string, userId: string) {
   try {
@@ -71,6 +72,7 @@ export function SignupPage() {
       </div>
       <form noValidate onSubmit={onSubmit} aria-busy={busy} aria-describedby={error ? "signup-error" : undefined}>
         <FieldGroup className="gap-5">
+          <GoogleSignIn callbackURL="/app" disabled={busy} />
           <Field data-disabled={busy}>
             <FieldLabel htmlFor="signup-name">{t("name")}</FieldLabel>
             <Input

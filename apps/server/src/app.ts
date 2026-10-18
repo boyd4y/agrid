@@ -63,6 +63,8 @@ export function createApp(options: { appUrl: string; resources: PlatformResource
     }, schema.ok ? 200 : 503);
   });
 
+  app.get("/api/public/auth-features", (c) => c.json({ google: Boolean(getAuth().options.socialProviders?.google) }));
+
   app.on(["POST", "GET"], "/api/auth/*", (c) => getAuth().handler(c.req.raw));
 
   app.route("/api/tables", tablesRoute);

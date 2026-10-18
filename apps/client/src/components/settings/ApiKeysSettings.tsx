@@ -4,6 +4,7 @@ import { ChevronRight, Copy, LoaderCircle, Plus, RefreshCw, Trash2 } from "lucid
 import { toast } from "sonner";
 import type { ApiKeyInfo, ApiKeyInput, CalendarPermission, BlogPermission, DocumentPermission, TablePermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
+import { enableGrokBot } from "@/components/settings/grok-bot";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
@@ -35,6 +36,11 @@ export function ApiKeysSettings() {
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
   const [secret, setSecret] = useState(""), [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<ApiKeyInfo | null>(null);
+  const [grok, setGrok] = useState<{ key: ApiKeyInfo; secret?: string } | null>(null);
+  const [enablingGrok, setEnablingGrok] = useState(false);
+  const [grokPicker, setGrokPicker] = useState(false);
+  const [grokTableIds, setGrokTableIds] = useState<string[]>([]);
+  const grokBusy = useRef(false);
   const busy = useRef(false);
   const pagination = useArrayPagination(keys);
   useEffect(() => {
@@ -77,6 +83,30 @@ export function ApiKeysSettings() {
     try { await navigator.clipboard.writeText(value); toast.success(text("copied")); }
     catch { toast.error(text("copyFailed")); }
   }
+  async function startGrok() {
+    if (!canManage || grokBusy.current) return;
+    grokBusy.current = true; setEnablingGrok(true);
+    try {
+      const current = await api.listApiKeys();
+      setKeys(current.keys); setTables(current.tables);
+      const existing = current.keys.find(key => key.name === "Grok Bot");
+      if (existing) { setGrok({ key: existing }); return; }
+      if (!current.tables.length) { toast.error(text("grok.noTables")); return; }
+      setGrokTableIds([]); setGrokPicker(true);
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
+    finally { grokBusy.current = false; setEnablingGrok(false); }
+  }
+  async function enableGrok() {
+    if (!canManage || grokBusy.current) return;
+    grokBusy.current = true; setEnablingGrok(true);
+    try {
+      const saved = await enableGrokBot(api, grokTableIds);
+      if (!saved) { toast.error(text("grok.selectTables")); return; }
+      setKeys(current => [saved.key, ...current.filter(key => key.id !== saved.key.id)]); pagination.resetPage();
+      setGrokPicker(false); setGrok(saved);
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
+    finally { grokBusy.current = false; setEnablingGrok(false); }
+  }
   function toggle(tableId: string, operation: typeof operations[number], checked: boolean) {
     setInput(current => {
       const grant: TablePermission = { tableId, canRead: false, canCreate: false, canUpdate: false, canDelete: false, ...current.permissions.find(p => p.tableId === tableId), [operation]: checked };
@@ -113,6 +143,43 @@ export function ApiKeysSettings() {
       <div className="flex min-w-0 flex-col gap-2"><CardTitle>{text("title")}</CardTitle><CardDescription>{text("description")}</CardDescription></div>
       <div className="flex items-center gap-2"><Button variant="ghost" size="icon" aria-label={t("common:refresh")} disabled={loading} onClick={() => setRevision(value => value + 1)}><RefreshCw data-icon="inline-start" /></Button>{!loading && !error && keys.length > 0 && create}</div>
     </header>
+    {!loading && !error && canManage && <div className="flex flex-wrap items-center justify-between gap-3 border-y py-4">
+      <div className="flex min-w-0 flex-col gap-1"><h3 className="text-sm font-medium">Grok Bot</h3><p className="text-sm text-muted-foreground">{text("grok.description")}</p></div>
+      <Button variant="outline" size="sm" disabled={enablingGrok} onClick={() => void startGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
+    </div>}
+    <Dialog open={grokPicker} onOpenChange={open => { if (!grokBusy.current) setGrokPicker(open); }}>
+      <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+        <DialogHeader><DialogTitle>{text("grok.enable")}</DialogTitle><DialogDescription>{text("grok.selectTables")}</DialogDescription></DialogHeader>
+        <FieldSet>
+          <FieldLegend variant="label">{text("permissions")} · {text("operations.canRead")}</FieldLegend>
+          <FieldGroup className="max-h-64 overflow-y-auto rounded-md border p-3">
+            {tables.map(table => <Field key={table.id} orientation="horizontal" data-disabled={enablingGrok}>
+              <Checkbox id={`${id}-grok-table-${table.id}`} disabled={enablingGrok} checked={grokTableIds.includes(table.id)} onCheckedChange={checked => setGrokTableIds(current => checked === true ? [...current, table.id] : current.filter(value => value !== table.id))} />
+              <FieldLabel htmlFor={`${id}-grok-table-${table.id}`} className="min-w-0 break-words">{table.workspaceName} / {table.name}</FieldLabel>
+            </Field>)}
+          </FieldGroup>
+          <FieldDescription>{text("grok.selected", { tables: tables.filter(table => grokTableIds.includes(table.id)).map(table => `${table.workspaceName} / ${table.name}`).join(", ") || text("grok.none") })}</FieldDescription>
+        </FieldSet>
+        <Button disabled={enablingGrok || !grokTableIds.length} onClick={() => void enableGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={grok !== null} onOpenChange={open => { if (!open) setGrok(null); }}>
+      <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+        <DialogHeader><DialogTitle>{text("grok.title")}</DialogTitle><DialogDescription>{text(grok?.secret ? "once" : "grok.existing")}</DialogDescription></DialogHeader>
+        {grok && <div className="flex min-w-0 flex-col gap-4">
+          <p className="break-words text-sm">{grok.key.name} · {grok.key.prefix}… · {new Date(grok.key.createdAt).toLocaleString()} · {text("tableCount", { count: grok.key.permissions.length })}</p>
+          <FieldGroup>
+            {[...(grok.secret ? [{ label: text("grok.secret"), value: grok.secret }] : []), { label: text("grok.openapi"), value: `${window.location.origin}/api/openapi.json` }, { label: text("grok.manifest"), value: `${window.location.origin}/api/plugins/grok-bot` }].map((item, index) => <Field key={item.label}>
+              <FieldLabel htmlFor={`${id}-grok-${index}`}>{item.label}</FieldLabel>
+              <div className="flex min-w-0 gap-2"><Input id={`${id}-grok-${index}`} readOnly value={item.value} autoComplete="off" spellCheck={false} /><Button variant="outline" size="icon" aria-label={text("grok.copy", { label: item.label })} onClick={() => void copy(item.value)}><Copy data-icon="inline-start" /></Button></div>
+            </Field>)}
+          </FieldGroup>
+          <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">{["step1", "step2", "step3"].map(step => <li key={step}>{text(`grok.${step}`)}</li>)}</ol>
+          <p className="text-sm text-muted-foreground">{text("grok.permissions")}</p>
+          <Button variant="outline" onClick={() => { const key = grok.key; setGrok(null); edit(key); }}>{text("edit")}</Button>
+        </div>}
+      </DialogContent>
+    </Dialog>
     {loading ? <p role="status" className="py-5 text-sm text-muted-foreground">{t("common:loading")}</p>
       : error ? <ListErrorState title={text("loadFailed")} onRetry={() => setRevision(value => value + 1)} />
       : !canManage ? <p className="py-5 text-sm text-muted-foreground">{text("adminOnly")}</p>

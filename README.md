@@ -159,7 +159,7 @@ TABDO_API_URL=http://localhost:3001 TABDO_API_KEY=agt_… \
 
 | Path | 说明 |
 |------|------|
-| `/api/auth/*` | Better Auth |
+| `/api/auth/*` | Better Auth ([Google OAuth setup](docs/auth-google.md)) |
 | `/api/members` | 成员列表（人+Agent） |
 | `/api/members/invite` | 邀请人类 |
 | `/api/members/agents` | 创建智能体（不生成 API Key） |
