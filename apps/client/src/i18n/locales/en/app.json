@@ -146,6 +146,21 @@
     "language": "Language",
     "languageAria": "Interface language",
     "apiKeys": {
+      "grok": {
+        "enable": "Enable Grok Bot",
+        "description": "Create a key with Read access to all current tables.",
+        "noTables": "Create at least one table before enabling Grok Bot.",
+        "title": "Connect Grok Bot",
+        "existing": "A Grok Bot key already exists. Its secret cannot be shown again. Use your saved secret, or revoke this key and enable again.",
+        "secret": "API key (shown once)",
+        "openapi": "OpenAPI URL",
+        "manifest": "Plugin manifest URL",
+        "copy": "Copy {{label}}",
+        "step1": "Copy the OpenAPI URL into the Grok Bot connector.",
+        "step2": "Paste your saved API key into its Bearer authentication field.",
+        "step3": "If configuring headers manually, use Authorization: Bearer tab_… .",
+        "permissions": "New keys allow Read on current tables only. Review existing grants in the key editor; add Create/Update only when needed. New tables are not added automatically."
+      },
       "title": "API Key",
       "description": "Select a key to view or edit its table permissions.",
       "create": "Create API key",

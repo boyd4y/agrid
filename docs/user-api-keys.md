@@ -1,5 +1,7 @@
 # API Key
 
+For read-only bot setup, see [OpenAPI and Grok Bot](api/openapi-and-plugins.md).
+
 统一入口为「设置 → API Key」。工作区所有者或管理员可以创建、编辑和删除 Key；每张表格一行，分别勾选**读取、新增、更新、删除**。未勾选的操作一律拒绝，新增表格不会自动加入。权限覆盖表内全部记录，不再区分“个人 Key”和“站点 Key”。
 
 Key 可用于 GraphQL、表格 REST 接口和 `@tabdo/sdk`，统一使用 `Authorization: Bearer KEY`。例如，同一 Key 可以读取商品表、仅向线索表新增记录，同时禁止修改或删除商品。写权限不自动包含读权限。Key 用于外部网站时，访问者可以看到它，因此只授予网站需要的权限。

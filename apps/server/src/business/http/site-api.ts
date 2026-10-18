@@ -1,3 +1,4 @@
+import { createOpenApiRoutes } from "./openapi.js";
 import { siteQueryCalendarView } from "../data-api/calendar-views.js";
 import { blogTransportInput } from "../blogs/transport.js";
 import { BLOG_COMMANDS, BLOG_READ_COMMANDS, type BlogCommand } from "@tabdo/shared";
@@ -118,6 +119,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
   const publicUrl = options.publicOrigin ? new URL(options.publicOrigin) : undefined;
   if (publicUrl && (!["http:", "https:"].includes(publicUrl.protocol) || publicUrl.username || publicUrl.password)) throw new TypeError("Invalid public API origin");
   const route = new Hono();
+  route.route("/", createOpenApiRoutes(options.publicOrigin));
   // This public surface never uses cookies and never inherits management CORS.
   for (const path of ["/graphql", "/site-files/*"]) {
     route.use(path, cors({ origin: "*", credentials: false, allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["Content-Type", "Authorization", "X-Tabdo-Key", "Idempotency-Key"], maxAge: 600 }));

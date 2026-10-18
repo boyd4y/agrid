@@ -1,5 +1,7 @@
 # Table API and JavaScript SDK
 
+See [OpenAPI and Grok Bot](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and one-click bot key setup.
+
 Manage all keys in **Settings → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
 
 ## Setup
