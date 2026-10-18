@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Save, X, Settings2, BookOpen, RefreshCw, Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { PLATFORM_TOOL_IDS, type SkillSummary, type SandboxProvider } from "@tabdo/shared";
+import { DEFAULT_DISABLED_PLATFORM_TOOLS, PLATFORM_TOOL_IDS, type SkillSummary, type SandboxProvider } from "@tabdo/shared";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Card } from "@tabdo/ui/components/card";
 import { Button } from "@tabdo/ui/components/button";
@@ -28,7 +28,7 @@ export function AgentEditorPage() {
   const [sandboxProvider, setSandboxProvider] = useState<SandboxProvider>("vercel");
   const [runtime, setRuntime] = useState<"local" | "sandbox">("local");
   const [skills, setSkills] = useState<SkillSummary[]>([]), [skillNames, setSkillNames] = useState<string[]>([]);
-  const [disabledTools, setDisabledTools] = useState<string[]>([]);
+  const [disabledTools, setDisabledTools] = useState<string[]>([...DEFAULT_DISABLED_PLATFORM_TOOLS]);
   const [image, setImage] = useState<string | null>(null), [avatarProcessing, setAvatarProcessing] = useState(false);
   const selectedSkills = skills.filter((skill) => skill.enabled && skillNames.includes(skill.name));
   const savingRef = useRef(false);
@@ -63,7 +63,7 @@ export function AgentEditorPage() {
       setSandboxProvider(selectedSandboxProvider);
       const selectedNames = library.skills.filter((s) => s.enabled && (!agent?.agent?.persona?.skillNames || agent.agent.persona.skillNames.includes(s.name))).map((s) => s.name);
       const platformIds = new Set<string>(PLATFORM_TOOL_IDS);
-      const selectedDisabledTools = (agent?.agent?.persona?.disabledTools ?? []).filter(id => platformIds.has(id));
+      const selectedDisabledTools = (agent ? agent.agent?.persona?.disabledTools ?? [] : [...DEFAULT_DISABLED_PLATFORM_TOOLS]).filter(id => platformIds.has(id));
       setSkillNames(selectedNames); setDisabledTools(selectedDisabledTools);
       setInitialConfiguration(JSON.stringify({ name: (agent?.name ?? "").trim(), image: agent?.image ?? null, persona: {
         systemPrompt: (agent?.agent?.persona?.systemPrompt ?? t("defaultPersona")).trim(),

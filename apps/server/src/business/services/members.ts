@@ -1,6 +1,6 @@
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { DISABLED_TOOLS_SCHEMA, sandboxProviderSchema, type SkillDocument, type AgentToolCatalog } from "@tabdo/shared";
+import { DEFAULT_DISABLED_PLATFORM_TOOLS, DISABLED_TOOLS_SCHEMA, sandboxProviderSchema, type SkillDocument, type AgentToolCatalog } from "@tabdo/shared";
 import type { RuntimeDependencies } from "../dependencies.js";
 import { ServiceError } from "../errors.js";
 import { agentProfile, member, user, organization, agentRuns, chatThreads } from "../db/schema.js";
@@ -107,7 +107,7 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
   const persona = {
     systemPrompt: body.persona?.systemPrompt,
     skillNames: body.persona?.skillNames,
-    disabledTools: body.persona?.disabledTools ?? [],
+    disabledTools: body.persona?.disabledTools ?? [...DEFAULT_DISABLED_PLATFORM_TOOLS],
     defaultHarness: body.persona?.defaultHarness ?? ("pi" as const),
     defaultModel: body.persona?.defaultModel?.trim() || NATIVE_DEFAULT_MODEL,
     runtime: body.persona?.runtime ?? (body.persona?.defaultHarness && body.persona.defaultHarness !== "pi" ? "sandbox" as const : "local" as const),

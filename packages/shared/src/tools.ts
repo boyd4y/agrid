@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** New agents require an explicit opt-in to outbound mail. */
+export const DEFAULT_DISABLED_PLATFORM_TOOLS = ["send_email", "reply_email"] as const;
+
 /** Configurable platform wire IDs. Native tool availability belongs to the Harness. */
 export const PLATFORM_TOOL_IDS = [
   "list_mail_inboxes", "send_email", "reply_email", "get_message",
