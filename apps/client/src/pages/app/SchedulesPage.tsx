@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
-import { CalendarClock, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CalendarClock, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AutomationRule } from "@tabdo/shared";
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { useRemotePagination, type ListPageRequest } from "@/hooks/useListPagina
 import { useMemberOptions } from "@/hooks/useMemberOptions";
 import { subscribeDataChanges } from "@/lib/data-changes";
 import { Button } from "@tabdo/ui/components/button";
+import { ListPagination } from "@/components/controls/list-pagination";
 import { Badge } from "@tabdo/ui/components/badge";
 import { AppPageHeader } from "@/components/shell/AppPage";
 import { ListErrorState } from "@/components/shell/ListErrorState";
@@ -59,7 +60,7 @@ export function SchedulesPage() {
             </li>;
           })}</ul>
         </div>
-        {(list.page > 1 || list.hasNext) && <nav className="flex items-center justify-between border-t border-border p-3" aria-label={t("common:pagination.label")}><Button variant="ghost" size="icon" disabled={list.loading || list.page <= 1} onClick={() => list.setPage(list.page - 1)} aria-label={t("common:pagination.previous")}><ChevronLeft /></Button><span className="text-xs text-muted-foreground">{t("common:pagination.page", { page: list.page })}</span><Button variant="ghost" size="icon" disabled={list.loading || !list.hasNext} onClick={() => list.setPage(list.page + 1)} aria-label={t("common:pagination.next")}><ChevronRight /></Button></nav>}
+        {(list.page > 1 || list.hasNext) && <ListPagination compact variant="ghost" className="mt-0 shrink-0 justify-between border-t border-border p-3" page={list.page} hasNext={list.hasNext} loading={list.loading} onPageChange={list.setPage} />}
       </aside>
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"><Outlet key={automationId ?? location.pathname} context={context} /></main>
     </div>
