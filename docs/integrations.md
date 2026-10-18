@@ -50,7 +50,7 @@ AgentMail首次注册使用固定 `https://api.agentmail.to/v0/webhooks`，明�
 
 数据绑定：通用事件使用 `payload`，邮件使用 `message`。邮件规范字段为`messageId/inboxId/threadId/senders:string[]/to:string[]/cc/replyTo/subject/preview/text/html/receivedAt/attachments`，附件仅`attachmentId/filename/contentType/size`元信息。兼容官方示例的`from`和`from_`，不保留任意附件下载URL或外部organization_id。HTML-only邮件保留html并让text为null，不伪造文本，不在界面执行邮件HTML。
 
-两种正文都缺失时标记`bodyMissing=true`，接收阶段不为GET邮件阻塞ACK；条件依赖未知正文时先保留候选规则，完整条件在补取后求值，不把缺失正文当成false而漏排队。worker在绑定上下文前调用`hydrateAgentMailEvent`，按已验证的source+inbox/message ID、实时启用连接，从固定官方消息API补取，并再次检查返回身份；网络失败抛错供后台重试。附件元信息不表示附件已下载、入库或送入原生Harness，现已提供已连接 AgentMail 收件箱的发送/回复服务，按组织连接及官方收件箱列表校验权限；不支持附件发送，自动化 send_email / reply_email 动作已接入，agent 工具尚未接入。出站协议 fixture 通过不等于真实邮箱验收。
+两种正文都缺失时标记`bodyMissing=true`，接收阶段不为GET邮件阻塞ACK；条件依赖未知正文时先保留候选规则，完整条件在补取后求值，不把缺失正文当成false而漏排队。worker在绑定上下文前调用`hydrateAgentMailEvent`，按已验证的source+inbox/message ID、实时启用连接，从固定官方消息API补取，并再次检查返回身份；网络失败抛错供后台重试。附件元信息不表示附件已下载、入库或送入原生Harness，现已提供已连接 AgentMail 收件箱的发送/回复服务，按组织连接及官方收件箱列表校验权限；不支持附件发送，自动化 send_email / reply_email 动作已接入，agent 工具现已提供 list_mail_inboxes / send_email / reply_email / get_message，能力开关分组为“邮件”。工具仅使用宿主工作区上下文，发送/回复须使用列表返回的 connectionId + inboxId，投递后不可撤回；get_message 为只读，附件仅返回元信息。出站协议 fixture 通过不等于真实邮箱验收。
 
 ## 验证
 

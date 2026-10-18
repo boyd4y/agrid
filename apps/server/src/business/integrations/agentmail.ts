@@ -83,14 +83,7 @@ type OutboundDependencies = Pick<IntegrationDependencies, "database" | "fetch" |
 
 async function outboundAgentMailMessage(deps: OutboundDependencies, organizationId: string,
   input: SendAgentMailMessageInput | ReplyAgentMailMessageInput): Promise<{ messageId: string; threadId: string }> {
-  const [connection] = await deps.database.select().from(integrationConnections).where(and(
-    eq(integrationConnections.id, input.connectionId), eq(integrationConnections.organizationId, organizationId),
-    eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt),
-  ));
-  if (!connection) throw new ServiceError(404, { message: "集成不存在或已停用" });
-  const key = await connectionKey(deps, connection);
-  const inboxes = await agentMailInboxes(deps, key);
-  if (!inboxes.some(inbox => inbox.inboxId === input.inboxId)) throw new ServiceError(400, { message: "AgentMail 收件箱不属于此连接" });
+  const key = await verifiedAgentMailKey(deps, organizationId, input);
   const reply = "messageId" in input;
   const path = `/v0/inboxes/${encodeURIComponent(input.inboxId)}/messages/${reply ? `${encodeURIComponent(input.messageId)}/reply` : "send"}`;
   const body = {
@@ -120,4 +113,46 @@ export async function replyAgentMailMessage(deps: OutboundDependencies, input: R
   const parsed = replyAgentMailMessageSchema.safeParse(message);
   if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 回复参数不正确" });
   return outboundAgentMailMessage(deps, organizationId, parsed.data);
+}
+
+/** Shared boundary for reads and sends: tenant, enabled connection, and live inbox membership. */
+async function verifiedAgentMailKey(deps: OutboundDependencies, organizationId: string, input: { connectionId: string; inboxId: string }) {
+  const [connection] = await deps.database.select().from(integrationConnections).where(and(
+    eq(integrationConnections.id, input.connectionId), eq(integrationConnections.organizationId, organizationId),
+    eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt),
+  ));
+  if (!connection) throw new ServiceError(404, { message: "集成不存在或已停用" });
+  const key = await connectionKey(deps, connection);
+  const inboxes = await agentMailInboxes(deps, key);
+  if (!inboxes.some(inbox => inbox.inboxId === input.inboxId)) throw new ServiceError(400, { message: "AgentMail 收件箱不属于此连接" });
+  return key;
+}
+
+export async function listAgentMailInboxes(deps: OutboundDependencies, organizationId: string, connectionId?: string) {
+  const connections = await deps.database.select().from(integrationConnections).where(and(
+    eq(integrationConnections.organizationId, organizationId), eq(integrationConnections.enabled, true),
+    eq(integrationConnections.provider, "agentmail"), isNull(integrationConnections.deletedAt),
+    ...(connectionId ? [eq(integrationConnections.id, connectionId)] : []),
+  ));
+  if (!connections.length) throw new ServiceError(404, { message: "请先在设置中连接 AgentMail，或选择当前工作区已启用的连接" });
+  const result = [];
+  for (const connection of connections) {
+    result.push({ connectionId: connection.id, name: connection.name,
+      inboxes: await agentMailInboxes(deps, await connectionKey(deps, connection)) });
+  }
+  return { connections: result };
+}
+
+export const getAgentMailMessageSchema = z.strictObject({ connectionId: replyAgentMailMessageSchema.shape.connectionId, inboxId: replyAgentMailMessageSchema.shape.inboxId, messageId: replyAgentMailMessageSchema.shape.messageId });
+
+export async function getAgentMailMessage(deps: OutboundDependencies, input: z.infer<typeof getAgentMailMessageSchema> & { organizationId: string }) {
+  const { organizationId, ...message } = input;
+  const parsed = getAgentMailMessageSchema.safeParse(message);
+  if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 读取参数不正确" });
+  const { inboxId, messageId } = parsed.data;
+  const key = await verifiedAgentMailKey(deps, organizationId, parsed.data);
+  const raw = await agentMailRequest(deps, key, `/v0/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(messageId)}`);
+  const normalized = normalizeAgentMailMessage(raw, new Date().toISOString());
+  if (normalized.inboxId !== inboxId || normalized.messageId !== messageId) throw new ServiceError(502, { message: "AgentMail 邮件身份不匹配" });
+  return normalized;
 }

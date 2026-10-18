@@ -16,5 +16,6 @@ export type RuntimeDependencies = DatabaseDependencies & SystemServices & Readon
 export type CommandDependencies = RuntimeDependencies & Readonly<{
   automationQueueName: string;
   calendarOutbound?: import("./calendar/outbound.js").CalendarOutbound;
+  integrations?: Pick<import("./integrations/dependencies.js").IntegrationCapabilities, "fetch" | "encryptionKey">;
   sites?: import("./sites/dependencies.js").SiteCapabilities;
 }>;
