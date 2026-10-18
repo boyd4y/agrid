@@ -92,9 +92,9 @@ try {
   await secondModal.getByRole('button', { name: '查看服务器内容' }).click(); await secondModal.getByText('当前服务器内容', { exact: true }).waitFor(); assert(!(await secondBody.innerText()).includes('Local conflict draft'));
   await secondModal.getByRole('button', { name: '返回当前草稿' }).click(); assert((await secondBody.innerText()).includes('Local conflict draft')); await second.close();
   for (const name of ['阅读', '编辑', '历史']) assert.equal(await modal.getByRole('button', { name, exact: true }).count(), 0);
-  await modal.getByRole('button', { name: '正文更多操作', exact: true }).click();
-  assert.equal(await page.getByRole('menuitem', { name: '历史', exact: true }).count(), 0);
-  await page.keyboard.press('Escape');
+  assert.equal(await modal.getByRole('button', { name: '正文更多操作', exact: true }).count(), 0);
+  assert.equal(await modal.getByRole('button', { name: '导出本地草稿', exact: true }).count(), 0);
+  await modal.getByRole('button', { name: '刷新记录', exact: true }).click();
   // Seed realistic content through the same public command for the visual matrix.
   const doc = await command('getDocument', identity); await command('replaceDocument', { ...identity, expectedVersion: doc.version, content: withImage.content, idempotencyKey: crypto.randomUUID() });
   await page.reload(); await open(); await body.waitFor(); await page.waitForFunction(() => document.querySelector('[data-testid="document-editor"] figure img')?.naturalWidth > 0);

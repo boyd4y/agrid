@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { assertToolbarFits, assertOrdinaryEditorActions } from './helpers/editor-layout.mjs';
 import { rm } from 'node:fs/promises';
 import { createBrowserFixture, artifact as artifactPath } from './fixture.mjs';
 const directory = artifactPath('reference-blog-files');
@@ -19,7 +20,7 @@ try {
   await toolbar.getByRole('button', { name: '文字颜色与高亮', exact: true }).click(); await page.getByRole('menuitem', { name: '蓝色', exact: true }).first().click();
   await toolbar.getByRole('button', { name: '对齐', exact: true }).click(); await page.getByRole('menuitem', { name: '居中对齐', exact: true }).click();
   await body.press('ArrowRight');
-  for (const width of [1440, 390]) { await page.setViewportSize({ width, height: 844 }); assert.equal(await writer.evaluate(el => el.scrollWidth > el.clientWidth + 1), false); assert((await toolbar.boundingBox()).height < 50); }
+  for (const width of [1440, 390, 320]) { await page.setViewportSize({ width, height: 844 }); assert.equal(await writer.evaluate(el => el.scrollWidth > el.clientWidth + 1), false); await assertToolbarFits(toolbar); await assertOrdinaryEditorActions(writer); }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('button', { name: '返回文章', exact: true }).click(); await writer.waitFor({ state: 'hidden' });
   let blog = await command('getBlog', { siteId }), sources = await command('getBlogSources', { tableId: blog.config.tableId }); const article = sources.items[0], identity = { tableId: blog.config.tableId, rowId: article.rowId };
