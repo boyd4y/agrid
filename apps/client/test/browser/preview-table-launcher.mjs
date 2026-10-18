@@ -16,6 +16,13 @@ const assertStepFits = async () => {
   assert(await step.getByTestId('preview-resource-list').evaluate(el => el.scrollWidth <= el.clientWidth + 1));
   assert((await step.locator('[data-resource-id]').count()) <= 10);
   assert(await step.getByTestId('preview-resource-list').evaluate(el => getComputedStyle(el.parentElement).borderTopWidth === '1px'), 'search/list has a single visible surface boundary');
+  assert(await step.evaluate(el => {
+    const bounds = el.getBoundingClientRect(), surface = el.querySelector('[data-testid=preview-resource-list]').parentElement.getBoundingClientRect();
+    const pagination = el.querySelector('nav')?.getBoundingClientRect();
+    const list = el.querySelector('[cmdk-list]').getBoundingClientRect();
+    return surface.top >= bounds.top && surface.bottom <= Math.min(bounds.bottom, innerHeight) + 1
+      && (!pagination || (pagination.bottom <= Math.min(bounds.bottom, innerHeight) + 1 && list.bottom <= pagination.top));
+  }), 'surface, list and pagination fit the available desktop height');
   assert.equal(await picker().count(), 0, 'no header picker before selecting');
 };
 try {
@@ -71,6 +78,23 @@ try {
   await step.locator('[data-resource-id]').first().waitFor();
   assert.equal(await step.locator('[data-resource-id]').count(), 10);
   assert(await previous().isDisabled());
+  // At short desktop heights only the list scrolls; mouse pagination stays visible.
+  for (const viewport of [{ width: 1440, height: 600 }, { width: 1024, height: 768 }]) for (const theme of ['light', 'dark']) {
+    await page.setViewportSize(viewport); await page.emulateMedia({ colorScheme: theme });
+    await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, theme);
+    await assertStepFits();
+    if (viewport.height === 600) assert(await step.locator('[cmdk-list]').evaluate(el => el.scrollHeight > el.clientHeight), 'short viewport scrolls the resource list');
+    if (!process.env.BROWSER_SKIP_VISUALS) await page.screenshot({ path: artifact(`preview-step-${viewport.width}x${viewport.height}-${theme}-page-1.png`), animations: 'disabled' });
+    await step.locator('[data-resource-id]').last().scrollIntoViewIfNeeded();
+    await assertStepFits();
+    await next().click(); await page.getByText('第 2 页，共 3 页', { exact: true }).waitFor();
+    assert.equal(await step.locator('[cmdk-list]').evaluate(el => el.scrollTop), 0, 'new page starts at the top of the resource list');
+    await assertStepFits();
+    if (!process.env.BROWSER_SKIP_VISUALS) await page.screenshot({ path: artifact(`preview-step-${viewport.width}x${viewport.height}-${theme}-page-2.png`), animations: 'disabled' });
+    await previous().click(); await page.getByText('第 1 页，共 3 页', { exact: true }).waitFor();
+  }
+  await page.setViewportSize({ width: 1600, height: 1000 }); await page.emulateMedia({ colorScheme: 'light' });
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
   if (!process.env.BROWSER_SKIP_VISUALS) await page.screenshot({ path: artifact('preview-step-tables-default.png'), animations: 'disabled' });
   await search().focus(); await page.keyboard.press('Tab');
   assert(await next().evaluate(el => el === document.activeElement), 'Tab reaches the next-page control');
@@ -224,7 +248,7 @@ try {
   await page.keyboard.press('Escape');
   await page.goto(frontend + '/app/tables?workspace=' + other.id); await page.getByTestId('app-sidebar').waitFor(); await shortcut(2); assert.equal(await page.getByTestId('workspace-preview-slot').count(), 0, 'only conversation page registers shortcuts');
   assert.deepEqual(f.errors, []);
-  console.log('PASS centered two-step selection with bordered surface; tables/sites/reports pagination (reports >100); all-resource search and resets; Enter/Escape/Tab and Control/IME guards; cache and direct tools; loading/error/retry/late responses; workspace isolation; zh/en light/dark 1440/1024/264px screenshots.');
+  console.log('PASS centered two-step selection with bordered surface; tables/sites/reports pagination (reports >100); all-resource search and resets; Enter/Escape/Tab and Control/IME guards; cache and direct tools; loading/error/retry/late responses; workspace isolation; zh/en light/dark 1440/1024/264px screenshots; 1440x600 and 1024x768 visible mouse pagination and list scrolling.');
 } catch (error) {
   await page.screenshot({ path: artifact('preview-launcher-failure.png') });
   throw error;

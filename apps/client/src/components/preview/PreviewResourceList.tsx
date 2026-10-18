@@ -23,6 +23,7 @@ export function PreviewResourceList({ kind, selected, onSelect }: {
   const [reload, setReload] = useState(0);
   const [search, setSearch] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const scope = workspaceCacheKey();
   const pagination = useArrayPagination(filterPreviewResources(items, search), 10);
   useEffect(() => { input.current?.focus(); }, []);
@@ -42,7 +43,7 @@ export function PreviewResourceList({ kind, selected, onSelect }: {
   return <div className="flex min-h-0 flex-col" data-testid="preview-resource-list">
     <Command shouldFilter={false} className="h-auto min-h-0">
       <CommandInput ref={input} value={search} onValueChange={value => { setSearch(value); pagination.resetPage(); }} placeholder={t("preview.searchResources")} aria-label={t("preview.searchResources")} />
-      <CommandList className="min-h-0 max-h-80" aria-busy={loading}>
+      <CommandList ref={list} className="min-h-0 max-h-80" aria-busy={loading}>
         {loading ? <p role="status" className="p-4 text-sm text-muted-foreground">{t("common:loading")}</p> : error ? <Alert variant="destructive"><AlertDescription><span className="break-words">{error}</span><Button variant="outline" size="sm" onClick={() => setReload(n => n + 1)}>{t("common:retry")}</Button></AlertDescription></Alert> : <>
           <CommandEmpty>{t(items.length ? "preview.noMatches" : `preview.no${kind === "site" ? "Sites" : kind === "report" ? "Reports" : "Tables"}`)}</CommandEmpty>
           <CommandGroup>{pagination.items.map(item => {
@@ -52,6 +53,6 @@ export function PreviewResourceList({ kind, selected, onSelect }: {
         </>}
       </CommandList>
     </Command>
-    {!loading && !error && pagination.total > 0 && <ListPagination compact className="mt-3 shrink-0 justify-center" page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}
+    {!loading && !error && pagination.total > 0 && <ListPagination compact className="mt-3 shrink-0 justify-center" page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={page => { pagination.setPage(page); list.current?.scrollTo(0, 0); }} />}
   </div>;
 }

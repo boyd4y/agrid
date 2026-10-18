@@ -114,7 +114,7 @@ export function PreviewSlot({ choosingKind, pickerOpen, onPickerOpenChange, tabs
       }}>
         <div className="m-auto flex max-h-full w-full max-w-96 min-h-0 flex-col gap-3">
           <div className="flex shrink-0 items-center gap-2"><Button variant="ghost" size="icon" aria-label={t("preview.back")} onClick={onShowTables}><ArrowLeft data-icon="inline-start" /></Button><h2 className="min-w-0 truncate text-sm font-medium">{t("preview.chooseType", { type: label(choosingKind) })}</h2></div>
-          <div className="min-h-0 rounded-lg border border-border bg-popover p-2"><PreviewResourceList key={`${workspaceCacheKey()}:${choosingKind}`} kind={choosingKind} onSelect={onOpenTab} /></div>
+          <div className="flex min-h-0 flex-col rounded-lg border border-border bg-popover p-2"><PreviewResourceList key={`${workspaceCacheKey()}:${choosingKind}`} kind={choosingKind} onSelect={onOpenTab} /></div>
         </div>
       </div>}
       {tabs.map(tab => {
