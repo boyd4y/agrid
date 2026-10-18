@@ -274,6 +274,13 @@
       "when": 1792249806245,
       "tag": "0038_calendar_event_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792286019906,
+      "tag": "0039_calendar_member_events",
+      "breakpoints": true
     }
   ]
 }

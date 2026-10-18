@@ -9,6 +9,7 @@ export const getCalendar = (deps: CommandDependencies, input: CalendarCommands["
 export const createCalendar = (deps: CommandDependencies, input: CalendarCommands["createCalendar"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "createCalendar", input, tx);
 export const updateCalendar = (deps: CommandDependencies, input: CalendarCommands["updateCalendar"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "updateCalendar", input, tx);
 export const archiveCalendar = (deps: CommandDependencies, input: CalendarCommands["archiveCalendar"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "archiveCalendar", input, tx);
+export const listCalendarMembers = (deps: CommandDependencies, input: CalendarCommands["listCalendarMembers"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "listCalendarMembers", input, tx);
 export const listCalendarPeople = (deps: CommandDependencies, input: CalendarCommands["listCalendarPeople"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "listCalendarPeople", input, tx);
 export const getCalendarPerson = (deps: CommandDependencies, input: CalendarCommands["getCalendarPerson"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "getCalendarPerson", input, tx);
 export const createCalendarPerson = (deps: CommandDependencies, input: CalendarCommands["createCalendarPerson"] & Identity, tx?: Transaction) => memberCalendarCommand(deps, "createCalendarPerson", input, tx);

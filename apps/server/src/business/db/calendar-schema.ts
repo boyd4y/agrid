@@ -31,11 +31,13 @@ export const bookings = pgTable("bookings", {
   calendarId: uuid("calendar_id").notNull(), personId: uuid("person_id").notNull(), title: text("title").notNull(),
   start: timestamp("start", { withTimezone: true }).notNull(), end: timestamp("end", { withTimezone: true }).notNull(), timeZone: text("time_zone").notNull(),
   status: text("status").$type<"confirmed" | "cancelled">().notNull().default("confirmed"), version: integer("version").notNull().default(1), revision: integer("revision").notNull().default(1),
+  schedulingMode: text("scheduling_mode").$type<"working_hours" | "member">().notNull().default("working_hours"),
   // A reference only; ordinary row CRUD never owns booking state. Resolve it under live table grants.
   linkedRowId: uuid("linked_row_id"),
 }, t => [uniqueIndex("bookings_scope_key").on(t.id, t.workspaceId), foreignKey({ columns: [t.calendarId, t.workspaceId], foreignColumns: [calendars.id, calendars.workspaceId] }).onDelete("cascade"),
   foreignKey({ columns: [t.personId, t.workspaceId], foreignColumns: [calendarPeople.id, calendarPeople.workspaceId] }).onDelete("cascade"),
   index("bookings_person_range_idx").on(t.personId, t.start, t.end), index("bookings_calendar_range_idx").on(t.calendarId, t.start, t.id),
+  check("bookings_scheduling_mode_check", sql`${t.schedulingMode} IN ('working_hours', 'member')`),
   check("bookings_time_check", sql`${t.end} > ${t.start}`), check("bookings_status_check", sql`${t.status} IN ('confirmed', 'cancelled')`)]);
 export const calendarReceipts = pgTable("calendar_receipts", {
   id: uuid("id").defaultRandom().primaryKey(), workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),

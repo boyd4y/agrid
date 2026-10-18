@@ -48,7 +48,7 @@ export function createClient(options: ClientOptions) {
   }
   // Aborting transport does not cancel a server transaction. Retry the same input/key to read its receipt.
   async function calendarCommand<K extends CalendarCommand>(command: K, input: CalendarCommands[K], request?: RequestOptions): Promise<CalendarResults[K]> {
-    const read = ["listCalendarSubscriptions", "getCalendarSubscription", "listCalendarDeliveries", "getCalendarDelivery", "listCalendars", "getCalendar", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"].includes(command);
+    const read = ["listCalendarSubscriptions", "getCalendarSubscription", "listCalendarDeliveries", "getCalendarDelivery", "listCalendars", "getCalendar", "listCalendarMembers", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"].includes(command);
     const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
@@ -104,6 +104,7 @@ export function createClient(options: ClientOptions) {
     createCalendar: (input: CalendarCommands["createCalendar"], request?: RequestOptions) => calendarCommand("createCalendar", input, request),
     updateCalendar: (input: CalendarCommands["updateCalendar"], request?: RequestOptions) => calendarCommand("updateCalendar", input, request),
     archiveCalendar: (input: CalendarCommands["archiveCalendar"], request?: RequestOptions) => calendarCommand("archiveCalendar", input, request),
+    listCalendarMembers: (input: CalendarCommands["listCalendarMembers"], request?: RequestOptions) => calendarCommand("listCalendarMembers", input, request),
     listCalendarPeople: (input: CalendarCommands["listCalendarPeople"], request?: RequestOptions) => calendarCommand("listCalendarPeople", input, request),
     getCalendarPerson: (input: CalendarCommands["getCalendarPerson"], request?: RequestOptions) => calendarCommand("getCalendarPerson", input, request),
     createCalendarPerson: (input: CalendarCommands["createCalendarPerson"], request?: RequestOptions) => calendarCommand("createCalendarPerson", input, request),

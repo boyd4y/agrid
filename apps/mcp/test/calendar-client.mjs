@@ -8,7 +8,7 @@ const transport = new StdioClientTransport({ command: process.execPath, args: [p
 try {
   await client.connect(transport);
   const catalog = await client.listTools();
-  for (const name of ['query_availability', 'create_booking', 'reschedule_booking', 'cancel_booking', 'batch_bookings', 'set_working_hours']) assert(catalog.tools.some(tool => tool.name === name));
+  for (const name of ['list_calendar_members', 'query_availability', 'create_booking', 'reschedule_booking', 'cancel_booking', 'batch_bookings', 'set_working_hours']) assert(catalog.tools.some(tool => tool.name === name));
   if (input.calls) {
     for (const item of input.calls) {
       const result = await client.callTool({ name: item.name, arguments: item.input });

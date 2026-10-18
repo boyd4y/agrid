@@ -11,7 +11,7 @@ try {
   const rule = await command('createAutomation', { name: '日历中编辑原计划', source: { kind: 'schedule', cron: '0 * * * *', timeZone: 'UTC' }, trigger: { type: 'schedule_due' }, actions: [{ type: 'run_agent', agentUserId: agent.userId, prompt: 'Read only' }] });
   await page.goto(frontend + '/app/calendar');
   const plansOnly = responseFor('queryScheduledOccurrences');
-  await page.getByRole('switch', { name: '叠加定时计划', exact: true }).click(); assert.equal((await plansOnly).status(), 200);
+  await page.getByRole('button', { name: '刷新', exact: true }).click(); assert.equal((await plansOnly).status(), 200);
   await page.locator('[data-schedule-point]').first().waitFor();
   assert.equal(await page.getByRole('button', { name: '添加人员', exact: true }).count(), 0);
   assert.equal(await page.getByRole('combobox', { name: '日历', exact: true }).count(), 0);
@@ -34,7 +34,7 @@ try {
   assert.equal(saved.bookingVersion, 2); assert.equal(saved.reminders[0].offsetMinutes, 30); assert.equal(saved.intents.length, 1);
   await sheet.getByRole('button', { name: '添加提醒', exact: true }).click();
   await sheet.getByRole('combobox', { name: '触发时间', exact: true }).last().click();
-  await page.getByRole('option', { name: '预约到期', exact: true }).click();
+  await page.getByRole('option', { name: '事件到期', exact: true }).click();
   await sheet.getByLabel('任务说明', { exact: true }).last().fill('到期后整理后续行动。');
   const settings = responseFor('setBookingReminders');
   await sheet.getByRole('button', { name: '保存提醒', exact: true }).click(); assert.equal((await settings).status(), 200);
@@ -56,14 +56,13 @@ try {
   await page.screenshot({ path: f.artifact('reminders-mobile-light.png'), fullPage: false });
   await page.setViewportSize({ width: 1600, height: 1000 });
   await sheet.getByRole('button', { name: '关闭', exact: true }).click(); await sheet.waitFor({ state: 'hidden' });
-  const plans = responseFor('queryScheduledOccurrences'); await page.getByRole('switch', { name: '叠加定时计划', exact: true }).click(); assert.equal((await plans).status(), 200);
+  const plans = responseFor('queryScheduledOccurrences'); await page.getByRole('button', { name: '刷新', exact: true }).click(); assert.equal((await plans).status(), 200);
   const point = page.locator('[data-schedule-point]').filter({ hasText: '日历中编辑原计划' }).first(); await point.waitFor(); await point.click();
   await page.screenshot({ path: f.artifact("schedule-point-editor.png"), fullPage: false });
   await sheet.getByLabel('名称', { exact: true }).fill('已编辑原计划');
   await sheet.getByRole('switch', { name: '启用原计划', exact: true }).click();
   await sheet.getByRole('button', { name: '保存', exact: true }).click(); await sheet.waitFor({ state: 'hidden' });
   const updated = await api(`/automations/${rule.id}`); assert.equal(updated.version, 2); assert.equal(updated.enabled, false); assert.equal(updated.name, '已编辑原计划');
-  await page.getByRole('switch', { name: '叠加定时计划', exact: true }).click();
   await event.waitFor(); await event.click();
   await sheet.getByRole('button', { name: '移除提醒 1', exact: true }).click();
   await sheet.getByRole('button', { name: '移除提醒 1', exact: true }).click();

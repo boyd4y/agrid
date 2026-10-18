@@ -28,7 +28,8 @@ import { createAutomationsRoute } from "../../src/business/http/automations.js";
 import { requireThread } from "../../src/business/chat/store.js";
 import type { AutomationRule, BookingReminder, CalendarCommand, CalendarCommands } from "@tabdo/shared";
 assert(new URL(process.env.DATABASE_URL!).pathname.endsWith("_queue_test")); assert.equal(process.env.DATABASE_URL, process.env.DATABASE_URL_UNPOOLED);
-assert.equal(new URL(process.env.REDIS_URL!).port, "16381"); assert(process.env.QUEUE_PREFIX?.startsWith("agrid-queue-test-0045"));
+assert(process.env.QUEUE_PREFIX?.startsWith("agrid-queue-test-"));
+if (process.env.HERDR_TEAM_REDIS_PREFIX) assert.equal(process.env.QUEUE_PREFIX, process.env.HERDR_TEAM_REDIS_PREFIX);
 for (const name of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CODEX_API_KEY", "CLAUDE_API_KEY", "PI_API_KEY", "PI_BASE_URL"]) process.env[name] = "";
 const org = randomUUID(), uid = randomUUID(), aid = randomUUID(), am = randomUUID(), peerId = randomUUID();
 let workspaceId: string, otherWorkspaceId: string, calendarId: string, marker = "";
@@ -58,14 +59,17 @@ const call = <K extends CalendarCommand>(name: K, input: CalendarCommands[K]) =>
 const queue = createAutomationQueue();
 const redis = createRedisClient(redisOptions(false), { name: "calendar-queue-tests" });
 let relay: ReturnType<typeof createRelay>;
-async function fixture(kind: BookingReminder["kind"] = "at_end", minutesAgo = 1, beforeStartInMinutes = 20) {
+async function fixture(kind: BookingReminder["kind"] = "at_end", minutesAgo = 1, beforeStartInMinutes = 20, memberEvent = false) {
   marker = `reminder-${randomUUID()}`;
-  const personId = (await call("createCalendarPerson", { calendarId, name: marker, timeZone: "UTC", idempotencyKey: randomUUID() })).id;
-  await call("setWorkingHours", { calendarId, personId, expectedVersion: 1, windows: [1,2,3,4,5,6,7].map(day => ({ day, start: "00:00", end: "24:00" })), idempotencyKey: randomUUID() });
+  let personId: string | undefined;
+  if (!memberEvent) {
+    personId = (await call("createCalendarPerson", { calendarId, name: marker, timeZone: "UTC", idempotencyKey: randomUUID() })).id;
+    await call("setWorkingHours", { calendarId, personId, expectedVersion: 1, windows: [1,2,3,4,5,6,7].map(day => ({ day, start: "00:00", end: "24:00" })), idempotencyKey: randomUUID() });
+  }
   const minute = Math.floor(Date.now() / 60000) * 60000;
   const start = kind === "at_end" ? minute - (minutesAgo + 30) * 60000 : minute + beforeStartInMinutes * 60000;
   const end = start + 30 * 60000;
-  const booking = await call("createBooking", { calendarId, personId, title: marker, time: { start: new Date(start).toISOString(), end: new Date(end).toISOString(), timeZone: "UTC" }, idempotencyKey: randomUUID() });
+  const booking = await call("createBooking", { calendarId, ...(memberEvent ? { userId: uid } : { personId }), title: marker, time: { start: new Date(start).toISOString(), end: new Date(end).toISOString(), timeZone: "UTC" }, idempotencyKey: randomUUID() });
   const reminder: BookingReminder = { kind, offsetMinutes: kind === "at_end" ? 0 : 30, agentUserId: aid, prompt: `Create one table. MUTATION_TABLE:${marker}`, maxLatenessMinutes: 60 };
   const receipt = await call("setBookingReminders", { calendarId, bookingId: booking.id, expectedVersion: 1, reminders: [reminder], idempotencyKey: randomUUID() });
   return { booking: { ...booking, ...receipt }, marker, start, end, reminder };
@@ -106,7 +110,7 @@ after(async () => {
   finally { redis.disconnect(); await client.end(); }
 });
 test("real BullMQ + official native agent executes once after duplicate/reordered delivery in the original workspace", { timeout: 60000 }, async () => {
-  const f = await fixture(); const intent = await due(f.booking.id); assert(intent.eventId);
+  const f = await fixture("at_end", 1, 20, true); const intent = await due(f.booking.id); assert(intent.eventId);
   assert((await executeCalendar({ ...commandDependencies(), workspaceId: otherWorkspaceId }, caller, "listCalendars", {})).complete);
   const worker = await startChild();
   try {
@@ -241,10 +245,11 @@ test("unknown event protocol fails durably instead of acknowledging and silently
     assert.equal((await call("listBookingReminders", { calendarId, bookingId: f.booking.id })).intents[0].status, "failed");
   } finally { await stop(worker.child); }
 });
-test("lost wakeup and real Redis outage across commit recover SQL deadlines on service startup; expired before-start never invokes", { timeout: 60000 }, async () => {
+test("lost wakeup and real Redis outage across commit recover SQL deadlines on service startup; expired before-start never invokes", { timeout: 60000, skip: !process.env.QUEUE_TEST_REDIS_CONTAINER }, async () => {
   const expired = await fixture("before_start", 1, -60);
-  assert.equal(process.env.QUEUE_TEST_REDIS_CONTAINER, "agrid-0045-redis", "Only this task's disposable Redis container may be stopped");
-  execFileSync("docker", ["stop", "-t", "0", "agrid-0045-redis"]);
+  const container = process.env.QUEUE_TEST_REDIS_CONTAINER!;
+  assert(container.startsWith("agrid-queue-test-"), "Only an explicitly configured disposable test Redis may be stopped");
+  execFileSync("docker", ["stop", "-t", "0", container]);
   let f: Awaited<ReturnType<typeof fixture>>;
   try {
     f = await fixture(); assert(await nextScheduleDeadline(commandDependencies()));
@@ -253,7 +258,7 @@ test("lost wakeup and real Redis outage across commit recover SQL deadlines on s
     assert((await db.select().from(automationOutbox).where(eq(automationOutbox.status, "pending"))).length > 0);
     assert.equal(await count(f.marker), 0);
     console.log("CALENDAR_COMMITTED_DURING_REAL_REDIS_OUTAGE", f.booking.id);
-  } finally { execFileSync("docker", ["start", "agrid-0045-redis"]); }
+  } finally { execFileSync("docker", ["start", container]); }
   service = createAutomationService({ closeDatabase: false, recoveryIntervalMs: 1000 }); await service.ready;
   try {
     await eventually(async () => await count(f.marker) === 1); await eventually(async () => (await call("listBookingReminders", { calendarId, bookingId: f.booking.id })).intents[0].status === "completed");

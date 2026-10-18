@@ -20,7 +20,7 @@ test("weekly hours are finite nonoverlapping wall-clock windows, not booking rec
   assert(CALENDAR_SCHEMAS.setWorkingHours.safeParse({ ...common, windows: [{ day: 1, start: "09:00", end: "10:00" }, { day: 1, start: "10:00", end: "11:00" }] }).success);
 });
 test("every promised calendar operation has a named public command and configurable native/MCP ID", () => {
-  assert.equal(CALENDAR_COMMANDS.length, 35);
+  assert.equal(CALENDAR_COMMANDS.length, 36);
   assert.deepEqual(new Set(Object.values(CALENDAR_TOOLS).map(item => item.command)), new Set(CALENDAR_COMMANDS));
   for (const command of CALENDAR_COMMANDS) assert(COMMANDS.includes(command));
   for (const name of Object.keys(CALENDAR_TOOLS)) assert((PLATFORM_TOOL_IDS as readonly string[]).includes(name));
@@ -45,4 +45,14 @@ test("outbound subscription contracts bound pages, forbid forged scope and keep 
   assert(!CALENDAR_SCHEMAS.listCalendarDeliveries.safeParse({ calendarId, subscriptionId, limit: 101 }).success);
   assert(!CALENDAR_SCHEMAS.retryCalendarDelivery.safeParse({ calendarId, subscriptionId, deliveryId: randomUUID(), idempotencyKey: "retry" }).success);
   assert(!CALENDAR_SCHEMAS.updateCalendarSubscription.safeParse({ ...input, subscriptionId, expectedVersion: 1, status: "revoked" }).success);
+});
+
+test("member events accept opaque user IDs, require one identity and share the batch contract", () => {
+  const input = { calendarId, title: "Event", time: { start: "2030-01-07T09:00:00Z", end: "2030-01-07T09:30:00Z", timeZone: "UTC" }, idempotencyKey: "member" };
+  assert(CALENDAR_SCHEMAS.createBooking.safeParse({ ...input, userId: "system-agent-id" }).success);
+  assert(!CALENDAR_SCHEMAS.createBooking.safeParse(input).success);
+  assert(!CALENDAR_SCHEMAS.createBooking.safeParse({ ...input, personId, userId: "system-user-id" }).success);
+  assert(!CALENDAR_SCHEMAS.createBooking.safeParse({ ...input, userId: "agent", schedulingMode: "member" }).success);
+  assert(CALENDAR_SCHEMAS.batchBookings.safeParse({ calendarId, idempotencyKey: "batch", operations: [{ kind: "create", userId: "agent", title: input.title, time: input.time }] }).success);
+  assert(!CALENDAR_SCHEMAS.batchBookings.safeParse({ calendarId, idempotencyKey: "batch", operations: [{ kind: "create", personId, userId: "agent", title: input.title, time: input.time }] }).success);
 });
