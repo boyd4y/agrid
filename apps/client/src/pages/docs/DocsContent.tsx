@@ -2,6 +2,15 @@ import { Link } from "react-router-dom";
 import type { DocsBlock } from "@/data/docs";
 import { cn } from "@/lib/utils";
 
+// Only app routes are formatted; API paths and URLs remain ordinary prose.
+function DocsText({ text }: { text: string }) {
+  return text.split(/(?<![a-z0-9/:])(`?\/(?:signup|app(?:\/[a-z0-9_-]+)*)`?)(?![a-z0-9/_-])/g).map((part, i) =>
+    /^`?\/(?:signup|app(?:\/[a-z0-9_-]+)*)`?$/.test(part)
+      ? <code key={i} className="rounded bg-muted px-1 py-0.5 text-[0.9em]">{part.replace(/`/g, "")}</code>
+      : part
+  );
+}
+
 export function DocsContent({ blocks }: { blocks: DocsBlock[] }) {
   return (
     <div className="space-y-5 text-[15px] leading-relaxed text-foreground">
@@ -10,7 +19,7 @@ export function DocsContent({ blocks }: { blocks: DocsBlock[] }) {
           case "p":
             return (
               <p key={i} className="text-foreground/90">
-                {b.text}
+                <DocsText text={b.text} />
               </p>
             );
           case "h2":
@@ -32,15 +41,15 @@ export function DocsContent({ blocks }: { blocks: DocsBlock[] }) {
             return (
               <ul key={i} className="list-disc space-y-1.5 pl-5 text-foreground/90">
                 {b.items.map((item, j) => (
-                  <li key={j}>{item}</li>
+                  <li key={j}><DocsText text={item} /></li>
                 ))}
               </ul>
             );
           case "ol":
             return (
-              <ol key={i} className="list-decimal space-y-1.5 pl-5 text-foreground/90">
+              <ol key={i} className="list-decimal flex flex-col gap-3 pl-5 text-foreground/90">
                 {b.items.map((item, j) => (
-                  <li key={j}>{item}</li>
+                  <li key={j}><DocsText text={item} /></li>
                 ))}
               </ol>
             );

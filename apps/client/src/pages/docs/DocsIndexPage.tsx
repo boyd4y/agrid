@@ -154,7 +154,7 @@ export function DocsIndexPage() {
                 <li key={p.slug}>
                   <Link
                     to={`/docs/${p.slug}`}
-                    className="text-sm font-medium text-primary hover:underline"
+                    className="text-sm font-medium text-primary underline underline-offset-4"
                   >
                     {p.title}
                   </Link>
