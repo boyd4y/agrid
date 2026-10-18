@@ -44,7 +44,7 @@ export default defineRailway(() => {
   const dockerBuild = { builder: "DOCKERFILE", dockerfilePath: "Dockerfile.server" } as const;
 
   const api = service("api", {
-    source: github("boyd4y/agrid", { branch: "master" }),
+    source: github("boyd4y/agrid", { branch: "master", checkSuites: true }),
     build: dockerBuild,
     replicas: { "asia-southeast1-eqsg3a": 1 },
     // Migrations fall back to DATABASE_URL; set DATABASE_URL_UNPOOLED to use
@@ -58,7 +58,7 @@ export default defineRailway(() => {
   });
 
   const worker = service("worker", {
-    source: github("boyd4y/agrid", { branch: "master" }),
+    source: github("boyd4y/agrid", { branch: "master", checkSuites: true }),
     build: dockerBuild,
     replicas: { "asia-southeast1-eqsg3a": 1 },
     start: "node dist/queue/main.js",
