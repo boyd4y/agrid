@@ -39,7 +39,8 @@
     "start": "node scripts/run-env.mjs production pnpm --filter @tabdo/server start",
     "start:worker": "node scripts/run-env.mjs production pnpm --filter @tabdo/server queue:start",
     "test:env": "node --test scripts/test/environment.test.mjs",
-    "dev:sites": "pnpm --filter @tabdo/sdk build && node examples/sites/server.mjs"
+    "dev:sites": "pnpm --filter @tabdo/sdk build && node examples/sites/server.mjs",
+    "db:seed:scenario-a": "node scripts/run-env.mjs development pnpm --filter @tabdo/server db:seed:scenario-a"
   },
   "packageManager": "pnpm@9.15.0",
   "devDependencies": {
