@@ -8,6 +8,8 @@ const command = async (command, input) => (await api('/commands', { command, inp
 const open = async payload => page.evaluate(detail => window.dispatchEvent(new CustomEvent('tabdo:open-preview', { detail })), payload);
 const slot = page.getByTestId('workspace-preview-slot');
 const header = slot.getByTestId('preview-slot-header');
+const launcher = slot.getByTestId('preview-table-launcher');
+const showTables = () => header.getByRole('button', { name: '表格列表', exact: true }).click();
 const refresh = () => header.getByRole('button', { name: '刷新工作面板', exact: true });
 const tab = name => header.getByRole('tab', { name, exact: true });
 let previewRequests = 0;
@@ -19,13 +21,12 @@ try {
   const other = await api('/sites', { name: '另一页面', files: [{ path: 'index.html', content: '<!doctype html><html><body><h1>另一页面正文</h1></body></html>' }] });
   await page.goto(frontend + '/app');
   await page.getByTestId('workspace-preview-toggle').click();
-  assert.equal(await header.getByRole('button').count(), 1);
+  assert.equal(await header.getByRole('button').count(), 0);
   assert.equal(await slot.getByRole('tab').count(), 0);
-  assert.equal(await slot.locator('p').count(), 0, 'empty body has no explanatory copy');
-  await header.getByRole('button', { name: '打开表格', exact: true }).focus(); await page.keyboard.press('Enter');
-  await page.getByRole('menuitem', { name: table.name, exact: true }).waitFor();
-  assert.equal(await page.getByRole('menuitem').count(), 1, 'only existing tables, no type catalog');
-  await page.getByRole('menuitem', { name: table.name, exact: true }).click();
+  assert.equal(await launcher.getByRole('button').count(), 1, 'only existing tables, no type catalog');
+  assert.equal(await header.locator('[aria-haspopup=menu]').count(), 0);
+  await launcher.locator(`button[data-table-id="${table.id}"]`).focus();
+  await page.keyboard.press('Enter');
   await tab('表格 · 客户资料').waitFor();
   await slot.getByTestId('preview-slot-table').waitFor();
   await open({ kind: 'site', siteId: site.id });
@@ -34,6 +35,13 @@ try {
   await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
   await frame().getByRole('textbox', { name: '现场草稿' }).fill('切换保留');
   const initialRequests = previewRequests;
+  await showTables();
+  await launcher.waitFor();
+  assert.equal(await slot.getByRole('tab').count(), 2, 'launcher retains resource tabs');
+  assert.equal(await refresh().count(), 0, 'launcher has no resource actions');
+  await tab('站点 · 活动页面').click();
+  assert.equal(await frame().getByRole('textbox', { name: '现场草稿' }).inputValue(), '切换保留');
+  assert.equal(previewRequests, initialRequests, 'launcher does not unmount or regenerate resources');
   assert.equal(await slot.locator('header').count(), 1);
   assert.equal(await slot.getByRole('button', { name: /刷新/ }).count(), 1);
   assert.equal(await header.getByRole('link', { name: '编辑站点', exact: true }).count(), 1);
@@ -45,6 +53,10 @@ try {
   await open({ kind: 'form', tableId: table.id, viewId: form.id });
   await slot.getByTestId('preview-slot-form').getByRole('textbox').first().fill('表单未提交草稿');
   await tab('表单 · 联系申请').waitFor();
+  await showTables();
+  await launcher.getByRole('button').first().click();
+  await tab('表单 · 联系申请').click();
+  assert.equal(await slot.getByTestId('preview-slot-form').getByRole('textbox').first().inputValue(), '表单未提交草稿');
   await open({ kind: 'automations', tableId: table.id });
   await slot.getByTestId('preview-slot-automations').getByRole('button', { name: '新建自动化', exact: true }).first().waitFor();
   await open({ kind: 'table', tableId: table.id });
@@ -96,16 +108,16 @@ try {
   for (const name of ['表格 · 客户资料', '表单 · 联系申请', '自动化 · 客户资料', '站点 · 另一页面', '站点 · 活动页面']) {
     await header.getByRole('button', { name: `关闭${name} Tab`, exact: true }).click();
   }
-  assert.equal(await header.getByRole('button').count(), 1);
-  assert.equal(await slot.locator('p').count(), 0);
-  await page.waitForFunction(() => document.querySelector('[data-testid=preview-slot-header]')?.contains(document.activeElement));
+  assert.equal(await header.getByRole('button').count(), 0);
+  await launcher.waitFor();
+  await page.waitForFunction(() => document.querySelector('[data-testid=preview-table-launcher]')?.contains(document.activeElement));
   if (!process.env.BROWSER_SKIP_VISUALS) await page.screenshot({ path: artifact('preview-empty-320-dark.png') });
   await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en')); await page.reload();
   await page.getByTestId('workspace-preview-toggle').click();
-  await header.getByRole('button', { name: 'Open table', exact: true }).waitFor();
-  assert.equal(await header.getByRole('button').count(), 1);
+  await slot.getByRole('region', { name: 'Table list', exact: true }).waitFor();
+  assert.equal(await header.getByRole('button').count(), 0);
   assert.deepEqual(f.errors, []);
-  console.log('PASS preview slot: blank table-only shortcut; event-opened site/table/form/automation; same-kind tabs; keyboard switching; real refresh per resource; errors/retry; form and iframe state retained; close all; single header/refresh; 1440/390/320 light+dark.');
+  console.log('PASS preview slot: table launcher and return without unmounting; event-opened site/table/form/automation; same-kind tabs; keyboard switching; real refresh per resource; errors/retry; form and iframe state retained; close all; single header/refresh; 1440/390/320 light+dark.');
 } catch (error) {
   console.error('Preview diagnostics:', page.url(), (await slot.innerText().catch(() => '')).slice(0, 1600), f.errors);
   throw error;

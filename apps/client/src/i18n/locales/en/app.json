@@ -238,6 +238,8 @@
     "form": "Form",
     "automations": "Automations",
     "openTable": "Open table",
+    "tableList": "Table list",
+    "duplicateTable": "Duplicate name {{index}}",
     "openKind": "Open {{label}}",
     "pickTable": "Choose a table",
     "pickTableFor": "Choose a table for {{label}}",
