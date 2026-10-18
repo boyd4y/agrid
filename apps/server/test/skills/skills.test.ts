@@ -40,7 +40,11 @@ test("SKILL.md parses standard frontmatter and refuses malformed, duplicate or a
 
 test("builtins are actual read-only documents with workspace-specific persisted enabled state", async () => {
   assert.equal((await req("", "GET", undefined, "")).status, 401);
-  const library = await (await req()).json(); assert.equal(library.canManage, true); assert.equal(library.skills.length, 5);
+  const library = await (await req()).json(); assert.equal(library.canManage, true); assert.equal(library.skills.length, 6);
+  const playbook = library.skills.find((skill: any) => skill.name === "playbook");
+  assert.equal(playbook.id, "builtin:playbook");
+  const playbookDetail = await (await req(`/${encodeURIComponent(playbook.id)}`)).json();
+  assert.ok(playbookDetail.files.some((file: any) => file.path === "references/real-estate-broker/overview.md"));
   const builtin = library.skills.find((skill: any) => skill.name === "table");
   assert.equal(builtin.document, undefined); assert.equal(builtin.builtin, true);
   const detail = await (await req(`/${encodeURIComponent(builtin.id)}`)).json(); assert.ok(detail.files.some((file: any) => file.path === "references/relations.md"));
@@ -49,7 +53,7 @@ test("builtins are actual read-only documents with workspace-specific persisted 
   assert.equal((await req(`/${encodeURIComponent(builtin.id)}/enabled`, "PUT", { enabled: false })).status, 200);
   assert.equal((await service.listSkills(org)).find((skill) => skill.id === builtin.id)?.enabled, false);
   assert.equal((await service.listSkills(foreignOrg)).find((skill) => skill.id === builtin.id)?.enabled, true);
-  const runtimeSkills = await service.loadHarnessSkills(org); assert.equal(runtimeSkills.length, 4); assert.ok(runtimeSkills.every((skill) => skill.content.length > 20 && !skill.name.includes("builtin:")));
+  const runtimeSkills = await service.loadHarnessSkills(org); assert.equal(runtimeSkills.length, 5); assert.ok(runtimeSkills.every((skill) => skill.content.length > 20 && !skill.name.includes("builtin:")));
 });
 
 test("custom documents persist; edits use version checks and reject namespace conflicts", async () => {
