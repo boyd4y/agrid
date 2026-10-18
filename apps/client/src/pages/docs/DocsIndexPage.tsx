@@ -23,7 +23,7 @@ export function DocsIndexPage() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80"
         style={{
           background:
-            "radial-gradient(ellipse 55% 70% at 75% 0%, var(--tabdo-blue-soft) 0%, transparent 55%), radial-gradient(ellipse 45% 55% at 15% 10%, var(--tabdo-purple-soft) 0%, transparent 50%)",
+            "radial-gradient(ellipse 55% 70% at 75% 0%, var(--tabdo-blue-soft) 0%, transparent 55%)",
         }}
       />
       <div className="mx-auto max-w-6xl px-4 py-12">
@@ -44,7 +44,7 @@ export function DocsIndexPage() {
             <div className="mt-10 grid gap-4 sm:grid-cols-2">
               <Link
                 to="/docs/agent-auth"
-                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+                className="group rounded-xl border border-border bg-background p-6 transition hover:border-primary/30"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-blue-soft)]">
                   <NiBot className="h-5 w-5 text-primary" />
@@ -68,7 +68,7 @@ export function DocsIndexPage() {
 
               <Link
                 to="/docs/human-quickstart"
-                className="group rounded-2xl border border-border bg-background p-6 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+                className="group rounded-xl border border-border bg-background p-6 transition hover:border-primary/30"
               >
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--tabdo-yellow-soft)]">
                   <NiBook className="h-5 w-5 text-[var(--tabdo-yellow)]" />

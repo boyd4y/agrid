@@ -129,7 +129,7 @@ export function HomePage() {
 
       <section className="bg-muted/60 py-12 lg:py-14">
         <div className="mx-auto max-w-6xl px-4">
-          <div className="rounded-3xl border border-border bg-background p-8 shadow-sm sm:p-12 lg:flex lg:items-center lg:justify-between lg:gap-12">
+          <div className="rounded-xl border border-border bg-background p-8 sm:p-12 lg:flex lg:items-center lg:justify-between lg:gap-12">
             <div className="max-w-xl">
               <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
                 <NiUsers className="h-5 w-5" />
@@ -192,7 +192,7 @@ function SurfaceCard({
   badge: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-background p-6 shadow-sm">
+    <div className="rounded-xl border border-border bg-background p-6">
       <div className="mb-3 flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted">
           {icon}
@@ -241,7 +241,7 @@ function DeepDive({
           <Link to={cta.to}>{cta.label}</Link>
         </Button>
       </div>
-      <div className="overflow-hidden rounded-3xl border border-border bg-muted/40 p-2 sm:p-3">{art}</div>
+      <div className="overflow-hidden rounded-xl border border-border bg-muted/40 p-2 sm:p-3">{art}</div>
     </div>
   );
 }
