@@ -52,7 +52,7 @@ async function ensureAgent(organizationId: string) {
   await db.transaction(async tx => {
     await tx.insert(user).values({ id: userId, name: SCENARIO_A_AGENT, email: `agent+${userId}@agents.local`, emailVerified: true, kind: "agent" });
     await tx.insert(member).values({ id: memberId, organizationId, userId, role: "member" });
-    await tx.insert(agentProfile).values({ userId, memberId, organizationId, displayName: SCENARIO_A_AGENT, persona: { systemPrompt: SCENARIO_A_PROMPT, skillNames: ["table", "automation"], disabledTools: [], defaultHarness: "pi", defaultModel: "__harness_default__", runtime: "local" } });
+    await tx.insert(agentProfile).values({ userId, memberId, organizationId, displayName: SCENARIO_A_AGENT, persona: { systemPrompt: SCENARIO_A_PROMPT, skillNames: ["table", "automation"], disabledTools: ["send_email", "reply_email"], defaultHarness: "pi", defaultModel: "__harness_default__", runtime: "local" } });
   });
   return userId;
 }
