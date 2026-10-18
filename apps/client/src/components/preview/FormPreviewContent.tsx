@@ -17,6 +17,7 @@ export function FormPreviewContent({
   viewId,
   onRefresh,
   refreshToken,
+  onHeaderChange,
 }: PreviewSlotContext) {
   const { t } = useTranslation("form");
   const [view, setView] = useState<ResolvedFormView | null>(null);
@@ -24,6 +25,11 @@ export function FormPreviewContent({
   const [error, setError] = useState<string | null>(null);
   const currentTableId = useRef(tableId);
   currentTableId.current = tableId;
+
+  useEffect(() => {
+    onHeaderChange?.({ title: view?.name });
+    return () => onHeaderChange?.(null);
+  }, [view?.name, onHeaderChange]);
 
   useEffect(() => {
     let cancelled = false;

@@ -57,7 +57,7 @@ try {
   assert.equal(blog.manifest.articles.length, 2); assert.equal(blog.manifest.assets.length, 1);
   assert(!(await frame.locator('body').innerText()).includes('未选择的私有草稿'));
   // Real populated desktop/mobile previews in both themes; no mock publication.
-  for (const width of [1440, 390]) for (const theme of ['light', 'dark']) {
+  for (const width of process.env.BROWSER_SKIP_VISUALS ? [] : [1440, 390]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: 1000 }); await page.emulateMedia({ colorScheme: theme });
     await page.evaluate(value => { localStorage.setItem('table-theme', value); document.documentElement.classList.toggle('dark', value === 'dark'); }, theme);
     await frame.getByRole('heading', { name: '团队手记', exact: true }).waitFor(); await pause(100);
@@ -69,7 +69,7 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: '确认操作', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
   blog = await command('getBlog', { siteId }); assert.equal(blog.publishedRevisionId, buildId);
   visitor = await browser.newContext({ javaScriptEnabled: false }); const publicPage = await visitor.newPage();
-  for (const width of [1440, 390]) for (const theme of ['light', 'dark']) {
+  for (const width of process.env.BROWSER_SKIP_VISUALS ? [] : [1440, 390]) for (const theme of process.env.BROWSER_SKIP_VISUALS ? [] : ['light', 'dark']) {
     await publicPage.setViewportSize({ width, height: 1000 }); await publicPage.emulateMedia({ colorScheme: theme });
     await publicPage.goto(blog.publicUrl + 'articles/note-0.html');
     await publicPage.getByRole('heading', { name: names[0], exact: true }).waitFor();
@@ -133,19 +133,51 @@ try {
   const intent = { siteId: longBlog.id, expectedVersion: longBlog.version, expectedPublishedRevisionId: null, buildId: longBlog.revisionId };
   const permit = await command('authorizeBlogPublication', { ...intent, action: 'publishBlog', idempotencyKey: request() });
   await command('publishBlog', { ...intent, authorizationToken: permit.authorizationToken, idempotencyKey: request() });
-  for (const theme of ['light', 'dark']) {
+  for (const theme of process.env.BROWSER_SKIP_VISUALS ? [] : ['light', 'dark']) {
     await publicPage.setViewportSize({ width: 390, height: 1000 }); await publicPage.emulateMedia({ colorScheme: theme });
     await publicPage.goto(longBlog.publicUrl);
     assert(await publicPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await publicPage.screenshot({ path: artifact(`blog-longword-390-${theme}.png`), fullPage: true });
   }
+  // The workspace slot reuses the editor without a second title or refresh bar.
+  await page.goto(frontend + '/app');
+  await page.getByTestId('workspace-home-split').waitFor();
+  const openPreview = payload => page.evaluate(detail => window.dispatchEvent(new CustomEvent('tabdo:open-preview', { detail })), payload);
+  await openPreview({ kind: 'site', siteId });
+  const slot = page.getByTestId('workspace-preview-slot'), slotHeader = slot.getByTestId('preview-slot-header');
+  await slotHeader.getByRole('tab', { name: '站点 · 团队手记', exact: true }).waitFor();
+  assert.equal(await slot.locator('header').count(), 1);
+  assert.equal(await slot.getByRole('button', { name: /刷新/ }).count(), 1);
+  assert.equal(await slot.getByRole('heading', { name: '团队手记', exact: true }).count(), 0);
+  await slot.getByRole('tab', { name: '配置', exact: true }).click();
+  await slot.getByLabel('博客简介', { exact: true }).fill('切换后保留的博客配置草稿');
+  assert(await slotHeader.getByRole('button', { name: '刷新工作面板', exact: true }).isDisabled());
+  await slotHeader.getByRole('button', { name: '关闭站点 · 团队手记 Tab', exact: true }).click();
+  await page.getByRole('dialog').getByRole('heading', { name: '仍有内容未保存', exact: true }).waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: '继续编辑', exact: true }).first().click();
+  assert.equal(await slot.getByLabel('博客简介', { exact: true }).inputValue(), '切换后保留的博客配置草稿');
+  await openPreview({ kind: 'table', tableId: table.id });
+  await slotHeader.getByRole('tab', { name: '站点 · 团队手记', exact: true }).click();
+  assert.equal(await slot.getByLabel('博客简介', { exact: true }).inputValue(), '切换后保留的博客配置草稿');
+  await slotHeader.getByRole('button', { name: '关闭站点 · 团队手记 Tab', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '保留草稿并离开', exact: true }).click();
+  await slot.getByTestId('blog-editor').waitFor({ state: 'hidden' });
+  await openPreview({ kind: 'site', siteId });
+  await slot.getByRole('tab', { name: '配置', exact: true }).click();
+  assert.equal(await slot.getByLabel('博客简介', { exact: true }).inputValue(), '切换后保留的博客配置草稿');
+  await slot.getByRole('button', { name: '保存配置', exact: true }).click();
+  await slot.getByRole('status').filter({ hasText: /有待发布变更|线上为当前已发布副本/ }).waitFor();
+  const blogRefresh = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith('/api/commands') && request.postDataJSON()?.command === 'getBlog');
+  await slotHeader.getByRole('button', { name: '刷新工作面板', exact: true }).click(); await blogRefresh;
+  await page.goto(frontend + `/app/sites/${siteId}`);
+  await page.getByTestId('blog-editor').getByRole('heading', { name: '团队手记', exact: true }).waitFor();
   await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en')); await page.setViewportSize({ width: 390, height: 1000 }); await page.reload();
   await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   await page.getByRole('tab', { name: 'Settings', exact: true }).focus(); await page.keyboard.press('ArrowRight');
   await page.waitForFunction(() => document.querySelector('[role=tab][aria-selected=true]')?.textContent === 'Preview');
   await page.keyboard.press('ArrowLeft');
   await page.getByLabel('Default public author name', { exact: true }).waitFor();
-  await page.screenshot({ path: artifact('blog-settings-390-en-dark.png'), fullPage: true });
+  if (!process.env.BROWSER_SKIP_VISUALS) await page.screenshot({ path: artifact('blog-settings-390-en-dark.png'), fullPage: true });
   assert.deepEqual(errors, []); console.log('PASS blogs: UI template/mapping/explicit selection/preview/publish/update/recall; anonymous no-JS HTML; 1440/390 light/dark; MCP/SDK calendar+documents+blogs and five-family key preservation');
 } catch (error) { await page.screenshot({ path: artifact('blogs-failure.png'), fullPage: true }).catch(() => {}); console.error(await page.locator('body').innerText().catch(() => 'no page')); throw error; }
 finally { await visitor?.close(); await fixture.close(); await rm(directory, { recursive: true, force: true }); }

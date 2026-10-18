@@ -72,10 +72,15 @@ try {
   assert(readSkill); assert.equal(calls, 4);
   const workspacePreview = page.getByTestId('workspace-preview-slot');
   await workspacePreview.getByRole('link', { name: '编辑站点', exact: true }).waitFor();
+  await workspacePreview.getByRole('tab', { name: '站点 · 活动报名网站', exact: true }).waitFor();
+  assert.equal(await workspacePreview.locator('header').count(), 1);
+  assert.equal(await workspacePreview.getByRole('button', { name: /刷新/ }).count(), 1);
+  assert.equal(await workspacePreview.getByRole('button', { name: /打开表单|打开自动化/ }).count(), 0);
   await workspacePreview.frameLocator('iframe').getByRole('heading', { name: '活动报名', exact: true }).waitFor();
   await workspacePreview.getByRole('link', { name: '编辑站点', exact: true }).click();
   await page.waitForURL(url => url.pathname === `/app/sites/${nativeId}`); const editor = page.getByTestId('site-editor');
   await editor.getByRole('button', { name: '发布', exact: true }).waitFor();
+  assert.equal(await editor.getByRole('button', { name: '刷新预览', exact: true }).count(), 1, 'standalone SitePreview keeps its toolbar');
   const frame = editor.frameLocator('iframe'); await frame.getByText('春日设计分享会', { exact: true }).waitFor();
   await editor.getByRole('button', { name: '连接数据', exact: true }).click();
   await page.getByRole('dialog').getByRole('textbox', { name: 'API Key', exact: true }).fill(key.secret);

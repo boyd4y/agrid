@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Copy, Plus, Pencil, RefreshCw } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, Plus, Pencil, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { BlogConfig, BlogDetail, BlogSource, ColumnDef } from "@tabdo/shared";
+import { blogConfigSchema } from "@tabdo/shared";
 import { Button } from "@tabdo/ui/components/button";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@tabdo/ui/components/collapsible";
 import { Input } from "@tabdo/ui/components/input";
@@ -24,13 +25,16 @@ import type { DocumentState } from "@/components/documents/DocumentBody";
 import { workspaceCacheKey, workspaceUnloadApproved } from "@/lib/workspace-scope";
 import { blogCommand } from "@/lib/blog-api";
 import { subscribeDataChanges } from "@/lib/data-changes";
+import type { PreviewSlotHeader } from "@/components/preview/preview-slot";
 
 type PublicAction = { action: "publishBlog" | "withdrawBlogArticle" | "unpublishBlog"; rowId?: string };
 const mappingTypes: Record<keyof BlogConfig["mapping"], string[]> = { title: ["text"], slug: ["text"], summary: ["text"], author: ["text", "person"], date: ["date", "text"], cover: ["file"], category: ["select", "text"], tags: ["multi_select", "select", "text"] };
-export function BlogEditor({ siteId }: { siteId: string }) {
+export function BlogEditor({ siteId, onPreviewHeaderChange }: { siteId: string; onPreviewHeaderChange?: (header: PreviewSlotHeader | null) => void }) {
   const { t } = useTranslation("blogs"), id = useId(), navigate = useNavigate();
   const pageRef = useRef<RecordPageHandle>(null);
   const [blog, setBlog] = useState<BlogDetail | null>(null), [name, setName] = useState(""), [config, setConfig] = useState<BlogConfig | null>(null);
+  const draftKey = `tabdo.blog-draft:${workspaceCacheKey()}:${siteId}`, recovered = useRef(false), loadGeneration = useRef(0);
+  const [draftVersion, setDraftVersion] = useState<number | null>(null);
   const [columns, setColumns] = useState<ColumnDef[]>([]), [sources, setSources] = useState<BlogSource[]>([]), [cursor, setCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [tab, setTab] = useState("articles");
   const [preview, setPreview] = useState<{ url: string; expiresAt: string } | null>(null), [confirmation, setConfirmation] = useState<PublicAction | null>(null);
@@ -42,11 +46,30 @@ export function BlogEditor({ siteId }: { siteId: string }) {
     const saved = await pageRef.current?.flush() ?? true;
     return saved && !dirty;
   });
+  const leaveRef = useRef(leave); leaveRef.current = leave;
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
   useEffect(() => { const guard = (e: BeforeUnloadEvent) => { if (!workspaceUnloadApproved() && dirtyRef.current) { e.preventDefault(); e.returnValue = ""; } }; window.addEventListener("beforeunload", guard); return () => window.removeEventListener("beforeunload", guard); }, []);
   const history = useArrayPagination(blog?.revisions ?? [], 10);
-  const apply = useCallback((next: BlogDetail) => { setBlog(next); setName(next.name); setConfig(next.config); }, []);
-  const load = useCallback(async () => { try { apply(await blogCommand("getBlog", { siteId })); setError(""); } catch(e) { setError((e as Error).message); } }, [siteId, apply]);
+  const apply = useCallback((next: BlogDetail) => { setBlog(next); setName(next.name); setConfig(next.config); setDraftVersion(null); }, []);
+  const load = useCallback(async () => { const current = ++loadGeneration.current; try {
+    const next = await blogCommand("getBlog", { siteId });
+    if (current !== loadGeneration.current) return;
+    apply(next); setError("");
+    if (!recovered.current) {
+      recovered.current = true;
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(draftKey) ?? "null");
+        if (saved && typeof saved.name === "string" && Number.isInteger(saved.version) && blogConfigSchema.safeParse(saved.config).success) { setName(saved.name); setConfig(saved.config); setDraftVersion(saved.version); }
+      } catch { /* The saved server version remains usable. */ }
+    }
+  } catch(e) { if (current === loadGeneration.current) setError((e as Error).message); } }, [siteId, apply, draftKey]);
+  useEffect(() => {
+    if (!blog || !config) return;
+    try {
+      if (dirty) sessionStorage.setItem(draftKey, JSON.stringify({ name, config, version: draftVersion ?? blog.version }));
+      else sessionStorage.removeItem(draftKey);
+    } catch { setError(t("documents:draftStorageFailed")); }
+  }, [blog, config, name, dirty, draftVersion, draftKey, t]);
   useEffect(() => { void load(); const unsubscribe = subscribeDataChanges(() => { if (!dirtyRef.current) void load(); }); const focus = () => { if (!dirtyRef.current) void load(); }; window.addEventListener("focus", focus); return () => { unsubscribe(); window.removeEventListener("focus", focus); }; }, [load]);
   const tableId = blog?.config.tableId;
   useEffect(() => { if (!tableId) return; const controller = new AbortController(); void blogCommand("getBlogSources", { tableId }, controller.signal).then(next => { setColumns(next.columns); setSources(next.items); setCursor(next.nextAfterId); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }); return () => controller.abort(); }, [tableId]);
@@ -80,12 +103,22 @@ export function BlogEditor({ siteId }: { siteId: string }) {
     const result = confirmation.action === "publishBlog" ? await blogCommand("publishBlog", { ...input, buildId: blog.revisionId, authorizationToken, idempotencyKey: crypto.randomUUID() }) : confirmation.action === "withdrawBlogArticle" ? await blogCommand("withdrawBlogArticle", { ...input, rowId: confirmation.rowId!, authorizationToken, idempotencyKey: crypto.randomUUID() }) : await blogCommand("unpublishBlog", { ...input, authorizationToken, idempotencyKey: crypto.randomUUID() });
     apply(result); setPreview(null); setConfirmation(null); toast.success(t("completed"));
   }
-  if (!blog || !config) return <div className="flex flex-col gap-4 p-6">{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : <p role="status">{t("loading")}</p>}<Button variant="outline" onClick={() => void load()}>{t("reload")}</Button></div>;
+  useEffect(() => {
+    onPreviewHeaderChange?.({
+      title: blog?.name,
+      actions: <Button asChild variant="ghost" size="icon"><Link to={`/app/sites/${siteId}`} aria-label={t("sites:openEditor")} title={t("sites:openEditor")} onClick={event => { event.preventDefault(); void leaveRef.current(() => navigate(`/app/sites/${siteId}`)); }}><ExternalLink /></Link></Button>,
+      refresh: { run: () => { void work(async () => { await load(); await reloadSources(); }); }, disabled: busy || dirty || articleBlocked, busy },
+      beforeClose: close => { void leaveRef.current(close); },
+    });
+    return () => onPreviewHeaderChange?.(null);
+  }, [onPreviewHeaderChange, blog?.name, load, reloadSources, busy, dirty, articleBlocked, siteId, navigate, t]);
+  if (!blog || !config) return <div className="flex flex-col gap-4 p-6">{error ? <p role="alert" className="text-sm text-destructive">{error}</p> : <p role="status">{t("loading")}</p>}{!onPreviewHeaderChange && <Button variant="outline" onClick={() => void load()}>{t("reload")}</Button>}</div>;
+  const Toolbar = onPreviewHeaderChange ? "div" : "header";
   const change = (patch: Partial<BlogConfig>) => setConfig(current => ({ ...current!, ...patch }));
   const selectRow = (source: BlogSource, selected: boolean) => change({ articles: selected ? [...config.articles, { rowId: source.rowId, imageIds: [] }] : config.articles.filter(a => a.rowId !== source.rowId) });
   const mappingSelect = (key: keyof BlogConfig["mapping"]) => <Field key={key}><FieldLabel htmlFor={`${id}-${key}`}>{t(`mapping.${key}`)}{["title", "slug"].includes(key) ? t("required") : ""}</FieldLabel><Select value={config.mapping[key] ?? "none"} disabled={busy} onValueChange={value => { const mapping = { ...config.mapping }; if (value === "none") delete mapping[key]; else mapping[key] = value; change({ mapping }); }}><SelectTrigger id={`${id}-${key}`}><SelectValue placeholder={t("chooseField")} /></SelectTrigger><SelectContent><SelectGroup>{!["title", "slug"].includes(key) && <SelectItem value="none">{t("notPublic")}</SelectItem>}{columns.filter(c => mappingTypes[key].includes(c.type)).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>;
   return <div className="flex h-full min-h-0 flex-col" data-testid="blog-editor">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div className="flex min-w-0 items-center gap-2"><Button asChild size="icon" variant="ghost" aria-label={t("back")}><Link to="/app/sites" onClick={event => { event.preventDefault(); void leave(() => navigate("/app/sites")); }}><ArrowLeft /></Link></Button><h1 className="truncate text-base font-medium">{blog.name}</h1><Badge variant="secondary">{blog.publishedRevisionId ? t("published") : t("draft")}</Badge></div><div className="flex flex-wrap items-center gap-2"><Button variant="ghost" size="icon" aria-label={t("reload")} disabled={busy || dirty || articleBlocked} onClick={() => void work(load)}><RefreshCw /></Button><Button variant="outline" disabled={busy || !dirty} onClick={() => void work(async () => { apply(await blogCommand("saveBlog", { siteId, expectedVersion: blog.version, name, config, idempotencyKey: crypto.randomUUID() })); setPreview(null); })}>{t("save")}</Button><Button variant="outline" disabled={busy || dirty || articleBlocked} onClick={() => void work(build)}>{busy ? t("working") : t("build")}</Button><Button disabled={busy || dirty || articleBlocked || !blog.manifest} onClick={() => setConfirmation({ action: "publishBlog" })}>{t("publish")}</Button></div></header>
+    <Toolbar data-testid="blog-editor-actions" className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div className="flex min-w-0 items-center gap-2">{!onPreviewHeaderChange && <><Button asChild size="icon" variant="ghost" aria-label={t("back")}><Link to="/app/sites" onClick={event => { event.preventDefault(); void leave(() => navigate("/app/sites")); }}><ArrowLeft /></Link></Button><h1 className="truncate text-base font-medium">{blog.name}</h1></>}<Badge variant="secondary">{blog.publishedRevisionId ? t("published") : t("draft")}</Badge></div><div className="flex flex-wrap items-center gap-2">{!onPreviewHeaderChange && <Button variant="ghost" size="icon" aria-label={t("reload")} disabled={busy || dirty || articleBlocked} onClick={() => void work(load)}><RefreshCw /></Button>}<Button variant="outline" disabled={busy || !dirty} onClick={() => void work(async () => { apply(await blogCommand("saveBlog", { siteId, expectedVersion: draftVersion ?? blog.version, name, config, idempotencyKey: crypto.randomUUID() })); setPreview(null); })}>{t("save")}</Button><Button variant="outline" disabled={busy || dirty || articleBlocked} onClick={() => void work(build)}>{busy ? t("working") : t("build")}</Button><Button disabled={busy || dirty || articleBlocked || !blog.manifest} onClick={() => setConfirmation({ action: "publishBlog" })}>{t("publish")}</Button></div></Toolbar>
     <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4 sm:p-6">
       <div className="mb-5 flex flex-col gap-3">{error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}<p role="status" className="text-sm text-muted-foreground">{dirty ? t("unsaved") : blog.pendingChanges ? t("pending") : t("upToDate")}</p>{blog.publishedRevisionId && <div className="flex min-w-0 flex-wrap items-center gap-2"><a className="min-w-0 break-all text-sm text-primary underline underline-offset-4" href={blog.publicUrl} target="_blank" rel="noopener noreferrer">{blog.publicUrl}</a><Button size="icon" variant="ghost" aria-label={t("copyPublic")} onClick={() => void copy(blog.publicUrl)}><Copy /></Button><Button variant="destructive-ghost" size="sm" disabled={busy || dirty || articleBlocked} onClick={() => setConfirmation({ action: "unpublishBlog" })}>{t("unpublish")}</Button></div>}</div>
       {active ? <div className="flex min-w-0 flex-col gap-4"><div><Button variant="ghost" size="sm" disabled={leaving} onClick={leaveArticle}><ArrowLeft />{t("backToArticles")}</Button></div><RecordPage ref={pageRef} key={`${workspaceCacheKey()}:${tableId}:${active}`} tableId={config.tableId} rowId={active} titleColumnId={config.mapping.title} advancedColumnIds={[config.mapping.slug]} onStateChange={setArticleState} /></div> : <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1"><TabsList className="mb-4 w-full sm:w-fit">{["articles", "settings", "preview", "history"].map(value => <TabsTrigger key={value} value={value} className="flex-1">{t(`tabs.${value}`)}</TabsTrigger>)}</TabsList>

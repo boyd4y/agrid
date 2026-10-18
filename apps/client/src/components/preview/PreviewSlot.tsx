@@ -1,68 +1,86 @@
-import { SitePreviewContent } from "./SitePreviewContent";
-import { ChevronDown, FileInput, Plus, RefreshCw, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ChevronDown, FileInput, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@tabdo/ui/components/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@tabdo/ui/components/tabs";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuGroup } from "@tabdo/ui/components/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuGroup } from "@tabdo/ui/components/dropdown-menu";
 import { TableIcon } from "@/components/table/TableIcon";
 import { APP_NAVIGATION } from "@/components/shell/app-navigation";
-import { getPreviewSlotRenderer, registerPreviewSlot, type PreviewSlotContext, type PreviewSlotKind, type PreviewTab } from "./preview-slot";
+import { cn } from "@tabdo/ui/lib/utils";
+import { getPreviewTabKey, getPreviewSlotRenderer, registerPreviewSlot, type PreviewSlotContext, type PreviewSlotHeader, type PreviewTab } from "./preview-slot";
+import { SitePreviewContent } from "./SitePreviewContent";
 import { TablePreviewContent } from "./TablePreviewContent";
 import { FormPreviewContent } from "./FormPreviewContent";
 import { AutomationPreviewContent } from "./AutomationPreviewContent";
 
 registerPreviewSlot("site", ctx => <SitePreviewContent {...ctx} />);
-registerPreviewSlot("table", (ctx) => <TablePreviewContent {...ctx} />);
-registerPreviewSlot("form", (ctx) => <FormPreviewContent {...ctx} />);
-registerPreviewSlot("automations", (ctx) => <AutomationPreviewContent {...ctx} />);
+registerPreviewSlot("table", ctx => <TablePreviewContent {...ctx} />);
+registerPreviewSlot("form", ctx => <FormPreviewContent {...ctx} />);
+registerPreviewSlot("automations", ctx => <AutomationPreviewContent {...ctx} />);
 
 type Props = {
   tabs: PreviewTab[];
-  activeKind: PreviewSlotKind | null;
+  activeKey: string | null;
   contexts: Record<string, PreviewSlotContext>;
   tables: { id: string; name: string; icon?: string | null }[];
   onOpenTab: (tab: PreviewTab) => void;
-  onCloseTab: (kind: PreviewSlotKind) => void;
-  onSelectTab: (kind: PreviewSlotKind) => void;
-  onCreateTable: () => void;
+  onCloseTab: (key: string) => void;
+  onSelectTab: (key: string) => void;
 };
 
-export function PreviewSlot({ tabs, activeKind, contexts, tables, onOpenTab, onCloseTab, onSelectTab, onCreateTable }: Props) {
+export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCloseTab, onSelectTab }: Props) {
   const { t } = useTranslation("app");
-  const TYPES = [
-    { kind: "table" as const, label: t("preview.table"), icon: APP_NAVIGATION.tables.icon },
-    { kind: "form" as const, label: t("preview.form"), icon: FileInput },
-    { kind: "automations" as const, label: t("preview.automations"), icon: APP_NAVIGATION.automations.icon },
-  ];
+  const [headers, setHeaders] = useState<Record<string, PreviewSlotHeader | null>>({});
+  const headerRef = useRef<HTMLElement>(null);
+  const closeTabRef = useRef(onCloseTab); closeTabRef.current = onCloseTab;
+  const headerCallbacks = useMemo(() => Object.fromEntries(tabs.map(tab => {
+    const key = getPreviewTabKey(tab);
+    return [key, (header: PreviewSlotHeader | null) => setHeaders(previous => ({ ...previous, [key]: header }))];
+  })), [tabs]);
+  const activeTab = tabs.find(tab => getPreviewTabKey(tab) === activeKey);
+  const header = activeTab ? headers[getPreviewTabKey(activeTab)] : null;
+  const TableShortcutIcon = APP_NAVIGATION.tables.icon;
   return <section className="flex h-full min-h-0 min-w-0 flex-col bg-background" data-testid="workspace-preview-slot">
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
-      {TYPES.map(({ kind, label, icon: Icon }) => <DropdownMenu key={kind}>
-        <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-8 px-2 text-xs" aria-label={t("preview.openKind", { label })}><Icon className="size-3.5" />{label}<ChevronDown className="size-3" /></Button></DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuLabel>{kind === "table" ? t("preview.pickTable") : t("preview.pickTableFor", { label })}</DropdownMenuLabel>
-          <DropdownMenuGroup>{tables.map((table) => <DropdownMenuItem key={table.id} onSelect={() => onOpenTab({ kind, tableId: table.id })}><TableIcon name={table.icon} className="size-4 shrink-0" />{table.name}</DropdownMenuItem>)}
-          {!tables.length && <DropdownMenuItem disabled>{t("preview.noTables")}</DropdownMenuItem>}</DropdownMenuGroup>
-          {kind === "table" && <><DropdownMenuSeparator /><DropdownMenuGroup><DropdownMenuItem onSelect={onCreateTable}><Plus className="size-3.5" />{t("preview.newTable")}</DropdownMenuItem></DropdownMenuGroup></>}
-        </DropdownMenuContent>
-      </DropdownMenu>)}
-      {activeKind && <Button variant="ghost" size="icon" className="ml-auto size-8 shrink-0" aria-label={t("preview.refreshPanel")} title={t("preview.refreshPanel")} onClick={() => contexts[activeKind]?.onRefresh()}><RefreshCw className="size-3.5" /></Button>}
-    </div>
-    {!tabs.length ? <p className="p-4 text-sm text-muted-foreground">{t("preview.emptyHint")}</p> :
-      <Tabs value={activeKind ?? ""} onValueChange={onSelectTab} className="min-h-0 flex-1 gap-0">
-        <TabsList aria-label={t("preview.openTabs")} className="h-10 w-full shrink-0 justify-start overflow-x-auto rounded-none border-b border-border bg-transparent p-0">
-          {tabs.map((tab) => {
-            const type = TYPES.find((type) => type.kind === tab.kind);
-            const table = tables.find((table) => table.id === tab.tableId);
-            const name = tab.kind === "site" ? t("nav.sites") : table?.name ?? t("preview.table");
-            return <div key={tab.kind} className="flex h-full shrink-0 items-center border-r border-border">
-              <TabsTrigger value={tab.kind} className="h-full max-w-48 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-muted/50 data-[state=active]:shadow-none" aria-label={`${type?.label ?? (tab.kind === "site" ? t("nav.sites") : tab.kind)} · ${name}`}>{tab.kind === "table" && <TableIcon name={table?.icon} className="size-3.5 shrink-0" />}<span className="truncate">{type?.label ?? (tab.kind === "site" ? t("nav.sites") : tab.kind)} · {name}</span></TabsTrigger>
-              <Button variant="ghost" size="icon" className="mr-1 size-6 shrink-0" aria-label={t("preview.closeTab", { label: type?.label ?? (tab.kind === "site" ? t("nav.sites") : tab.kind) })} onClick={() => onCloseTab(tab.kind)}><X className="size-3" /></Button>
+    <Tabs value={activeKey ?? ""} onValueChange={onSelectTab} className="min-h-0 min-w-0 flex-1 gap-0">
+      <header ref={headerRef} className="flex h-11 min-w-0 shrink-0 items-center gap-1 border-b border-border px-2" data-testid="preview-slot-header">
+        {tabs.length > 0 && <TabsList variant="line" aria-label={t("preview.openTabs")} className="h-full min-w-0 flex-1 justify-start overflow-x-auto">
+          {tabs.map(tab => {
+            const table = tables.find(table => table.id === tab.tableId);
+            const label = tab.kind === "site" ? t("nav.sites") : t(`preview.${tab.kind}`, { defaultValue: tab.kind });
+            const name = headers[getPreviewTabKey(tab)]?.title ?? contexts[getPreviewTabKey(tab)]?.table?.name ?? table?.name ?? label;
+            const Icon = tab.kind === "form" ? FileInput : tab.kind === "automations" ? APP_NAVIGATION.automations.icon : APP_NAVIGATION.sites.icon;
+            return <div key={getPreviewTabKey(tab)} className="flex h-full shrink-0 items-center">
+              <TabsTrigger value={getPreviewTabKey(tab)} title={name} aria-label={`${label} · ${name}`} className="h-full min-w-0 max-w-44 rounded-none px-2 text-xs">
+                {tab.kind === "table" ? <TableIcon name={table?.icon} className="size-4 shrink-0" /> : <Icon aria-hidden="true" />}
+                <span className="truncate">{name}</span>
+              </TabsTrigger>
+              <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label={t("preview.closeTab", { label: `${label} · ${name}` })} onClick={() => {
+                const close = () => {
+                  closeTabRef.current(getPreviewTabKey(tab));
+                  requestAnimationFrame(() => headerRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], button[aria-haspopup="menu"]')?.focus());
+                };
+                const beforeClose = headers[getPreviewTabKey(tab)]?.beforeClose;
+                if (beforeClose) beforeClose(close);
+                else close();
+              }}><X /></Button>
             </div>;
           })}
-        </TabsList>
-        {tabs.map((tab) => <TabsContent key={`${tab.kind}:${tab.siteId ?? tab.tableId}:${tab.viewId ?? ""}`} value={tab.kind} forceMount hidden={tab.kind !== activeKind} className="min-h-0 overflow-hidden data-[state=inactive]:hidden">
-          {getPreviewSlotRenderer(tab.kind)?.(contexts[tab.kind]) ?? <p className="p-4 text-sm text-muted-foreground">{t("preview.noContent")}</p>}
-        </TabsContent>)}
-      </Tabs>}
+        </TabsList>}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button variant="ghost" size={tabs.length ? "icon" : "sm"} className="shrink-0" aria-label={t("preview.openTable")} title={t("preview.openTable")}><TableShortcutIcon />{!tabs.length && <>{t("preview.openTable")}<ChevronDown /></>}</Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-w-[calc(100vw-2rem)]">
+            <DropdownMenuLabel>{t("preview.pickTable")}</DropdownMenuLabel>
+            <DropdownMenuGroup>{tables.map(table => <DropdownMenuItem key={table.id} onSelect={() => onOpenTab({ kind: "table", tableId: table.id })}><TableIcon name={table.icon} className="size-4 shrink-0" /><span className="truncate">{table.name}</span></DropdownMenuItem>)}
+              {!tables.length && <DropdownMenuItem disabled>{t("preview.noTables")}</DropdownMenuItem>}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {header?.actions}
+        {activeTab && <Button variant="ghost" size="icon" className="shrink-0" aria-label={t("preview.refreshPanel")} title={t("preview.refreshPanel")} disabled={header?.refresh?.disabled || header?.refresh?.busy} onClick={() => (header?.refresh?.run ?? contexts[getPreviewTabKey(activeTab)]?.onRefresh)?.()}><RefreshCw className={cn(header?.refresh?.busy && "animate-spin motion-reduce:animate-none")} /></Button>}
+      </header>
+      {tabs.map(tab => <TabsContent key={getPreviewTabKey(tab)} value={getPreviewTabKey(tab)} forceMount hidden={getPreviewTabKey(tab) !== activeKey} className="min-h-0 min-w-0 overflow-hidden data-[state=inactive]:hidden">
+        {getPreviewSlotRenderer(tab.kind)?.({ ...contexts[getPreviewTabKey(tab)], onHeaderChange: headerCallbacks[getPreviewTabKey(tab)] }) ?? <p className="p-4 text-sm text-muted-foreground">{t("preview.noContent")}</p>}
+      </TabsContent>)}
+    </Tabs>
   </section>;
 }
