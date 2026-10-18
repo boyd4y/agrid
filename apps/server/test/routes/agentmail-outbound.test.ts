@@ -70,7 +70,7 @@ test("send/reply protocol and tenant boundaries without database or real network
   assert.deepEqual(posts[1], { path: `/v0/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(messageId)}/reply`, body: { cc: ["copy@example.test"], reply_all: false, text: "Hello" } });
   const error = (status: number) => (value: unknown) => value instanceof ServiceError && value.status === status;
   for (const operation of [() => sendAgentMailMessage(deps, send), () => replyAgentMailMessage(deps, { ...base, messageId })]) {
-    for (const failure of [400, 401, 404, 429, 500]) { status = failure; await assert.rejects(operation, error(502)); }
+    for (const failure of [400, 401, 404, 429, 500]) { status = failure; await assert.rejects(operation, error(failure < 500 && failure !== 429 ? failure : 502)); }
     status = 200; malformed = true; await assert.rejects(operation, error(502)); malformed = false;
     failNetwork = true; await assert.rejects(operation, error(503)); failNetwork = false;
   }

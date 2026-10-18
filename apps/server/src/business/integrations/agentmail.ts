@@ -20,7 +20,7 @@ export async function agentMailRequest(deps: ProviderDependencies, apiKey: strin
       ...(init?.body === undefined ? {} : { body: JSON.stringify(init.body) }), redirect: "error", signal: AbortSignal.timeout(10_000) });
   } catch { throw new ServiceError(503, { message: "AgentMail 暂时无法连接，请重试" }); }
   if (response.status === 404 && init?.method === "DELETE" && init.allowNotFound) { await response.body?.cancel(); return {}; }
-  if (!response.ok) { await response.body?.cancel(); throw new ServiceError(502, { message: `AgentMail 请求失败（HTTP ${response.status}），请检查凭证、权限和公网地址` }); }
+  if (!response.ok) { await response.body?.cancel(); throw new ServiceError(response.status >= 400 && response.status < 500 && response.status !== 429 ? response.status : 502, { message: `AgentMail 请求失败（HTTP ${response.status}），请检查凭证、权限和公网地址` }); }
   if (response.status === 204) return {};
   try { return jsonObject(await boundedBody(response, 10 * 1024 * 1024)); }
   catch { throw new ServiceError(502, { message: "AgentMail 响应格式或大小不正确" }); }
