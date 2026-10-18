@@ -22,6 +22,8 @@ registerPreviewSlot("automations", ctx => <AutomationPreviewContent {...ctx} />)
 
 const icons = { table: APP_NAVIGATION.tables.icon, site: APP_NAVIGATION.sites.icon, report: ChartNoAxesCombined, form: FileInput, automations: APP_NAVIGATION.automations.icon };
 type Props = {
+  pickerOpen: boolean;
+  onPickerOpenChange: (open: boolean) => void;
   tabs: PreviewTab[];
   activeKey: string | null;
   selectedKeys: Record<string, string>;
@@ -35,7 +37,7 @@ type Props = {
 };
 
 /** Visible identity is the type; mounted content identity remains the stable resource ID. */
-export function PreviewSlot({ tabs, activeKey, selectedKeys, contexts, tables, onOpenTab, onOpenType, onCloseTab, onSelectTab, onShowTables }: Props) {
+export function PreviewSlot({ pickerOpen, onPickerOpenChange, tabs, activeKey, selectedKeys, contexts, tables, onOpenTab, onOpenType, onCloseTab, onSelectTab, onShowTables }: Props) {
   const { t } = useTranslation("app");
   const [headers, setHeaders] = useState<Record<string, PreviewSlotHeader | null>>({});
   const headerRef = useRef<HTMLElement>(null);
@@ -83,7 +85,7 @@ export function PreviewSlot({ tabs, activeKey, selectedKeys, contexts, tables, o
   return <section className="@container flex h-full min-h-0 min-w-0 flex-col bg-background" data-testid="workspace-preview-slot">
     <Tabs value={activeTab?.kind ?? ""} onValueChange={kind => { const key = selectedKeys[kind]; if (key) onSelectTab(key); }} className="min-h-0 min-w-0 flex-1 gap-0">
       <header ref={headerRef} className="flex h-11 min-w-0 shrink-0 items-center gap-0.5 border-b border-border px-1" data-testid="preview-slot-header">
-        {activeTab ? <PreviewResourcePicker key={activeTab.kind} kind={activeTab.kind} selected={activeTab} title={header?.title} tables={tables} onSelect={onOpenTab} /> : <span className="min-w-0 flex-1 px-2 text-sm font-medium">{t("preview.title")}</span>}
+        {activeTab ? <PreviewResourcePicker key={activeTab.kind} open={pickerOpen} onOpenChange={onPickerOpenChange} kind={activeTab.kind} selected={activeTab} title={header?.title} tables={tables} onSelect={onOpenTab} /> : <span className="min-w-0 flex-1 px-2 text-sm font-medium">{t("preview.title")}</span>}
         {kinds.length > 0 && <TabsList variant="line" aria-label={t("preview.openTabs")} className="h-full min-w-0 flex-1 justify-start overflow-x-auto">
           {kinds.map(kind => { const Icon = icons[kind as keyof typeof icons] ?? FileInput; return <TabsTrigger key={kind} value={kind} id={`preview-trigger-${kind}`} aria-controls={`preview-panel-${kind}`} ref={activeTab?.kind === kind ? activeTabRef : undefined} title={label(kind)} aria-label={label(kind)} className="h-full shrink-0 rounded-none px-2 text-xs"><Icon aria-hidden="true" className="size-4 shrink-0" /><span className="@max-[450px]:sr-only">{label(kind)}</span></TabsTrigger>; })}
         </TabsList>}
@@ -95,7 +97,7 @@ export function PreviewSlot({ tabs, activeKey, selectedKeys, contexts, tables, o
         {kinds.length > 0 && <Button variant="ghost" size="icon" className="size-7 shrink-0" aria-label={t("preview.home")} title={t("preview.home")} aria-pressed={!activeTab} onClick={onShowTables}><Home /></Button>}
       </header>
       {!activeTab && <div ref={launcherRef} role="region" aria-label={t("preview.title")} className="flex min-h-0 min-w-0 flex-1 overflow-auto p-4" data-testid="preview-launcher">
-        <div className="m-auto flex w-full max-w-64 shrink-0 flex-col gap-2">{PREVIEW_SHORTCUTS.map((kind, index) => { const Icon = icons[kind]; return <Button key={kind} variant="ghost" className="h-12 w-full justify-start gap-3" aria-keyshortcuts={`Control+Shift+${index + 1}`} onClick={() => onOpenType(kind)}><Icon className="size-5 shrink-0" /><span className="flex-1 text-left">{label(kind)}</span><kbd className="text-xs text-muted-foreground">{previewShortcutLabel(index)}</kbd></Button>; })}</div>
+        <div className="m-auto flex w-full max-w-96 shrink-0 flex-col gap-3">{PREVIEW_SHORTCUTS.map((kind, index) => { const Icon = icons[kind]; return <Button key={kind} variant="secondary" className="h-20 w-full justify-start gap-4 border border-border px-5 @max-[360px]:gap-3 @max-[360px]:px-3 hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none" aria-keyshortcuts={`Control+Shift+${index + 1}`} onClick={() => onOpenType(kind)}><Icon aria-hidden="true" className="size-5 shrink-0" /><span className="flex-1 text-left text-base">{label(kind)}</span><kbd className="rounded border border-border bg-background px-1.5 py-0.5 text-xs text-muted-foreground">{previewShortcutLabel(index)}</kbd></Button>; })}</div>
       </div>}
       {tabs.map(tab => {
         const key = getPreviewTabKey(tab), visible = key === activeKey;

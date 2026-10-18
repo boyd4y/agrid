@@ -29,7 +29,7 @@ try {
   const launcher = slot.getByTestId('preview-launcher');
   assert.equal(await launcher.getByRole('button').count(), 3);
   await launcher.getByRole('button', { name: /表格/ }).click();
-  await select(table); await slot.getByTestId('preview-slot-table').waitFor();
+  await page.locator(`[data-resource-id="${table.id}"]`).click(); await slot.getByTestId('preview-slot-table').waitFor();
   await open({ kind: 'site', siteId: sites[0].id });
   await frame().getByRole('heading', { name: '活动页面正文' }).waitFor();
   await frame().getByRole('textbox').fill('切换保留');

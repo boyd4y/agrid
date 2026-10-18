@@ -9,11 +9,11 @@ import { subscribeDataChanges } from "@/lib/data-changes";
 import type { PreviewTab } from "./preview-slot";
 
 type Resource = { id: string; name: string };
-export function PreviewResourcePicker({ kind, selected, title, tables, onSelect }: {
+export function PreviewResourcePicker({ open, onOpenChange, kind, selected, title, tables, onSelect }: {
+  open: boolean; onOpenChange: (open: boolean) => void;
   kind: string; selected?: PreviewTab; title?: string; tables: Resource[]; onSelect: (tab: PreviewTab) => void;
 }) {
   const { t } = useTranslation(["app", "common"]);
-  const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export function PreviewResourcePicker({ kind, selected, title, tables, onSelect 
   const resources = remote ? items : tables;
   const id = selected?.siteId ?? selected?.reportId ?? selected?.tableId;
   const label = title ?? resources.find(item => item.id === id)?.name ?? t("preview.chooseResource");
-  return <Popover open={open} onOpenChange={setOpen}>
+  return <Popover open={open} onOpenChange={onOpenChange}>
     <PopoverTrigger asChild><Button variant="ghost" size="sm" className="min-w-0 max-w-48 basis-[36%] justify-start" title={label} aria-label={t("preview.selectResource", { name: label })} data-testid="preview-resource-picker"><span className="min-w-0 flex-1 truncate">{label}</span><ChevronDown className="size-3 shrink-0" /></Button></PopoverTrigger>
     <PopoverContent align="start" className="w-72 max-w-[calc(100vw-1rem)] p-0">
       <Command><CommandInput placeholder={t("preview.searchResources")} aria-label={t("preview.searchResources")} /><CommandList>
@@ -49,7 +49,7 @@ export function PreviewResourcePicker({ kind, selected, title, tables, onSelect 
           <CommandGroup>{resources.map((item, index) => {
             const duplicates = resources.filter(resource => resource.name === item.name);
             const name = duplicates.length > 1 ? `${item.name} · ${t("preview.duplicateResource", { index: duplicates.findIndex(resource => resource.id === item.id) + 1 })}` : item.name;
-            return <CommandItem key={item.id} value={`${item.name} ${index}`} aria-label={name} title={name} data-resource-id={item.id} onSelect={() => { onSelect({ kind, ...(kind === "site" ? { siteId: item.id } : kind === "report" ? { reportId: item.id } : { tableId: item.id }) }); setOpen(false); }}><span className="min-w-0 flex-1 truncate">{name}</span>{id === item.id && <Check />}</CommandItem>;
+            return <CommandItem key={item.id} value={`${item.name} ${index}`} aria-label={name} title={name} data-resource-id={item.id} onSelect={() => { onSelect({ kind, ...(kind === "site" ? { siteId: item.id } : kind === "report" ? { reportId: item.id } : { tableId: item.id }) }); onOpenChange(false); }}><span className="min-w-0 flex-1 truncate">{name}</span>{id === item.id && <Check />}</CommandItem>;
           })}</CommandGroup>
         </>}
       </CommandList></Command>
