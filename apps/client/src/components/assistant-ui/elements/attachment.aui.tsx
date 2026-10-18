@@ -210,7 +210,7 @@ const AttachmentUI: FC = () => {
                     aria-hidden="true"
                     className="aui-attachment-tile-uploading bg-background/60 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
                   >
-                    <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+                    <Loader2Icon className="text-muted-foreground size-4 animate-spin motion-reduce:animate-none" />
                   </div>
                 )}
                 {isError && (

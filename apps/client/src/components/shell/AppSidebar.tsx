@@ -124,7 +124,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r border-border bg-muted transition-[width] duration-200 ease-out",
+        "flex h-full shrink-0 flex-col border-r border-border bg-muted transition-[width] motion-reduce:transition-none duration-200 ease-out",
         sidebarCollapsed ? "w-[56px]" : "w-[240px]"
       )}
       data-testid="app-sidebar"
@@ -190,7 +190,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
           {!sidebarCollapsed && (
             <div className="mb-1 flex items-center justify-between px-2.5">
               <button type="button" onClick={() => setTablesExpanded((expanded) => !expanded)} aria-expanded={tablesExpanded} aria-controls="sidebar-my-tables" className="flex items-center gap-1 rounded py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground">
-                <NiChevronRight className={cn("size-3 transition-transform", tablesExpanded && "rotate-90")} />{t("shell.myTables")}
+                <NiChevronRight className={cn("size-3 transition-transform motion-reduce:transition-none", tablesExpanded && "rotate-90")} />{t("shell.myTables")}
               </button>
               <button
                 type="button"

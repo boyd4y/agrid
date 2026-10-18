@@ -20,7 +20,7 @@ try {
   await page.route('**/api/chat',route=>route.continue());
   const thread=await api('/threads',{clientId:crypto.randomUUID(),agentId:agent.id,context:{page:'ai'}});
   await page.goto(frontend+'/app');
-  await page.evaluate(id=>localStorage.setItem('agrid.chat.lastThreadByResource',JSON.stringify({workspace:id})),thread.id);
+  await page.evaluate(id=>localStorage.setItem('tabdo.chat.lastThreadByResource',JSON.stringify({workspace:id})),thread.id);
   await Promise.all([page.waitForResponse(response=>response.url().includes(`/threads/${thread.id}/messages`) && response.status()===200),page.reload()]);
   const input=page.getByRole('textbox',{name:'消息输入框'});await input.waitFor();
   await input.fill('Verify a live stream');await input.press('Enter');
