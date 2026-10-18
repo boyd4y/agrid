@@ -176,7 +176,7 @@
       "name": "名称",
       "permissions": "权限",
       "tables": "表格",
-      "tablesHint": "按工作区选择表格及允许的操作，包含正文和图片。允许发布会将内容公开。",
+      "tablesHint": "按工作区选择表格及操作。新增可创建正文，更新可修改正文和图片。允许发布会公开内容。",
       "grantDescription": "只授权所需资源与操作；允许发布需单独开启。",
       "createdTitle": "API Key 已创建",
       "once": "请立即复制 Key，关闭后不会再次显示。",
@@ -206,7 +206,7 @@
         "canPublish": "允许发布"
       },
       "legacyPreserved": "保留原授权：此表的原有权限与下方统一选项不同。",
-      "legacyConversion": "修改将按现有记录操作与发布权限转换为统一授权，补齐对应正文和图片能力，并替换此表原有权限。其他资源不变。",
+      "legacyConversion": "修改将按所选操作替换此表原授权：新增可首次创建正文，更新可修改正文和上传图片。其他资源不变。",
       "modifyTable": "修改此表授权",
       "modifyTableNamed": "修改此表授权：{{name}}",
       "recordFields": "标题与属性",

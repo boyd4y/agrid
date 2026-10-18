@@ -176,7 +176,7 @@
       "name": "Name",
       "permissions": "Permissions",
       "tables": "Table",
-      "tablesHint": "Choose tables and allowed actions by workspace, including bodies and images. Allow publishing makes content public.",
+      "tablesHint": "Choose tables and actions by workspace. Create can add a body; update can edit bodies and images. Allow publishing makes content public.",
       "grantDescription": "Grant only the resources and actions needed. Enable publishing separately.",
       "createdTitle": "API key created",
       "once": "Copy the key now. It will not be displayed again.",
@@ -209,7 +209,7 @@
         "canPublish": "Allow publishing"
       },
       "legacyPreserved": "Original access preserved: this table has permissions that differ from the unified options.",
-      "legacyConversion": "Modifying converts the current record actions and publishing permission to unified access, adds matching body and image access, and replaces this table’s original permissions. Other resources stay unchanged.",
+      "legacyConversion": "Modifying replaces this table’s original access with the selected actions: create can add a first body; update can edit bodies and upload images. Other resources stay unchanged.",
       "modifyTable": "Modify table access",
       "modifyTableNamed": "Modify table access: {{name}}",
       "recordFields": "Titles and properties",

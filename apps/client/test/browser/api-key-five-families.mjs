@@ -51,8 +51,8 @@ try {
   await dialog.getByRole('checkbox', { name: `${workspace.name} / Combined content · 新增`, exact: true }).check();
   input = { ...input,
     permissions: [{ ...input.permissions[0], canCreate: true }],
-    documentPermissions: [{ ...input.documentPermissions[0], canCreate: true, canUpdate: true, canUpload: true, canReadHistory: false, canRestore: false }],
-    blogPermissions: [{ ...input.blogPermissions[0], canConfigure: true, canBuild: false, canRestore: false }],
+    documentPermissions: [{ ...input.documentPermissions[0], canCreate: true, canUpdate: false, canUpload: false, canReadHistory: false, canRestore: false }],
+    blogPermissions: [{ ...input.blogPermissions[0], canConfigure: false, canBuild: false, canRestore: false }],
   };
   await dialog.getByRole('button', { name: '保存', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
   const actual = (await api('/user/api-keys')).keys.find(item => item.id === saved.id);

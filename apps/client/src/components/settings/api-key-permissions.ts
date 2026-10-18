@@ -37,9 +37,11 @@ export const tableOperations = [...operations, "canPublish"] as const;
 export function tableAccessGrants(tableId: string, access: TableAccess) {
   const { canRead, canCreate, canUpdate, canDelete, canPublish } = access;
   const table: TablePermission = { tableId, canRead, canCreate, canUpdate, canDelete };
-  const document: DocumentPermission = { tableId, canRead, canCreate: canCreate || canUpdate, canUpdate: canCreate || canUpdate,
-    canUpload: canCreate || canUpdate, canReadHistory: false, canRestore: false };
-  const blog: BlogPermission = { tableId, canRead, canConfigure: canCreate || canUpdate, canBuild: canPublish, canPublish, canRestore: false };
+  // Create uses createDocument. Only Update needs both bits for lazy body
+  // creation via replaceDocument(0), plus upload and existing blog configuration.
+  const document: DocumentPermission = { tableId, canRead, canCreate: canCreate || canUpdate, canUpdate,
+    canUpload: canUpdate, canReadHistory: false, canRestore: false };
+  const blog: BlogPermission = { tableId, canRead, canConfigure: canUpdate, canBuild: canPublish, canPublish, canRestore: false };
   return { table, document, blog };
 }
 

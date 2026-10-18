@@ -36,14 +36,24 @@ test('unified read includes private bodies/images and internal blog reads, never
   assert.equal(getTableAccess(result, 'a').legacy, false);
 });
 
-test('create/update cover body upsert and upload plus draft configuration; only explicit publish enables build and shared preview', () => {
-  for (const op of ['canCreate', 'canUpdate']) {
-    const { table, document, blog } = tableAccessGrants('a', access({ [op]: true }));
-    assert.equal(table[op], true);
-    assert.equal(document.canCreate, true); assert.equal(document.canUpdate, true); assert.equal(document.canUpload, true);
-    assert.equal(document.canRead, false); assert.equal(document.canRestore, false);
-    assert.equal(blog.canConfigure, true); assert.equal(blog.canBuild, false); assert.equal(blog.canPublish, false); assert.equal(blog.canRestore, false);
-  }
+test('create only grants first body creation, without body replacement, image upload or blog configuration', () => {
+  const { table, document, blog } = tableAccessGrants('a', access({ canCreate: true }));
+  assert.deepEqual(table, { tableId: 'a', canRead: false, canCreate: true, canUpdate: false, canDelete: false });
+  assert.deepEqual(document, { tableId: 'a', canRead: false, canCreate: true, canUpdate: false, canUpload: false, canReadHistory: false, canRestore: false });
+  assert.deepEqual(blog, { tableId: 'a', canRead: false, canConfigure: false, canBuild: false, canPublish: false, canRestore: false });
+  const result = setTableAccess(empty(), 'a', access({ canCreate: true }));
+  assert.deepEqual(result.blogPermissions, []);
+  assert.equal(getTableAccess(result, 'a').legacy, false);
+});
+
+test('update only supports existing body replacement, lazy body creation, images and draft configuration without adding rows or publishing', () => {
+  const { table, document, blog } = tableAccessGrants('a', access({ canUpdate: true }));
+  assert.deepEqual(table, { tableId: 'a', canRead: false, canCreate: false, canUpdate: true, canDelete: false });
+  assert.deepEqual(document, { tableId: 'a', canRead: false, canCreate: true, canUpdate: true, canUpload: true, canReadHistory: false, canRestore: false });
+  assert.deepEqual(blog, { tableId: 'a', canRead: false, canConfigure: true, canBuild: false, canPublish: false, canRestore: false });
+});
+
+test('only explicit publishing enables build and shared preview', () => {
   const result = setTableAccess(empty(), 'a', access({ canPublish: true }));
   assert.deepEqual(result.permissions, []); assert.deepEqual(result.documentPermissions, []);
   assert.equal(result.blogPermissions[0].canBuild, true); assert.equal(result.blogPermissions[0].canPublish, true);
@@ -53,6 +63,9 @@ test('create/update cover body upsert and upload plus draft configuration; only 
 
 test('legacy read without body, write-only, preview-only, history/restore and independent document grants require explicit conversion', () => {
   const legacyInputs = [
+    { ...empty(), permissions: [{ ...grant('a', false), canCreate: true }],
+      documentPermissions: [{ tableId: 'a', canRead: false, canCreate: true, canUpdate: true, canUpload: true }],
+      blogPermissions: [{ tableId: 'a', canConfigure: true }] },
     { ...empty(), permissions: [grant('a')] },
     { ...empty(), documentPermissions: [{ tableId: 'a', canRead: true }] },
     { ...empty(), blogPermissions: [{ tableId: 'a', canBuild: true }] },
