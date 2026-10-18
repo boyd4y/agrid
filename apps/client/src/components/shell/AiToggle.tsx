@@ -17,7 +17,7 @@ export function AiToggle() {
       variant={aiOpen ? "secondary" : "default"}
       onClick={toggleAi}
       className={cn(
-        "fixed bottom-6 right-6 z-50 h-11 gap-2 rounded-xl border border-border px-4 shadow-md",
+        "fixed bottom-6 right-6 z-50 h-11 gap-2 rounded-xl border border-border px-4",
         !aiOpen && "border-agent/50 bg-agent text-background hover:bg-agent/90"
       )}
       aria-label={aiOpen ? t("collapseChat") : t("openChat")}

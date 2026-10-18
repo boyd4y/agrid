@@ -107,7 +107,7 @@ function SortableFieldRow({
         onClick={onSelect}
       >
         <span className="font-medium">{label}</span>
-        <span className="ml-1.5 text-[10px] uppercase text-muted-foreground">
+        <span className="ml-1.5 text-[10px] text-muted-foreground">
           {type}
         </span>
       </button>

@@ -87,7 +87,7 @@ function NavItem({
           base,
           collapsed && "justify-center px-2",
           active
-            ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border"
+            ? "bg-card font-medium text-foreground ring-1 ring-border"
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
         );
       }}
@@ -298,7 +298,7 @@ function SidebarTable({ table, collapsed, onTogglePin }: { table: TableMeta; col
   const [error, setError] = useState<string | null>(null);
   return <div>
     <div className="group relative">
-      <Link to={`/app/tables/${table.id}`} title={table.name} data-testid={`sidebar-table-${table.id}`} className={cn(SIDEBAR_ROW, "w-full", collapsed ? "justify-center px-2" : "pr-9", location.pathname.includes(table.id) ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+      <Link to={`/app/tables/${table.id}`} title={table.name} data-testid={`sidebar-table-${table.id}`} className={cn(SIDEBAR_ROW, "w-full", collapsed ? "justify-center px-2" : "pr-9", location.pathname.includes(table.id) ? "bg-card font-medium text-foreground ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
         <TableIcon name={table.icon} className={SIDEBAR_ICON} />{!collapsed && <span className="truncate">{table.name}</span>}
       </Link>
       {!collapsed && <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 size-6 -translate-y-1/2 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100" disabled={busy} title={table.pinned ? t("shell.unpinFromWorkspace") : t("shell.pinToWorkspace")} aria-label={`${table.pinned ? t("shell.unpin") : t("shell.pin")}${table.name}`} onClick={async () => {

@@ -15,14 +15,14 @@ import {
 import type { BlogCoverId } from "./BlogCover";
 
 const meta: Meta = {
-  title: "Illustrations/Notion",
+  title: "Illustrations/Tabdo",
   parameters: { layout: "padded" },
 };
 export default meta;
 
 export const Hero: StoryObj = {
   render: () => (
-    <div className="rounded-2xl bg-[#F7F6F3] p-6">
+    <div className="rounded-2xl bg-muted p-6">
       <HeroWorkspace className="w-full max-w-2xl" />
     </div>
   ),
@@ -49,7 +49,7 @@ export const AuthSide: StoryObj = {
 
 export const Empty: StoryObj = {
   render: () => (
-    <div className="flex flex-col items-center rounded-2xl border border-[#E3E2DE] bg-white p-10">
+    <div className="flex flex-col items-center rounded-2xl border border-border bg-background p-10">
       <EmptyTable className="w-72" />
       <p className="mt-4 text-sm text-[#9B9A97]">选择或新建一张表</p>
     </div>
@@ -93,7 +93,7 @@ export const BlogCovers: StoryObj = {
     <div className="grid gap-4 sm:grid-cols-2">
       {coverIds.map((id) => (
         <div key={id} className="space-y-2">
-          <div className="overflow-hidden rounded-2xl border border-[#E3E2DE] bg-[#F7F6F3]">
+          <div className="overflow-hidden rounded-2xl border border-border bg-muted">
             <BlogCover id={id} className="aspect-[16/9] w-full" />
           </div>
           <p className="text-center text-xs text-[#9B9A97]">{id}</p>
@@ -106,7 +106,7 @@ export const BlogCovers: StoryObj = {
 
 export const CommandLayer: StoryObj = {
   render: () => (
-    <div className="rounded-2xl bg-[#F7F6F3] p-6">
+    <div className="rounded-2xl bg-muted p-6">
       <CommandLayerArt className="w-full max-w-4xl" />
     </div>
   ),
@@ -116,7 +116,7 @@ export const FeatureScenes: StoryObj = {
   render: () => (
     <div className="grid gap-6">
       {(["table", "kanban", "agents"] as const).map((v) => (
-        <div key={v} className="rounded-2xl border border-[#E3E2DE] bg-[#F7F6F3] p-4">
+        <div key={v} className="rounded-2xl border border-border bg-muted p-4">
           <FeatureScene variant={v} className="w-full max-w-lg" />
           <p className="mt-2 text-center text-xs text-[#9B9A97]">{v}</p>
         </div>

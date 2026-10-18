@@ -598,7 +598,7 @@ function ToolFallbackApprovalQuestions({
           >
             <p className="aui-tool-fallback-approval-question-prompt text-foreground whitespace-pre-line">
               {question.header ? (
-                <span className="text-muted-foreground me-1.5 text-xs font-medium uppercase">
+                <span className="text-muted-foreground me-1.5 text-xs font-medium">
                   {question.header}
                 </span>
               ) : null}
