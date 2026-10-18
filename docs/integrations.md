@@ -62,3 +62,7 @@ AgentMail首次注册使用固定 `https://api.agentmail.to/v0/webhooks`，明�
 DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
   pnpm --filter @tabdo/server exec tsx --test test/routes/integrations.test.ts
 ```
+
+## Outbound delivery guarantees
+
+AgentMail outbound sends and replies are at-least-once. The provider acknowledges delivery before the local receipt transaction commits; a crash or fence loss between those operations can cause duplicate sends. After a successful provider ACK, receipt transaction failures other than fence loss are permanent failures to avoid automatically sending again. Check provider delivery before manually retrying such a failure. No provider idempotency key is assumed.

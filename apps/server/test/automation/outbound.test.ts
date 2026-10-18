@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
-import { executeNext, recordFailure, PermanentError, type AutomationExecutionDependencies } from "../../src/business/automation/execution.js";
+import { executeNext, recordFailure, PermanentError, FenceLostError, type AutomationExecutionDependencies } from "../../src/business/automation/execution.js";
 import { ServiceError } from "../../src/business/errors.js";
 import { automationRuns, automationStepReceipts } from "../../src/business/db/schema.js";
 
-function fixture(type: "send_email" | "reply_email", failure?: Error) {
+function fixture(type: "send_email" | "reply_email", failure?: Error, receiptFailure?: Error) {
   const organizationId = randomUUID(), connectionId = randomUUID(), workspaceId = randomUUID();
   const action = { type, connectionId, inboxId: "out@example.com", text: { $event: "message.text" },
     ...(type === "send_email" ? { to: { $event: "message.senders" }, subject: { $event: "message.subject" } }
@@ -16,7 +16,7 @@ function fixture(type: "send_email" | "reply_email", failure?: Error) {
   const run = { id: randomUUID(), organizationId, workspaceId, nextStep: 0, status: "running", detail: {}, ruleSnapshot: rule };
   const results = [[event], [event], [run], [{ organizationId, workspaceId, enabled: true, createdByUserId: "actor" }], [{}], [],
     [event], [run]];
-  let inTransaction = false;
+  let inTransaction = false, transactions = 0;
   const receipts: unknown[] = [], updates: { table: unknown; values: Record<string, unknown> }[] = [];
   const query = (value: unknown) => {
     const chain: Record<string, unknown> = {};
@@ -28,7 +28,12 @@ function fixture(type: "send_email" | "reply_email", failure?: Error) {
     select: () => query(results.shift()),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       assert.equal(inTransaction, false); inTransaction = true;
-      try { return await fn(database); } finally { inTransaction = false; }
+      try {
+        transactions++;
+        const result = await fn(database);
+        if (transactions === 2 && receiptFailure) throw receiptFailure;
+        return result;
+      } finally { inTransaction = false; }
     },
     update: (table: unknown) => ({ set: (values: Record<string, unknown>) => {
       updates.push({ table, values }); return query([]);
@@ -89,3 +94,18 @@ test("mail receipts remain readable without native chat ownership", async () => 
     history as unknown as Parameters<typeof readableRunDetails>[1], f.event.organizationId);
   assert(readable.has("run"));
 });
+
+for (const type of ["send_email", "reply_email"] as const) {
+  for (const failure of [new Error("receipt commit failed"), new FenceLostError("lease stolen")]) {
+    test(type + " preserves fence loss and makes other post-ACK failures permanent: " + failure.message, async () => {
+      const f = fixture(type, undefined, failure);
+      await assert.rejects(() => executeNext(f.deps, f.event.id, 1), (error: unknown) => {
+        if (failure instanceof FenceLostError) return error === failure;
+        assert(error instanceof PermanentError);
+        assert.equal(error.cause, failure);
+        return true;
+      });
+      assert(f.sent, "provider acknowledged before receipt commit failure");
+    });
+  }
+}

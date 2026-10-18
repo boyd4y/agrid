@@ -202,15 +202,22 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
   if (typeof plan === "string") return plan;
   if (plan.action.type === "send_email" || plan.action.type === "reply_email") {
     const receipt = await executeMailAction(deps, plan.action, plan.event.organizationId, plan.context, plan.steps);
-    return deps.database.transaction(async tx => {
-      const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
-      if (!event || event.finishedAt) return "done";
-      if (event.fence !== fence) throw new FenceLostError("执行租约已被接管");
-      const [run] = await tx.select().from(automationRuns).where(eq(automationRuns.id, plan.run.id)).for("update");
-      if (!run || run.nextStep !== plan.run.nextStep || !unfinishedRuns.includes(run.status)) return "continue";
-      await completeStep(deps, tx, event, run, plan.rule, receipt);
-      return "continue";
-    });
+    // AgentMail outbound is at-least-once: ACK before receipt commit, or fence loss
+    // between them, can duplicate a send.
+    try {
+      return await deps.database.transaction(async tx => {
+        const [event] = await tx.select().from(automationEvents).where(eq(automationEvents.id, id)).for("update");
+        if (!event || event.finishedAt) return "done";
+        if (event.fence !== fence) throw new FenceLostError("执行租约已被接管");
+        const [run] = await tx.select().from(automationRuns).where(eq(automationRuns.id, plan.run.id)).for("update");
+        if (!run || run.nextStep !== plan.run.nextStep || !unfinishedRuns.includes(run.status)) return "continue";
+        await completeStep(deps, tx, event, run, plan.rule, receipt);
+        return "continue";
+      });
+    } catch (error) {
+      if (error instanceof FenceLostError) throw error;
+      throw new PermanentError("AgentMail accepted the message, but saving the receipt failed; delivery may have succeeded", { cause: error });
+    }
   }
   if (plan.action.type !== "run_agent" || !plan.actorId) throw new PermanentError("Invalid native action");
   const result = await deps.runAgentAction({ runId: plan.run.id, step: plan.run.nextStep, organizationId: plan.event.organizationId,
