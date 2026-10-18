@@ -109,7 +109,7 @@ export async function createAgent(deps: MemberDependencies, actor: Actor, raw: u
     disabledTools: body.persona?.disabledTools ?? [...DEFAULT_DISABLED_PLATFORM_TOOLS],
     defaultHarness: "pi" as const,
     defaultModel: NATIVE_DEFAULT_MODEL,
-    runtime: body.persona?.runtime ?? listHarnesses().find(harness => harness.id === "pi")!.defaultRuntime,
+    runtime: body.persona?.runtime ?? listHarnesses().find(harness => harness.id === "pi")?.defaultRuntime ?? ("local" as const),
     sandboxProvider: body.persona?.sandboxProvider,
     avatarColor: body.persona?.avatarColor,
   };
