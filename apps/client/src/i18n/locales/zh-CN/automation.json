@@ -12,7 +12,9 @@
   "actions": {
     "update_field": "更新字段",
     "run_agent": "执行智能体",
-    "command": "数据操作"
+    "command": "数据操作",
+    "send_email": "发送邮件",
+    "reply_email": "回复邮件"
   },
   "updateFieldNamed": "更新「{{name}}」",
   "field": "字段",
@@ -247,5 +249,9 @@
       "description": "在 AgentMail 中创建邮箱，然后刷新重新选择。"
     },
     "pickConnection": "先选择左侧的邮件连接，再选择邮箱。"
+  },
+  "mail": {
+    "fields": "邮件字段（JSON）",
+    "hint": "填写 connectionId、inboxId 及 text 或 html。发送需填写 to 地址数组；回复需填写 messageId，可设置 replyAll。动态值使用 {\"$event\":\"message.subject\"} 或 {\"$step\":{\"index\":0,\"path\":\"messageId\"}}。"
   }
 }

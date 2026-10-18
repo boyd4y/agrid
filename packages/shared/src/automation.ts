@@ -35,7 +35,7 @@ export type AutomationTrigger =
       optionId: string;
     };
 
-export const AUTOMATION_ACTIONS = ["update_field", "run_agent", "command"] as const;
+export const AUTOMATION_ACTIONS = ["update_field", "run_agent", "command", "send_email", "reply_email"] as const;
 export type AutomationActionType = (typeof AUTOMATION_ACTIONS)[number];
 
 export type UpdateFieldAction = {
@@ -55,7 +55,8 @@ export type RunAgentAction = {
 };
 
 export type DataCommandAction = { type: "command"; command: AutomationDataCommand; input: Record<string, unknown> };
-export type AutomationAction = UpdateFieldAction | RunAgentAction | DataCommandAction;
+export type MailAutomationAction = import("zod").z.infer<typeof import("./automation-contracts.js").AUTOMATION_SEND_EMAIL_SCHEMA> | import("zod").z.infer<typeof import("./automation-contracts.js").AUTOMATION_REPLY_EMAIL_SCHEMA>;
+export type AutomationAction = UpdateFieldAction | RunAgentAction | DataCommandAction | MailAutomationAction;
 
 export type AutomationRule = {
   id: string;
@@ -108,6 +109,8 @@ export const AUTOMATION_TRIGGER_LABELS: Record<AutomationTriggerType, string> = 
 };
 
 export const AUTOMATION_ACTION_LABELS: Record<AutomationActionType, string> = {
+  send_email: "发送邮件",
+  reply_email: "回复邮件",
   update_field: "更新字段",
   run_agent: "执行智能体",
   command: "操作数据",

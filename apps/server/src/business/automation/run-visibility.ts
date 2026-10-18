@@ -31,6 +31,8 @@ export async function readableRunDetails(deps: DatabaseDependencies, history: Ru
     let unresolved = false;
     // These are platform result references, not an allowlist of fields to redact.
     for (const value of [run.detail, ...results]) {
+      // Mail thread IDs belong to the provider, not private native chat threads.
+      if (value !== run.detail && ["send_email", "reply_email"].includes(String(object(value).type))) continue;
       for (const [field, ids] of [["threadId", threadIds], ["agentRunId", agentRunIds]] as const) {
         const id = object(value)[field];
         if (id == null) continue;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sendAgentMailMessageSchema, replyAgentMailMessageSchema } from "./mail.js";
 import { ADD_COLUMN_SCHEMA, UPDATE_COLUMN_SCHEMA, BATCH_ADD_COLUMNS_SCHEMA, BATCH_UPDATE_COLUMNS_SCHEMA, BATCH_DELETE_COLUMNS_SCHEMA } from "./batch-columns.js";
 import { BATCH_ADD_ROWS_SCHEMA, BATCH_UPDATE_ROWS_SCHEMA, BATCH_DELETE_ROWS_SCHEMA } from "./batch-rows.js";
 import { BATCH_SET_RELATIONS_SCHEMA } from "./batch-relations.js";
@@ -120,7 +121,24 @@ export const AUTOMATION_TRIGGER_SCHEMA = z.discriminatedUnion("type", [
   z.object({ type: z.literal("booking_due") }).strict(),
   z.object({ type: z.literal("schedule_due") }).strict(),
 ]);
+const mailBinding = z.union([
+  z.object({ $event: z.string().min(1) }).strict(),
+  z.object({ $step: z.object({ index: z.number().int().nonnegative(), path: z.string().min(1) }).strict() }).strict(),
+]);
+type MailBinding = z.infer<typeof mailBinding>;
+type BindableField<T extends z.ZodType> = T extends z.ZodOptional<infer Inner>
+  ? z.ZodOptional<z.ZodType<z.output<Inner> | MailBinding>>
+  : z.ZodType<z.output<T> | MailBinding>;
+function bindableMailFields<T extends Record<string, z.ZodType>>(shape: T) {
+  return Object.fromEntries(Object.entries(shape).map(([key, field]) => [
+    key, key === "connectionId" ? field : field.safeParse(undefined).success ? z.union([field, mailBinding]).optional() : z.union([field, mailBinding]),
+  ])) as { [K in keyof T]: K extends "connectionId" ? T[K] : BindableField<T[K]> };
+}
+export const AUTOMATION_SEND_EMAIL_SCHEMA = z.object({ ...bindableMailFields(sendAgentMailMessageSchema.shape), type: z.literal("send_email") }).strict();
+export const AUTOMATION_REPLY_EMAIL_SCHEMA = z.object({ ...bindableMailFields(replyAgentMailMessageSchema.shape), type: z.literal("reply_email") }).strict();
+
 export const AUTOMATION_ACTION_SCHEMA = z.discriminatedUnion("type", [
+  AUTOMATION_SEND_EMAIL_SCHEMA, AUTOMATION_REPLY_EMAIL_SCHEMA,
   z.object({ type: z.literal("update_field"), columnId: uuid, value }).strict(),
   z.object({ type: z.literal("run_agent"), agentUserId: z.string().min(1), prompt: z.string().trim().min(1).max(30000) }).strict(),
   z.object({ type: z.literal("command"), command: z.enum(AUTOMATION_DATA_COMMANDS), input: z.record(z.string(), z.unknown()) }).strict(),
@@ -165,6 +183,7 @@ export function validateAutomationActionReferences(actions: readonly AutomationA
   };
   actions.forEach((action, index) => {
     if (action.type === "command") visit(action.input, index);
+    if (action.type === "send_email" || action.type === "reply_email") visit(action, index);
     if (action.type === "run_agent") {
       for (const match of (action.prompt ?? "").matchAll(/\{\{\s*(event|steps)\.([^{}]+?)\s*\}\}/g)) {
         const referencePath = match[2]!.trim(); path(referencePath);
