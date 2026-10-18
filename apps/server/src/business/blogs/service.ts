@@ -198,9 +198,11 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           let slug: string;
           do { slug = `post-${deps.uuid().replaceAll("-", "")}`; }
           while ((await tx.select({ id: rows.id }).from(rows).where(and(eq(rows.tableId, tableId), sql`${rows.cells}->>${mapping.slug} = ${slug}`)).limit(1)).length);
+          // Key grants resolve the target from the blog, independently of ambient member scope.
+          const sourceDeps = { ...deps, workspaceId };
           const identity = { organizationId, actorId: caller.kind === "key" ? undefined : caller.actorId };
-          if (row) await updateCellsInTransaction(deps, tx, { ...identity, rowId: row.id, cells: { [mapping.slug]: slug }, expectedVersion: row.version });
-          else row = await addRow(deps, { ...identity, tableId, cells: { [mapping.title]: input.title, [mapping.slug]: slug } }, tx);
+          if (row) await updateCellsInTransaction(sourceDeps, tx, { ...identity, rowId: row.id, cells: { [mapping.slug]: slug }, expectedVersion: row.version });
+          else row = await addRow(sourceDeps, { ...identity, tableId, cells: { [mapping.title]: input.title, [mapping.slug]: slug } }, tx);
         }
         result = { tableId, rowId: row.id }; break;
       }
