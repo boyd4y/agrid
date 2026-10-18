@@ -285,7 +285,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         text: "Files can be viewed and downloaded only by workspace members with access. To add a file through an API, upload it in tabdo first.",
       },
       { type: "cards", items: [
-        { title: "Use record bodies", description: "Enable a body, write long-form content, and review its history.", href: "/docs/record-documents", badge: "Body" },
+        { title: "Use record bodies", description: "Write directly on a record page and review body history.", href: "/docs/record-documents", badge: "Body" },
         { title: "Document API", description: "Read and update bodies with REST, GraphQL, or MCP.", href: "/docs/document-api", badge: "API" },
         { title: "Table calendar views", description: "Display date records as all-day items and edit the original rows.", href: "/docs/table-calendar", badge: "View" },
       ] },
@@ -295,13 +295,14 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
     slug: "record-documents",
     sectionId: "humans",
     title: "Use record bodies",
-    description: "Add a separate body to a record and write, illustrate, and restore it in the visual editor.",
+    description: "Write and add images below a record's properties, then review body history.",
     body: [
-      { type: "p", text: "Record bodies hold long-form text and images without using table fields or loading with the table row list. Keep properties such as title and status in the table; the body is saved separately." },
+      { type: "p", text: "Each record opens as an editable page: its title and other properties appear above a body where you can write long-form text and add images. The body does not use table fields or load with the table row list. Text fields such as a custom Content field remain ordinary properties; tabdo does not move their values into the body or overwrite them." },
       { type: "ol", items: [
-        "Open a table and open a record. In its details, choose Body. If the record does not have one yet, choose Enable body to start writing.",
-        "Write in the visual body editor. Use headings, lists, quotes, code blocks, and links. Choose Upload image to add an image; pasted external images are not uploaded automatically. The editor shows saving, saved, unsaved, failed, or conflict status.",
-        "On a version conflict, the editor retains a draft in the current browser tab. Use View server version to compare, or export the local draft. Decide what to keep before loading the server version and continuing. If the browser cannot retain the draft, keep the tab open and retry saving.",
+        "Open a table and select a record to edit its title, properties, and body on the page. A body is created only when you first enter and save body content; opening a record alone creates no body or history entry.",
+        "Write below the properties. Use headings, lists, quotes, code blocks, and links. Choose Upload image to add an image; pasted external images are not uploaded automatically. The title, properties, and body save automatically, with one page status for saving, saved, unsaved, failed, or conflict.",
+        "The title/properties and body save separately, so one part can save while another fails. A failed save keeps the affected draft and offers a retry. When you close a record, switch records, return from a blog article to its list, or switch workspaces, tabdo waits for saves; if a save still fails, you can keep editing or leave while retaining the draft. Watch for the unsaved warning before refreshing or closing the browser tab.",
+        "On a body version conflict, the editor retains a draft in the current browser tab. Use View server version to compare, or export the local draft. Decide what to keep before loading the server version and continuing. If the browser cannot retain the draft, keep the tab open and retry saving.",
         "Choose History to review earlier versions. Open a version to preview it; restoring saves its content as a new version and leaves the previous history unchanged.",
         "A connected and authorized tabdo agent or MCP client can read, create, or replace a record body when its body tools are available. Image and history access also require their matching permissions. For REST or GraphQL access, see Document API.",
       ] },
@@ -309,11 +310,11 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "ul", items: [
         "Supported formatting includes paragraphs, level 1–3 headings, bullet and numbered lists, quotes, code blocks, horizontal rules, line breaks, bold, italic, strike, inline code, safe links, and images. Links must be full http, https, or mailto URLs.",
         "A body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Supported image types are PNG, JPEG, WebP, and GIF. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
-        "Unsaved drafts stay in the current browser tab. They are not a cross-device backup; confirm a body is saved before closing the tab, and export a draft you need to keep during a conflict.",
+        "Unsaved property and body drafts stay in the current browser tab. They are not a cross-device backup; confirm changes are saved before closing the tab, and export a body draft you need to keep during a conflict.",
       ] },
       { type: "cards", items: [
         { title: "Document API", description: "Review permissions, read/write examples, history, and image routes.", href: "/docs/document-api", badge: "API" },
-        { title: "Publish a blog", description: "Publish explicitly selected record bodies as blog articles.", href: "/docs/blogging", badge: "Blog" },
+        { title: "Publish a blog", description: "Write in a blog, then select articles to preview and publish.", href: "/docs/blogging", badge: "Blog" },
       ] },
     ],
   },
@@ -687,7 +688,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
       ] },
       { type: "callout", tone: "warn", text: "The site editor lets you edit website files directly. Each site can contain up to 50 files, using the file types listed above. Publish a saved version. A tab_ key is delivered with the site front-end code, so do not put a high-privilege credential there; grant only the required per-table data access." },
       { type: "cards", items: [
-        { title: "Publish a blog", description: "Choose article records, preview them, and publish a blog.", href: "/docs/blogging", badge: "Blog" },
+        { title: "Publish a blog", description: "Write in a blog, then select articles to preview and publish.", href: "/docs/blogging", badge: "Blog" },
         { title: "HTTP API and data access keys", description: "Learn about tab_ key permissions and access boundaries.", href: "/docs/api-quickstart", badge: "Security" },
       ] },
     ],
@@ -696,12 +697,13 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     slug: "blogging",
     sectionId: "humans",
     title: "Publish a blog",
-    description: "Choose articles from table records, review a preview, and publish or update a blog.",
+    description: "Write directly in a blog, then select articles to preview, publish, and update.",
     body: [
-      { type: "p", text: "A blog turns the record bodies you select into public articles. Each build and publication is a fixed version. Preview it first, then decide whether readers can access it." },
+      { type: "p", text: "A blog turns the articles you explicitly select into public content. Create a blog and write its titles and bodies on the blog page. Each build and publication is a fixed version. Saving a draft does not make it public; preview it first, then decide whether readers can access it." },
       { type: "ol", items: [
-        "Open Sites in your workspace, create a blog, and choose a content table. In the table, enable a document for each article record. Write and add images in the visual document editor; wait until its status says the changes are saved. Use document history to review or restore an earlier version.",
-        "In the blog settings, map the title and URL slug. Map a summary, author, date, cover, category, or tags as needed. Select each article you want to publish, then choose its document images and cover explicitly. Unselected records, related records, and attachments are not added to the blog.",
+        "Open Sites in your workspace and create a blog by entering a name; a description is optional. tabdo prepares the blog content and fields needed for writing. To keep using an existing content table, expand Advanced: bind an existing content table and select its table and fields.",
+        "In the blog, choose New article to enter a title and edit its body, including images, on the same page. Open an existing article there to continue writing. Its record page shows the same title, properties, and body. Use body history to review or restore an earlier version.",
+        "An article URL slug is generated automatically; an existing non-empty slug stays as it is. You can adjust mappings or a slug in advanced settings. New articles and saved edits are not automatically added to the publication list. Select each article you want to publish, then explicitly choose its body images and cover. Unselected records, related records, and attachments are not added to the blog.",
         "Save the settings and build the blog. Review the build and its preview link. Anyone with the link can open the preview for 10 minutes. Previews are excluded from search indexing; you can revoke all preview links earlier.",
         "After reviewing the preview, publish that build. Copy the blog address from its details and share it with readers. Editing a document or blog setting does not automatically change the live articles. To update them, build again, review the new preview, and publish the new version.",
         "To remove one article, choose and confirm its withdrawal. To stop the entire blog, unpublish it. You can also restore an internal configuration as a new draft, then build and publish it again.",
@@ -717,12 +719,12 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
       { type: "h2", text: "Permissions and troubleshooting" },
       { type: "ul", items: [
         "Workspace members need permission to read and edit the selected records and documents. For API access, a workspace owner or admin grants blog read, configure, build, publish, or restore permissions separately for the content table. Grant only what is needed.",
-        "If an article has no body, confirm that its document is enabled and saved. On a version conflict, the editor retains the draft in the current browser tab and offers options to view the server version, export the draft, or export it and load the server version. Compare both versions before deciding what to keep. You can preview a history version and restore it as a new version. If a build reports changed sources, reload the records, review them, and build again.",
-        "If a slug is invalid or duplicated, set a unique lowercase slug using English letters, numbers, and hyphens. If publishing or previewing fails, check the key's permission, the build version, and pending changes. Create a new preview if the old link expired.",
+        "If a title or body has not saved, check the page status and retry. When closing the article, returning to the blog article list, or switching workspaces, tabdo waits for saves and lets you keep editing or leave while retaining a draft if a save fails. On a body version conflict, the editor retains the draft in the current browser tab and offers options to view the server version, export the draft, or export it and load the server version. Compare both versions before deciding what to keep. You can preview a history version and restore it as a new version. If a build reports changed sources, reload the records, review them, and build again.",
+        "If a slug does not meet the blog requirements, adjust it in advanced settings; new articles receive a valid unique slug automatically. If publishing or previewing fails, check the key's permission, the build version, and pending changes. Create a new preview if the old link expired.",
       ] },
       { type: "cards", items: [
         { title: "Blog API", description: "Read and manage blogs with REST, GraphQL, or available MCP tools.", href: "/docs/blog-api", badge: "API" },
-        { title: "Use record bodies", description: "Learn about the editor, save status, conflict drafts, and history recovery.", href: "/docs/record-documents", badge: "Body" },
+        { title: "Use record bodies", description: "Write directly on a record page and manage body history.", href: "/docs/record-documents", badge: "Body" },
       ] },
     ],
   },
@@ -858,7 +860,7 @@ if (row) {
     title: "Blog API",
     description: "Manage blog snapshots with dedicated blog permissions using REST, GraphQL, or MCP.",
     body: [
-      { type: "p", text: "Use blog commands through the API key REST command endpoint or GraphQL. Blog permissions are granted separately for each content table; existing data or document permissions do not grant blog configuration, build, or publishing access. Blog methods are not available in the currently published npm SDK." },
+      { type: "p", text: "Use blog commands through the REST command endpoint, GraphQL, or an authorized tabdo MCP connection. Blog permissions are granted separately for each content table; existing data or document permissions do not grant blog configuration, build, or publishing access. createBlog requires a signed-in member session and cannot use an API key. The published @tabdo/sdk 0.1.1 release does not include any blog commands; use REST, GraphQL, or MCP for API access." },
       { type: "h2", text: "Create an access key" },
       { type: "ol", items: [
         "Ask a workspace owner or admin to open Settings → API Key and create a dedicated key. Add only the content table and blog permissions you need: canRead for sources and configuration, canConfigure to save settings, canBuild to build and preview, canPublish to authorize the key to publish or withdraw, and canRestore to restore a configuration revision.",
@@ -874,7 +876,28 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
-      { type: "p", text: "Create a blog with saveBlog. This configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. Successful REST commands return { ok, command, result }. The BlogDetail site ID field is id: read it as result.id in REST or data.saveBlog.id in GraphQL after saveBlog; after getBlog, use result.id in REST or data.getBlog.id in GraphQL." },
+      { type: "h2", text: "Create a blog as a signed-in member" },
+      { type: "p", text: "For a new blog with tabdo-prepared content fields, send the following request body to POST /api/commands with your signed-in workspace session. This request uses the member session, not a tab_ API key; API keys cannot create a blog. The command creates the content table and default title/slug fields. A successful REST command returns { ok, command, result }; the BlogDetail site ID is result.id." },
+      { type: "code", lang: "json", code: `{
+  "command": "createBlog",
+  "input": {
+    "name": "Field Notes",
+    "description": "Notes and updates",
+    "language": "en",
+    "idempotencyKey": "create-blog-example-1"
+  }
+}` },
+      { type: "p", text: "To start an article in that blog, send the following request body to POST /api/commands with your signed-in workspace session, or call startBlogArticle with an API key through the REST or GraphQL API. Include its siteId, current expectedVersion, and title. The command creates or prepares a source record and generates a valid slug if needed; it does not create the body, select the article for publication, or publish it. The result contains tableId and rowId. Continue writing its body through the Document API. API-key callers need blog canConfigure and content-table canCreate for a new article, or canRead and canUpdate when preparing an existing record; body permissions remain separate." },
+      { type: "code", lang: "json", code: `{
+  "command": "startBlogArticle",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 1,
+    "title": "A first note",
+    "idempotencyKey": "start-article-example-1"
+  }
+}` },
+      { type: "p", text: "To keep using an existing content table, use saveBlog to configure that table and its mapped fields. This advanced configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. After saveBlog, read its site ID from result.id in REST or data.saveBlog.id in GraphQL; after getBlog, use result.id or data.getBlog.id." },
       { type: "code", lang: "json", code: `{
   "command": "saveBlog",
   "input": {
@@ -915,7 +938,7 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
     "idempotencyKey": "publish-blog-example-1"
   }
 }` },
-      { type: "p", text: "getBlogSources returns selectable article fields, document versions, and explicitly selectable images. Its limit is at most 50; use nextAfterId to continue. getBlog reads configuration, the current build, published articles, revisions, and pendingChanges. saveBlog saves the template and explicit article list; buildBlog creates a fixed snapshot from current sources; createBlogPreview returns a 10-minute share link; publishBlog publishes a selected buildId; withdrawBlogArticle removes one article; unpublishBlog takes down the whole site; restoreBlogRevision restores an earlier configuration as a new draft. Blog REST request bodies are limited to 128 KiB. See the blog guide for content and image budgets." },
+      { type: "p", text: "createBlog prepares a new blog and default content table for a signed-in member; startBlogArticle creates or prepares an article record but does not select or publish it. getBlogSources returns selectable article fields, document versions, and explicitly selectable images. Its limit is at most 50; use nextAfterId to continue. getBlog reads configuration, the current build, published articles, revisions, and pendingChanges. saveBlog saves configuration and the explicit article list; buildBlog creates a fixed snapshot from current sources; createBlogPreview returns a 10-minute share link; publishBlog publishes a selected buildId; withdrawBlogArticle removes one article; unpublishBlog takes down the whole site; restoreBlogRevision restores an earlier configuration as a new draft. Blog REST request bodies are limited to 128 KiB. See the blog guide for content and image budgets." },
       { type: "h2", text: "GraphQL" },
       { type: "p", text: "The GraphQL endpoint is POST /api/graphql and uses the same Authorization: Bearer tab_… header and dedicated blog permissions. Pass each command's JSON input as an argument; use query for reads and mutation for writes. Use the same idempotency keys and version preconditions for REST and GraphQL writes." },
       { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
@@ -927,9 +950,9 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
 }` },
       { type: "p", text: "Use the Idempotency-Key header for writes. GraphQL request bodies are limited to 128 KiB and responses use the standard { data } or { errors } envelope. Common errors include FORBIDDEN (permission missing), NOT_FOUND (object missing or not visible), VERSION_CONFLICT (configuration or published version changed), SOURCE_CHANGED (source changed; build again), IDEMPOTENCY_MISMATCH (key reused for a different request), and LIMIT_EXCEEDED (blog budget exceeded). On a version conflict, call getBlog again and review the current state before continuing." },
       { type: "h2", text: "MCP and public reading" },
-      { type: "p", text: "Clients connected to tabdo MCP can use get_blog_sources, get_blog, save_blog, build_blog, create_blog_preview, revoke_blog_previews, publish_blog, withdraw_blog_article, unpublish_blog, and restore_blog_revision. MCP calls use the same content-table blog permissions; only give publishing access to trusted integrations." },
+      { type: "p", text: "Clients connected to tabdo MCP can use create_blog, start_blog_article, get_blog_sources, get_blog, save_blog, build_blog, create_blog_preview, revoke_blog_previews, publish_blog, withdraw_blog_article, unpublish_blog, and restore_blog_revision. API-key calls to create_blog are not supported; start_blog_article uses the same content-table blog and table permissions described above. Only give publishing access to trusted integrations." },
       { type: "p", text: "Published blogs can be read without a key. GET /s/{siteId}/ (the publicUrl returned by getBlog) opens the article list; articles, pagination, categories, and selected images use paths below that address. Draft content, withdrawn article paths, and unpublished blogs are not publicly readable. Anyone with a preview URL can access it until it expires; it is not a private, sign-in-only preview." },
-      { type: "callout", tone: "warn", text: "Do not give a publishing key to browser code or an untrusted automation. Saving, building, and publishing are separate actions; a new build does not automatically update live content. The blog commands are not available through the currently published npm SDK." },
+      { type: "callout", tone: "warn", text: "Do not give a publishing key to browser code or an untrusted automation. Saving, building, and publishing are separate actions; a new build does not automatically update live content. The published @tabdo/sdk 0.1.1 release does not include any blog commands; use REST, GraphQL, or an authorized MCP connection." },
       { type: "cards", items: [
         { title: "Publish a blog", description: "Follow the full workflow from document writing to publishing and withdrawal.", href: "/docs/blogging", badge: "Guide" },
         { title: "Authentication", description: "Learn about API key creation, table grants, and access boundaries.", href: "/docs/auth", badge: "Permissions" },
