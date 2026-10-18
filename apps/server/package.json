@@ -28,9 +28,10 @@
     "test:harness:remote": "tsx test/harness/remote-smoke.ts",
     "test:skills": "tsx --test test/skills/*.test.ts",
     "typecheck:test": "tsc --project tsconfig.test.json",
-    "test": "pnpm typecheck:test && tsx --test test/automation/*.test.ts test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/storage/*.test.ts test/routes/*.test.ts test/runner/*.test.ts",
+    "test": "pnpm typecheck:test && tsx --test test/db/*.test.ts test/automation/*.test.ts test/ai/*.test.ts test/commands/*.test.ts test/reports/*.test.ts test/skills/*.test.ts test/harness/*.test.ts test/storage/*.test.ts test/routes/*.test.ts test/runner/*.test.ts",
     "test:automations": "tsx --test test/automation/*.test.ts",
-    "test:runner": "tsx --test test/runner/*.test.ts"
+    "test:runner": "tsx --test test/runner/*.test.ts",
+    "db:seed:scenario-a": "node ../../scripts/run-env.mjs development tsx src/db/seed-scenario-a.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.78",
