@@ -26,7 +26,7 @@ export function RelatedRecordPanel() {
     };
     window.addEventListener("tabdo:open-record", open); return () => window.removeEventListener("tabdo:open-record", open);
   }, [setAiOpen, t]);
-  return <><Dialog open={visible} onOpenChange={open => { if (!open) close(); }}><DialogContent closeLabel={t("closeRecord")} aria-modal="true" aria-describedby={undefined} className="flex h-dvh w-full max-w-[960px] flex-col gap-0 rounded-none p-0 sm:h-[90dvh] sm:w-[calc(100%-3rem)] sm:rounded-lg" data-testid="related-record-panel" onPointerDownOutside={event => {
+  return <><Dialog open={visible} onOpenChange={open => { if (!open) close(); }}><DialogContent closeLabel={t("closeRecord")} aria-modal="true" aria-describedby={undefined} className="flex h-dvh w-full max-w-[1120px] flex-col gap-0 rounded-none p-0 sm:h-[90dvh] sm:w-[calc(100%-3rem)] sm:rounded-lg" data-testid="related-record-panel" onPointerDownOutside={event => {
     if (leaving) event.preventDefault();
   }} onEscapeKeyDown={event => { if (leaving) event.preventDefault(); }}>
     <DialogTitle className="sr-only">{t("record")}</DialogTitle>

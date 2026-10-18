@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 export async function assertToolbarFits(toolbar) {
   const layout = await toolbar.evaluate(root => {
     const bounds = root.getBoundingClientRect();
-    const buttons = [...root.querySelectorAll('button')].map(el => {
+    const buttons = [...root.querySelectorAll('button')].filter(el => el.getClientRects().length).map(el => {
       const rect = el.getBoundingClientRect();
       return { name: el.getAttribute('aria-label') ?? el.textContent, x: rect.x, right: rect.right, y: rect.y, bottom: rect.bottom, width: rect.width, height: rect.height };
     });
@@ -13,7 +13,9 @@ export async function assertToolbarFits(toolbar) {
   });
   assert.equal(layout.scrollers, 0, 'toolbar has no internal horizontal scrolling surface');
   assert.deepEqual(layout.overflow, [], 'no toolbar group or button overflows internally');
-  assert(layout.buttons.length >= 18, 'all existing editing actions remain present');
+  const grouped = layout.width < 960;
+  assert(layout.buttons.length >= (grouped ? 10 : 18), 'visible toolbar has its complete layout');
+  for (const name of grouped ? [/^(结构|Structure)$/, /^(插入|Insert)$/, /^(样式|Styles)$/] : []) await toolbar.getByRole('button', { name }).waitFor();
   for (const button of layout.buttons) {
     assert(button.x >= layout.x - 1 && button.right <= layout.right + 1 && button.y >= layout.y && button.bottom <= layout.bottom, `${button.name} fully inside toolbar: ${JSON.stringify({ button, layout })}`);
     assert(button.width >= 32 && button.height >= 32, `${button.name} keeps its click target`);

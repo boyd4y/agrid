@@ -1,4 +1,6 @@
 {
+  "showAllProperties": "显示全部属性（另外 {{count}} 项）",
+  "collapseProperties": "收起属性",
   "columnTypes": {
     "text": "文本",
     "number": "数字",

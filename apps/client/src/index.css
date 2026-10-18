@@ -77,3 +77,27 @@ html, body, #root { height: 100%; }
 .tabdo-event-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .tabdo-event-time { flex-shrink: 0; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
 .tabdo-other-month { color: var(--muted-foreground); }
+
+.record-title {
+  border-color: transparent;
+}
+.record-title:focus-visible {
+  border-color: var(--input);
+}
+
+/* Record values stay directly editable; the existing controls own their state and focus. */
+.record-property-value :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, button.border:not([role="checkbox"]):not([role="radio"])) {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+}
+.record-property-value :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, button.border:not([role="checkbox"]):not([role="radio"])):hover:not(:disabled) {
+  background-color: var(--accent);
+}
+.record-property-value :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, button.border:not([role="checkbox"]):not([role="radio"])):focus-visible {
+  border-color: var(--input);
+  box-shadow: 0 0 0 1px var(--ring);
+}
+.record-property-value [aria-invalid="true"] {
+  border-color: var(--destructive);
+}

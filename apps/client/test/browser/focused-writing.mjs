@@ -16,7 +16,7 @@ try {
   assert.equal(await panel.locator('[data-rich-text-editor]').count(), 1);
   assert.equal(await panel.getByText(/64 KiB/).count(), 0);
   assert.equal(await panel.getByTestId('editor-toolbar').getByRole('button', { name: '加粗', exact: true }).count(), 1, 'persistent toolbar');
-  const bounds = await body.boundingBox(); assert(bounds.width >= 700 && bounds.width <= 725); assert(bounds.y < 350, 'body starts in the first viewport');
+  const bounds = await body.boundingBox(); assert(bounds.width >= 990 && bounds.width <= 1005); assert(bounds.y < 350, 'body starts in the first viewport');
   await body.fill('选中文字后改变格式'); await page.keyboard.press('Meta+a');
   const selectionMenu = panel.getByTestId('selection-formatting'); await selectionMenu.waitFor({ state: 'visible' });
   await page.screenshot({ path: f.artifact('focused-selection-formatting-desktop.png') });
@@ -32,10 +32,11 @@ try {
   // The heading dropdown preserves selection after a command and restores its trigger on cancellation.
   for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: 844 });
-    const format = toolbar.getByRole('button', { name: '正文', exact: true });
+    const name = width === 1440 ? '正文' : '结构';
+    const format = toolbar.getByRole('button', { name, exact: true });
     await format.focus(); await format.press('Enter'); await page.getByRole('menu').waitFor();
     await page.keyboard.press('Escape'); await page.getByRole('menu').waitFor({ state: 'hidden' });
-    await page.waitForFunction(() => document.activeElement?.textContent === '正文');
+    await page.waitForFunction(name => document.activeElement?.textContent === name, name);
     assert(await format.evaluate(element => element === document.activeElement)); assert(await panel.isVisible());
   }
   await body.focus(); await page.keyboard.press('Meta+a');
@@ -70,7 +71,8 @@ try {
     const touchPanel = touch.getByTestId('related-record-panel'), touchBody = touchPanel.getByRole('textbox', { name: '正文内容', exact: true }); await touchBody.waitFor();
     await touchBody.tap(); await touchBody.fill('触屏点击直接写作');
     await touchBody.locator('p').last().tap();
-    await touchPanel.getByTestId('editor-toolbar').getByRole('button', { name: '无序列表', exact: true }).tap();
+    await touchPanel.getByTestId('editor-toolbar').getByRole('button', { name: '结构', exact: true }).tap();
+    await touch.getByRole('menuitem', { name: '无序列表', exact: true }).tap();
     assert.equal(await touchBody.locator('ul').innerText(), '触屏点击直接写作'); await saved(touchPanel);
     assert(JSON.stringify((await command('getDocument', touchIdentity)).content).includes('触屏点击直接写作'));
     const touchToolbar = touchPanel.getByTestId('editor-toolbar');

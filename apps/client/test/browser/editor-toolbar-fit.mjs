@@ -13,13 +13,16 @@ async function checkSurface(root, titleName, surface) {
   const title = root.getByRole('textbox', { name: titleName, exact: true }), toolbar = root.getByTestId('editor-toolbar');
   await root.getByRole('textbox', { name: '正文内容', exact: true }).waitFor();
   await assertOrdinaryEditorActions(root);
+  await title.blur();
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.record-title')).borderTopColor === 'rgba(0, 0, 0, 0)');
   for (const width of [1440, 390, 320]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 });
     await page.evaluate(value => document.documentElement.classList.toggle('dark', value === 'dark'), theme);
     const layout = await assertToolbarFits(toolbar);
-    if (width === 1440) { assert(Math.abs(layout.width - 720) < 1); assert.equal(new Set(layout.buttons.map(b => b.y)).size, 2); }
+    if (width === 1440) { assert(Math.abs(layout.width - 1000) < 1); assert.equal(new Set(layout.buttons.map(b => b.y)).size, 1); }
     await title.fill('');
     assert(await title.getAttribute('placeholder'), 'empty title retains its placeholder');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.record-title')).borderTopColor !== 'rgba(0, 0, 0, 0)');
     const style = await title.evaluate(el => {
       const s = getComputedStyle(el), r = el.getBoundingClientRect();
       return { left: parseFloat(s.paddingLeft), right: parseFloat(s.paddingRight), top: parseFloat(s.paddingTop), bottom: parseFloat(s.paddingBottom), font: parseFloat(s.fontSize), focused: el === document.activeElement, ring: s.boxShadow, x: r.x, rightEdge: r.right };
@@ -65,6 +68,6 @@ try {
   await page.getByTestId('blog-editor').waitFor(); await page.getByRole('button', { name: '新建文章', exact: true }).click();
   await checkSurface(page.getByTestId('record-page'), '标题', 'fit-blog');
   assert.deepEqual(f.errors, []);
-  console.log('PASS real record/blog default 720 + viewport 320/390 light/dark: all toolbar actions inside container, no internal scrolling, direct search/refresh, no ordinary export/help; empty/Chinese/English focused title padding and autosave; conflict-only download/reload retained');
+  console.log('PASS real record/blog default 1000 + viewport 320/390 light/dark: all toolbar actions inside container, no internal scrolling, direct search/refresh, no ordinary export/help; empty/Chinese/English focused title padding and autosave; conflict-only download/reload retained');
 } catch (error) { await page.screenshot({ path: artifact('editor-toolbar-fit-failure.png') }).catch(() => {}); console.error(f.errors); throw error; }
 finally { await f.close(); await rm(directory, { recursive: true, force: true }); }

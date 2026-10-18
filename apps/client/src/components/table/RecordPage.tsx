@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useId, useRef, useState, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { Save } from "lucide-react";
+import { ChevronDown, ChevronUp, Save } from "lucide-react";
 import { Button } from "@tabdo/ui/components/button";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@tabdo/ui/components/collapsible";
 import { Input } from "@tabdo/ui/components/input";
@@ -29,6 +29,8 @@ export function RecordPage({ ref, tableId, rowId, titleColumnId, advancedColumnI
   const bodyRef = useRef<DocumentHandle>(null), rowFlight = useRef<Promise<boolean> | null>(null), rowFailed = useRef(false);
   const pendingFilesRef = useRef(new Set<string>()), fileWaiters = useRef<(() => void)[]>([]);
   const [flushing, setFlushing] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const propertiesId = useId();
   const key = useRef(`tabdo.record-draft:${workspaceCacheKey()}:${tableId}:${rowId}`).current;
   const draftRef = useRef(draft), savingRef = useRef(false), baseVersion = useRef<number | undefined>(undefined), mounted = useRef(true);
   draftRef.current = draft;
@@ -123,21 +125,23 @@ export function RecordPage({ ref, tableId, rowId, titleColumnId, advancedColumnI
   useImperativeHandle(ref, () => ({ flush }));
   const pageStatus = error || bodyState.status === "failed" || bodyState.status === "conflict" ? "failed" : saving || flushing || bodyState.busy ? "saving" : dirty || bodyState.dirty ? "unsaved" : loading || bodyState.status === "loading" ? "loading" : "saved";
   const titleColumn = row?.columns.find(c => c.id === titleColumnId) ?? row?.columns.find(c => c.type === "text");
+  const properties = row?.columns.filter(c => !c.config.hidden && c !== titleColumn && !advancedColumnIds.includes(c.id)) ?? [];
   const control = (column: ColumnDef) => {
     const value = Object.hasOwn(draft, column.id) ? draft[column.id] : row?.cells[column.id] ?? null;
     const readOnly = ["formula", "rollup"].includes(column.type);
     return <Field key={column.id} className={cn("min-w-0", column !== titleColumn && "record-property grid grid-cols-[6rem_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:grid-cols-[8rem_minmax(0,1fr)]")} data-record-field={column.id} data-disabled={saving || readOnly}>
       <FieldLabel className={column === titleColumn ? "sr-only" : "min-w-0 flex-wrap gap-1.5 py-1.5 text-muted-foreground"}><ColumnTypeIcon type={column.type} className="size-4" />{column.name}{readOnly && <span className="text-xs text-muted-foreground">{t("readonly")}</span>}</FieldLabel>
-      {column === titleColumn ? <Input className="h-auto border-0 px-3 py-2 text-2xl font-semibold shadow-none md:text-2xl" aria-label={column.name} value={value == null ? "" : String(value)} disabled={saving} placeholder={t("untitled")} onChange={e => stage(column, e.target.value)} /> : readOnly ? <div className="min-h-8 px-2 py-1.5 text-sm"><CellDisplay column={column} value={value} relation={row?.relations?.[column.id]} members={members} /></div> : <div className="min-w-0" aria-label={column.name} inert={saving}>{column.type === "number" ? <Input size="sm" inputMode="decimal" aria-label={column.name} value={value == null ? "" : String(value)} aria-invalid={!!error.startsWith(column.name)} onChange={e => stage(column, e.target.value)} /> : column.type === "relation" ? <RelationPicker size="sm" column={column} value={Array.isArray(value) ? value : []} records={row?.relations?.[column.id]?.records} onChange={value => stage(column, value)} /> : <FormFieldControl size="sm" column={column} value={value} members={members} onChange={value => stage(column, value)} onPendingChange={pending => { const next = new Set(pendingFilesRef.current); if (pending) next.add(column.id); else next.delete(column.id); pendingFilesRef.current = next; setPendingFiles(next); if (!next.size) fileWaiters.current.splice(0).forEach(resolve => resolve()); }} />}</div>}
+      {column === titleColumn ? <Input className="record-title h-auto px-3 py-2 text-2xl font-semibold shadow-none md:text-2xl" aria-label={column.name} value={value == null ? "" : String(value)} disabled={saving} placeholder={t("untitled")} onChange={e => stage(column, e.target.value)} /> : readOnly ? <div className="min-h-8 px-2 py-1.5 text-sm"><CellDisplay column={column} value={value} relation={row?.relations?.[column.id]} members={members} /></div> : <div className="record-property-value min-w-0" aria-label={column.name} inert={saving}>{column.type === "number" ? <Input size="sm" inputMode="decimal" aria-label={column.name} value={value == null ? "" : String(value)} aria-invalid={!!error.startsWith(column.name)} onChange={e => stage(column, e.target.value)} /> : column.type === "relation" ? <RelationPicker size="sm" column={column} value={Array.isArray(value) ? value : []} records={row?.relations?.[column.id]?.records} onChange={value => stage(column, value)} /> : <FormFieldControl size="sm" column={column} value={value} members={members} onChange={value => stage(column, value)} onPendingChange={pending => { const next = new Set(pendingFilesRef.current); if (pending) next.add(column.id); else next.delete(column.id); pendingFilesRef.current = next; setPendingFiles(next); if (!next.size) fileWaiters.current.splice(0).forEach(resolve => resolve()); }} />}</div>}
     </Field>;
   };
-  return <div className="mx-auto flex w-full min-w-0 max-w-[720px] flex-col gap-3" data-testid="record-page">
+  return <div className="mx-auto flex w-full min-w-0 max-w-[1000px] flex-col gap-3" data-testid="record-page">
     <div className="flex min-h-7 flex-wrap items-center justify-end gap-2"><p role="status" aria-live="polite" className={cn("text-xs text-muted-foreground", pageStatus === "failed" && "text-destructive")}>{t(`pageStatus.${pageStatus}`)}</p>{pageStatus === "failed" && <Button variant="outline" size="sm" disabled={saving || flushing || pendingFiles.size > 0 || !(dirty || bodyState.dirty)} onClick={() => void flush()}><Save />{t("retrySave")}</Button>}</div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {loading && !row && <p role="status" className="text-sm text-muted-foreground">{t("readingRecord")}</p>}
     {stale && <div className="flex flex-col gap-2 text-xs text-muted-foreground"><p>{t("staleRecordHint")}</p><Button variant="outline" size="sm" disabled={saving} onClick={() => { draftRef.current = {}; setDraft({}); baseVersion.current = undefined; rowFailed.current = false; setError(""); retain(); setRevision(v => v + 1); }}>{t("discardDraftReload")}</Button></div>}
-    {row && <><FieldGroup className="gap-1">{titleColumn && control(titleColumn)}{row.columns.filter(c => !c.config.hidden && c !== titleColumn && !advancedColumnIds.includes(c.id)).map(control)}</FieldGroup>
-      {!!advancedColumnIds.length && <Collapsible><CollapsibleTrigger asChild><Button variant="ghost" size="sm">{t("blogs:advanced")}</Button></CollapsibleTrigger><CollapsibleContent><FieldGroup className="gap-1 pt-2">{row.columns.filter(c => advancedColumnIds.includes(c.id) && c !== titleColumn).map(control)}</FieldGroup></CollapsibleContent></Collapsible>}
+    {row && <><FieldGroup className="gap-1">{titleColumn && control(titleColumn)}<div id={propertiesId} className="flex flex-col gap-1">{properties.map((column, index) => <div key={column.id} hidden={!propertiesOpen && index >= 3}>{control(column)}</div>)}</div></FieldGroup>
+      {properties.length > 3 && <Button variant="ghost" size="sm" className="self-start" aria-expanded={propertiesOpen} aria-controls={propertiesId} onClick={() => setPropertiesOpen(open => !open)}>{propertiesOpen ? t("collapseProperties") : t("showAllProperties", { count: properties.length - 3 })}{propertiesOpen ? <ChevronUp /> : <ChevronDown />}</Button>}
+      {!!advancedColumnIds.length && <Collapsible><CollapsibleTrigger asChild><Button variant="ghost" size="sm">{t("blogs:advanced")}</Button></CollapsibleTrigger><CollapsibleContent forceMount className="data-[state=closed]:hidden"><FieldGroup className="gap-1 pt-2">{row.columns.filter(c => advancedColumnIds.includes(c.id) && c !== titleColumn).map(control)}</FieldGroup></CollapsibleContent></Collapsible>}
       <DocumentBody ref={bodyRef} embedded tableId={tableId} rowId={rowId} onStateChange={setBodyState} onRefresh={() => setRevision(v => v + 1)} refreshDisabled={loading || saving || dirty} />
     </>}
     {!row && !loading && <Button variant="outline" onClick={() => setRevision(v => v + 1)}>{t("retry")}</Button>}
