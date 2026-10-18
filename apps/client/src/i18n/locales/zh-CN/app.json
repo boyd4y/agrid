@@ -252,6 +252,8 @@
     "report": "报告",
     "home": "预览首页",
     "chooseResource": "选择资源",
+    "back": "返回上一步",
+    "chooseType": "选择{{type}}",
     "selectResource": "选择资源 · {{name}}",
     "searchResources": "搜索资源…",
     "noMatches": "没有匹配的资源",

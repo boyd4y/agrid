@@ -24,6 +24,7 @@ export function WorkspaceHomePage() {
   const [selectedKeys, setSelectedKeys] = useState<Record<string, string>>({});
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [choosingKind, setChoosingKind] = useState<string | null>(null);
   const [siteRefreshTokens, setSiteRefreshTokens] = useState<Record<string, number>>({});
   const [cache, setCache] = useState<Record<string, FullTable>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
@@ -55,6 +56,7 @@ export function WorkspaceHomePage() {
 
   const openTab = useCallback((tab: PreviewTab) => {
     setPickerOpen(false);
+    setChoosingKind(null);
     const key = getPreviewTabKey(tab);
     setTabs(previous => previous.some(entry => getPreviewTabKey(entry) === key) ? previous : [...previous, tab]);
     setSelectedKeys(previous => ({ ...previous, [tab.kind]: key }));
@@ -63,10 +65,11 @@ export function WorkspaceHomePage() {
   }, []);
 
   const openType = useCallback((kind: string) => {
-    const current = tabs.find(tab => getPreviewTabKey(tab) === selectedKeys[kind]);
-    openTab(current ?? { kind });
-    setPickerOpen(!Boolean(current?.tableId || current?.siteId || current?.reportId));
-  }, [tabs, selectedKeys, openTab]);
+    setPickerOpen(false);
+    setActiveKey(null);
+    setChoosingKind(kind);
+    setPreviewOpen(true);
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -149,7 +152,7 @@ export function WorkspaceHomePage() {
         }} className="flex h-full min-h-0 flex-col">
           <div id="workspace-preview-panel" className="h-full min-h-0 min-w-0" hidden={!previewOpen}>
             {createError && <p role="alert" className="p-3 text-sm text-destructive">{createError}</p>}
-            <PreviewSlot pickerOpen={pickerOpen} onPickerOpenChange={setPickerOpen} selectedKeys={selectedKeys} onOpenType={openType} tabs={tabs} activeKey={activeKey} contexts={contexts} tables={tables} onOpenTab={openTab} onCloseTab={closeTab} onSelectTab={key => { setPickerOpen(false); setActiveKey(key); }} onShowTables={() => { setPickerOpen(false); setActiveKey(null); }} />
+            <PreviewSlot choosingKind={choosingKind} pickerOpen={pickerOpen} onPickerOpenChange={setPickerOpen} selectedKeys={selectedKeys} onOpenType={openType} tabs={tabs} activeKey={activeKey} contexts={contexts} tables={tables} onOpenTab={openTab} onCloseTab={closeTab} onSelectTab={key => { setChoosingKind(null); setPickerOpen(false); setActiveKey(key); }} onShowTables={() => { setChoosingKind(null); setPickerOpen(false); setActiveKey(null); }} />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
