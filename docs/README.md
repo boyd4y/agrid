@@ -7,7 +7,7 @@
 - [产品定位](../PRODUCT.md)：目标用户、产品边界与表达方式。
 - [设计规范](../DESIGN.md)：界面、主题、组件与品牌约定。
 - [品牌资料](brand/README.md)：定位文案、标志资源与使用规范。
-- [Scenario A：房产经纪人](brand/scenario-a-real-estate.md)：`pnpm db:seed:scenario-a` 初始化、跟进草稿与真实发信配置。
+- [Scenario A：房产经纪人](brand/scenario-a-real-estate.md)：`playbook` 技能 + `real-estate-broker` reference；跟进草稿与真实发信配置。
 - [场景案例](brand/use-cases.md)：四个案例的 setup、演示路径与功能边界。
 
 ## 功能与数据

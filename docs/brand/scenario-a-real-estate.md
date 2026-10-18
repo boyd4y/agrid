@@ -1,49 +1,41 @@
 # Scenario A：房产经纪人
 
-## 产品路径与本地 fixture
+## 产品路径
 
-- **产品路径**：给智能体分配内置 `playbook` 技能，对话要求按 `real-estate-broker` reference 搭建或修改当前工作区（见 `apps/server/skills/playbook/`）。
-- **本地/CI**：`pnpm db:seed:scenario-a` 仍是金样 fixture，不删除；下述 seed 操作保留。
+给智能体分配内置 **`playbook`** 技能，对话要求按 **`real-estate-broker`** reference 搭建或修改当前工作区。
 
-在完成依赖安装、基础包构建与数据库迁移后运行：
+权威内容在：
 
-```sh
-pnpm install
-pnpm build:foundation
-pnpm db:migrate
-pnpm db:seed:scenario-a
-```
+- `apps/server/skills/playbook/SKILL.md`
+- `apps/server/skills/playbook/references/real-estate-broker/`（overview / tables / views / agent / automations / sample-data）
 
-登录 `demo@tabdo.ai` / `Demo1234!`，进入 Demo Workspace。命令复用 `seedDemoUser`（刷新演示密码并执行其已有的演示空间清理逻辑），不需要先运行 `db:seed:demo`。不要指向生产或真实客户数据库。seed 本身不连接 AgentMail，也不执行模型调用或发送邮件。
+**已移除** `pnpm db:seed:scenario-a` 与相关 seed 代码；不要再跑 seed 初始化该场景。
 
-## 创建内容与重复运行
+## 场景摘要
 
-- **意向客户**：置顶 Contact 表，客户姓名、手机、邮箱、状态、下次跟进、预算、意向区域、备注、跟进邮件草稿、意向房源。状态依次为新线索 / 跟进中 / 已约看 / 已带看 / 成交 / 流失；稳定 ID 为 `lead / follow / scheduled / shown / won / lost`。
+- **意向客户**：客户姓名、手机、邮箱、状态、下次跟进、预算、意向区域、备注、跟进邮件草稿、意向房源。状态：新线索 / 跟进中 / 已约看 / 已带看 / 成交 / 流失（稳定 ID：`lead / follow / scheduled / shown / won / lost`）。
 - **房源**：标题/小区、状态（在售 / 已定 / 下架）、价格、面积、地址、下次跟进、备注。价格和预算单位为万元，面积为平方米。
-- 五位虚构客户、三套虚构房源，通过正式命令创建多对多关联及反向「意向客户」字段；手机号留空，邮箱使用 `example.com`。两张表各有表格和状态看板。
-- **房产经纪人**：本地 Pi，分配内置 `table`、`automation` 技能，`disabledTools: ["send_email", "reply_email"]`。使用运行环境默认模型，需另外配置可用的 Pi 模型凭证。
-- **状态进入已约看 → 提醒**：真实 `enter_status` 触发，提醒显示在智能体运行结果并写入备注；有可靠日期时更新下次跟进，不虚构预约，也不发送外部通知。
-- **每日跟进检查（定时）**：真实 `schedule_due`，`0 9 * * *`，`Asia/Shanghai`；查询今天/逾期且未成交、未流失的客户，汇总并追加备注。
-- **带看后起草跟进邮件**：进入已带看，读取关联房源，将短邮件保存到跟进邮件草稿，不发送。
+- **房产经纪人**：本地 Pi，分配 `table`、`automation`；`disabledTools: ["send_email", "reply_email"]`。草稿优先，见 agent reference。
+- **三条自动化**：状态进入已约看 → 提醒；每日跟进检查（`0 9 * * *`，`Asia/Shanghai`）；带看后起草跟进邮件（只写草稿，不发送）。细节见 automations reference。
 
-seed 输出表 ID、智能体 **userId** 和自动化名称。`seedScenarioA(organizationId?)` 可在 `withNodeResources` 内复用；传入组织时，演示用户必须已存在并属于该组织。默认复用 Demo Workspace。
-
-重复运行按表名、字段名、样例标题、智能体名称、未删除自动化名称查找，补充缺失资源；保留已有记录值、关联、智能体人设、自动化启停和配置，不重置演示过程。改名后的样例可能被补建，删除的自动化会重建。字段类型或关联目标冲突会报错供人工检查。首次插入时两位客户的日期分别为上海当天和前一天；重复运行不刷新日期，因此已有日期会逐渐变成逾期。脚本用于串行执行，不支持并发初始化。
+样例数据仅在用户要求时按 `sample-data.md` 写入；虚构邮箱/房源不得当真发信。
 
 ## 演示对话路径
 
-1. 启动服务及 worker（例如 `pnpm dev`），确认 Pi 模型可用，选择「房产经纪人」对话：**“查询意向客户，列出今天和逾期需要跟进的客户，说明关联房源。只根据表内数据。”** 核对真实表格查询结果。
-2. 输入：**“把演示·陈女士改为已约看；预约时间还未确认，备注写明待确认。”** 检查看板状态、自动化运行记录及备注；不要把聊天回复当成外部通知已送达。
-3. 输入：**“把演示·陈女士改为已带看，根据关联房源起草简短跟进邮件，保存到跟进邮件草稿，先不要发送。”** 检查记录字段和自动化日志。状态必须从其他值进入目标值才触发，保持同一状态不会重复触发。
-4. 输入：**“读取已保存草稿，指出邮箱、预约和客户反馈还缺什么。”** 核对草稿中没有虚构反馈。查看每日检查自动化的来源、时区和下一次运行；真实定时验收需在上海 09:00 后检查运行记录，worker 必须持续运行。手动对话查询不能当成定时验收。
+与 playbook reference `overview.md` 一致：
+
+1. 选择「房产经纪人」：**“查询意向客户，列出今天和逾期需要跟进的客户，说明关联房源。只根据表内数据。”**
+2. **“把演示·陈女士改为已约看；预约时间还未确认，备注写明待确认。”**
+3. **“把演示·陈女士改为已带看，根据关联房源起草简短跟进邮件，保存到跟进邮件草稿，先不要发送。”**
+4. **“读取已保存草稿，指出邮箱、预约和客户反馈还缺什么。”**
+
+未安装样例时，用用户指定记录替换名称；不要把聊天回复当成外部通知已送达。定时验收需 worker 持续运行，并在上海 09:00 后检查运行记录。
 
 ## AgentMail 实时发送
 
-依赖 #27（`feat/agentmail-outbound`）提供的 `list_mail_inboxes`、`send_email`、`reply_email` 和邮件读取工具。到 Settings 的集成设置中连接真实 AgentMail，选择当前组织可用的邮箱；让智能体先用 `list_mail_inboxes` 读取实际连接和 inbox 标识。替换虚构收件人为经确认、由你控制的测试地址，检查草稿后明确要求发送。只有工具成功返回才能说已发送；工具成功也不等同于收件人已阅读。
+依赖 AgentMail 出站工具（`list_mail_inboxes`、`send_email`、`reply_email`）。在 Settings 连接真实 AgentMail，选择当前组织可用邮箱；让智能体先用 `list_mail_inboxes` 核对。替换虚构收件人为你控制的测试地址，检查草稿后再明确要求发送。只有工具成功返回才能说已发送。
 
-未连接时保存草稿并说明原因。附件不在此场景范围内。样例邮箱、虚构房源、草稿字段与自动化日志均不代表已真实发送邮件。
-
-`send_email` 的 `connectionId` 必须是真实 UUID，因此 seed **不创建**发送自动化，也不填哨兵连接。可在连接后手动创建一条初始禁用的表格自动化，先审核收件人、触发条件和正文，再启用。以下是动作 JSON 模板，尖括号必须替换为真实值；这不是可直接提交的固定样例：
+未连接时保存草稿并说明原因。playbook 默认禁用经纪人的 `send_email` / `reply_email`。`send_email` 的 `connectionId` 必须是真实 UUID；可在连接后手动创建初始禁用的发送自动化，审核后再启用。动作模板：
 
 ```json
 {
@@ -56,15 +48,6 @@ seed 输出表 ID、智能体 **userId** 和自动化名称。`seedScenarioA(org
 }
 ```
 
-自动化外层使用 `enabled: false`、真实的 `{ "kind": "table", "tableId": "<意向客户表 UUID>" }` 来源、字段 UUID 和状态选项 ID，并将上面的动作放进 `actions`。静态正文适合单次测试；逐行动态正文应通过编辑器事件变量绑定或由智能体读取草稿后发送，不能假设字段名字符串会自动插值。启用前按当前邮件自动化文档核对绑定与权限，避免状态反复切换造成重复发送。
-
 ## 验证边界
 
-轻量测试验证三条 `run_agent` 动作通过共享 `AUTOMATION_ACTION_SCHEMA` 并绑定提供的 agent userId，不连接数据库：
-
-```sh
-pnpm --filter @tabdo/server exec tsx --test test/db/scenario-a.test.ts
-pnpm --filter @tabdo/server exec tsc --noEmit
-```
-
-数据库重复 seed、看板拖动触发、定时调度及真实邮件投递需在配置好的隔离演示环境验收；fixtures 和 schema 测试不能替代这些验证。
+用 playbook 在演示工作区搭好后，按上面四步对话验收。看板拖动触发、定时调度及真实邮件投递需在隔离环境验证；单元 fixture 不能替代这些验证。
