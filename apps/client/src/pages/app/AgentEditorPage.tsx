@@ -45,9 +45,9 @@ export function AgentEditorPage() {
     if (patch.sandboxProvider !== undefined) setSandboxProvider(patch.sandboxProvider);
     if (patch.runtime !== undefined) setRuntime(patch.runtime);
   };
-  const configuration = { name: agentName.trim(), image, persona: { systemPrompt: persona.trim(), defaultHarness: harness, defaultModel: model.trim(), runtime, sandboxProvider, skillNames: selectedSkills.map((skill) => skill.name), disabledTools: [...disabledTools].sort() } };
+  const configuration = { name: agentName.trim(), image, persona: { systemPrompt: persona.trim(), defaultHarness: "pi" as const, defaultModel: "__harness_default__", runtime, sandboxProvider, skillNames: selectedSkills.map((skill) => skill.name), disabledTools: [...disabledTools].sort() } };
   const dirty = JSON.stringify(configuration) !== initialConfiguration;
-  const basicValid = Boolean(agentName.trim() && persona.trim() && model.trim());
+  const basicValid = Boolean(agentName.trim() && persona.trim());
   useEffect(() => {
     let cancelled = false;setSection("basic");setLoading(true);setReady(false);setCreateError(null);setEditing(null);
     void Promise.all([api.listSkills(), agentId ? api.listMembers() : Promise.resolve(null), fetch("/api/chat/status").then((r) => { if (!r.ok) throw new Error(t("statusLoadFailed"));return r.json(); })]).then(([library, members, status]) => {
@@ -55,11 +55,11 @@ export function AgentEditorPage() {
       setSkills(library.skills);setCanManage(library.canManage);setHarnesses(status.harnesses ?? []);
       const agent = agentId ? members?.members.find((m) => m.id === agentId && m.kind === "agent") : null;
       if (agentId && !agent) throw new Error(t("notFound"));
-      const selected = agent?.agent?.persona?.defaultHarness ?? "pi";
+      const piStatus = status.harnesses?.find((h: HarnessStatus) => h.id === "pi");
       setImage(agent?.image ?? null);setEditing(agent ?? null);setAgentName(agent?.name ?? "");setPersona(agent?.agent?.persona?.systemPrompt ?? t("defaultPersona"));
-      setHarness(agent?.agent?.persona?.defaultHarness ?? "pi");setModel(agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__");
-      setRuntime(agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"));
-      const selectedSandboxProvider = agent?.agent?.persona?.sandboxProvider ?? (agent ? "vercel" : status.defaultSandboxProvider ?? "vercel");
+      setHarness("pi");setModel("__harness_default__");
+      setRuntime(agent?.agent?.persona?.runtime ?? piStatus?.defaultRuntime ?? "local");
+      const selectedSandboxProvider = agent?.agent?.persona?.sandboxProvider ?? status.defaultSandboxProvider ?? "vercel";
       setSandboxProvider(selectedSandboxProvider);
       const selectedNames = library.skills.filter((s) => s.enabled && (!agent?.agent?.persona?.skillNames || agent.agent.persona.skillNames.includes(s.name))).map((s) => s.name);
       const platformIds = new Set<string>(PLATFORM_TOOL_IDS);
@@ -67,9 +67,9 @@ export function AgentEditorPage() {
       setSkillNames(selectedNames); setDisabledTools(selectedDisabledTools);
       setInitialConfiguration(JSON.stringify({ name: (agent?.name ?? "").trim(), image: agent?.image ?? null, persona: {
         systemPrompt: (agent?.agent?.persona?.systemPrompt ?? t("defaultPersona")).trim(),
-        defaultHarness: selected,
-        defaultModel: (agent?.agent?.persona?.defaultModel ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultModel ?? "__harness_default__").trim(),
-        runtime: agent?.agent?.persona?.runtime ?? status.harnesses?.find((h: HarnessStatus) => h.id === selected)?.defaultRuntime ?? (selected === "pi" ? "local" : "sandbox"),
+        defaultHarness: "pi",
+        defaultModel: "__harness_default__",
+        runtime: agent?.agent?.persona?.runtime ?? piStatus?.defaultRuntime ?? "local",
         sandboxProvider: selectedSandboxProvider,
         skillNames: selectedNames, disabledTools: [...selectedDisabledTools].sort(),
       }}));setReady(true);
@@ -111,7 +111,7 @@ export function AgentEditorPage() {
                   </aside>
                   <TabsContent value="basic" className="min-w-0 flex-1 p-3 sm:p-6">
                     <div className="mb-4 flex flex-col gap-1"><h2 className="font-semibold">{t("basic")}</h2></div>
-                    <AgentBasicFields value={values} onChange={updateValues} harnesses={harnesses} disabled={busy} onAvatarProcessingChange={setAvatarProcessing} harnessLocked />
+                    <AgentBasicFields value={values} onChange={updateValues} harnesses={harnesses} disabled={busy} onAvatarProcessingChange={setAvatarProcessing} />
                   </TabsContent>
                   <TabsContent value="skills" className="min-w-0 flex-1 p-3 sm:p-6">
                     <div className="mb-4 flex flex-col gap-1"><h2 className="font-semibold">{t("skills")}</h2><p className="text-sm text-muted-foreground">{t("skillsDescShort")}</p></div>
@@ -138,7 +138,7 @@ export function AgentEditorPage() {
                   </nav>
                   <div className="min-w-0 flex-1 p-3 sm:p-6">
                     <div className="mb-4 flex flex-col gap-1"><h2 className="font-semibold">{sectionTitle}</h2>{section !== "basic" && <p className="text-sm text-muted-foreground">{sectionDescription}</p>}</div>
-                    {section === "basic" ? <AgentBasicFields value={values} onChange={updateValues} harnesses={harnesses} disabled={busy} onAvatarProcessingChange={setAvatarProcessing} harnessLocked={false} />  : section === "skills" ? <AgentSkillFields skills={skills} selected={skillNames} onChange={setSkillNames} disabled={busy} /> : <AgentToolFields harness={harness} disabledTools={disabledTools} onChange={setDisabledTools} disabled={busy} />}
+                    {section === "basic" ? <AgentBasicFields value={values} onChange={updateValues} harnesses={harnesses} disabled={busy} onAvatarProcessingChange={setAvatarProcessing} />  : section === "skills" ? <AgentSkillFields skills={skills} selected={skillNames} onChange={setSkillNames} disabled={busy} /> : <AgentToolFields harness={harness} disabledTools={disabledTools} onChange={setDisabledTools} disabled={busy} />}
                   </div>
                 </div>
               )}

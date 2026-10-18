@@ -59,3 +59,12 @@ test("Sandbox providers require their own complete credentials and a dedicated R
   assert.equal(listRuntimeProviders({ E2B_API_KEY: "private-value" }).find(entry => entry.id === "e2b")?.available, true);
   assert(!JSON.stringify(listRuntimeProviders({ E2B_API_KEY: "private-value", RAILWAY_API_TOKEN: "other-private-value" })).includes("private-value"));
 });
+
+test("sandbox defaults prefer E2B, then available providers, while explicit choices win", () => {
+  const e2b = { E2B_API_KEY: "fixture", VERCEL_OIDC_TOKEN: "fixture" };
+  assert.equal(resolveRuntimeProvider("sandbox", undefined, e2b), "e2b");
+  assert.equal(resolveRuntimeProvider("sandbox", undefined, { VERCEL_OIDC_TOKEN: "fixture" }), "vercel");
+  assert.equal(resolveRuntimeProvider("sandbox", undefined, { RAILWAY_API_TOKEN: "fixture", RAILWAY_SANDBOX_ENVIRONMENT_ID: "dedicated" }), "railway");
+  assert.equal(resolveRuntimeProvider("sandbox", undefined, { ...e2b, SANDBOX_PROVIDER: "railway" }), "railway");
+  assert.equal(resolveRuntimeProvider("sandbox", "vercel", { ...e2b, SANDBOX_PROVIDER: "railway" }), "vercel");
+});

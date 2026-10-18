@@ -45,6 +45,7 @@ for (const locale of ["en", "zh-CN"]) {
       const html = renderToStaticMarkup(createElement(Component, { value, onChange: patch => changes.push(patch), harnessLocked: true,
         harnesses: [{ id: harness, label: harness, available: true, models: [{ id: "fixture", label: "Fixture" }],
           runtimeModes: ["local", "sandbox"], defaultRuntime: "local", runtimeProviders: [
+            { id: "vercel", available: true },
             { id: "railway", available: false, reason: "railway_harness_unavailable", hint: "server fallback" },
           ] }],
       }));
@@ -68,7 +69,31 @@ for (const locale of ["en", "zh-CN"]) {
       }));
       assert(!html.includes(strings.railwayHarnessUnavailable));
       if (status.hint) assert(html.includes(status.hint));
-      assert(controls.some(({ name, props }) => name === "SelectItem" && props.value === "railway" && props.disabled === !status.available));
+      assert(!controls.some(({ name }) => name === "Select"), "singleton provider is hidden");
     }
   });
 }
+
+test("create forms show only available choices and hide singleton selectors", () => {
+  for (const providers of [
+    [{ id: "local", available: true }],
+    [{ id: "e2b", available: true }],
+    [{ id: "local", available: true }, { id: "e2b", available: true }],
+    [{ id: "e2b", available: true }, { id: "railway", available: true }],
+  ]) {
+    const { Component, controls } = formFixture({});
+    const runtime = providers.some(p => p.id !== "local") ? "sandbox" : "local";
+    renderToStaticMarkup(createElement(Component, {
+      value: { name: "New", persona: "Tools", harness: "pi", model: "__harness_default__", runtime, sandboxProvider: "e2b" },
+      onChange: () => assert.fail("render must not change defaults"),
+      harnesses: [{ id: "pi", available: true, models: [], runtimeModes: ["local", "sandbox"],
+        runtimeProviders: [...providers, { id: "vercel", available: false }], defaultRuntime: runtime }],
+    }));
+    const triggers = controls.filter(c => c.name === "SelectTrigger").map(c => c.props.id);
+    assert(!triggers.includes("agent-harness"));
+    assert(!triggers.includes("agent-model"));
+    assert.equal(triggers.includes("agent-runtime"), providers.some(p => p.id === "local") && providers.some(p => p.id !== "local"));
+    assert.equal(triggers.includes("agent-sandbox-provider"), providers.filter(p => p.id !== "local").length > 1);
+    assert(!controls.some(c => c.name === "SelectItem" && c.props.value === "vercel"));
+  }
+});
