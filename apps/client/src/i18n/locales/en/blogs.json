@@ -1,6 +1,6 @@
 {
   "create": "Create blog",
-  "createHint": "Choose a content table and its title and URL fields. Select articles and preview before publishing; the table stays private.",
+  "createHint": "Name your blog and start writing. Only explicitly selected articles and images can be published.",
   "name": "Blog name",
   "contentTable": "Content table",
   "chooseTable": "Choose a content table",
@@ -24,7 +24,7 @@
   "close": "Close",
   "back": "Back to sites",
   "save": "Save configuration",
-  "build": "Build preview",
+  "build": "Preview articles",
   "publish": "Publish blog",
   "published": "Published",
   "draft": "Draft",
@@ -47,12 +47,12 @@
     "history": "History"
   },
   "selection": "{{count}} articles selected",
-  "selectionHint": "Choose up to 20 articles with documents. Use unique lowercase slugs containing letters, numbers and hyphens.",
+  "selectionHint": "Choose up to 20 articles for publication. Saving drafts stays private; select each image explicitly.",
   "openTable": "Open content table",
   "selectNamed": "Select article: {{name}}",
   "untitled": "Untitled article",
   "sourceVersion": "Properties v{{row}} · Document v{{document}}",
-  "noDocument": "Open this record in its table and enable a document first.",
+  "noDocument": "Open the article to start writing.",
   "assets": "Images to publish",
   "assetsHint": "Select each image explicitly. Unselected body images are omitted; covers must belong to the mapped file field.",
   "noSources": "This table has no articles yet.",
@@ -97,5 +97,10 @@
     "PUBLICATION_APPROVAL_REQUIRED": "Publication approval expired or does not match. Confirm this operation again.",
     "UNPUBLISH_REQUIRED": "Unpublish the site in the blog editor before deleting it."
   },
-  "authorName": "Default public author name"
+  "authorName": "Default public author name",
+  "newArticle": "New article",
+  "write": "Write",
+  "backToArticles": "Back to articles",
+  "advanced": "Advanced settings",
+  "bindExisting": "Advanced: bind an existing content table"
 }

@@ -106,7 +106,7 @@ try {
   assert.equal(await sheet.count(), 0, "native drag does not open details");
   await card(first.id).click();
   await sheet
-    .getByRole("heading", { name: "第一张卡片", exact: true })
+    .locator('input[value="第一张卡片"]')
     .waitFor();
   assert.equal(
     await page.evaluate(() => getComputedStyle(document.body).pointerEvents),
@@ -115,7 +115,7 @@ try {
   );
   await move(second.id, "done", { x: 140, y: 18 });
   await sheet
-    .getByRole("heading", { name: "第一张卡片", exact: true })
+    .locator('input[value="第一张卡片"]')
     .waitFor();
   await page.screenshot({
     path: artifact("kanban-drag-sheet-open.png"),
@@ -131,14 +131,14 @@ try {
   );
   await card(second.id).click();
   await sheet
-    .getByRole("heading", { name: "第二张卡片", exact: true })
+    .locator('input[value="第二张卡片"]')
     .waitFor();
   await page.keyboard.press("Escape");
   await sheet.waitFor({ state: "hidden" });
   await card(second.id).focus();
   await page.keyboard.press("Enter");
   await sheet
-    .getByRole("heading", { name: "第二张卡片", exact: true })
+    .locator('input[value="第二张卡片"]')
     .waitFor();
   await page.reload();
   await page

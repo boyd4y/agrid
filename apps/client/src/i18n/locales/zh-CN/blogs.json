@@ -1,6 +1,6 @@
 {
   "create": "创建博客",
-  "createHint": "选择内容表和标题、网址字段。创建后逐篇选文与预览；不会自动公开内容表。",
+  "createHint": "输入名称即可开始写作。文章与图片仅在明确选择并发布后公开。",
   "name": "博客名称",
   "contentTable": "内容表",
   "chooseTable": "选择内容表",
@@ -24,7 +24,7 @@
   "close": "关闭",
   "back": "返回站点",
   "save": "保存配置",
-  "build": "构建预览",
+  "build": "预览文章",
   "publish": "发布博客",
   "published": "已发布",
   "draft": "草稿",
@@ -47,12 +47,12 @@
     "history": "历史"
   },
   "selection": "已选 {{count}} 篇",
-  "selectionHint": "最多选择20篇已启用正文的文章。网址使用小写字母、数字和连字符，且不能重复。",
+  "selectionHint": "选择需要发布的文章，最多20篇。保存草稿不会公开；每张图片需单独选择。",
   "openTable": "打开内容表",
   "selectNamed": "选择文章：{{name}}",
   "untitled": "未命名文章",
   "sourceVersion": "属性 v{{row}} · 正文 v{{document}}",
-  "noDocument": "尚未启用正文，请在内容表中打开记录并启用。",
+  "noDocument": "直接打开文章开始写作。",
   "assets": "允许公开的图片",
   "assetsHint": "每张图片都需要明确选择。未选正文图片会从公开副本省略；封面须来自映射的文件字段。",
   "noSources": "内容表还没有文章。",
@@ -97,5 +97,10 @@
     "PUBLICATION_APPROVAL_REQUIRED": "发布授权已过期或不匹配，请重新确认本次操作。",
     "UNPUBLISH_REQUIRED": "请先在博客编辑页撤下整站，再删除博客。"
   },
-  "authorName": "默认作者公开名称"
+  "authorName": "默认作者公开名称",
+  "newArticle": "新建文章",
+  "write": "写作",
+  "backToArticles": "返回文章",
+  "advanced": "高级设置",
+  "bindExisting": "高级：绑定已有内容表"
 }

@@ -291,7 +291,7 @@
   "backToPrevRecord": "返回上一条记录",
   "refreshRecord": "刷新记录",
   "closeRecord": "关闭记录",
-  "recordSheetDesc": "查看或编辑记录，保存后同步到表格和看板。",
+  "recordSheetDesc": "标题、属性和正文自动保存。关闭时会先完成保存。",
   "staleRecordHint": "记录已更新，编辑草稿仍保留。保存冲突时请重新加载后核对。",
   "discardDraftReload": "放弃草稿并重新加载",
   "readingRecord": "读取记录…",
@@ -382,5 +382,15 @@
     "empty": "此范围没有日期记录",
     "partial": "已加载 {{count}} 条，还有记录未加载",
     "loadMore": "加载更多记录"
+  },
+  "propertiesUnsaved": "标题与属性尚未保存",
+  "propertiesSaved": "标题与属性已保存",
+  "retrySave": "重试保存",
+  "pageStatus": {
+    "saved": "全部更改已保存",
+    "unsaved": "尚有更改未保存",
+    "saving": "正在保存…",
+    "loading": "正在读取…",
+    "failed": "部分内容保存失败，草稿已保留"
   }
 }

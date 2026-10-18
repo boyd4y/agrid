@@ -11,6 +11,8 @@ import { capabilities, siteMime } from "../sites/service.js";
 import { renderDocumentHtml } from "../documents/renderer.js";
 import { renderBlogFiles } from "./renderer.js";
 import { blogStorageKey, collectBlogStorage } from "./storage.js";
+import { createTable, addRow, updateCellsInTransaction } from "../commands/rows.js";
+import { addColumn } from "../commands/columns.js";
 import { BlogError } from "./errors.js";
 import { isPublicBlogLink } from "./public-links.js";
 export type BlogCaller = { kind: "member" | "native"; organizationId: string; actorId: string } | { kind: "key"; secret: string };
@@ -41,6 +43,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
   return inTransaction(deps, transaction, root => transaction ? root.transaction(run) : run(root)) as Promise<BlogResults[K]>;
   async function run(tx: Transaction): Promise<unknown> {
     let principal: SitePrincipal | undefined, organizationId: string, principalId: string, human = false, displayName = "", workspaceId: string;
+    if (caller.kind === "key" && command === "createBlog") fail(403, "FORBIDDEN", "Workspace membership is required to create default blog resources");
     if (caller.kind === "key") { principal = await resolveSiteKey(tx, caller.secret, true); organizationId = principal.organizationId; principalId = `key:${principal.id}`; }
     else {
       organizationId = caller.organizationId; principalId = `user:${caller.actorId}`;
@@ -58,11 +61,15 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
     } else workspaceId = (await requireWorkspace(deps, organizationId, tx)).id;
     if (!principal && workspaceId !== (await requireWorkspace(deps, organizationId, tx)).id) fail(404, "NOT_FOUND", "Blog not found");
     const tableId = site?.blogConfig?.tableId ?? input.config?.tableId ?? input.tableId;
-    const permission: keyof Omit<BlogPermission, "tableId"> = BLOG_READ_COMMANDS.includes(command) ? "canRead" : command === "saveBlog" ? "canConfigure" : command === "restoreBlogRevision" ? "canRestore" : publicationCommands.includes(command) || command === "authorizeBlogPublication" ? "canPublish" : "canBuild";
+    const permission: keyof Omit<BlogPermission, "tableId"> = BLOG_READ_COMMANDS.includes(command) ? "canRead" : ["saveBlog", "createBlog", "startBlogArticle"].includes(command) ? "canConfigure" : command === "restoreBlogRevision" ? "canRestore" : publicationCommands.includes(command) || command === "authorizeBlogPublication" ? "canPublish" : "canBuild";
     if (principal) {
       const grant = principal.blogPermissions.get(tableId);
       if (!grant) fail(404, "NOT_FOUND", "Blog not found");
       if (!grant[permission]) fail(403, "FORBIDDEN", "Blog operation is not granted");
+    }
+    if (principal && command === "startBlogArticle") {
+      const grant = principal.permissions.get(tableId);
+      if (!grant || (input.rowId ? !grant.canRead || !grant.canUpdate : !grant.canCreate)) fail(403, "FORBIDDEN", "Independent content table write permission is required");
     }
     if (command === "authorizeBlogPublication" && !human) fail(403, "FORBIDDEN", "Only a signed-in human can approve a publication");
     const publicUrl = (id: string) => new URL(`/s/${id}/`, capabilities(deps).publicOrigin).href;
@@ -168,6 +175,35 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
     };
     let result: unknown;
     switch (command) {
+      case "createBlog": {
+        const table = await createTable(deps, { organizationId, name: `${input.name} · ${deps.uuid().slice(0, 8)}` }, tx);
+        const [title] = await tx.select().from(columns).where(eq(columns.tableId, table.id));
+        const slug = await addColumn(deps, { organizationId, tableId: table.id, name: "slug", type: "text" }, tx);
+        result = await executeBlog(deps, caller, "saveBlog", { name: input.name, config: { tableId: table.id, authorName: displayName && !/@/.test(displayName) ? displayName : "tabdo", description: input.description, language: input.language, mapping: { title: title.id, slug: slug.id }, articles: [] }, idempotencyKey: `create:${receiptId}` }, tx);
+        break;
+      }
+      case "startBlogArticle": {
+        cas();
+        // Serialize slug allocation across blogs sharing this table. Existing nonempty URLs never change.
+        await tx.select({ id: tables.id }).from(tables).where(eq(tables.id, tableId)).for("update");
+        await configColumns(site!.blogConfig!);
+        const mapping = site!.blogConfig!.mapping;
+        let row;
+        if (input.rowId) {
+          [row] = await tx.select().from(rows).where(and(eq(rows.id, input.rowId), eq(rows.tableId, tableId))).for("update");
+          if (!row) fail(404, "NOT_FOUND", "Article not found");
+          if (row.version !== input.expectedRowVersion) fail(409, "VERSION_CONFLICT", "Article changed; reload before writing");
+        }
+        if (!row?.cells[mapping.slug]) {
+          let slug: string;
+          do { slug = `post-${deps.uuid().replaceAll("-", "")}`; }
+          while ((await tx.select({ id: rows.id }).from(rows).where(and(eq(rows.tableId, tableId), sql`${rows.cells}->>${mapping.slug} = ${slug}`)).limit(1)).length);
+          const identity = { organizationId, actorId: caller.kind === "key" ? undefined : caller.actorId };
+          if (row) await updateCellsInTransaction(deps, tx, { ...identity, rowId: row.id, cells: { [mapping.slug]: slug }, expectedVersion: row.version });
+          else row = await addRow(deps, { ...identity, tableId, cells: { [mapping.title]: input.title, [mapping.slug]: slug } }, tx);
+        }
+        result = { tableId, rowId: row.id }; break;
+      }
       case "getBlogSources": {
         const [table] = await tx.select().from(tables).where(and(eq(tables.id, tableId), eq(tables.workspaceId, workspaceId), eq(tables.organizationId, organizationId)));
         if (!table) fail(404, "NOT_FOUND", "Content table not found");
@@ -220,7 +256,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           const [row] = await tx.select().from(rows).where(and(eq(rows.id, selection.rowId), eq(rows.tableId, tableId))).for("share");
           if (!row) fail(404, "NOT_FOUND", "Selected article no longer exists");
           const [linked] = await tx.select({ id: recordDocumentLinks.documentId }).from(recordDocumentLinks).where(and(eq(recordDocumentLinks.rowId, row.id), eq(recordDocumentLinks.tableId, tableId), eq(recordDocumentLinks.workspaceId, workspaceId)));
-          if (!linked) fail(400, "BAD_INPUT", "Enable a document for every selected article");
+          if (!linked) fail(400, "BAD_INPUT", "Write and save the body of each selected article");
           const [doc] = await tx.select().from(recordDocuments).where(eq(recordDocuments.id, linked.id)).for("share");
           const text = (key: keyof BlogConfig["mapping"], max: number) => { const id = config.mapping[key], v = id ? row.cells[id] : null; return typeof v === "string" ? v.trim().slice(0, max) : ""; };
           const title = text("title", 200), slug = text("slug", 100).toLowerCase();

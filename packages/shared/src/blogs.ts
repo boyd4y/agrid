@@ -20,6 +20,8 @@ const write = { idempotencyKey: z.string().min(1).max(200) };
 const site = { siteId: uuid };
 const cas = { ...site, expectedVersion: version, expectedPublishedRevisionId: uuid.nullable(), ...write };
 export const BLOG_SCHEMAS = {
+  createBlog: z.strictObject({ name: z.string().trim().min(1).max(100), description: z.string().trim().max(500).default(""), language: z.enum(["zh-CN", "en"]).default("zh-CN"), ...write }),
+  startBlogArticle: z.strictObject({ ...site, expectedVersion: version, rowId: uuid.optional(), expectedRowVersion: version.optional(), title: z.string().trim().min(1).max(200), ...write }).refine(v => !v.rowId || v.expectedRowVersion !== undefined, "Existing article requires expectedRowVersion"),
   getBlogSources: z.strictObject({ tableId: uuid, afterId: uuid.optional(), limit: z.number().int().min(1).max(50).default(20) }),
   getBlog: z.strictObject({ ...site, revisionId: uuid.optional() }),
   saveBlog: z.strictObject({ siteId: uuid.optional(), expectedVersion: version.optional(), name: z.string().trim().min(1).max(100), config: blogConfigSchema, ...write })
@@ -44,12 +46,16 @@ export type BlogAsset = { path: string; mimeType: string; size: number; hash: st
 export type BlogManifest = { name: string; schemaVersion: 1; buildId: string; configVersion: number; configHash: string; hash: string; createdAt: string; articles: BlogArticle[]; assets: BlogAsset[] };
 export type BlogDetail = { id: string; name: string; version: number; config: BlogConfig; revisionId: string; publishedRevisionId: string | null; publicUrl: string; manifest: BlogManifest | null; pendingChanges: boolean; publishedArticles: { rowId: string; slug: string; title: string }[]; revisions: { id: string; version: number; built: boolean; createdAt: string }[] };
 export type BlogResults = {
+  createBlog: BlogDetail;
+  startBlogArticle: { tableId: string; rowId: string };
   getBlogSources: { columns: ColumnDef[]; items: BlogSource[]; nextAfterId: string | null };
   getBlog: BlogDetail; saveBlog: BlogDetail; buildBlog: BlogDetail; publishBlog: BlogDetail; withdrawBlogArticle: BlogDetail; unpublishBlog: BlogDetail; restoreBlogRevision: BlogDetail;
   createBlogPreview: { url: string; expiresAt: string }; revokeBlogPreviews: { revoked: true };
   authorizeBlogPublication: { authorizationToken: string; expiresAt: string };
 };
 export const BLOG_TOOLS = {
+  create_blog: { command: "createBlog", description: "在当前工作区事务创建博客及默认内容表/字段；仅成员身份，不支持表级Key，不发布。" },
+  start_blog_article: { command: "startBlogArticle", description: "在博客中创建文章记录或准备现有文章，缺失slug自动生成，正文首次保存时创建。不改变发布选择，不发布；Key需独立博客配置和表写授权。" },
   get_blog_sources: { command: "getBlogSources", description: "分页读取可选文章属性、正文版本及可明确公开的图片清单；不读取关联记录。" },
   get_blog: { command: "getBlog", description: "读取博客配置、不可变构建清单、真实发布状态和历史。" },
   save_blog: { command: "saveBlog", description: "保存博客模板、显式文章与公开字段映射；不发布。最多20篇，图片须逐项选择。" },

@@ -198,3 +198,31 @@ test("real images from another row or workspace cannot be read or linked through
   }
   assert.deepEqual(await call("getDocument", identity()), current);
 });
+
+test("first body save is lazy, CAS serialized, idempotent and requires independent create plus update grants", async () => {
+  const [row] = await resource.db.insert(rows).values({ tableId }).returning();
+  const scope = { tableId, rowId: row.id };
+  assert.equal(await call("getDocument", scope), null);
+  const count = (await resource.db.select().from(recordDocuments)).length;
+  assert.equal(await call("getDocument", scope), null);
+  assert.equal((await resource.db.select().from(recordDocuments)).length, count);
+  const input = { ...scope, expectedVersion: 0, content: body("首次输入"), idempotencyKey: k() };
+  const key = await createSiteKey(a, actor, { name: "Update alone", permissions: [], documentPermissions: [grant({ canUpdate: true })] });
+  await assert.rejects(call("replaceDocument", input, a, { kind: "key", secret: key.secret }), code("FORBIDDEN"));
+  await updateSiteKey(a, actor, key.key.id, { name: "Create and update", permissions: [], documentPermissions: [grant({ canUpdate: true, canCreate: true })] });
+  const [first, replay] = await Promise.all([call("replaceDocument", input, a, { kind: "key", secret: key.secret }), call("replaceDocument", input, b, { kind: "key", secret: key.secret })]);
+  assert.deepEqual(first, replay); assert.equal(first.version, 1); assert(!("content" in first));
+  await assert.rejects(call("replaceDocument", { ...input, idempotencyKey: k() }), code("VERSION_CONFLICT"));
+  await assert.rejects(call("createDocument", { ...scope, content: body("legacy"), idempotencyKey: k() }), code("ALREADY_EXISTS"));
+  const history = await call("listDocumentRevisions", scope); assert.deepEqual(history.items.map(item => item.version), [1]);
+  assert.equal((await resource.db.select().from(rows).where(eq(rows.id, row.id)))[0].version, 1);
+  await updateSiteKey(a, actor, key.key.id, { name: "Shrunk", permissions: [], documentPermissions: [grant({ canRead: true })] });
+  await assert.rejects(call("replaceDocument", input, a, { kind: "key", secret: key.secret }), code("FORBIDDEN"));
+  const [race] = await resource.db.insert(rows).values({ tableId }).returning();
+  const raced = await Promise.allSettled([a, b].map(deps => call("replaceDocument", { ...input, rowId: race.id, idempotencyKey: k() }, deps)));
+  assert.equal(raced.filter(r => r.status === "fulfilled").length, 1);
+  assert(code("VERSION_CONFLICT")((raced.find(r => r.status === "rejected") as PromiseRejectedResult).reason));
+  const [rollback] = await resource.db.insert(rows).values({ tableId }).returning();
+  await assert.rejects(resource.db.transaction(async tx => { await executeDocument(a, caller, "replaceDocument", { ...input, rowId: rollback.id, idempotencyKey: k() }, tx); throw new Error("late lazy rollback"); }), /late lazy rollback/);
+  assert.equal(await call("getDocument", { ...scope, rowId: rollback.id }), null);
+});
