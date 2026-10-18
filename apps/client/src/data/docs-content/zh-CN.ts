@@ -289,7 +289,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         text: "只有有权访问工作区的成员才能查看和下载附件。通过 API 添加附件时，请先在 tabdo 中上传文件。",
       },
       { type: "cards", items: [
-        { title: "使用记录正文", description: "为记录启用正文、编辑长文并查看版本历史。", href: "/docs/record-documents", badge: "正文" },
+        { title: "使用记录正文", description: "在记录页面直接写作、查看保存状态并恢复历史。", href: "/docs/record-documents", badge: "正文" },
         { title: "正文 API", description: "通过 REST、GraphQL 或 MCP 读取和更新正文。", href: "/docs/document-api", badge: "API" },
         { title: "表格日历视图", description: "把日期记录显示为全天日历，并在原记录中编辑。", href: "/docs/table-calendar", badge: "视图" },
       ] },
@@ -299,13 +299,14 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
     slug: "record-documents",
     sectionId: "humans",
     title: "使用记录正文",
-    description: "为记录添加独立正文，用可视化编辑器写作、插图和恢复历史。",
+    description: "在记录页面的属性下直接写作、插图并恢复正文历史。",
     body: [
-      { type: "p", text: "记录正文适合存放长文和图片，不会占用表格字段，也不会随表格行列表读取。表格继续保存标题、状态等属性，正文单独保存。" },
+      { type: "p", text: "每条记录打开后就是一个可编辑页面：标题和其他属性在上方，长文和图片可直接写在下方。正文不占用表格字段，也不会随表格行列表读取；你自建的“内容”等文本字段仍是普通属性，不会被自动搬到正文或覆盖。" },
       { type: "ol", items: [
-        "打开表格并打开一条记录，在记录详情中选择「正文」。如果记录还没有正文，选择「启用正文」开始编辑。",
-        "在正文编辑器中输入文字，使用标题、列表、引用、代码块和链接等格式。使用「上传图片」添加图片；粘贴的外部图片不会自动上传。编辑器会显示保存中、已保存、未保存、保存失败或版本冲突状态。",
-        "遇到版本冲突时，当前浏览器标签页会保留草稿。使用「查看服务器版本」比较内容，或导出本地草稿；确认后再加载服务器版本并继续编辑。若浏览器无法保留草稿，请保持当前标签页打开并重试保存。",
+        "打开表格并选择一条记录，即可在页面中编辑标题、属性和正文。新记录初次输入正文时才会创建正文；仅打开记录不会创建正文或历史版本。",
+        "在页面下方直接输入，使用标题、列表、引用、代码块和链接等格式。使用「上传图片」添加图片；粘贴的外部图片不会自动上传。标题、属性和正文会自动保存，页面状态会汇总显示保存中、已保存、未保存、保存失败或版本冲突。",
+        "标题/属性与正文分别保存，因此一部分保存成功不代表另一部分也成功。保存失败时，页面会保留对应草稿并提供重试；关闭记录、切换记录、从博客文章返回文章列表或切换工作区时，tabdo 会先等待保存。若保存仍失败，可继续编辑或保留草稿后离开。刷新或关闭浏览器标签页前也请留意未保存提示。",
+        "遇到正文版本冲突时，当前浏览器标签页会保留草稿。使用「查看服务器版本」比较内容，或导出本地草稿；确认后再加载服务器版本并继续编辑。若浏览器无法保留草稿，请保持当前标签页打开并重试保存。",
         "选择「历史」查看先前版本。打开某个版本可先预览；选择恢复会把内容保存为新版本，原历史版本不会被覆盖。",
         "在工作区已连接且获授权的 tabdo 智能体或 MCP 客户端中，可按需读取、创建或替换记录正文；图片和历史读取也需要对应权限。通过 REST 或 GraphQL 接入时，见「正文 API」。",
       ] },
@@ -313,11 +314,11 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "ul", items: [
         "正文使用受限格式：段落、三级标题、无序/有序列表、引用、代码块、分隔线、换行、加粗、斜体、删除线、行内代码、安全链接和图片。链接只支持完整的 http、https 或 mailto 地址。",
         "正文最多 64 KiB 序列化 JSON、4,000 个节点、12 层和 20 张被引用图片。图片支持 PNG、JPEG、WebP、GIF；每张最多 5 MiB，每篇正文最多上传 40 个文件、总计 50 MiB。",
-        "正文草稿保存在当前浏览器标签页。未保存草稿不是跨设备备份；关闭标签页前确认已保存，冲突时先导出需要保留的草稿。",
+        "未保存的属性和正文草稿保存在当前浏览器标签页，不是跨设备备份。关闭标签页前确认已保存；冲突时先导出需要保留的正文草稿。",
       ] },
       { type: "cards", items: [
         { title: "正文 API", description: "查看授权、读写示例、历史和图片接口。", href: "/docs/document-api", badge: "API" },
-        { title: "发布博客", description: "把明确选择的记录正文发布为博客文章。", href: "/docs/blogging", badge: "博客" },
+        { title: "发布博客", description: "在博客中写作，再明确选择文章预览和发布。", href: "/docs/blogging", badge: "博客" },
       ] },
     ],
   },
@@ -700,7 +701,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
       ] },
       { type: "callout", tone: "warn", text: "站点编辑器可直接编辑网站文件；每个站点最多 50 个文件，文件类型见上方列表。发布时使用已保存的版本。tab_ Key 会随站点前端代码提供，不能存放高权限凭证；Key 只应授予必要的逐表数据权限。" },
       { type: "cards", items: [
-        { title: "发布博客", description: "从正文记录中选择文章、预览并发布博客。", href: "/docs/blogging", badge: "博客" },
+        { title: "发布博客", description: "在博客中写作，再明确选择文章预览和发布。", href: "/docs/blogging", badge: "博客" },
         { title: "HTTP API 与数据访问 Key", description: "了解 tab_ Key 的逐表权限和访问边界。", href: "/docs/api-quickstart", badge: "安全" },
       ] },
     ],
@@ -709,12 +710,13 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     slug: "blogging",
     sectionId: "humans",
     title: "发布博客",
-    description: "从表格正文中选择文章，检查预览后发布和更新博客。",
+    description: "在博客中直接写作，明确选择文章后预览、发布和更新。",
     body: [
-      { type: "p", text: "博客把你选中的记录正文整理成可公开阅读的文章。每次构建和发布都是固定版本；你可以先预览，再决定是否让读者访问。" },
+      { type: "p", text: "博客把你明确选择的文章整理成可公开阅读的内容。新建博客后即可在博客页面写标题和正文；每次构建和发布都是固定版本。保存草稿不会公开内容，你可以先预览，再决定是否让读者访问。" },
       { type: "ol", items: [
-        "在工作区打开「站点」，新建博客并选择一张内容表。先在表格中为文章记录启用正文，再用可视化正文编辑器写作、插入图片并等待保存状态显示已保存。正文历史可用于查看和恢复先前版本。",
-        "在博客设置中映射标题和 URL slug；按需映射摘要、作者、日期、封面、分类和标签。逐篇选择要发布的记录，并逐项选择正文图片和封面。未选中的记录、关联记录和附件不会加入博客。",
+        "在工作区打开「站点」并新建博客，填写名称即可；简介可选。tabdo 会准备博客内容和写作所需字段。若要继续使用已有内容表，可展开「高级：绑定已有内容表」并选择对应表与字段。",
+        "进入博客后选择「新建文章」，在同一页面填写标题并直接编辑正文、插入图片。已有文章也可在博客中打开并继续写作；打开记录页面时也能看到同一标题、属性和正文。正文历史可用于查看和恢复先前版本。",
+        "文章 URL slug 会自动生成；非空的已有 slug 会保留。需要时可在高级设置中调整映射或 slug。新文章和保存的修改不会自动加入发布列表；逐篇选择要发布的文章，并逐项选择正文图片和封面。未选中的记录、关联记录和附件不会加入博客。",
         "保存配置后构建博客。查看构建结果和预览链接；预览链接在 10 分钟后过期，任何持有链接的人都可访问。预览不进入搜索索引；你也可以提前撤销所有预览链接。",
         "检查无误后发布构建版本。发布后复制博客地址分享给读者。继续编辑正文或博客设置不会自动改动线上文章；发现待发布更改时，重新构建、预览并发布，线上内容才会更新。",
         "要撤下一篇文章，选择该文章并确认撤回；要停止整个博客，选择撤下博客。也可以恢复内部历史配置作为新草稿，再重新构建并发布。",
@@ -730,12 +732,12 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
       { type: "h2", text: "权限与排错" },
       { type: "ul", items: [
         "工作区成员需有权查看并编辑所选记录和正文。通过 API 连接时，owner/admin 在「设置 → API Key」为内容表单独授予博客读取、配置、构建、发布或恢复权限；只授予实际需要的权限。",
-        "若正文没有出现在文章中，请确认已启用正文并等待保存完成。出现版本冲突时，编辑器会保留当前标签页中的草稿，并提供查看服务器版本、导出草稿或导出后加载服务器版本的选项；先比较两份内容，再决定如何继续。历史版本可先预览，再恢复为新版本。构建提示来源已变化时，重新读取记录、核对内容并重新构建。",
-        "若 slug 重复或格式无效，请为每篇文章设置唯一的小写英文、数字和连字符 slug。若无法发布或预览，请检查 Key 的对应权限、构建版本和待发布更改；过期预览需要重新生成。",
+        "若标题或正文未保存，请查看页面状态并重试。关闭文章、返回博客文章列表或切换工作区时，tabdo 会等待保存；若失败，可继续编辑或保留草稿后离开。出现正文版本冲突时，编辑器会保留当前标签页中的草稿，并提供查看服务器版本、导出草稿或导出后加载服务器版本的选项；先比较两份内容，再决定如何继续。历史版本可先预览，再恢复为新版本。构建提示来源已变化时，重新读取记录、核对内容并重新构建。",
+        "若 slug 不符合博客要求，可在高级设置中调整；新建文章会自动生成合法且唯一的 slug。若无法发布或预览，请检查 Key 的对应权限、构建版本和待发布更改；过期预览需要重新生成。",
       ] },
       { type: "cards", items: [
         { title: "博客 API", description: "通过 REST、GraphQL 或可用的 MCP 工具读取和管理博客。", href: "/docs/blog-api", badge: "API" },
-        { title: "使用记录正文", description: "了解正文编辑器、自动保存状态、冲突草稿和历史恢复。", href: "/docs/record-documents", badge: "正文" },
+        { title: "使用记录正文", description: "在记录页面直接写作并管理正文历史。", href: "/docs/record-documents", badge: "正文" },
       ] },
     ],
   },
@@ -871,7 +873,7 @@ if (row) {
     title: "博客 API",
     description: "使用专用博客权限，通过 REST、GraphQL 或 MCP 管理博客快照。",
     body: [
-      { type: "p", text: "博客命令可通过 API Key 的 REST 命令入口和 GraphQL 使用。博客权限按内容表单独授予；旧的数据读写权限或正文权限不会自动获得博客配置、构建或发布权限。博客相关的 npm SDK 方法尚未在公开版本提供。" },
+      { type: "p", text: "博客命令可通过 REST 命令入口、GraphQL 或已授权的 tabdo MCP 连接使用。博客权限按内容表单独授予；旧的数据读写权限或正文权限不会自动获得博客配置、构建或发布权限。createBlog 必须使用已登录的成员会话，不能使用 API Key。已发布的 @tabdo/sdk 0.1.1 版本尚未包含任何博客命令；API 接入请使用 REST、GraphQL 或 MCP。" },
       { type: "h2", text: "创建访问 Key" },
       { type: "ol", items: [
         "请工作区 owner/admin 打开「设置 → API Key」并创建专用 Key。仅添加需要访问的内容表及博客权限：canRead 读取来源和配置，canConfigure 保存博客设置，canBuild 构建和预览，canPublish 授权该 Key 发布或撤回，canRestore 恢复历史配置。",
@@ -887,7 +889,28 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
-      { type: "p", text: "创建博客时调用 saveBlog。以下配置使用虚构 UUID；将字段 ID、表 ID 和记录 ID 替换为 getBlogSources 与字段元数据返回的值。REST 命令成功响应为 { ok, command, result }。BlogDetail 的站点 ID 字段名是 id：从 saveBlog 读取时，REST 使用 result.id、GraphQL 使用 data.saveBlog.id；从 getBlog 读取时，REST 使用 result.id、GraphQL 使用 data.getBlog.id。" },
+      { type: "h2", text: "以已登录成员身份创建博客" },
+      { type: "p", text: "要新建博客并使用 tabdo 准备内容字段，请在已登录的工作区成员会话中向 POST /api/commands 发送下方请求体。该请求使用成员登录会话，不使用 tab_ API Key；API Key 不能创建博客。命令会创建内容表和默认标题/slug 字段。REST 命令成功响应为 { ok, command, result }；BlogDetail 站点 ID 为 result.id。" },
+      { type: "code", lang: "json", code: `{
+  "command": "createBlog",
+  "input": {
+    "name": "Field Notes",
+    "description": "Notes and updates",
+    "language": "zh-CN",
+    "idempotencyKey": "create-blog-example-1"
+  }
+}` },
+      { type: "p", text: "在已登录成员会话下，可向 POST /api/commands 发送下方请求体；也可通过 REST 或 GraphQL 使用 API Key 调用 startBlogArticle。提供博客 siteId、当前 expectedVersion 和标题。命令会创建或准备来源记录；缺少 slug 时会生成合法 slug。它不会创建正文、选择文章发布或发布内容。结果包含 tableId 和 rowId，之后可通过正文 API 编写内容。API Key 调用者还需博客 canConfigure 和内容表 canCreate（新建文章），或 canRead 与 canUpdate（准备已有记录）；正文授权仍单独检查。" },
+      { type: "code", lang: "json", code: `{
+  "command": "startBlogArticle",
+  "input": {
+    "siteId": "00000000-0000-4000-8000-000000000002",
+    "expectedVersion": 1,
+    "title": "第一篇笔记",
+    "idempotencyKey": "start-article-example-1"
+  }
+}` },
+      { type: "p", text: "继续使用已有内容表时，可通过 saveBlog 配置该表和字段映射。以下高级配置使用虚构 UUID；将字段 ID、表 ID 和记录 ID 替换为 getBlogSources 与字段元数据返回的值。saveBlog 返回的站点 ID 在 REST 中为 result.id、GraphQL 中为 data.saveBlog.id；getBlog 的结果分别为 result.id 与 data.getBlog.id。" },
       { type: "code", lang: "json", code: `{
   "command": "saveBlog",
   "input": {
@@ -928,7 +951,7 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
     "idempotencyKey": "publish-blog-example-1"
   }
 }` },
-      { type: "p", text: "getBlogSources 返回可选文章字段、正文版本和可明确选择的图片；limit 最大为 50，可用 nextAfterId 继续分页。getBlog 读取配置、当前构建、已发布文章、历史版本和 pendingChanges。saveBlog 保存模板与显式文章列表；buildBlog 从当前来源生成固定快照；createBlogPreview 返回 10 分钟分享链接；publishBlog 发布指定 buildId；withdrawBlogArticle 撤回单篇；unpublishBlog 撤下整站；restoreBlogRevision 将历史配置恢复成新草稿。博客 REST 请求体上限为 128 KiB，具体博客内容和图片预算见博客使用指南。" },
+      { type: "p", text: "createBlog 为已登录成员创建博客和默认内容表；startBlogArticle 创建或准备文章记录，但不会选择文章或发布。getBlogSources 返回可选文章字段、正文版本和可明确选择的图片；limit 最大为 50，可用 nextAfterId 继续分页。getBlog 读取配置、当前构建、已发布文章、历史版本和 pendingChanges。saveBlog 保存配置和显式文章列表；buildBlog 从当前来源生成固定快照；createBlogPreview 返回 10 分钟分享链接；publishBlog 发布指定 buildId；withdrawBlogArticle 撤回单篇；unpublishBlog 撤下整站；restoreBlogRevision 将历史配置恢复成新草稿。博客 REST 请求体上限为 128 KiB，具体博客内容和图片预算见博客使用指南。" },
       { type: "h2", text: "GraphQL" },
       { type: "p", text: "GraphQL 入口为 POST /api/graphql，同样使用 Authorization: Bearer tab_… 和专用博客权限。每个命令以 JSON input 作为参数；读取命令放在 query，写命令放在 mutation。对 REST 和 GraphQL 写操作使用相同的幂等键与版本前提。" },
       { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
@@ -940,9 +963,9 @@ curl -s -X POST "$TABDO_API_URL/api/commands" \\
 }` },
       { type: "p", text: "写命令使用 Idempotency-Key 请求头；GraphQL 单次请求体上限为 128 KiB。GraphQL 返回标准 { data } 或 { errors }。常见错误包括 FORBIDDEN（缺少权限）、NOT_FOUND（对象不存在或不可见）、VERSION_CONFLICT（配置或发布版本已变化）、SOURCE_CHANGED（来源变化，需要重新构建）、IDEMPOTENCY_MISMATCH（幂等键被不同请求复用）和 LIMIT_EXCEEDED（超过博客预算）。发生版本冲突时重新调用 getBlog 并核对后再继续。" },
       { type: "h2", text: "MCP 与公开阅读" },
-      { type: "p", text: "已连接 tabdo MCP 的客户端可使用 get_blog_sources、get_blog、save_blog、build_blog、create_blog_preview、revoke_blog_previews、publish_blog、withdraw_blog_article、unpublish_blog 和 restore_blog_revision 工具。MCP 调用遵循同一组内容表博客权限；发布权限只应交给受信任的集成。" },
+      { type: "p", text: "已连接 tabdo MCP 的客户端可使用 create_blog、start_blog_article、get_blog_sources、get_blog、save_blog、build_blog、create_blog_preview、revoke_blog_previews、publish_blog、withdraw_blog_article、unpublish_blog 和 restore_blog_revision 工具。API Key 不能调用 create_blog；start_blog_article 遵循上述内容表博客与表格权限。发布权限只应交给受信任的集成。" },
       { type: "p", text: "已发布博客无需 Key 即可公开读取：GET /s/{siteId}/（即 getBlog 返回的 publicUrl）可访问文章列表；文章、分页、分类和选中图片使用该地址下的子路径。未发布内容、撤下文章的旧路径以及已撤下博客不可公开读取。预览 URL 是任何持链接者均可访问的短时链接，不要将其当作私有登录预览。" },
-      { type: "callout", tone: "warn", text: "不要将可发布的 Key 交给浏览器或不受信任的自动化。保存、构建和发布是不同操作；只有明确授权的 Key 才能发布，重新构建不会自动更新线上内容。" },
+      { type: "callout", tone: "warn", text: "不要将可发布的 Key 交给浏览器或不受信任的自动化。保存、构建和发布是不同操作；只有明确授权的 Key 才能发布，重新构建不会自动更新线上内容。已发布的 @tabdo/sdk 0.1.1 版本尚未包含任何博客命令；请使用 REST、GraphQL 或已授权的 MCP 连接。" },
       { type: "cards", items: [
         { title: "发布博客", description: "查看从正文写作到发布和撤回的完整步骤。", href: "/docs/blogging", badge: "指南" },
         { title: "API Key", description: "了解 Key 的创建、逐表授权和使用边界。", href: "/docs/auth", badge: "权限" },
