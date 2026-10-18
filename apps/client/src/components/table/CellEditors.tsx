@@ -2,19 +2,20 @@ import { FileDisplay, FileCellEditor } from "./FileField";
 import { MemberAvatar } from "@/components/members/MemberAvatar";
 import { MemberChip } from "@/components/members/MemberChip";
 import { RelationPicker, RelationTags } from "./RelationPicker";
-import { useState, type KeyboardEvent } from "react";
-import { Check, Search, X } from "lucide-react";
+import { useState } from "react";
+import { Check } from "lucide-react";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Input } from "@tabdo/ui/components/input";
 import {
   Popover,
   PopoverAnchor,
-  PopoverContent,
 } from "@tabdo/ui/components/popover";
 import { DatePicker } from "@/components/controls/date-picker";
 import { formatDateDisplay } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 import { SelectChip } from "./SelectChip";
+import { CellOptionPanel } from "./CellOptionPanel";
+import { SelectOptionRow, CELL_OPTION_CLASS } from "./SelectOptionRow";
 import type { CellValue, ColumnDef, SelectOption } from "@/types/table";
 import type { MemberOption } from "@/lib/api";
 import i18n from "@/i18n";
@@ -28,72 +29,6 @@ type EditorProps = {
   row?: import("@/types/table").RowData;
   onRowUpdated?: (row: import("@/types/table").RowData) => void;
 };
-
-const OPTION_CLASS =
-  "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent focus-visible:ring-1 focus-visible:ring-primary";
-const CELL_POPOVER_CLASS = "w-64 p-1";
-
-function CellOptionSearch({
-  value,
-  onChange,
-  placeholder,
-  onClear,
-  canClear,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-  onClear: () => void;
-  canClear: boolean;
-}) {
-  return (
-    <div className="mb-1 flex items-center gap-1 border-b border-border px-2 py-1.5">
-      <Search
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-        aria-hidden
-      />
-      <Input
-        size="sm"
-        className="h-7 min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
-        placeholder={placeholder}
-        aria-label={placeholder.replace(/…$/, "")}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        autoFocus
-      />
-      <button
-        type="button"
-        aria-label={i18n.t("table:clearSelected")}
-        title={i18n.t("table:clearSelected")}
-        disabled={!canClear}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-30"
-        onClick={onClear}
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
-function navigateOptions(e: KeyboardEvent<HTMLDivElement>) {
-  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-  const buttons = Array.from(
-    e.currentTarget.querySelectorAll<HTMLButtonElement>(
-      "button[data-cell-option]:not(:disabled)",
-    ),
-  );
-  if (!buttons.length) return;
-  e.preventDefault();
-  const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-  const next =
-    index < 0
-      ? e.key === "ArrowDown"
-        ? 0
-        : buttons.length - 1
-      : (index + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) %
-        buttons.length;
-  buttons[next].focus();
-}
 
 export function CellDisplay({
   column,
@@ -391,50 +326,41 @@ function PersonEditor({
           )}
         </div>
       </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        alignOffset={-8}
-        side="bottom"
-        sideOffset={6}
-        className={CELL_POPOVER_CLASS}
-        aria-label={i18n.t("table:pickPerson")}
-        onKeyDown={navigateOptions}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <CellOptionSearch
-          placeholder={i18n.t("table:searchPeople")}
-          value={q}
-          onChange={setQ}
-          onClear={() => onCommit(null)}
-          canClear={Boolean(value)}
-        />
-        {list.length === 0 && (
+      <CellOptionPanel
+        label={i18n.t("table:pickPerson")}
+        search={{
+          placeholder: i18n.t("table:searchPeople"),
+          value: q,
+          onChange: setQ,
+          onClear: () => onCommit(null),
+          canClear: Boolean(value),
+        }}
+        items={list}
+        renderOption={(m) => (
+          <button
+            key={m.userId}
+            type="button"
+            data-cell-option
+            aria-pressed={value === m.userId || value === m.name}
+            className={cn(
+              CELL_OPTION_CLASS,
+              (value === m.userId || value === m.name) && "bg-accent",
+            )}
+            onClick={() => onCommit(m.userId)}
+          >
+            <MemberAvatar name={m.name} kind={m.kind} image={m.image} className="size-5" />
+            <span className="truncate">{m.name}</span>
+            {(value === m.userId || value === m.name) && (
+              <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
+          </button>
+        )}
+        beforeList={list.length === 0 && (
           <div className="px-2 py-2 text-xs text-muted-foreground">
             {i18n.t("table:noMembers")}
           </div>
         )}
-        <div className="max-h-56 overflow-y-auto">
-          {list.map((m) => (
-            <button
-              key={m.userId}
-              type="button"
-              data-cell-option
-              aria-pressed={value === m.userId || value === m.name}
-              className={cn(
-                OPTION_CLASS,
-                (value === m.userId || value === m.name) && "bg-accent",
-              )}
-              onClick={() => onCommit(m.userId)}
-            >
-              <MemberAvatar name={m.name} kind={m.kind} image={m.image} className="size-5" />
-              <span className="truncate">{m.name}</span>
-              {(value === m.userId || value === m.name) && (
-                <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              )}
-            </button>
-          ))}
-        </div>
-        {members.length === 0 && (
+        afterList={members.length === 0 && (
           <Input
             size="sm"
             className="mt-1 h-8"
@@ -446,7 +372,7 @@ function PersonEditor({
             }}
           />
         )}
-      </PopoverContent>
+      />
     </Popover>
   );
 }
@@ -487,49 +413,31 @@ function SelectEditor({
           )}
         </div>
       </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        alignOffset={-8}
-        side="bottom"
-        sideOffset={6}
-        className={CELL_POPOVER_CLASS}
-        aria-label={i18n.t("table:pickOption")}
-        onKeyDown={navigateOptions}
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <CellOptionSearch
-          placeholder={i18n.t("table:searchOptions")}
-          value={q}
-          onChange={setQ}
-          onClear={() => onCommit(null)}
-          canClear={Boolean(value)}
-        />
-        <div className="max-h-56 overflow-y-auto">
-          {filtered.length === 0 && (
-            <p className="px-2 py-3 text-xs text-muted-foreground">
-              {i18n.t("table:noMatchingOptions")}
-            </p>
-          )}
-          {filtered.map((o) => {
-            const selected = value === o.id;
-            return (
-              <button
-                key={o.id}
-                type="button"
-                data-cell-option
-                aria-pressed={selected}
-                className={cn(OPTION_CLASS, selected && "bg-accent")}
-                onClick={() => onCommit(o.id)}
-              >
-                <SelectChip option={o} />
-                {selected && (
-                  <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
+      <CellOptionPanel
+        label={i18n.t("table:pickOption")}
+        search={{
+          placeholder: i18n.t("table:searchOptions"),
+          value: q,
+          onChange: setQ,
+          onClear: () => onCommit(null),
+          canClear: Boolean(value),
+        }}
+        items={filtered}
+        renderOption={(o) => (
+          <SelectOptionRow
+            key={o.id}
+            option={o}
+            surface="cell"
+            selected={value === o.id}
+            onSelect={() => onCommit(o.id)}
+          />
+        )}
+        emptyState={
+          <p className="px-2 py-3 text-xs text-muted-foreground">
+            {i18n.t("table:noMatchingOptions")}
+          </p>
+        }
+      />
     </Popover>
   );
 }
@@ -589,16 +497,35 @@ function MultiSelectEditor({
           )}
         </div>
       </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        alignOffset={-8}
-        side="bottom"
-        sideOffset={6}
-        className={CELL_POPOVER_CLASS}
-        aria-label={i18n.t("table:pickOptions")}
-        onOpenAutoFocus={(e) => e.preventDefault()}
+      <CellOptionPanel
+        label={i18n.t("table:pickOptions")}
+        search={{
+          placeholder: i18n.t("table:searchOptions"),
+          value: q,
+          onChange: setQ,
+          onClear: () => {
+            setSelected([]);
+            setDirty(true);
+          },
+          canClear: selected.length > 0,
+        }}
+        items={filtered}
+        renderOption={(o) => (
+          <SelectOptionRow
+            key={o.id}
+            option={o}
+            surface="cell"
+            multiple
+            selected={selected.includes(o.id)}
+            onSelect={() => toggle(o.id)}
+          />
+        )}
+        emptyState={
+          <p className="px-2 py-3 text-xs text-muted-foreground">
+            {i18n.t("table:noMatchingOptions")}
+          </p>
+        }
         onKeyDown={(e) => {
-          navigateOptions(e);
           if (e.key === "Escape") {
             e.preventDefault();
             setOpen(false);
@@ -606,63 +533,23 @@ function MultiSelectEditor({
             else onCancel();
           }
         }}
-      >
-        <CellOptionSearch
-          placeholder={i18n.t("table:searchOptions")}
-          value={q}
-          onChange={setQ}
-          onClear={() => {
-            setSelected([]);
-            setDirty(true);
-          }}
-          canClear={selected.length > 0}
-        />
-        <div className="flex min-h-8 flex-wrap items-center gap-1 px-2 py-1.5">
-          {selectedOpts.length === 0 ? (
-            <span className="text-[12px] text-muted-foreground">
-              {i18n.t("table:clickToPickTags")}
-            </span>
-          ) : (
-            selectedOpts.map((o) => (
-              <SelectChip key={o.id} option={o} onRemove={() => toggle(o.id)} />
-            ))
-          )}
-        </div>
-        <div className="my-1 h-px bg-border" />
-        <div className="max-h-56 overflow-y-auto">
-          {filtered.length === 0 && (
-            <p className="px-2 py-3 text-xs text-muted-foreground">
-              {i18n.t("table:noMatchingOptions")}
-            </p>
-          )}
-          {filtered.map((o) => {
-            const on = selected.includes(o.id);
-            return (
-              <button
-                key={o.id}
-                type="button"
-                data-cell-option
-                aria-pressed={on}
-                className={cn(OPTION_CLASS, on && "bg-accent")}
-                onClick={() => toggle(o.id)}
-              >
-                <span
-                  className={cn(
-                    "inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border",
-                    on
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-transparent",
-                  )}
-                  aria-hidden
-                >
-                  {on && <Check className="h-2.5 w-2.5" />}
+        beforeList={
+          <>
+            <div className="flex min-h-8 flex-wrap items-center gap-1 px-2 py-1.5">
+              {selectedOpts.length === 0 ? (
+                <span className="text-[12px] text-muted-foreground">
+                  {i18n.t("table:clickToPickTags")}
                 </span>
-                <SelectChip option={o} />
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
+              ) : (
+                selectedOpts.map((o) => (
+                  <SelectChip key={o.id} option={o} onRemove={() => toggle(o.id)} />
+                ))
+              )}
+            </div>
+            <div className="my-1 h-px bg-border" />
+          </>
+        }
+      />
     </Popover>
   );
 }

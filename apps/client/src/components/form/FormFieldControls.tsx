@@ -1,7 +1,7 @@
 import { FileDisplay, FileEditor } from "@/components/table/FileField";
 import { RelationPicker } from "@/components/table/RelationPicker";
 import { useState } from "react";
-import { Bot, Check, ChevronsUpDown, User } from "lucide-react";
+import { Bot, ChevronsUpDown, User } from "lucide-react";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
@@ -13,6 +13,7 @@ import {
 } from "@tabdo/ui/components/popover";
 import { DatePicker } from "@/components/controls/date-picker";
 import { SelectChip } from "@/components/table/SelectChip";
+import { SelectOptionRow } from "@/components/table/SelectOptionRow";
 import { cn } from "@/lib/utils";
 import type { CellValue, ColumnDef, SelectOption } from "@/types/table";
 import type { MemberOption } from "@/lib/api";
@@ -340,18 +341,16 @@ function SelectControl({
           {i18n.t("form:clear")}
         </button>
         {options.map((o) => (
-          <button
+          <SelectOptionRow
             key={o.id}
-            type="button"
-            className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-            onClick={() => {
+            option={o}
+            surface="form"
+            selected={value === o.id}
+            onSelect={() => {
               onChange(o.id);
               setOpen(false);
             }}
-          >
-            <SelectChip option={o} />
-            {value === o.id && <Check className="h-3.5 w-3.5" />}
-          </button>
+          />
         ))}
       </PopoverContent>
     </Popover>
@@ -407,27 +406,16 @@ function MultiSelectControl({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-1" align="start">
-        {options.map((o) => {
-          const on = value.includes(o.id);
-          return (
-            <button
-              key={o.id}
-              type="button"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-              onClick={() => toggle(o.id)}
-            >
-              <span
-                className={cn(
-                  "flex h-4 w-4 items-center justify-center rounded border",
-                  on ? "border-foreground bg-foreground text-background" : "border-border"
-                )}
-              >
-                {on && <Check className="h-3 w-3" />}
-              </span>
-              <SelectChip option={o} />
-            </button>
-          );
-        })}
+        {options.map((o) => (
+          <SelectOptionRow
+            key={o.id}
+            option={o}
+            surface="form"
+            multiple
+            selected={value.includes(o.id)}
+            onSelect={() => toggle(o.id)}
+          />
+        ))}
       </PopoverContent>
     </Popover>
   );

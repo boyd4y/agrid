@@ -40,7 +40,16 @@ try {
   const checkbox = field(columns[2].id).getByRole('checkbox');
   const checkboxStyle = () => checkbox.evaluate(el => { const s = getComputedStyle(el); return { border: s.borderTopColor, background: s.backgroundColor, ring: s.boxShadow }; });
   const unchecked = await checkboxStyle(); assert.notEqual(unchecked.border, 'rgba(0, 0, 0, 0)', 'unchecked checkbox keeps its border');
-  await field(columns[1].id).getByRole('textbox').focus(); await page.keyboard.press('Tab');
+  await saved();
+  // Returned record columns can put another input between number and checkbox.
+  // Start at the actual preceding control, then test native Tab navigation.
+  const propertyControls = panel.locator('[data-slot="field-group"] :is(input, button):visible:not(:disabled):not([tabindex="-1"])');
+  const checkboxIndex = await propertyControls.evaluateAll(nodes => nodes.findIndex(node => node.getAttribute('role') === 'checkbox'));
+  assert(checkboxIndex > 0, 'checkbox has a preceding focusable property control');
+  const predecessor = propertyControls.nth(checkboxIndex - 1);
+  await predecessor.focus();
+  assert(await predecessor.evaluate(el => el === document.activeElement), 'Tab starts from the preceding property control');
+  await page.keyboard.press('Tab');
   assert(await checkbox.evaluate(el => el === document.activeElement)); assert.notEqual((await checkboxStyle()).ring, 'none', 'checkbox keeps its focus ring');
   let releaseRow, rowStarted;
   const heldRow = new Promise(resolve => { releaseRow = resolve; }), startedRow = new Promise(resolve => { rowStarted = resolve; });
