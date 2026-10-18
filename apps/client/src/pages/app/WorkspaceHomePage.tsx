@@ -120,7 +120,7 @@ export function WorkspaceHomePage() {
         }} className="flex h-full min-h-0 flex-col">
           <div id="workspace-preview-panel" className="h-full min-h-0 min-w-0" hidden={!previewOpen}>
             {createError && <p role="alert" className="p-3 text-sm text-destructive">{createError}</p>}
-            <PreviewSlot tabs={tabs} activeKey={activeKey} contexts={contexts} tables={tables} onOpenTab={openTab} onCloseTab={closeTab} onSelectTab={setActiveKey} />
+            <PreviewSlot tabs={tabs} activeKey={activeKey} contexts={contexts} tables={tables} onOpenTab={openTab} onCloseTab={closeTab} onSelectTab={setActiveKey} onShowTables={() => setActiveKey(null)} />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

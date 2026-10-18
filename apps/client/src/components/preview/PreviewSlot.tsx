@@ -1,9 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FileInput, RefreshCw, X } from "lucide-react";
+import { ArrowRight, FileInput, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@tabdo/ui/components/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@tabdo/ui/components/tabs";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuGroup } from "@tabdo/ui/components/dropdown-menu";
 import { TableIcon } from "@/components/table/TableIcon";
 import { APP_NAVIGATION } from "@/components/shell/app-navigation";
 import { cn } from "@tabdo/ui/lib/utils";
@@ -26,12 +25,14 @@ type Props = {
   onOpenTab: (tab: PreviewTab) => void;
   onCloseTab: (key: string) => void;
   onSelectTab: (key: string) => void;
+  onShowTables: () => void;
 };
 
-export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCloseTab, onSelectTab }: Props) {
+export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCloseTab, onSelectTab, onShowTables }: Props) {
   const { t } = useTranslation("app");
   const [headers, setHeaders] = useState<Record<string, PreviewSlotHeader | null>>({});
   const headerRef = useRef<HTMLElement>(null);
+  const launcherRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<HTMLDivElement>(null);
   const closeTabRef = useRef(onCloseTab); closeTabRef.current = onCloseTab;
   const headerCallbacks = useMemo(() => Object.fromEntries(tabs.map(tab => {
@@ -40,6 +41,14 @@ export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCl
   })), [tabs]);
   const activeTab = tabs.find(tab => getPreviewTabKey(tab) === activeKey);
   const header = activeTab ? headers[getPreviewTabKey(activeTab)] : null;
+  const showTables = !activeTab;
+  const nameCounts = new Map<string, number>();
+  const nameOrdinals = new Map<string, number>();
+  for (const table of tables) {
+    const ordinal = (nameCounts.get(table.name) ?? 0) + 1;
+    nameCounts.set(table.name, ordinal);
+    nameOrdinals.set(table.id, ordinal);
+  }
   useLayoutEffect(() => {
     const active = activeTabRef.current, list = active?.parentElement;
     if (!active || !list) return;
@@ -60,6 +69,7 @@ export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCl
   return <section className="flex h-full min-h-0 min-w-0 flex-col bg-background" data-testid="workspace-preview-slot">
     <Tabs value={activeKey ?? ""} onValueChange={onSelectTab} className="min-h-0 min-w-0 flex-1 gap-0">
       <header ref={headerRef} className="flex h-11 min-w-0 shrink-0 items-center gap-1 border-b border-border px-2" data-testid="preview-slot-header">
+        {!tabs.length && <span className="px-2 text-sm font-medium">{t("nav.tables")}</span>}
         {tabs.length > 0 && <TabsList variant="line" aria-label={t("preview.openTabs")} className="h-full min-w-0 flex-1 justify-start overflow-x-auto">
           {tabs.map(tab => {
             const table = tables.find(table => table.id === tab.tableId);
@@ -74,7 +84,11 @@ export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCl
               <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label={t("preview.closeTab", { label: `${label} · ${name}` })} onClick={() => {
                 const close = () => {
                   closeTabRef.current(getPreviewTabKey(tab));
-                  requestAnimationFrame(() => headerRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], button[aria-haspopup="menu"]')?.focus());
+                  requestAnimationFrame(() => {
+                    const target = headerRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+                      ?? launcherRef.current?.querySelector<HTMLElement>("button") ?? launcherRef.current;
+                    target?.focus();
+                  });
                 };
                 const beforeClose = headers[getPreviewTabKey(tab)]?.beforeClose;
                 if (beforeClose) beforeClose(close);
@@ -83,18 +97,28 @@ export function PreviewSlot({ tabs, activeKey, contexts, tables, onOpenTab, onCl
             </div>;
           })}
         </TabsList>}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size={tabs.length ? "icon" : "sm"} className="shrink-0" aria-label={t("preview.openTable")} title={t("preview.openTable")}><TableShortcutIcon />{!tabs.length && <>{t("preview.openTable")}<ChevronDown /></>}</Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-w-[calc(100vw-2rem)]">
-            <DropdownMenuLabel>{t("preview.pickTable")}</DropdownMenuLabel>
-            <DropdownMenuGroup>{tables.map(table => <DropdownMenuItem key={table.id} onSelect={() => onOpenTab({ kind: "table", tableId: table.id })}><TableIcon name={table.icon} className="size-4 shrink-0" /><span className="truncate">{table.name}</span></DropdownMenuItem>)}
-              {!tables.length && <DropdownMenuItem disabled>{t("preview.noTables")}</DropdownMenuItem>}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {tabs.length > 0 && <Button variant="ghost" size="icon" className="shrink-0" aria-label={t("preview.tableList")} title={t("preview.tableList")} aria-pressed={showTables} onClick={onShowTables}><TableShortcutIcon /></Button>}
         {header?.actions}
         {activeTab && <Button variant="ghost" size="icon" className="shrink-0" aria-label={t("preview.refreshPanel")} title={t("preview.refreshPanel")} disabled={header?.refresh?.disabled || header?.refresh?.busy} onClick={() => (header?.refresh?.run ?? contexts[getPreviewTabKey(activeTab)]?.onRefresh)?.()}><RefreshCw className={cn(header?.refresh?.busy && "animate-spin motion-reduce:animate-none")} /></Button>}
       </header>
+      {showTables && <div ref={launcherRef} role="region" aria-label={t("preview.tableList")} tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring sm:p-6" data-testid="preview-table-launcher">
+        {tables.length ? <ul className="flex min-w-0 flex-col gap-3">
+          {tables.map(table => {
+            const disambiguator = (nameCounts.get(table.name) ?? 0) > 1 ? t("preview.duplicateTable", { index: nameOrdinals.get(table.id) }) : null;
+            const label = disambiguator ? `${table.name} · ${disambiguator}` : table.name;
+            return <li key={table.id} className="min-w-0">
+              <Button variant="outline" className="h-auto min-h-16 w-full min-w-0 justify-start gap-3 whitespace-normal px-4 py-4 text-left shadow-none" data-table-id={table.id} aria-label={label} title={label} onClick={() => onOpenTab({ kind: "table", tableId: table.id })}>
+                <TableIcon name={table.icon} className="size-5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{table.name}</span>
+                  {disambiguator && <span className="block truncate text-xs font-normal text-muted-foreground">{disambiguator}</span>}
+                </span>
+                <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              </Button>
+            </li>;
+          })}
+        </ul> : <p role="status" className="py-8 text-center text-sm text-muted-foreground">{t("preview.noTables")}</p>}
+      </div>}
       {tabs.map(tab => <TabsContent key={getPreviewTabKey(tab)} value={getPreviewTabKey(tab)} forceMount hidden={getPreviewTabKey(tab) !== activeKey} className="min-h-0 min-w-0 overflow-hidden data-[state=inactive]:hidden">
         {getPreviewSlotRenderer(tab.kind)?.({ ...contexts[getPreviewTabKey(tab)], onHeaderChange: headerCallbacks[getPreviewTabKey(tab)] }) ?? <p className="p-4 text-sm text-muted-foreground">{t("preview.noContent")}</p>}
       </TabsContent>)}
