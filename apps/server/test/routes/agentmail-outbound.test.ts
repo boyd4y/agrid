@@ -26,6 +26,7 @@ test("outbound schemas enforce bodies, address limits, identities and no attachm
 test("send/reply protocol and tenant boundaries without database or real network", async () => {
   const encryptionKey = "12".repeat(32);
   const encryptedCredential = await encryptSecret({ encryptionKey }, "fixture-api-key", { organizationId, id: connectionId, purpose: "agentmail-key" });
+  let provider = "agentmail";
   let enabled = true, deletedAt: Date | null = null;
   let status = 200, malformed = false, failNetwork = false;
   const posts: { path: string; body: unknown }[] = [];
@@ -34,9 +35,10 @@ test("send/reply protocol and tenant boundaries without database or real network
     const query = new PgDialect().sqlToQuery(condition);
     assert.match(query.sql, /"enabled" =/);
     assert.match(query.sql, /"deleted_at" is null/);
-    assert.deepEqual(query.params.slice(2), [true]);
-    return query.params[0] === connectionId && query.params[1] === organizationId && enabled && !deletedAt
-      ? [{ id: connectionId, organizationId, encryptedCredential }] : [];
+    assert.match(query.sql, /"provider" =/);
+    assert.deepEqual(query.params.slice(2), ["agentmail", true]);
+    return query.params[0] === connectionId && query.params[1] === organizationId && provider === "agentmail" && enabled && !deletedAt
+      ? [{ id: connectionId, organizationId, provider, encryptedCredential }] : [];
   } }) }) };
   const deps = {
     database: database as unknown as Parameters<typeof sendAgentMailMessage>[0]["database"], encryptionKey,
@@ -76,6 +78,7 @@ test("send/reply protocol and tenant boundaries without database or real network
   }
   const before = requests;
   await assert.rejects(() => sendAgentMailMessage(deps, { ...send, organizationId: "other-org" }), error(404));
+  provider = "other"; await assert.rejects(() => sendAgentMailMessage(deps, send), error(404)); provider = "agentmail";
   enabled = false; await assert.rejects(() => sendAgentMailMessage(deps, send), error(404)); enabled = true;
   deletedAt = new Date(); await assert.rejects(() => sendAgentMailMessage(deps, send), error(404)); deletedAt = null;
   await assert.rejects(() => replyAgentMailMessage(deps, { ...base, messageId: ".." }), error(400));
@@ -83,4 +86,15 @@ test("send/reply protocol and tenant boundaries without database or real network
   const postCount = posts.length;
   await assert.rejects(() => sendAgentMailMessage(deps, { ...send, inboxId: "foreign@fixture.test" }), error(400));
   assert.equal(posts.length, postCount, "unlisted inbox never sends");
+});
+
+ test("management rejects other providers before credentials or network access", async () => {
+  const services = await import("../../src/business/services/integrations.js");
+  const deps = { database: { select: () => ({ from: () => ({ where: async () => [{ provider: "other" }] }) }) },
+    fetch: () => { throw new Error("must not contact provider"); } } as unknown as Parameters<typeof services.listInboxes>[0];
+  const actor = { organizationId } as Parameters<typeof services.listInboxes>[1];
+  for (const operation of [services.listInboxes, services.testConnection, services.updateConnection, services.deleteConnection, services.registerWebhook]) {
+    await assert.rejects(() => operation(deps, actor, new Request("https://fixture.test"), connectionId),
+      (error: unknown) => error instanceof ServiceError && error.status === 400 && error.message.includes("AgentMail"));
+  }
 });

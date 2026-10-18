@@ -21,7 +21,7 @@ test("mail tools enforce host scope, inbox membership, protocol and safe results
     assert.match(query.sql, /"deleted_at" is null/);
     return query.params.includes(organizationId) && enabled && !deleted &&
       (!query.sql.includes('"id" =') || query.params.includes(connectionId))
-      ? [{ id: connectionId, organizationId, name: "Mail", encryptedCredential }] : [];
+      ? [{ id: connectionId, organizationId, name: "Mail", provider: "agentmail", encryptedCredential }] : [];
   } }) }) };
   const deps = { database, integrations: { encryptionKey, fetch: async (url: string, init: RequestInit) => {
     requests++;

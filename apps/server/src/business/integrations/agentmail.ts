@@ -26,6 +26,7 @@ export async function agentMailRequest(deps: ProviderDependencies, apiKey: strin
   catch { throw new ServiceError(502, { message: "AgentMail 响应格式或大小不正确" }); }
 }
 export async function connectionKey(deps: CredentialDependencies, connection: typeof integrationConnections.$inferSelect) {
+  if (connection.provider !== "agentmail") throw new ServiceError(400, { message: "此连接不是 AgentMail 连接" });
   return await decryptSecret(deps, connection.encryptedCredential, { organizationId: connection.organizationId, id: connection.id, purpose: "agentmail-key" });
 }
 export async function changeRemoteWebhook(deps: ProviderDependencies & CredentialDependencies, connection: typeof integrationConnections.$inferSelect, endpoint: typeof webhookEndpoints.$inferSelect, enabled: boolean | "delete") {
@@ -70,7 +71,7 @@ export async function hydrateAgentMailEvent(deps: IntegrationDependencies, event
   if (!message?.bodyMissing) return event;
   if (message.inboxId !== event.source.inboxId || typeof message.messageId !== "string") throw new Error("Invalid verified message context");
   if ([event.source.inboxId, message.messageId].some(id => id === "." || id === "..")) throw new Error("Invalid AgentMail message identity");
-  const [connection] = await deps.database.select().from(integrationConnections).where(and(eq(integrationConnections.id, event.source.connectionId), eq(integrationConnections.organizationId, event.organizationId), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
+  const [connection] = await deps.database.select().from(integrationConnections).where(and(eq(integrationConnections.id, event.source.connectionId), eq(integrationConnections.organizationId, event.organizationId), eq(integrationConnections.provider, "agentmail"), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt)));
   if (!connection) throw new Error("AgentMail connection is no longer available");
   const full = await agentMailRequest(deps, await connectionKey(deps, connection), `/v0/inboxes/${encodeURIComponent(event.source.inboxId)}/messages/${encodeURIComponent(message.messageId)}`);
   const normalized = normalizeAgentMailMessage(full, event.occurredAt);
@@ -119,7 +120,7 @@ export async function replyAgentMailMessage(deps: OutboundDependencies, input: R
 async function verifiedAgentMailKey(deps: OutboundDependencies, organizationId: string, input: { connectionId: string; inboxId: string }) {
   const [connection] = await deps.database.select().from(integrationConnections).where(and(
     eq(integrationConnections.id, input.connectionId), eq(integrationConnections.organizationId, organizationId),
-    eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt),
+    eq(integrationConnections.provider, "agentmail"), eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt),
   ));
   if (!connection) throw new ServiceError(404, { message: "集成不存在或已停用" });
   const key = await connectionKey(deps, connection);
