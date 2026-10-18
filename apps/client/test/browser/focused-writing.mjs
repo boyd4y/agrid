@@ -28,10 +28,36 @@ try {
   assert.equal(await body.locator('a').innerText(), '选中文字后改变格式', 'link applies to the genuine retained selection');
   await page.keyboard.press('ArrowRight'); await saved(panel);
   const format = panel.getByRole('button', { name: '插入/格式', exact: true });
-  await format.focus(); await format.press('Enter');
-  const controls = page.getByRole('dialog', { name: '正文排版' }); await controls.waitFor();
+  const controls = page.getByRole('dialog', { name: '正文排版' });
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await format.focus(); await format.press('Enter'); await controls.waitFor();
+    // Focused tooltips are a separate top layer; Escape dismisses them before the popover.
+    await controls.getByRole('button', { name: '加粗', exact: true }).focus();
+    const tooltip = page.getByRole('tooltip'); await tooltip.waitFor();
+    await page.keyboard.press('Escape'); await tooltip.waitFor({ state: 'hidden' });
+    assert(await controls.isVisible(), 'first Escape only dismisses the focused tooltip');
+    await page.keyboard.press('Escape'); await controls.waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.activeElement?.textContent === '插入/格式');
+    assert(await format.evaluate(element => element === document.activeElement), `${width}px Escape restores the format trigger focus`);
+    assert(await panel.isVisible(), 'format cancellation keeps the record open');
+  }
+  // A menu command must keep its own focus target instead of restoring the format trigger.
+  await body.focus(); await page.keyboard.press('Meta+a');
+  await format.focus(); await format.press('Enter'); await controls.waitFor();
+  await controls.getByRole('button', { name: '链接', exact: true }).press('Enter');
+  await controls.waitFor({ state: 'hidden' }); await link.waitFor();
+  assert(await link.getByLabel('链接地址', { exact: true }).evaluate(element => element === document.activeElement), 'link command gives focus to the link dialog');
+  await link.getByLabel('链接地址', { exact: true }).fill('https://example.com/selected-after-menu');
+  await link.getByRole('button', { name: '应用链接', exact: true }).press('Enter'); await link.waitFor({ state: 'hidden' });
+  assert.equal(await body.locator('a').innerText(), '选中文字后改变格式');
+  assert.equal(await body.locator('a').getAttribute('href'), 'https://example.com/selected-after-menu');
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await format.focus(); await format.press('Enter'); await controls.waitFor();
   assert(await controls.evaluate(element => element.contains(document.activeElement)), 'keyboard enters the formatting controls');
-  await controls.getByLabel('标题 2', { exact: true }).click(); assert.equal(await body.locator('h2').innerText(), '选中文字后改变格式');
+  await controls.getByLabel('标题 2', { exact: true }).press('Enter'); assert.equal(await body.locator('h2').innerText(), '选中文字后改变格式');
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容');
+  assert(await body.evaluate(element => element === document.activeElement), 'format command restores the genuine editor selection and focus');
   await body.press('End'); await body.press('Enter'); await page.keyboard.insertText('第二段');
   await format.click(); await controls.getByRole('button', { name: '引用', exact: true }).click(); await body.locator('blockquote').waitFor();
   await format.click(); await controls.getByRole('button', { name: '撤销', exact: true }).click(); assert.equal(await body.locator('blockquote').count(), 0);
@@ -65,6 +91,6 @@ try {
     await touchPanel.getByRole('button', { name: '关闭记录', exact: true }).tap(); await touchPanel.waitFor({ state: 'hidden' });
   } catch (error) { const touch = mobile.pages()[0]; console.error(await touch.locator('[data-testid=related-record-panel]').innerText()); console.error(await touch.getByRole('textbox', { name: '正文内容', exact: true }).innerHTML()); await touch.screenshot({ path: f.artifact('focused-touch-failure.png') }); throw error; } finally { await mobile.close(); }
   assert.deepEqual(f.errors, []);
-  console.log('PASS focused writing: modal first-viewport content, shared editor, real selection bubble/link, keyboard formatting, heading/quote/undo/redo, contextual limits and actionable overflow/retry, real touch formatting and autosave.');
+  console.log('PASS focused writing: modal first-viewport content, shared editor, real selection bubble/link, keyboard tooltip/Escape focus return and command/dialog focus, heading/quote/undo/redo, contextual limits and actionable overflow/retry, real touch formatting and autosave.');
 } catch (error) { console.error(f.errors); await page.screenshot({ path: f.artifact('focused-writing-failure.png') }).catch(() => {}); throw error; }
 finally { await f.close(); }
