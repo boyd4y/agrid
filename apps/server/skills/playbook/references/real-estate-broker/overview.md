@@ -4,8 +4,6 @@
 
 产品路径：给搭建智能体分配内置 playbook 技能，对话要求“按 real-estate-broker reference 搭建/修改当前工作区”。经纪人本身优先只分配 table、automation；搭建智能体可同时分配这两项技能。
 
-本地/CI：`pnpm db:seed:scenario-a` 仍是金样 fixture，保留原有命令；产品搭建通过现有工具，不调用 seed。reference 来源为 Scenario A 品牌文档、seed-scenario-a.ts 与 scenario-a-config.ts。
-
 ## 读取与搭建
 
 - [tables.md](tables.md)：字段、选项与双向关联。

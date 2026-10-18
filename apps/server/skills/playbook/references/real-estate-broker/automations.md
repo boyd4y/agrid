@@ -2,7 +2,7 @@
 
 先用 list_automations 分页盘点，按未删除规则名称复用；匹配则跳过，保留用户启停和配置，仅按用户要求增量修改。新规则 enabled=true、conditions=[]、conditionLogic=and，每条 actions 仅一个 `{type:"run_agent", agentUserId, prompt}`；agentUserId 必须来自真实经纪人智能体 userId。缺少该智能体时先完成成员配置再建规则。
 
-表格 source 使用意向客户的真实 tableId，trigger.columnId 使用「状态」的实际 UUID；optionId 使用稳定选项 ID。以下 prompt 来自 scenarioAActions 原文。
+表格 source 使用意向客户的真实 tableId，trigger.columnId 使用「状态」的实际 UUID；optionId 使用稳定选项 ID。以下为各规则应使用的 prompt 原文。
 
 ## 状态进入已约看 → 提醒
 

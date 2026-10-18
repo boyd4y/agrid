@@ -6,7 +6,7 @@
 
 以下是可复现的演示蓝图，尚未在用户工作区创建，也不是已有客户的使用成绩。底层数据、原生 Harness、自动化、文件和 UI 能力已做隔离验证；四条完整用户旅程仍需使用演示工作区与实际模型配置各演练一次。转化率、体验耗时和持续使用效果是待验证的目标。
 
-房产经纪人模板见 [Scenario A：房产经纪人](scenario-a-real-estate.md)，可用 `pnpm db:seed:scenario-a` 初始化演示表、关联、智能体和自动化。
+房产经纪人场景见 [Scenario A：房产经纪人](scenario-a-real-estate.md)：给智能体分配 `playbook`，按 `real-estate-broker` reference 搭建。
 
 ## 推荐入口和顺序
 
