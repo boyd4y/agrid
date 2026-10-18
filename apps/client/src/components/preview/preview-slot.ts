@@ -10,7 +10,18 @@ export type PreviewSlotKind = "table" | "form" | "automations" | (string & {});
 
 export type PreviewTab = { kind: PreviewSlotKind; tableId?: string; siteId?: string; viewId?: string | null };
 
+export const getPreviewTabKey = (tab: PreviewTab) => JSON.stringify([tab.kind, tab.siteId ?? null, tab.tableId ?? null, tab.viewId ?? null]);
+
+/** Resource-owned details/actions rendered in the slot's single header. */
+export type PreviewSlotHeader = {
+  title?: string;
+  actions?: ReactNode;
+  refresh?: { run: () => void; disabled?: boolean; busy?: boolean };
+  beforeClose?: (close: () => void) => void;
+};
+
 export type PreviewSlotContext = {
+  onHeaderChange?: (header: PreviewSlotHeader | null) => void;
   active?: boolean;
   siteId?: string;
   tableId: string | null;

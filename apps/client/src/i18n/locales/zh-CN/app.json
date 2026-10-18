@@ -234,6 +234,7 @@
     "table": "表格",
     "form": "表单",
     "automations": "自动化",
+    "openTable": "打开表格",
     "openKind": "打开{{label}}",
     "pickTable": "选择表格",
     "pickTableFor": "选择表格的{{label}}",
