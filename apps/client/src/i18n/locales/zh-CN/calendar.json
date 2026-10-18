@@ -178,7 +178,7 @@
   },
   "subscriptions": {
     "title": "日历事件订阅",
-    "description": "将事件和排班变更通知发送到你的 HTTPS 接收地址，并查看投递记录。",
+    "description": "将日历变更通知发送到你的 HTTPS 接收地址。",
     "adminOnly": "仅企业所有者和管理员可在此管理出站订阅。",
     "noCalendars": "请先创建日历",
     "noCalendarsHint": "在当前工作区的日历中创建日历后，再到此处设置订阅。",

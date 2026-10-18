@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, RefreshCw, Copy, LoaderCircle } from "lucide-react";
+import { Plus, Copy, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { CALENDAR_EVENT_TYPES, type Calendar, type CalendarEventType, type CalendarSubscription, type CalendarSubscriptionPage } from "@tabdo/shared";
 import { calendarCommand } from "@/lib/calendar-api";
@@ -9,13 +9,14 @@ import { CalendarDeliveryHistory } from "@/components/settings/CalendarDeliveryH
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { ListPagination } from "@/components/controls/list-pagination";
 import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Badge } from "@tabdo/ui/components/badge";
-import { CardTitle, CardDescription } from "@tabdo/ui/components/card";
+import { CardDescription } from "@tabdo/ui/components/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@tabdo/ui/components/dialog";
 import { Field, FieldLabel, FieldDescription, FieldError, FieldGroup, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@tabdo/ui/components/select";
@@ -37,14 +38,14 @@ export function CalendarSubscriptionsSettings() {
     return () => controller.abort();
   }, [revision]);
   return <section className="flex min-w-0 flex-col gap-5" data-testid="calendar-subscriptions-settings">
-    <header className="flex items-start justify-between gap-3"><div className="flex min-w-0 flex-col gap-2"><CardTitle>{t("subscriptions.title")}</CardTitle><CardDescription>{t("subscriptions.description")}</CardDescription></div><Button variant="ghost" size="icon" aria-label={t("refresh")} disabled={loading} onClick={() => setRevision(v => v + 1)}><RefreshCw /></Button></header>
-    {loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p> : error ? <ListErrorState description={error} onRetry={() => setRevision(v => v + 1)} /> : !allowed ? <p className="text-sm text-muted-foreground">{t("subscriptions.adminOnly")}</p> : !calendars.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={t("subscriptions.noCalendars")} description={t("subscriptions.noCalendarsHint")} /> : <>
+    <header className="flex items-start justify-between gap-3"><CardDescription>{t("subscriptions.description")}</CardDescription><DataRefreshButton disabled={loading} onRefresh={() => setRevision(v => v + 1)} /></header>
+    {loading && !calendars.length ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p> : error ? <ListErrorState description={error} onRetry={() => setRevision(v => v + 1)} /> : !allowed ? <p className="text-sm text-muted-foreground">{t("subscriptions.adminOnly")}</p> : !calendars.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={t("subscriptions.noCalendars")} description={t("subscriptions.noCalendarsHint")} /> : <>
       <Field><FieldLabel>{t("calendar")}</FieldLabel><Select value={calendarId} onValueChange={setCalendarId}><SelectTrigger aria-label={t("calendar")}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{calendars.map(calendar => <SelectItem key={calendar.id} value={calendar.id}>{calendar.name}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
-      {calendarId && <SubscriptionList key={calendarId} calendar={calendars.find(c => c.id === calendarId)!} />}
+      {calendarId && <SubscriptionList key={calendarId} calendar={calendars.find(c => c.id === calendarId)!} refreshToken={revision} />}
     </>}
   </section>;
 }
-function SubscriptionList({ calendar }: { calendar: Calendar }) {
+function SubscriptionList({ calendar, refreshToken }: { calendar: Calendar; refreshToken: number }) {
   const { t } = useTranslation("calendar"), id = useId();
   const [page, setPage] = useState<CalendarSubscriptionPage<CalendarSubscription>>(), [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [revision, setRevision] = useState(0), [loading, setLoading] = useState(true), [error, setError] = useState("");
@@ -58,7 +59,7 @@ function SubscriptionList({ calendar }: { calendar: Calendar }) {
     const controller = new AbortController(); setLoading(true); setError("");
     void calendarCommand("listCalendarSubscriptions", { calendarId, cursor }, controller.signal).then(setPage).catch(cause => { if (!controller.signal.aborted) setError(cause.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [calendarId, cursor, revision]);
+  }, [calendarId, cursor, revision, refreshToken]);
   const refresh = () => setRevision(v => v + 1);
   function edit(subscription?: CalendarSubscription) {
     setSecret(""); setFormError(""); setDraft({ subscription, name: subscription?.name ?? "", endpoint: subscription?.endpoint ?? "", eventTypes: subscription?.eventTypes ?? ["booking.created", "booking.rescheduled", "booking.cancelled"], requestKey: crypto.randomUUID() });
@@ -90,8 +91,7 @@ function SubscriptionList({ calendar }: { calendar: Calendar }) {
   }
   const create = <Button size="sm" disabled={calendar.archived || saving} onClick={() => edit()}><Plus data-icon="inline-start" />{t("subscriptions.create")}</Button>;
   return <div className="flex min-w-0 flex-col gap-4">
-    <p className="text-sm text-muted-foreground">{t("subscriptions.boundary")}</p>
-    <div className="flex flex-wrap items-center justify-end gap-2"><Button variant="outline" size="sm" disabled={loading} onClick={refresh}>{t("refresh")}</Button>{!!page?.items.length && create}</div>
+    {!!page?.items.length && <div className="flex flex-wrap items-center justify-end gap-2">{create}</div>}
     {loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p> : error ? <ListErrorState description={error} onRetry={refresh} /> : !page?.items.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={t("subscriptions.empty")} description={t("subscriptions.emptyHint")} action={create} /> : <ul className="divide-y border-y">
       {page.items.map(subscription => <li key={subscription.id} className="flex min-w-0 flex-col gap-3 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><span className="break-words text-sm font-medium">{subscription.name}</span><Badge variant="secondary">{t(`subscriptions.status.${subscription.status}`)}</Badge></div>
@@ -105,12 +105,12 @@ function SubscriptionList({ calendar }: { calendar: Calendar }) {
         </>}</div>
       </li>)}
     </ul>}
-    {page && <ListPagination page={cursors.length} hasNext={page.hasMore} loading={loading} onPageChange={next => setCursors(current => next < current.length ? current.slice(0, -1) : [...current, page.nextCursor ?? undefined])} />}
+    {page && (cursors.length > 1 || page.hasMore) && <ListPagination page={cursors.length} hasNext={page.hasMore} loading={loading} onPageChange={next => setCursors(current => next < current.length ? current.slice(0, -1) : [...current, page.nextCursor ?? undefined])} />}
     <Dialog open={!!draft} onOpenChange={open => { if (!open && !busy.current) { setDraft(undefined); setSecret(""); } }}><DialogContent closeLabel={t("close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl"><DialogHeader><DialogTitle>{t(secret ? "subscriptions.secretTitle" : draft?.subscription ? "subscriptions.edit" : "subscriptions.create")}</DialogTitle><DialogDescription>{t(secret ? "subscriptions.secretOnce" : "subscriptions.endpointHint")}</DialogDescription></DialogHeader>
       {secret ? <div className="flex flex-col gap-4"><Field><FieldLabel htmlFor={`${id}-secret`}>{t("subscriptions.secret")}</FieldLabel><Input id={`${id}-secret`} readOnly autoComplete="off" spellCheck={false} value={secret} onFocus={event => event.currentTarget.select()} /></Field><Button variant="outline" onClick={() => { void navigator.clipboard.writeText(secret).then(() => toast.success(t("subscriptions.copied")), () => toast.error(t("subscriptions.copyFailed"))); }}><Copy data-icon="inline-start" />{t("subscriptions.copy")}</Button></div> : <form noValidate className="flex flex-col gap-5" onSubmit={save}><FieldGroup>
         <Field><FieldLabel htmlFor={`${id}-name`}>{t("name")}</FieldLabel><Input id={`${id}-name`} required maxLength={200} disabled={saving} value={draft?.name ?? ""} onChange={event => change({ name: event.target.value })} /></Field>
         <Field><FieldLabel htmlFor={`${id}-endpoint`}>{t("subscriptions.endpoint")}</FieldLabel><Input id={`${id}-endpoint`} required type="url" maxLength={2000} placeholder="https://example.com/events" disabled={saving} value={draft?.endpoint ?? ""} onChange={event => change({ endpoint: event.target.value })} /><FieldDescription>{t("subscriptions.endpointHint")}</FieldDescription></Field>
-        <FieldSet><FieldLegend variant="label">{t("subscriptions.eventTypes")}</FieldLegend><div className="grid gap-2 sm:grid-cols-2">{CALENDAR_EVENT_TYPES.map(type => <label key={type} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} checked={draft?.eventTypes.includes(type) ?? false} onCheckedChange={checked => change({ eventTypes: checked ? [...draft!.eventTypes, type] : draft!.eventTypes.filter(item => item !== type) })} />{t(`subscriptions.events.${type.replaceAll(".", "_")}`)}</label>)}</div></FieldSet>
+        <FieldSet><FieldLegend variant="label">{t("subscriptions.eventTypes")}</FieldLegend><div className="grid gap-2 sm:grid-cols-2">{CALENDAR_EVENT_TYPES.map(type => <label key={type} className="flex min-h-8 items-center gap-2 text-sm"><Checkbox disabled={saving} checked={draft?.eventTypes.includes(type) ?? false} onCheckedChange={checked => change({ eventTypes: checked ? [...draft!.eventTypes, type] : draft!.eventTypes.filter(item => item !== type) })} />{t(`subscriptions.events.${type.replaceAll(".", "_")}`)}</label>)}</div><FieldDescription>{t("subscriptions.boundary")}</FieldDescription></FieldSet>
       </FieldGroup>{formError && <FieldError role="alert">{formError}</FieldError>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={() => setDraft(undefined)}>{t("close")}</Button><Button disabled={saving || !draft?.name.trim() || !draft.endpoint.trim() || !draft.eventTypes.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{t(saving ? "saving" : "save")}</Button></div></form>}
     </DialogContent></Dialog>
     <DeleteConfirmation open={!!revoking} onOpenChange={open => { if (!open) setRevoking(undefined); }} title={t("subscriptions.revoke")} description={t("subscriptions.revokeHint")} labels={{ confirmDelete: t("subscriptions.revoke") }} onConfirm={async () => { if (!revoking) return; await calendarCommand("revokeCalendarSubscription", { calendarId, subscriptionId: revoking.id, expectedVersion: revoking.version, idempotencyKey: crypto.randomUUID() }); refresh(); }} />

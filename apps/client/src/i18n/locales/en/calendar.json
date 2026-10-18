@@ -178,7 +178,7 @@
   },
   "subscriptions": {
     "title": "Calendar event subscriptions",
-    "description": "Send calendar change notifications to your HTTPS endpoint and inspect delivery history.",
+    "description": "Send calendar change notifications to your HTTPS endpoint.",
     "adminOnly": "Only owners and administrators can manage outbound subscriptions here.",
     "noCalendars": "Create a calendar first",
     "noCalendarsHint": "Open Calendar to create a calendar in this workspace, then return here.",
