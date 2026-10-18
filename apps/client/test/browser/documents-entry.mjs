@@ -41,7 +41,7 @@ try {
   await target.click(); await body.waitFor();
   assert.equal(await body.innerText(), '第二行的独立正文，通过普通表格入口撰写。');
   await modal.getByRole('button', { name: '关闭记录', exact: true }).click(); await modal.waitFor({ state: 'hidden' });
-  // Reopen the same row while its non-modal details Sheet is still open.
+  // Reopen the same row after its modal record page closes.
   await target.click(); await body.waitFor();
   assert.equal(await body.innerText(), '第二行的独立正文，通过普通表格入口撰写。'); await close();
   await page.reload(); await target.click(); await body.waitFor();

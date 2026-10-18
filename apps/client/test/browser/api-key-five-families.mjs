@@ -26,7 +26,7 @@ try {
     ['calendarPermissions', 'canReadDeliveries', 'Combined calendar · 读取投递记录', true],
     ['calendarPermissions', 'canManageSubscriptions', 'Combined calendar · 管理订阅', true],
     ['blogPermissions', 'canBuild', 'Combined content · 构建与分享预览', true],
-    ['documentPermissions', 'canReadHistory', 'Combined content · 读取历史', true],
+    ['documentPermissions', 'canUpload', 'Combined content · 上传图片', true],
     ['schedulePermissions', 'canUpdate', `${workspace.name} · Combined plan · 修改计划`, true],
     ['permissions', 'canCreate', `${workspace.name} / Combined content · 新增`, true],
     ['calendarPermissions', 'canTriggerAgent', 'Combined calendar · 触发智能体提醒', false],

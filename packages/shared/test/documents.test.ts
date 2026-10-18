@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { documentContentSchema, EMPTY_DOCUMENT, DOCUMENT_LIMITS, safeDocumentLink, DOCUMENT_COMMANDS, DOCUMENT_TOOLS, COMMANDS, PLATFORM_TOOL_IDS } from "../src/index.js";
+import { documentContentSchema, EMPTY_DOCUMENT, DOCUMENT_LIMITS, safeDocumentLink, DOCUMENT_COMMANDS, DOCUMENT_TOOLS, DOCUMENT_SCHEMAS, documentPermissionSchema, DISABLED_TOOLS_SCHEMA, COMMANDS, PLATFORM_TOOL_IDS } from "../src/index.js";
 const body = (node: unknown) => ({ type: "doc", content: [node] });
 test("document grammar rejects unknown nodes/attributes, dangerous URLs, invalid parents and bounded adversarial JSON", () => {
   assert(documentContentSchema.safeParse(EMPTY_DOCUMENT).success);
@@ -18,4 +18,16 @@ test("document grammar rejects unknown nodes/attributes, dangerous URLs, invalid
   assert(safeDocumentLink("https://example.com/a?x=1&y=2"));
   for (const command of DOCUMENT_COMMANDS) assert((COMMANDS as readonly string[]).includes(command));
   for (const tool of Object.keys(DOCUMENT_TOOLS)) assert((PLATFORM_TOOL_IDS as readonly string[]).includes(tool));
+});
+
+test("current body is the only public document capability; old history flags only parse for compatibility", () => {
+  for (const command of ["listDocumentRevisions", "getDocumentRevision", "restoreDocumentRevision"]) assert(!(COMMANDS as readonly string[]).includes(command));
+  for (const tool of ["list_document_revisions", "get_document_revision", "restore_document_revision"]) assert(!(PLATFORM_TOOL_IDS as readonly string[]).includes(tool));
+  assert.deepEqual(DISABLED_TOOLS_SCHEMA.parse(["list_document_revisions", "get_document_revision", "restore_document_revision", "get_document"]), ["get_document"], "old disabled tool settings normalize without restoring removed tools");
+  const scope = { tableId: crypto.randomUUID(), rowId: crypto.randomUUID() };
+  assert(DOCUMENT_SCHEMAS.renderDocument.safeParse(scope).success);
+  assert(!DOCUMENT_SCHEMAS.renderDocument.safeParse({ ...scope, version: 1 }).success);
+  const grant = { tableId: scope.tableId, canRead: true, canCreate: false, canUpdate: false, canUpload: false };
+  assert.deepEqual(documentPermissionSchema.parse(grant), { ...grant, canReadHistory: false, canRestore: false });
+  assert(documentPermissionSchema.safeParse({ ...grant, canReadHistory: true, canRestore: true }).success);
 });

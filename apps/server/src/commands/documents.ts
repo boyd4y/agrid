@@ -4,9 +4,6 @@ type Args<F extends (...args: never[]) => unknown> = Parameters<F> extends [unkn
 export const getDocument = (...args: Args<typeof implementation.getDocument>) => businessCall(() => implementation.getDocument(commandDependencies(), ...args));
 export const createDocument = (...args: Args<typeof implementation.createDocument>) => businessCall(() => implementation.createDocument(commandDependencies(), ...args));
 export const replaceDocument = (...args: Args<typeof implementation.replaceDocument>) => businessCall(() => implementation.replaceDocument(commandDependencies(), ...args));
-export const listDocumentRevisions = (...args: Args<typeof implementation.listDocumentRevisions>) => businessCall(() => implementation.listDocumentRevisions(commandDependencies(), ...args));
-export const getDocumentRevision = (...args: Args<typeof implementation.getDocumentRevision>) => businessCall(() => implementation.getDocumentRevision(commandDependencies(), ...args));
-export const restoreDocumentRevision = (...args: Args<typeof implementation.restoreDocumentRevision>) => businessCall(() => implementation.restoreDocumentRevision(commandDependencies(), ...args));
 export const renderDocument = (...args: Args<typeof implementation.renderDocument>) => businessCall(() => implementation.renderDocument(commandDependencies(), ...args));
 export const uploadDocumentImage = (...args: Args<typeof implementation.uploadDocumentImage>) => businessCall(() => implementation.uploadDocumentImage(commandDependencies(), ...args));
 export const getDocumentImage = (...args: Args<typeof implementation.getDocumentImage>) => businessCall(() => implementation.getDocumentImage(commandDependencies(), ...args));

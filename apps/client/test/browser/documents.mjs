@@ -36,9 +36,9 @@ try {
   await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor();
   assert(JSON.stringify((await command('getDocument', identity)).content).includes('中文输入法'));
   console.log("stage IME committed");
-  await page.keyboard.press('Enter'); await modal.getByLabel('标题 2', { exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('可视化标题');
+  await page.keyboard.press('Enter'); await modal.getByRole('button', { name: '插入/格式', exact: true }).click(); await page.getByRole('dialog', { name: '正文排版' }).getByLabel('标题 2', { exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('可视化标题');
   await page.keyboard.press('Enter'); await page.keyboard.type('正文段落');
-  await page.keyboard.press('Enter'); await modal.getByLabel('无序列表', { exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('列表一');
+  await page.keyboard.press('Enter'); await modal.getByRole('button', { name: '插入/格式', exact: true }).click(); await page.getByRole('dialog', { name: '正文排版' }).getByLabel('无序列表', { exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('列表一');
   await page.keyboard.press('Enter'); await page.keyboard.insertText('列表二'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
   await page.evaluate(() => { window.__documentXss = false; });
   await body.evaluate(element => {
@@ -89,10 +89,12 @@ try {
   await secondBody.locator('p').last().click(); await second.keyboard.press('Meta+ArrowDown'); await second.keyboard.type(' Local conflict draft');
   await secondModal.getByRole('status').filter({ hasText: '部分内容保存失败' }).waitFor(); assert((await secondBody.innerText()).includes('Local conflict draft'));
   await second.reload(); await open(second); await secondModal.getByRole('status').filter({ hasText: '部分内容保存失败' }).waitFor(); assert((await secondBody.innerText()).includes('Local conflict draft'));
-  await secondModal.getByRole('button', { name: '查看服务器版本' }).click(); await secondModal.getByText(/正在查看版本/).waitFor(); assert(!(await secondBody.innerText()).includes('Local conflict draft'));
+  await secondModal.getByRole('button', { name: '查看服务器内容' }).click(); await secondModal.getByText('当前服务器内容', { exact: true }).waitFor(); assert(!(await secondBody.innerText()).includes('Local conflict draft'));
   await secondModal.getByRole('button', { name: '返回当前草稿' }).click(); assert((await secondBody.innerText()).includes('Local conflict draft')); await second.close();
-  await modal.getByRole('button', { name: '历史', exact: true }).click(); await modal.getByRole('button', { name: /^v1\b/ }).click(); await modal.getByText('正在查看版本 1', { exact: true }).waitFor();
-  await modal.getByRole('button', { name: '恢复为新版本' }).click(); await modal.getByText('正在查看版本 1', { exact: true }).waitFor({ state: 'hidden' }); await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor(); assert(JSON.stringify((await command('getDocument', identity)).content).includes('中文正文'));
+  for (const name of ['阅读', '编辑', '历史']) assert.equal(await modal.getByRole('button', { name, exact: true }).count(), 0);
+  await modal.getByRole('button', { name: '正文更多操作', exact: true }).click();
+  assert.equal(await page.getByRole('menuitem', { name: '历史', exact: true }).count(), 0);
+  await page.keyboard.press('Escape');
   // Seed realistic content through the same public command for the visual matrix.
   const doc = await command('getDocument', identity); await command('replaceDocument', { ...identity, expectedVersion: doc.version, content: withImage.content, idempotencyKey: crypto.randomUUID() });
   await page.reload(); await open(); await body.waitFor(); await page.waitForFunction(() => document.querySelector('[data-testid="document-editor"] figure img')?.naturalWidth > 0);
@@ -122,24 +124,26 @@ try {
     const projected = await client.callTool({ name: 'query_scheduled_occurrences', arguments: { automationIds: [plan.id], rangeStart, rangeEnd } }); assert(!projected.isError); assert.equal(JSON.parse(projected.content[0].text).items.length, 1);
     console.log('stage MCP read document'); const read = await client.callTool({ name: 'get_document', arguments: identity }); assert(!read.isError); const value = JSON.parse(read.content[0].text);
     console.log('stage MCP replace document'); const replaced = await client.callTool({ name: 'replace_document', arguments: { ...identity, expectedVersion: value.version, content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'MCP stdio persisted' }] }] }, idempotencyKey: crypto.randomUUID() } }); assert(!replaced.isError); assert(JSON.stringify((await command('getDocument', identity)).content).includes('MCP stdio persisted'));
-    console.log('stage MCP denied history'); const denied = await client.callTool({ name: 'list_document_revisions', arguments: identity }); assert.equal(denied.isError, true);
+    for (const name of ['list_document_revisions', 'get_document_revision', 'restore_document_revision']) assert(!tools.tools.some(tool => tool.name === name));
   } finally { await client.close(); }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(frontend + '/app/settings?tab=api-keys');
   await page.getByRole('button', { name: '编辑 Document MCP', exact: true }).click();
   const keyDialog = page.getByRole('dialog');
   assert(await keyDialog.getByRole('checkbox', { name: '文章 · 读取正文与图片', exact: true }).isChecked());
-  await keyDialog.getByRole('checkbox', { name: '文章 · 读取历史', exact: true }).check();
+  assert.equal(await keyDialog.getByRole('checkbox', { name: '文章 · 读取历史', exact: true }).count(), 0);
+  assert.equal(await keyDialog.getByRole('checkbox', { name: '文章 · 恢复历史', exact: true }).count(), 0);
+  await keyDialog.getByRole('checkbox', { name: '文章 · 上传图片', exact: true }).check();
   await keyDialog.getByRole('button', { name: '保存', exact: true }).click(); await keyDialog.waitFor({ state: 'hidden' });
   const updatedKey = (await api('/user/api-keys')).keys.find(k => k.id === key.key.id);
-  assert.equal(updatedKey.documentPermissions[0].canReadHistory, true);
+  assert.equal(updatedKey.documentPermissions[0].canUpload, true);
   assert.deepEqual(updatedKey.permissions, oldTableGrants);
   assert.deepEqual(updatedKey.calendarPermissions, oldCalendarGrants);
   assert.deepEqual(updatedKey.schedulePermissions, scheduleGrants);
   await page.reload(); await page.getByRole('button', { name: '编辑 Document MCP', exact: true }).click();
-  assert(await page.getByRole('dialog').getByRole('checkbox', { name: '文章 · 读取历史', exact: true }).isChecked());
+  assert(await page.getByRole('dialog').getByRole('checkbox', { name: '文章 · 上传图片', exact: true }).isChecked());
   await page.getByRole('dialog').evaluate(element => { element.scrollTop = element.scrollHeight; });
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).waitFor();
   await page.screenshot({ path: artifact('key-capabilities-bottom.png'), fullPage: false, animations: 'disabled' });
-  assert.deepEqual(errors, []); console.log('PASS documents: Chinese composition, formatting/paste, private images, autosave, refresh, old response, second-client conflict draft, history, light/dark/mobile and real MCP stdio');
+  assert.deepEqual(errors, []); console.log('PASS documents: Chinese composition, formatting/paste, private images, autosave, refresh, old response, second-client conflict draft/current-server comparison, retired history catalog, light/dark/mobile and real MCP stdio');
 } catch (error) { await page.screenshot({ path: artifact("documents-failure.png"), fullPage: true }).catch(() => {}); console.error(await page.locator("[data-document-file], [data-private-source]").evaluateAll(elements => elements.map(el => ({ html: el.outerHTML, natural: el.naturalWidth }))).catch(() => [])); console.error(await page.locator("body").innerText().catch(() => "no page")); throw error; } finally { await fixture.close(); await rm(imageDirectory, { recursive: true, force: true }); }

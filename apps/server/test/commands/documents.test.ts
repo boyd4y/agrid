@@ -33,6 +33,7 @@ const body = (text: string): DocumentContent => ({ type: "doc", content: [{ type
 const code = (expected: string) => (error: unknown) => error instanceof DocumentError && error.code === expected;
 const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVQIHWP4DwABAQEAG7buVgAAAABJRU5ErkJggg==";
 const grant = (overrides: Partial<DocumentPermission> = {}): DocumentPermission => ({ tableId, canRead: false, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false, ...overrides });
+const revisionRows = () => resource.db.select({ revision: documentRevisions }).from(documentRevisions).innerJoin(recordDocuments, eq(recordDocuments.id, documentRevisions.documentId)).where(eq(recordDocuments.organizationId, org));
 before(async () => {
   await resource.db.insert(organization).values({ id: org, name: "Document fixture", slug: org });
   await resource.db.insert(user).values([{ id: uid, name: "Owner", email: actor.email }, { id: agent, kind: "agent", name: "Agent", email: `${agent}@local.test` }]);
@@ -43,7 +44,7 @@ before(async () => {
   const [row] = await resource.db.insert(rows).values({ tableId }).returning(); rowId = row.id;
 });
 after(async () => { await resource.db.delete(organization).where(eq(organization.id, org)); await resource.db.delete(user).where(eq(user.id, uid)); await resource.db.delete(user).where(eq(user.id, agent)); await other.close(); await resource.close(); });
-test("independent clients reserve creation, CAS, idempotency and immutable history without changing row metadata", async () => {
+test("independent clients keep only current content with CAS/idempotency, preserving existing historical data and row metadata", async () => {
   assert.equal(await call("getDocument", identity()), null);
   const input = { ...identity(), content: body("中文正文"), idempotencyKey: k() };
   const created = await Promise.all([call("createDocument", input), call("createDocument", input, b)]); assert.deepEqual(created[0], created[1]);
@@ -51,11 +52,16 @@ test("independent clients reserve creation, CAS, idempotency and immutable histo
   const races = await Promise.allSettled([call("replaceDocument", { ...identity(), content: body("a"), expectedVersion: 1, idempotencyKey: k() }), call("replaceDocument", { ...identity(), content: body("b"), expectedVersion: 1, idempotencyKey: k() }, b)]);
   assert.equal(races.filter(x => x.status === "fulfilled").length, 1); assert(code("VERSION_CONFLICT")((races.find(x => x.status === "rejected") as PromiseRejectedResult).reason));
   await assert.rejects(call("createDocument", { ...input, content: body("changed") }), code("IDEMPOTENCY_MISMATCH"));
-  const restored = await call("restoreDocumentRevision", { ...identity(), version: 1, expectedVersion: 2, idempotencyKey: k() }); assert.equal(restored.version, 3);
-  assert.deepEqual((await call("getDocumentRevision", { ...identity(), version: 1 })).content, input.content);
-  await assert.rejects(resource.db.update(documentRevisions).set({ content: body("mutate history") }).where(and(eq(documentRevisions.documentId, restored.id), eq(documentRevisions.version, 1)))) ;
-  const history = await call("listDocumentRevisions", { ...identity(), limit: 2 }); assert.equal(history.hasMore, true); assert.equal(history.nextBeforeVersion, 2);
-  const next = await call("listDocumentRevisions", { ...identity(), beforeVersion: 2 }); assert.deepEqual(next.items.map(x => x.version), [1]);
+  assert.deepEqual(await revisionRows(), [], "create and replacement do not append revisions");
+  const current = (await call("getDocument", identity()))!;
+  // Retained legacy data is neither consulted nor changed by later ordinary saves.
+  await resource.db.insert(documentRevisions).values({ documentId: current.id, version: 1, content: input.content });
+  const legacy = await revisionRows();
+  const write = { ...identity(), expectedVersion: current.version, content: body("only current content"), idempotencyKey: k() };
+  const updated = await call("replaceDocument", write);
+  assert.equal(updated.version, current.version + 1);
+  assert.deepEqual((await call("getDocument", identity()))!.content, write.content);
+  assert.deepEqual(await revisionRows(), legacy);
   const [row] = await resource.db.select().from(rows).where(eq(rows.id, rowId)); assert.equal(row.version, 1); assert.deepEqual(row.cells, {});
 });
 test("late host failure and handled native errors roll back changes, history, receipts and uploaded blobs", async () => {
@@ -63,13 +69,13 @@ test("late host failure and handled native errors roll back changes, history, re
   const write = { ...identity(), expectedVersion: current.version, content: current.content, idempotencyKey: k() };
   const replayed = await Promise.all([call("replaceDocument", write), call("replaceDocument", write, b)]); assert.deepEqual(replayed[0], replayed[1]);
   current.version++;
-  const beforeRevs = await call("listDocumentRevisions", identity()), beforeBlobs = blobs.size;
+  const beforeRevs = await revisionRows(), beforeBlobs = blobs.size;
   await assert.rejects(resource.db.transaction(async tx => {
     await executeDocument(a, caller, "replaceDocument", { ...identity(), expectedVersion: current.version, content: body("must roll back"), idempotencyKey: k() }, tx);
     await executeDocument(a, caller, "uploadDocumentImage", { ...identity(), expectedVersion: current.version + 1, name: "late.png", mimeType: "image/png", base64: png, idempotencyKey: k() }, tx);
     throw new Error("late outer failure");
   }), /late outer failure/);
-  assert.equal(blobs.size, beforeBlobs); assert.deepEqual(await call("listDocumentRevisions", identity()), beforeRevs); assert.deepEqual((await call("getDocument", identity()))!.content, current.content);
+  assert.equal(blobs.size, beforeBlobs); assert.deepEqual(await revisionRows(), beforeRevs); assert.deepEqual((await call("getDocument", identity()))!.content, current.content);
   await resource.db.transaction(async outer => {
     await assert.rejects(outer.transaction(async nested => { await executeDocument(a, caller, "uploadDocumentImage", { ...identity(), expectedVersion: current.version, name: "nested.png", mimeType: "image/png", base64: png, idempotencyKey: k() }, nested); throw new Error("nested rollback"); }), /nested rollback/);
     await outer.execute(sql`select 1`);
@@ -113,7 +119,6 @@ test("capabilities do not inherit table/calendar access, creation does not read,
   await assert.rejects(call("getDocument", { tableId, rowId: row.id }, a, { kind: "key", secret: key.secret }), code("FORBIDDEN"));
   await updateSiteKey(a, actor, key.key.id, { name: "Read only", permissions: [], documentPermissions: [grant({ canRead: true })] });
   await assert.rejects(call("createDocument", input, a, { kind: "key", secret: key.secret }), code("FORBIDDEN"));
-  await assert.rejects(call("listDocumentRevisions", { tableId, rowId: row.id }, a, { kind: "key", secret: key.secret }), code("FORBIDDEN"));
   await deleteSiteKey(a, actor, key.key.id); await assert.rejects(call("createDocument", input, a, { kind: "key", secret: key.secret }), /Invalid API key/);
   await resource.db.delete(rows).where(eq(rows.id, row.id));
   assert.equal((await resource.db.select().from(recordDocuments).where(eq(recordDocuments.id, accepted.id))).length, 1);
@@ -150,14 +155,34 @@ test("REST, member commands, GraphQL and typed SDK execute the same core under l
   const oversized = await host.request("/api/graphql", { method: "POST", headers, body: JSON.stringify({ query: "query { tables { id } }", variables: { padding: "x".repeat(150000) } }) }); assert.equal(oversized.status, 413);
   const unknown = await api.request(`/tables/${k()}/rows/${rowId}/document`, { headers }); assert.equal(unknown.status, 404);
   const bad = await api.request("/commands", { method: "POST", headers, body: JSON.stringify({ command: "replaceDocument", input: { ...identity(), expectedVersion: 999, content: EMPTY_DOCUMENT, idempotencyKey: k() } }) }); assert.equal(bad.status, 409); assert.equal((await bad.json() as any).code, "VERSION_CONFLICT");
+  for (const command of ["listDocumentRevisions", "getDocumentRevision", "restoreDocumentRevision"]) {
+    const unsupported = await api.request("/commands", { method: "POST", headers, body: JSON.stringify({ command, input: identity() }) });
+    assert.equal(unsupported.status, 403, "removed key commands follow the standard unsupported path");
+    const query = await host.request("/api/graphql", { method: "POST", headers, body: JSON.stringify({ query: `query($input: JSON!) { ${command}(input: $input) }`, variables: { input: identity() } }) });
+    assert.equal(query.status, 200);
+    const unsupportedGraphql = await query.json() as any;
+    assert(unsupportedGraphql.errors.some((error: { message: string }) => error.message.includes("Cannot query field")));
+    assert(!unsupportedGraphql.data);
+    assert(!Object.hasOwn(sdk.documents, command));
+  }
+  for (const path of ["revisions", "revisions/1", "restore"]) {
+    const unsupported = await api.request(`/tables/${tableId}/rows/${rowId}/document/${path}`, { method: path === "restore" ? "POST" : "GET", headers });
+    assert.equal(unsupported.status, 404);
+  }
+  const oldRender = await api.request(`/tables/${tableId}/rows/${rowId}/document/render?version=1`, { headers }); assert.equal(oldRender.status, 400);
+  const nativeTools = createDocumentTools(a, org, uid);
+  for (const name of ["list_document_revisions", "get_document_revision", "restore_document_revision"]) assert(!Object.hasOwn(nativeTools, name));
+  const inertKey = await createSiteKey(a, actor, { name: "Legacy inert history only", permissions: [], documentPermissions: [grant({ canReadHistory: true, canRestore: true })] });
+  await assert.rejects(call("getDocument", identity(), a, { kind: "key", secret: inertKey.secret }), code("FORBIDDEN"));
   const memberApi = createCommandsRoute(async () => ({ commands: a, identity: { database: a.database, async resolveSession() { return { user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } } as any; } }, async close() {} }));
+  const unsupportedMember = await memberApi.request("/", { method: "POST", headers: { "Content-Type": "application/json", "X-Workspace-Id": a.workspaceId! }, body: JSON.stringify({ command: "listDocumentRevisions", input: identity() }) }); assert.equal(unsupportedMember.status, 400);
   const result = await memberApi.request("/", { method: "POST", headers: { "Content-Type": "application/json", "X-Workspace-Id": a.workspaceId! }, body: JSON.stringify({ command: "getDocument", input: identity() }) }); assert.equal(result.status, 200);
 });
 test("a late image receipt SQL failure rolls back its savepoint and blob while the host commits other work", async () => {
   const doc = (await call("getDocument", identity()))!;
   const input = { ...identity(), expectedVersion: doc.version, name: "receipt-fault.png", mimeType: "image/png" as const, base64: png, idempotencyKey: k() };
   const functionName = `document_receipt_fault_${k().replaceAll("-", "")}`;
-  const beforeBlobs = blobs.size, beforeHistory = await call("listDocumentRevisions", identity());
+  const beforeBlobs = blobs.size, beforeHistory = await revisionRows();
   const hostRow = k();
   await resource.db.execute(sql.raw(`CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.key = '${input.idempotencyKey}' THEN RAISE EXCEPTION 'late document receipt fault'; END IF; RETURN NEW; END; $$`));
   try {
@@ -170,7 +195,7 @@ test("a late image receipt SQL failure rolls back its savepoint and blob while t
       await tx.insert(rows).values({ id: hostRow, tableId });
     });
     assert.equal((await other.db.select().from(rows).where(eq(rows.id, hostRow))).length, 1);
-    assert.deepEqual(await call("listDocumentRevisions", identity()), beforeHistory);
+    assert.deepEqual(await revisionRows(), beforeHistory);
     assert.deepEqual(await call("getDocument", identity()), doc);
   } finally {
     await resource.db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${functionName}" ON document_receipts`));
@@ -214,7 +239,7 @@ test("first body save is lazy, CAS serialized, idempotent and requires independe
   assert.deepEqual(first, replay); assert.equal(first.version, 1); assert(!("content" in first));
   await assert.rejects(call("replaceDocument", { ...input, idempotencyKey: k() }), code("VERSION_CONFLICT"));
   await assert.rejects(call("createDocument", { ...scope, content: body("legacy"), idempotencyKey: k() }), code("ALREADY_EXISTS"));
-  const history = await call("listDocumentRevisions", scope); assert.deepEqual(history.items.map(item => item.version), [1]);
+  assert.equal((await resource.db.select().from(documentRevisions).where(eq(documentRevisions.documentId, first.id))).length, 0);
   assert.equal((await resource.db.select().from(rows).where(eq(rows.id, row.id)))[0].version, 1);
   await updateSiteKey(a, actor, key.key.id, { name: "Shrunk", permissions: [], documentPermissions: [grant({ canRead: true })] });
   await assert.rejects(call("replaceDocument", input, a, { kind: "key", secret: key.secret }), code("FORBIDDEN"));

@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
-import { Bold, Italic, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Code, Link as LinkIcon, ImagePlus, History, BookOpen, Pencil, Undo2, Redo2 } from "lucide-react";
+import { RichTextEditor, useRichTextEditor, type RichTextLabels } from "@tabdo/ui/components/rich-text-editor";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@tabdo/ui/components/dropdown-menu";
+import { MoreHorizontal, Info, Download, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@tabdo/ui/components/button";
-import { ToggleGroup, ToggleGroupItem } from "@tabdo/ui/components/toggle-group";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
-import { Input } from "@tabdo/ui/components/input";
-import { Field, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
 import { Skeleton } from "@tabdo/ui/components/skeleton";
-import { documentContentSchema, EMPTY_DOCUMENT, safeDocumentLink, type DocumentContent, type RecordDocument, type DocumentCommands, type DocumentResults } from "@tabdo/shared";
+import { documentContentSchema, EMPTY_DOCUMENT, safeDocumentLink, type DocumentContent, type RecordDocument, type DocumentCommands } from "@tabdo/shared";
 import { documentCommand, DocumentApiError } from "@/lib/document-api";
 import { workspaceCacheKey, workspaceUnloadApproved } from "@/lib/workspace-scope";
-import { documentExtensions } from "@/components/documents/document-extensions";
-import "@/components/documents/document.css";
 
 export type DocumentState = { dirty: boolean; busy: boolean; status?: string };
 export type DocumentHandle = { flush(): Promise<boolean> };
-type Scope = { tableId: string; rowId: string; onStateChange?(state: DocumentState): void; ref?: Ref<DocumentHandle>; embedded?: boolean };
+type Scope = { tableId: string; rowId: string; onStateChange?(state: DocumentState): void; ref?: Ref<DocumentHandle>; embedded?: boolean; onRefresh?(): void; refreshDisabled?: boolean };
 type PendingSave = DocumentCommands["replaceDocument"];
 type Draft = { content: DocumentContent; baseVersion: number; pending?: PendingSave };
 const keyFor = (scope: Scope) => `tabdo.document-draft:${workspaceCacheKey()}:${scope.tableId}:${scope.rowId}`;
@@ -27,9 +23,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export default function DocumentBody(scope: Scope) {
   const { t } = useTranslation("documents");
   const [doc, setDoc] = useState<RecordDocument | null>(), [error, setError] = useState("");
-  const [status, setStatus] = useState("loading"), [busy, setBusy] = useState(false), [readOnly, setReadOnly] = useState(false);
-  const [tick, setTick] = useState(0), [history, setHistory] = useState<DocumentResults["listDocumentRevisions"] | null>(null), [historyOpen, setHistoryOpen] = useState(false), [historyBusy, setHistoryBusy] = useState(false);
-  const [preview, setPreview] = useState<RecordDocument | null>(null), [linkOpen, setLinkOpen] = useState(false), [href, setHref] = useState("");
+  const [status, setStatus] = useState("loading"), [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0), [comparing, setComparing] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [preview, setPreview] = useState<RecordDocument | null>(null);
   const [loadRevision, setLoadRevision] = useState(0);
   const [pasteNotice, setPasteNotice] = useState(false);
   const [images, setImages] = useState<Record<string, string>>({});
@@ -39,14 +36,14 @@ export default function DocumentBody(scope: Scope) {
     try { if (dirty.current) sessionStorage.setItem(draftKey, JSON.stringify({ content: content.current, baseVersion: version.current, pending: pending.current })); else sessionStorage.removeItem(draftKey); }
     catch { setError(t("draftStorageFailed")); }
   }, [draftKey, t]);
-  const editor = useEditor({ extensions: documentExtensions, content: EMPTY_DOCUMENT, editable: false, immediatelyRender: false,
-    editorProps: { attributes: { class: "document-prose", "data-placeholder": t("placeholder"), "aria-label": t("body"), role: "textbox", "aria-multiline": "true" },
+  const editor = useRichTextEditor({ isAllowedUri: safeDocumentLink, content: EMPTY_DOCUMENT, editable: false, immediatelyRender: false,
+    editorProps: { attributes: { "data-placeholder": t("placeholder"), "aria-label": t("body"), role: "textbox", "aria-multiline": "true" },
       handleDOMEvents: { compositionstart: () => { composing.current = true; return false; }, compositionend: () => { composing.current = false; setTick(v => v + 1); return false; } },
       handlePaste: (_view, event) => { if (event.clipboardData?.getData("text/html")) setPasteNotice(true); if (event.clipboardData?.files.length) { setError(t("pasteImages")); return true; } return false; },
     },
     onUpdate: ({ editor }) => { if (preview) return; content.current = editor.getJSON() as DocumentContent; dirty.current = true; failed.current = conflicted.current; setStatus(conflicted.current ? "conflict" : "unsaved"); retain(); setTick(v => v + 1); },
   });
-  const selection = useEditorState({ editor, selector: ({ editor }) => editor ? { marks: ["bold", "italic"].filter(mark => editor.isActive(mark)), heading: [1, 2, 3].find(level => editor.isActive("heading", { level })), bullet: editor.isActive("bulletList"), ordered: editor.isActive("orderedList"), quote: editor.isActive("blockquote"), code: editor.isActive("codeBlock") } : null });
+
   useEffect(() => {
     mounted.current = true;
     const controller = new AbortController();
@@ -65,8 +62,8 @@ export default function DocumentBody(scope: Scope) {
   }, [editor, loadRevision]);
   useEffect(() => {
     if (doc === undefined || !editor) return;
-    editor.setEditable(!readOnly && !preview && !busy, false);
-  }, [editor, doc, readOnly, preview, busy]);
+    editor.setEditable(!preview && !busy, false);
+  }, [editor, doc, preview, busy]);
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => { if (workspaceUnloadApproved()) return; if (dirty.current || inFlight.current) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", beforeUnload); return () => window.removeEventListener("beforeunload", beforeUnload);
@@ -103,9 +100,9 @@ export default function DocumentBody(scope: Scope) {
   };
   useImperativeHandle(scope.ref, () => ({ flush }));
   useEffect(() => {
-    if (doc === undefined || !dirty.current || failed.current || composing.current || busy || preview || readOnly) return;
+    if (doc === undefined || !dirty.current || failed.current || composing.current || busy || preview) return;
     const timer = window.setTimeout(() => void save(), 900); return () => window.clearTimeout(timer);
-  }, [tick, doc, busy, preview, readOnly]);
+  }, [tick, doc, busy, preview]);
   // File bytes are fetched only for this document; object URLs never enter persisted content.
   useEffect(() => {
     if (!doc) return;
@@ -121,33 +118,15 @@ export default function DocumentBody(scope: Scope) {
   }, [doc?.id, tick, preview]);
   const imageUrls = useRef(images); imageUrls.current = images;
   useEffect(() => () => Object.values(imageUrls.current).forEach(url => URL.revokeObjectURL(url)), []);
-  const loadHistory = async (append = false) => {
-    if (historyBusy) return; setHistoryBusy(true); setError("");
+  const viewServer = async () => {
+    setComparing(true); setError("");
     try {
-      const page = await documentCommand("listDocumentRevisions", { ...identity, ...(append && history?.nextBeforeVersion ? { beforeVersion: history.nextBeforeVersion } : {}) });
-      if (mounted.current) { setHistory(previous => append && previous ? { ...page, items: [...previous.items, ...page.items] } : page); setHistoryOpen(true); }
-    } catch (cause) { if (mounted.current) setError((cause as Error).message); }
-    finally { if (mounted.current) setHistoryBusy(false); }
-  };
-  const viewVersion = async (v?: number) => {
-    setHistoryBusy(true); setError("");
-    try {
-      const value = v === undefined ? await documentCommand("getDocument", identity) : await documentCommand("getDocumentRevision", { ...identity, version: v });
+      const value = await documentCommand("getDocument", identity);
       if (mounted.current && value) { setPreview(value); editor?.commands.setContent(value.content, { emitUpdate: false }); }
     } catch (cause) { if (mounted.current) setError((cause as Error).message); }
-    finally { if (mounted.current) setHistoryBusy(false); }
+    finally { if (mounted.current) setComparing(false); }
   };
   const backToDraft = () => { editor?.commands.setContent(content.current, { emitUpdate: false }); setPreview(null); };
-  const restore = async () => {
-    if (!preview || dirty.current || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setError("");
-    try {
-      const saved = await documentCommand("restoreDocumentRevision", { ...identity, version: preview.version, expectedVersion: version.current, idempotencyKey: crypto.randomUUID() });
-      if (!mounted.current) return;
-      version.current = saved.version; content.current = preview.content; setDoc({ ...preview, version: saved.version }); setPreview(null); setStatus("saved"); setHistoryOpen(false);
-    } catch (cause) { if (mounted.current) setError((cause as Error).message); }
-    finally { inFlight.current = false; if (mounted.current) setBusy(false); }
-  };
   const uploadOnce = async (file?: File) => {
     if (!file || doc === undefined || inFlight.current || dirty.current) { setError(t("saveBeforeImage")); return; }
     if (file.size > 5 * 1024 * 1024) { setError(t("imageBudget")); return; }
@@ -184,39 +163,24 @@ export default function DocumentBody(scope: Scope) {
     finally { inFlight.current = false; if (mounted.current) setBusy(false); }
   };
   useEffect(() => { scope.onStateChange?.({ dirty: dirty.current, busy: busy || inFlight.current, status }); }, [tick, busy, status, scope.onStateChange]);
-  const toolbarDisabled = busy || readOnly || !!preview || doc === undefined;
-  return <div data-testid="document-editor" data-document-root className="flex min-w-0 flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-          <p hidden={scope.embedded} role="status" aria-live="polite" className="text-xs text-muted-foreground">{t(`status.${status}`)}</p>
-          {doc !== undefined && <div className="flex flex-wrap gap-1">
-            <Button variant="ghost" size="sm" disabled={busy || historyBusy} onClick={() => setReadOnly(v => !v)}>{readOnly ? <Pencil /> : <BookOpen />}{readOnly ? t("edit") : t("read")}</Button>
-            <Button variant="ghost" size="sm" disabled={busy || historyBusy || !doc} onClick={() => void loadHistory()}><History />{t("history")}</Button>
-            <Button hidden={scope.embedded} variant="outline" size="sm" disabled={busy || status === "saving" || !dirty.current || status === "conflict"} onClick={() => void save()}>{t("save")}</Button>
-          </div>}
-        </div>
-        {error && <div role="alert" className="flex flex-col gap-2 border-b px-5 py-3 text-sm text-destructive"><p>{error}</p>{status === "conflict" && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={historyBusy} onClick={() => void viewVersion()}>{t("viewServer")}</Button><Button size="sm" variant="outline" onClick={exportDraft}>{t("downloadDraft")}</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void exportAndReload()}>{t("downloadAndReload")}</Button></div>}</div>}
-        {doc === undefined ? <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-8"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" />{error && <Button variant="outline" onClick={() => setLoadRevision(v => v + 1)}>{t("table:retry")}</Button>}</div> : <>
-          {!readOnly && !preview && <div aria-label={t("formatting")} className="flex flex-wrap items-center gap-1 border-b px-3 py-2">
-            <ToggleGroup type="multiple" size="sm" value={selection?.marks ?? []} disabled={toolbarDisabled} onValueChange={values => { if (values.includes("bold") !== !!selection?.marks.includes("bold")) editor?.chain().focus().toggleBold().run(); if (values.includes("italic") !== !!selection?.marks.includes("italic")) editor?.chain().focus().toggleItalic().run(); }}><ToggleGroupItem value="bold" aria-label={t("bold")}><Bold className="size-4" /></ToggleGroupItem><ToggleGroupItem value="italic" aria-label={t("italic")}><Italic className="size-4" /></ToggleGroupItem></ToggleGroup>
-            <ToggleGroup type="single" size="sm" value={String(selection?.heading ?? "")} disabled={toolbarDisabled} onValueChange={value => { const level = Number(value || selection?.heading) as 1 | 2 | 3; editor?.chain().focus().toggleHeading({ level }).run(); }}>{[Heading1, Heading2, Heading3].map((Icon, i) => <ToggleGroupItem key={i} value={String(i + 1)} aria-label={t("heading", { level: i + 1 })}><Icon className="size-4" /></ToggleGroupItem>)}</ToggleGroup>
-            <ToggleGroup type="multiple" size="sm" disabled={toolbarDisabled} value={[selection?.bullet && "bullet", selection?.ordered && "ordered", selection?.quote && "quote", selection?.code && "code"].filter(Boolean) as string[]} onValueChange={values => { if (values.includes("bullet") !== !!selection?.bullet) editor?.chain().focus().toggleBulletList().run(); else if (values.includes("ordered") !== !!selection?.ordered) editor?.chain().focus().toggleOrderedList().run(); else if (values.includes("quote") !== !!selection?.quote) editor?.chain().focus().toggleBlockquote().run(); else if (values.includes("code") !== !!selection?.code) editor?.chain().focus().toggleCodeBlock().run(); }}>
-              <ToggleGroupItem value="bullet" aria-label={t("bulletList")}><List className="size-4" /></ToggleGroupItem><ToggleGroupItem value="ordered" aria-label={t("orderedList")}><ListOrdered className="size-4" /></ToggleGroupItem><ToggleGroupItem value="quote" aria-label={t("quote")}><Quote className="size-4" /></ToggleGroupItem><ToggleGroupItem value="code" aria-label={t("codeBlock")}><Code className="size-4" /></ToggleGroupItem>
-            </ToggleGroup>
-            <Button variant="ghost" size="icon" disabled={toolbarDisabled} aria-label={t("link")} onClick={() => { setHref(editor?.getAttributes("link").href ?? ""); setLinkOpen(true); }}><LinkIcon /></Button>
-            <Button variant="ghost" size="icon" disabled={toolbarDisabled || dirty.current || status === "saving" || status === "conflict"} aria-label={t("image")} onClick={() => fileInput.current?.click()}><ImagePlus /></Button>
-            <Button variant="ghost" size="icon" disabled={toolbarDisabled || !editor?.can().undo()} aria-label={t("undo")} onClick={() => editor?.chain().focus().undo().run()}><Undo2 /></Button>
-            <Button variant="ghost" size="icon" disabled={toolbarDisabled || !editor?.can().redo()} aria-label={t("redo")} onClick={() => editor?.chain().focus().redo().run()}><Redo2 /></Button>
-            <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" tabIndex={-1} onChange={event => { void upload(event.target.files?.[0]); event.target.value = ""; }} />
-          </div>}
-          {preview && <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3"><p className="mr-auto text-sm">{t("previewVersion", { version: preview.version })}</p><Button variant="outline" size="sm" disabled={busy} onClick={backToDraft}>{t("backToDraft")}</Button><Button size="sm" disabled={busy || dirty.current} onClick={() => void restore()}>{t("restore")}</Button>{dirty.current && <p className="w-full text-xs text-muted-foreground">{t("restoreDirty")}</p>}</div>}
-          {pasteNotice && <div role="status" className="flex items-center gap-2 border-b px-5 py-2 text-xs text-muted-foreground"><p className="flex-1">{t("pasteNotice")}</p><Button variant="ghost" size="sm" onClick={() => setPasteNotice(false)}>{t("dismiss")}</Button></div>}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">
-            {historyOpen && <aside aria-label={t("history")} className="flex max-h-40 w-full shrink-0 flex-col gap-2 overflow-y-auto border-b p-3 sm:max-h-none sm:w-48 sm:border-r sm:border-b-0"><Button variant="ghost" size="sm" onClick={() => setHistoryOpen(false)}>{t("closeHistory")}</Button>{history?.items.map(item => <Button key={item.version} variant="ghost" className="h-auto flex-col items-start gap-1" disabled={historyBusy || busy} onClick={() => void viewVersion(item.version)}><span>v{item.version}</span><span className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</span></Button>)}{history?.hasMore && <Button variant="outline" size="sm" disabled={historyBusy} onClick={() => void loadHistory(true)}>{t("moreHistory")}</Button>}</aside>}
-            <div className="min-w-0 flex-1"><div className="mx-auto max-w-[72ch] px-5 py-8 sm:px-8"><EditorContent editor={editor} /></div></div>
-          </div>
-          <p className="border-t px-5 py-2 text-xs text-muted-foreground">{busy ? t("uploading") : dirty.current ? t("draftRetained") : t("budget")}</p>
-        </>}
-        <div hidden aria-hidden="true">{Object.entries(images).map(([id, url]) => <img key={id} data-private-source={id} src={url} alt="" />)}</div>
-      <Dialog open={linkOpen} onOpenChange={setLinkOpen}><DialogContent closeLabel={t("close")}><DialogHeader><DialogTitle>{t("link")}</DialogTitle><DialogDescription>{t("linkHint")}</DialogDescription></DialogHeader><form noValidate onSubmit={event => { event.preventDefault(); if (href && !safeDocumentLink(href)) return; const chain = editor?.chain().focus().extendMarkRange("link"); if (href) chain?.setLink({ href }).run(); else chain?.unsetLink().run(); setLinkOpen(false); }}><FieldGroup><Field><FieldLabel htmlFor="document-link">{t("url")}</FieldLabel><Input id="document-link" value={href} aria-invalid={!!href && !safeDocumentLink(href)} onChange={event => setHref(event.target.value)} autoFocus /></Field><Button type="submit" disabled={!!href && !safeDocumentLink(href)}>{href ? t("applyLink") : t("removeLink")}</Button></FieldGroup></form></DialogContent></Dialog>
+  const toolbarDisabled = busy || !!preview || doc === undefined;
+  const labels: RichTextLabels = { insertFormat: t("insertFormat"), formatting: t("formatting"), selectionFormatting: t("selectionFormatting"), bold: t("bold"), italic: t("italic"), heading: level => t("heading", { level }), bulletList: t("bulletList"), orderedList: t("orderedList"), quote: t("quote"), codeBlock: t("codeBlock"), link: t("link"), image: t("image"), undo: t("undo"), redo: t("redo"), close: t("close"), linkHint: t("linkHint"), url: t("url"), applyLink: t("applyLink"), removeLink: t("removeLink") };
+  const actions = <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={t("more")}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuGroup>
+    {scope.onRefresh && <DropdownMenuItem disabled={scope.refreshDisabled} onSelect={scope.onRefresh}><RefreshCw />{t("table:refreshRecord")}</DropdownMenuItem>}
+    {!scope.embedded && <DropdownMenuItem disabled={busy || status === "saving" || !dirty.current || status === "conflict"} onSelect={() => void save()}>{t("save")}</DropdownMenuItem>}
+    <DropdownMenuItem onSelect={exportDraft}><Download />{t("downloadDraft")}</DropdownMenuItem>
+    <DropdownMenuItem onSelect={() => setHelpOpen(true)}><Info />{t("writingHelp")}</DropdownMenuItem>
+  </DropdownMenuGroup></DropdownMenuContent></DropdownMenu>;
+  return <div data-testid="document-editor" className="flex min-w-0 flex-col">
+    {!scope.embedded && <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{t(`status.${status}`)}</p>}
+    {error && <div role="alert" className="flex flex-col gap-2 py-3 text-sm text-destructive"><p>{error}</p>{status === "conflict" && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={comparing} onClick={() => void viewServer()}>{t("viewServer")}</Button><Button size="sm" variant="outline" onClick={exportDraft}>{t("downloadDraft")}</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void exportAndReload()}>{t("downloadAndReload")}</Button></div>}</div>}
+    <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" tabIndex={-1} onChange={event => { void upload(event.target.files?.[0]); event.target.value = ""; }} />
+    {doc === undefined ? <div className="flex flex-col gap-4 py-8"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" />{error && <Button variant="outline" onClick={() => setLoadRevision(v => v + 1)}>{t("table:retry")}</Button>}</div> : <>
+      {preview && <div className="flex flex-wrap items-center gap-2 py-3"><p className="mr-auto text-sm">{t("comparingServer")}</p><Button variant="outline" size="sm" disabled={busy} onClick={backToDraft}>{t("backToDraft")}</Button></div>}
+      {pasteNotice && <div role="status" className="flex items-center gap-2 py-2 text-xs text-muted-foreground"><p className="flex-1">{t("pasteNotice")}</p><Button variant="ghost" size="sm" onClick={() => setPasteNotice(false)}>{t("dismiss")}</Button></div>}
+      <RichTextEditor editor={editor} labels={labels} disabled={toolbarDisabled} isAllowedUri={safeDocumentLink} onImage={() => fileInput.current?.click()} imageDisabled={dirty.current || status === "saving" || status === "conflict"} imageSources={images} actions={actions} />
+      {busy && <p role="status" className="text-xs text-muted-foreground">{t("uploading")}</p>}
+    </>}
+    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent closeLabel={t("close")}><DialogHeader><DialogTitle>{t("writingHelp")}</DialogTitle><DialogDescription>{t("budget")}</DialogDescription></DialogHeader><p className="text-sm text-muted-foreground">{t("draftRetained")}</p></DialogContent></Dialog>
   </div>;
 }

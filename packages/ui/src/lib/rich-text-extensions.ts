@@ -1,7 +1,8 @@
+// Adapted from ehtisham-afzal/tiptap-shadcn @ 84e08b1f77ea4d0a80f5bcb498935ecee40aa95b (MIT).
+// See packages/ui/third-party/tiptap-shadcn.LICENSE.
 import { Node } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { safeDocumentLink } from "@tabdo/shared";
 const SafeLink = Link.extend({ addAttributes() { return { href: { default: null, parseHTML: element => element.getAttribute("href") } }; } });
 const PrivateImage = Node.create({
   name: "image", group: "block", atom: true, draggable: true,
@@ -12,10 +13,10 @@ const PrivateImage = Node.create({
   addNodeView() { return ({ node }) => {
     const dom = document.createElement("figure"), image = document.createElement("img");
     dom.setAttribute("data-document-file", node.attrs.fileId); image.alt = node.attrs.alt; image.loading = "lazy"; dom.append(image);
-    const update = () => { const source = dom.closest("[data-document-root]")?.querySelector<HTMLImageElement>(`[data-private-source="${node.attrs.fileId}"]`); if (source?.src && image.src !== source.src) image.src = source.src; };
+    const update = () => { const source = dom.closest("[data-rich-text-editor]")?.querySelector<HTMLImageElement>(`[data-private-source="${node.attrs.fileId}"]`); if (source?.src && image.src !== source.src) image.src = source.src; };
     const observer = new MutationObserver(update); observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["src"] });
     queueMicrotask(update);
     return { dom, ignoreMutation: () => true, destroy() { observer.disconnect(); } };
   }; },
 });
-export const documentExtensions = [StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, underline: false }), SafeLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false, isAllowedUri: url => safeDocumentLink(url), HTMLAttributes: { rel: "noopener noreferrer nofollow" } }), PrivateImage];
+export const createRichTextExtensions = (isAllowedUri: (url: string) => boolean) => [StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, underline: false }), SafeLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false, isAllowedUri: isAllowedUri, HTMLAttributes: { rel: "noopener noreferrer nofollow" } }), PrivateImage];

@@ -87,14 +87,14 @@ export function AppShellProvider({ children }: { children: ReactNode }) {
         e.preventDefault();
         setSidebarCollapsed(!sidebarCollapsed);
       }
-      if (!isAiPage && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+      if (!isAiPage && !recordSheetOpen && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
         setAiOpen(!aiOpen);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [sidebarCollapsed, aiOpen, setSidebarCollapsed, setAiOpen, isAiPage]);
+  }, [sidebarCollapsed, aiOpen, setSidebarCollapsed, setAiOpen, isAiPage, recordSheetOpen]);
 
   const value = useMemo(
     () => ({

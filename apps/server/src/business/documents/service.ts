@@ -1,10 +1,10 @@
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { sha256 } from "@tabdo/core/crypto";
 import { DOCUMENT_SCHEMAS, DOCUMENT_READ_COMMANDS, DOCUMENT_LIMITS, type DocumentCommand, type DocumentResults, type DocumentContent, type DocumentPermission } from "@tabdo/shared";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
 import { inTransaction } from "../db/context.js";
-import { member, rows, tables, recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages } from "../db/schema.js";
+import { member, rows, tables, recordDocuments, recordDocumentLinks, documentReceipts, documentImages } from "../db/schema.js";
 import { requireWorkspace } from "../tenant/workspace.js";
 import { resolveSiteKey, type SitePrincipal } from "../data-api/keys.js";
 import { DocumentError } from "./errors.js";
@@ -35,11 +35,11 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
       const [current] = await tx.select({ id: member.id }).from(member).where(and(eq(member.organizationId, organizationId), eq(member.userId, caller.actorId))).for("share");
       if (!current) fail(403, "FORBIDDEN", "Current membership is required");
     }
-    const permission: keyof Omit<DocumentPermission, "tableId"> = command === "createDocument" ? "canCreate" : command === "replaceDocument" ? "canUpdate" : command === "uploadDocumentImage" ? "canUpload" : command === "restoreDocumentRevision" ? "canRestore" : ["listDocumentRevisions", "getDocumentRevision"].includes(command) ? "canReadHistory" : "canRead";
+    const permission: keyof Omit<DocumentPermission, "tableId"> = command === "createDocument" ? "canCreate" : command === "replaceDocument" ? "canUpdate" : command === "uploadDocumentImage" ? "canUpload" : "canRead";
     if (principal) {
       const grant = principal.documentPermissions.get(input.tableId);
       if (!grant) fail(404, "NOT_FOUND", "Record document not found");
-      if (!grant[permission] || command === "replaceDocument" && input.expectedVersion === 0 && !grant.canCreate || (command === "restoreDocumentRevision" || command === "renderDocument" && input.version !== undefined) && !grant.canReadHistory) fail(403, "FORBIDDEN", "This document operation is not granted");
+      if (!grant[permission] || command === "replaceDocument" && input.expectedVersion === 0 && !grant.canCreate) fail(403, "FORBIDDEN", "This document operation is not granted");
     }
     const [table] = await tx.select().from(tables).where(and(eq(tables.id, input.tableId), eq(tables.organizationId, organizationId))).for("key share");
     if (!table) fail(404, "NOT_FOUND", "Record document not found");
@@ -65,10 +65,6 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
     }
     if (command !== "createDocument" && command !== "getDocument" && !(command === "replaceDocument" && input.expectedVersion === 0) && !doc) fail(404, "NOT_FOUND", "Document is not enabled");
     const cas = () => { if (doc!.version !== input.expectedVersion) fail(409, "VERSION_CONFLICT", "Document changed; retain your draft and reload"); };
-    const revision = async () => {
-      const [found] = await tx.select().from(documentRevisions).where(and(eq(documentRevisions.documentId, doc!.id), eq(documentRevisions.version, input.version)));
-      if (!found) fail(404, "NOT_FOUND", "Document revision not found"); return found;
-    };
     const assets = async (content: DocumentContent) => {
       const ids = documentImageIds(content);
       if (!ids.length) return [];
@@ -83,30 +79,15 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
         if (command === "replaceDocument" && input.expectedVersion !== 0) {
           cas(); await assets(input.content);
           [doc] = await tx.update(recordDocuments).set({ content: input.content, version: doc!.version + 1, updatedAt: deps.now() }).where(eq(recordDocuments.id, doc!.id)).returning();
-          await tx.insert(documentRevisions).values({ documentId: doc.id, version: doc.version, content: doc.content, createdAt: deps.now() });
           result = receipt(); break;
         }
         if (doc) fail(409, command === "createDocument" ? "ALREADY_EXISTS" : "VERSION_CONFLICT", "Document already exists; retain your draft");
         if (documentImageIds(input.content).length) fail(400, "BAD_INPUT", "Create the document before uploading images");
         [doc] = await tx.insert(recordDocuments).values({ workspaceId: table.workspaceId, organizationId, sourceTableId: table.id, sourceRowId: row.id, content: input.content, updatedAt: deps.now() }).returning();
         await tx.insert(recordDocumentLinks).values({ documentId: doc.id, rowId: row.id, tableId: table.id, workspaceId: table.workspaceId, organizationId });
-        await tx.insert(documentRevisions).values({ documentId: doc.id, version: 1, content: doc.content, createdAt: deps.now() });
         result = receipt(); break;
       }
-      case "restoreDocumentRevision": {
-        cas(); const content = (await revision()).content;
-        await assets(content);
-        [doc] = await tx.update(recordDocuments).set({ content, version: doc!.version + 1, updatedAt: deps.now() }).where(eq(recordDocuments.id, doc!.id)).returning();
-        await tx.insert(documentRevisions).values({ documentId: doc.id, version: doc.version, content: doc.content, restoredFrom: command === "restoreDocumentRevision" ? input.version : null, createdAt: deps.now() });
-        result = receipt(); break;
-      }
-      case "listDocumentRevisions": {
-        const found = await tx.select({ version: documentRevisions.version, createdAt: documentRevisions.createdAt, restoredFrom: documentRevisions.restoredFrom }).from(documentRevisions).where(and(eq(documentRevisions.documentId, doc!.id), input.beforeVersion ? lt(documentRevisions.version, input.beforeVersion) : undefined)).orderBy(desc(documentRevisions.version)).limit(input.limit + 1);
-        const items = found.slice(0, input.limit).map(v => ({ ...v, createdAt: v.createdAt.toISOString() }));
-        result = { items, hasMore: found.length > input.limit, nextBeforeVersion: found.length > input.limit ? items.at(-1)!.version : null }; break;
-      }
-      case "getDocumentRevision": { const rev = await revision(); result = current(rev.content, rev.version, rev.createdAt); break; }
-      case "renderDocument": { const content = input.version === undefined ? doc!.content : (await revision()).content; result = { html: renderDocumentHtml(content), assets: await assets(content), version: input.version ?? doc!.version, schemaVersion: 1 }; break; }
+      case "renderDocument": { result = { html: renderDocumentHtml(doc!.content), assets: await assets(doc!.content), version: doc!.version, schemaVersion: 1 }; break; }
       case "uploadDocumentImage": {
         cas();
         if (!deps.sites || !deps.afterRollback) fail(503, "STORAGE_UNAVAILABLE", "Transactional document storage is unavailable");

@@ -55,17 +55,20 @@ try {
   await page.unroute(`**/api/rows/${row.id}`, reject); await sheet.getByRole('button', { name: '重试保存' }).click();
   await sheet.getByRole('status').filter({ hasText: '全部更改已保存' }).waitFor();
   assert.equal((await command('getRow', { rowId: row.id })).cells[title.id], 'Persisted'); assert.equal((await command('getRow', { rowId: row.id })).cells[number.id], -1.25); assert.equal((await command('getRow', { rowId: row.id })).cells[check.id], true);
-  await titleInput.fill('Outside flush'); await page.mouse.click(600, 100); await sheet.waitFor({ state: 'hidden' }); await card.click(); await sheet.waitFor(); assert.equal(await titleInput.inputValue(), 'Outside flush', 'outside click flushes pending changes');
+  await titleInput.fill('Outside flush'); await page.mouse.click(10, 100); await sheet.waitFor({ state: 'hidden' }); await card.click(); await sheet.waitFor(); assert.equal(await titleInput.inputValue(), 'Outside flush', 'outside click flushes pending changes');
   await page.keyboard.press('Escape'); await sheet.waitFor({ state: 'hidden' }); await card.click(); await sheet.waitFor();
   let releasePatch, signalPatch; const heldPatch = new Promise((resolve) => { releasePatch = resolve; }); const patchStarted = new Promise((resolve) => { signalPatch = resolve; });
   const slowPatch = async (route) => { if (route.request().method() === 'PATCH') { signalPatch(); await heldPatch; } await route.fallback(); }; await page.route(`**/api/rows/${row.id}`, slowPatch);
-  await titleInput.fill('Protected save'); await patchStarted; await page.mouse.click(600, 100); assert.equal(await sheet.isVisible(), true, 'outside pointer cannot close an active save'); await page.keyboard.press('Escape'); assert.equal(await sheet.isVisible(), true, 'Escape cannot close an active save'); releasePatch(); await sheet.waitFor({ state: 'hidden' }); await page.unroute(`**/api/rows/${row.id}`, slowPatch);
-  await card.click(); await sheet.waitFor(); await page.getByTestId('global-ai-toggle').click(); await sheet.waitFor({ state: 'hidden' }); await page.locator('#global-ai-panel').waitFor(); await page.getByTestId('global-ai-toggle').click(); await card.click(); await sheet.waitFor();
-  await page.keyboard.press('Meta+j'); await page.locator('#global-ai-panel').waitFor(); await pause(250); const sheetBox = await sheet.boundingBox(), aiBox = await page.locator('#global-ai-panel').boundingBox(); assert(aiBox.x + aiBox.width <= sheetBox.x, 'wide AI and record Sheet do not overlap'); await page.keyboard.press('Meta+j');
+  await titleInput.fill('Protected save'); await patchStarted; await page.mouse.click(10, 100); assert.equal(await sheet.isVisible(), true, 'outside pointer cannot close an active save'); await page.keyboard.press('Escape'); assert.equal(await sheet.isVisible(), true, 'Escape cannot close an active save'); releasePatch(); await sheet.waitFor({ state: 'hidden' }); await page.unroute(`**/api/rows/${row.id}`, slowPatch);
+  // A record is now modal: it closes AI on open and blocks toggles without hiding/unmounting the draft.
+  await page.getByTestId('global-ai-toggle').click(); await page.locator('#global-ai-panel').waitFor();
+  // Modal AI is nonblocking; an ordinary record entry still opens its protected writing dialog.
+  await card.click(); await sheet.waitFor(); assert.equal(await page.locator('#global-ai-panel').isVisible(), false);
+  assert.equal(await sheet.getAttribute('aria-modal'), 'true'); assert.equal(await page.getByTestId('global-ai-toggle').count(), 0);
+  await page.keyboard.press('Meta+j'); assert.equal(await sheet.isVisible(), true); assert.equal(await page.locator('#global-ai-panel').isVisible(), false);
+  const sheetBox = await sheet.boundingBox(); assert(sheetBox.width >= 900 && sheetBox.width <= 1000); assert(Math.abs(sheetBox.x + sheetBox.width / 2 - 800) < 2);
   await page.setViewportSize({ width: 800, height: 800 }); await titleInput.fill('Narrow draft');
-  // The shared toggle is identified by its data test hook when present.
-  const toggle = page.getByTestId('global-ai-toggle');
-  if (await toggle.count()) { await page.keyboard.press('Meta+j'); await sheet.waitFor({ state: 'hidden' }); await page.keyboard.press('Meta+j'); await sheet.waitFor(); assert.equal(await titleInput.inputValue(), 'Narrow draft'); }
+  await page.keyboard.press('Meta+j'); assert.equal(await sheet.isVisible(), true); assert.equal(await titleInput.inputValue(), 'Narrow draft');
   await sheet.getByRole('button', { name: '关闭记录', exact: true }).click(); await sheet.waitFor({ state: 'hidden' });
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.waitForLoadState('networkidle'); await pause(250);
@@ -81,5 +84,5 @@ try {
   await page.getByTestId(`view-menu-${grid.id}`).click(); await page.getByRole('menuitem', { name: '删除表格', exact: true }).click(); await page.getByRole('alertdialog').getByRole('button', { name: '取消', exact: true }).click(); await page.getByRole('alertdialog').waitFor({ state: 'hidden' }); assert.equal((await api(`/tables/${table.id}`)).id, table.id);
   await page.screenshot({ path: artifact('views-toolbar.png') });
   assert.deepEqual(await page.locator('[data-member-chip]').first().evaluate((node) => ({ height: node.getBoundingClientRect().height, line: getComputedStyle(node.lastElementChild).lineHeight })), { height: 24, line: '16px' });
-  assert.deepEqual(errors, []); console.log('PASS views/settings and Sheet save/conflict/outside-dismiss/Escape/save-lock/nested relation/AI');
+  assert.deepEqual(errors, []); console.log('PASS views/settings and modal record save/conflict/outside-dismiss/Escape/save-lock/nested relation/AI coordination');
 } catch (error) { await page.screenshot({ path: artifact('views-failure.png') }); console.log(await page.locator('body').innerText()); throw error; } finally { await fixture.close(); }

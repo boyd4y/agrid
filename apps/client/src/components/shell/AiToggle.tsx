@@ -11,15 +11,14 @@ export function AiToggle() {
   const { aiOpen, toggleAi, recordSheetOpen } = useAppShell();
   const Icon = APP_NAVIGATION.ai.icon;
   const isAiPage = useMatch({ path: "/app", end: true });
-  if (isAiPage) return null;
+  if (isAiPage || recordSheetOpen) return null;
   return (
     <Button
       variant={aiOpen ? "secondary" : "default"}
       onClick={toggleAi}
       className={cn(
         "fixed bottom-6 right-6 z-50 h-11 gap-2 rounded-xl border border-border px-4 shadow-md",
-        !aiOpen && "border-agent/50 bg-agent text-background hover:bg-agent/90",
-        recordSheetOpen && "left-6 right-auto lg:left-auto lg:right-[calc(480px+1.5rem)]"
+        !aiOpen && "border-agent/50 bg-agent text-background hover:bg-agent/90"
       )}
       aria-label={aiOpen ? t("collapseChat") : t("openChat")}
       aria-expanded={aiOpen}

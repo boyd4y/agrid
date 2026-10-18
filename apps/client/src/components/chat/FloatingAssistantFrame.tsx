@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { AssistantModalPrimitive } from "@assistant-ui/react";
 import { useTranslation } from "react-i18next";
 import { useAppShell } from "@/context/AppShellContext";
-import { cn } from "@/lib/utils";
 export function FloatingAssistantFrame({
   floating,
   open,
@@ -19,12 +18,12 @@ export function FloatingAssistantFrame({
   if (!floating) return <>{children}</>;
   return (
     <AssistantModalPrimitive.Root
-      open={open}
+      open={open && !recordSheetOpen}
       onOpenChange={onOpenChange}
       modal={false}
       unstable_openOnRunStart={false}
     >
-      <AssistantModalPrimitive.Anchor className={cn("pointer-events-none fixed bottom-6 right-6 size-11", recordSheetOpen && "lg:right-[calc(480px+1.5rem)]")} />
+      <AssistantModalPrimitive.Anchor className="pointer-events-none fixed bottom-6 right-6 size-11" />
       <AssistantModalPrimitive.Content
         forceMount
         side="top"

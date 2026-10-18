@@ -76,18 +76,16 @@ export const DOCUMENT_SCHEMAS = {
   getDocument: z.strictObject(scope),
   createDocument: z.strictObject({ ...scope, ...write, content: documentContentSchema }),
   replaceDocument: z.strictObject({ ...scope, ...write, expectedVersion: z.number().int().nonnegative(), content: documentContentSchema }),
-  listDocumentRevisions: z.strictObject({ ...scope, beforeVersion: version.optional(), limit: z.number().int().min(1).max(50).default(20) }),
-  getDocumentRevision: z.strictObject({ ...scope, version }),
-  restoreDocumentRevision: z.strictObject({ ...scope, ...write, expectedVersion: version, version }),
-  renderDocument: z.strictObject({ ...scope, version: version.optional() }),
+  renderDocument: z.strictObject(scope),
   uploadDocumentImage: z.strictObject({ ...scope, ...write, expectedVersion: version, name: z.string().min(1).max(255), mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]), base64: z.string().min(4).max(Math.ceil(DOCUMENT_LIMITS.imageBytes / 3) * 4).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }),
   getDocumentImage: z.strictObject({ ...scope, fileId: z.uuid() }),
 } as const;
-export const DOCUMENT_COMMANDS = ["getDocument", "createDocument", "replaceDocument", "listDocumentRevisions", "getDocumentRevision", "restoreDocumentRevision", "renderDocument", "uploadDocumentImage", "getDocumentImage"] as const;
+export const DOCUMENT_COMMANDS = ["getDocument", "createDocument", "replaceDocument", "renderDocument", "uploadDocumentImage", "getDocumentImage"] as const;
 export type DocumentCommand = typeof DOCUMENT_COMMANDS[number];
-export const DOCUMENT_READ_COMMANDS: readonly DocumentCommand[] = ["getDocument", "listDocumentRevisions", "getDocumentRevision", "renderDocument", "getDocumentImage"];
+export const DOCUMENT_READ_COMMANDS: readonly DocumentCommand[] = ["getDocument", "renderDocument", "getDocumentImage"];
 export type DocumentCommands = { [K in DocumentCommand]: z.input<typeof DOCUMENT_SCHEMAS[K]> };
-export const documentPermissionSchema = z.strictObject({ tableId: z.uuid(), canRead: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canReadHistory: z.boolean(), canRestore: z.boolean(), canUpload: z.boolean() }).refine(v => v.canRead || v.canCreate || v.canUpdate || v.canReadHistory || v.canRestore || v.canUpload);
+// Legacy history flags remain parseable for persisted API Keys; no command consumes them.
+export const documentPermissionSchema = z.strictObject({ tableId: z.uuid(), canRead: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canReadHistory: z.boolean().default(false), canRestore: z.boolean().default(false), canUpload: z.boolean() }).refine(v => v.canRead || v.canCreate || v.canUpdate || v.canReadHistory || v.canRestore || v.canUpload);
 export type DocumentPermission = z.infer<typeof documentPermissionSchema>;
 export type DocumentReceipt = { id: string; version: number; schemaVersion: 1; tableId: string; rowId: string };
 export type RecordDocument = DocumentReceipt & { content: DocumentContent; updatedAt: string };
@@ -96,9 +94,6 @@ export type DocumentResults = {
   getDocument: RecordDocument | null;
   createDocument: DocumentReceipt;
   replaceDocument: DocumentReceipt;
-  listDocumentRevisions: { items: { version: number; createdAt: string; restoredFrom: number | null }[]; hasMore: boolean; nextBeforeVersion: number | null };
-  getDocumentRevision: RecordDocument;
-  restoreDocumentRevision: DocumentReceipt;
   renderDocument: { html: string; assets: DocumentImage[]; version: number; schemaVersion: 1 };
   uploadDocumentImage: DocumentImage;
   getDocumentImage: DocumentImage & { base64: string };
@@ -107,10 +102,7 @@ export const DOCUMENT_TOOLS = {
   get_document: { command: "getDocument", description: "按tableId和rowId按需读取独立正文（不存在为null），不通过query_rows读取全文。" },
   create_document: { command: "createDocument", description: "为记录创建唯一正文；schemaVersion=1，受限Tiptap JSON。最多64KiB/4000节点/12层/20图片。带幂等key，仅返回版本回执，不隐含读取权限。" },
   replace_document: { command: "replaceDocument", description: "以expectedVersion整篇替换正文；0仅在不存在时创建（另需canCreate）；409时保留草稿并重新读取，绝不覆盖。未知节点/属性及危险链接拒绝。" },
-  list_document_revisions: { command: "listDocumentRevisions", description: "分页列出正文历史元数据，最多50条；需独立历史读取授权。" },
-  get_document_revision: { command: "getDocumentRevision", description: "读取指定不可变正文历史版本，需历史读取权。" },
-  restore_document_revision: { command: "restoreDocumentRevision", description: "恢复历史正文为新版本；需CAS/幂等key及恢复和历史读取授权，原历史不变。" },
-  render_document: { command: "renderDocument", description: "读取安全静态HTML与私有图片清单；历史版本另需历史读取权。相对document-assets路径需获权读取图片后解析，不能公开私有下载凭证。" },
+  render_document: { command: "renderDocument", description: "读取当前正文的安全静态HTML与私有图片清单。相对document-assets路径需获权读取图片后解析，不能公开私有下载凭证。" },
   upload_document_image: { command: "uploadDocumentImage", description: "上传正文专属PNG/JPEG/WebP/GIF，base64不含data前缀；单图5MiB、每正文累计40文件/50MiB。需正文版本、幂等key和上传权。返回稳定fileId，无登录token。" },
   get_document_image: { command: "getDocumentImage", description: "按当前正文归属读取私有图片base64，不开放全局文件目录。需正文读取权。" },
 } as const satisfies Record<string, { command: DocumentCommand; description: string }>;

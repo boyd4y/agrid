@@ -28,8 +28,8 @@ try {
   assert(bytes > 32000 && bytes < 65536, `actual saved JSON bytes: ${bytes}`);
   assert(JSON.stringify(saved.content).includes(text));
   assert(JSON.stringify(saved.content).includes('LONGFORM_END'));
-  await modal.getByRole('button', { name: '阅读', exact: true }).click();
-  assert.equal(await body.getAttribute('contenteditable'), 'false');
+  assert.equal(await modal.getByRole('button', { name: '阅读', exact: true }).count(), 0);
+  assert.equal(await body.getAttribute('contenteditable'), 'true');
   await body.locator('p').last().scrollIntoViewIfNeeded();
   assert(await body.getByText('长文结束标记 LONGFORM_END', { exact: true }).isVisible());
   await page.screenshot({ path: f.artifact('longform-read-bottom.png'), fullPage: false });
@@ -41,15 +41,15 @@ try {
   const englishBody = modal.getByRole('textbox', { name: 'Document body', exact: true });
   await englishBody.waitFor(); assert((await englishBody.innerText()).includes('LONGFORM_END'));
   assert.equal((await command('getDocument', identity)).version, saved.version);
-  await modal.getByRole('button', { name: 'Read', exact: true }).click();
-  assert.equal(await englishBody.getAttribute('contenteditable'), 'false');
+  assert.equal(await modal.getByRole('button', { name: 'Read', exact: true }).count(), 0);
+  assert.equal(await englishBody.getAttribute('contenteditable'), 'true');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await englishBody.locator('p').last().scrollIntoViewIfNeeded();
   assert.equal(await modal.evaluate(element => element.scrollWidth > element.clientWidth + 1), false);
   await page.screenshot({ path: f.artifact('longform-read-english-mobile-dark.png'), fullPage: false });
   assert.deepEqual(f.errors, []);
-  console.log(`PASS longform: ${bytes} UTF-8 JSON bytes saved through the visual editor; read-only scrolling, refresh, independent row version, no body in row queries, English/390px/dark.`);
+  console.log(`PASS longform: ${bytes} UTF-8 JSON bytes saved through the visual editor; direct-edit scrolling, refresh, independent row version, no body in row queries, English/390px/dark.`);
 } catch (error) {
   await page.screenshot({ path: f.artifact('longform-failure.png'), fullPage: false }).catch(() => {});
   throw error;

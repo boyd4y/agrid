@@ -100,7 +100,7 @@ try {
   await keyDialog.getByRole('checkbox', { name: 'Reminder key table · Read history', exact: true }).check();
   await keyDialog.getByRole('button', { name: 'Save', exact: true }).click(); await keyDialog.waitFor({ state: 'hidden' });
   const afterDocumentEdit = (await api('/user/api-keys')).keys.find(item => item.id === record.key.id);
-  assert.deepEqual(afterDocumentEdit.documentPermissions, [{ ...documentGrants[0], canReadHistory: true }]);
+  assert.deepEqual(afterDocumentEdit.documentPermissions, [{ ...documentGrants[0], canUpload: true }]);
   for (const family of ['permissions', 'calendarPermissions', 'schedulePermissions']) assert.deepEqual(afterDocumentEdit[family], keyRecord[family]);
   await page.reload(); await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
   assert(await keyDialog.getByRole('checkbox', { name: 'Reminder key table · Read history', exact: true }).isChecked());

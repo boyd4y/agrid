@@ -1,0 +1,50 @@
+/* Adapted from ehtisham-afzal/tiptap-shadcn tiptap.css @ 84e08b1 (MIT).
+   Scoped to the editor; tabdo semantic tokens replace upstream palette variables.
+   Only supported document grammar remains. See third-party/tiptap-shadcn.LICENSE. */
+.rich-text-prose {
+  caret-color: var(--primary);
+  outline: none;
+  margin: 0 auto;
+  max-width: 100%;
+  position: relative;
+  color: var(--foreground);
+  min-height: 18rem;
+  overflow-wrap: anywhere;
+  text-rendering: optimizeLegibility;
+  font-size: 1rem;
+  line-height: 1.85;
+}
+.rich-text-prose:focus { outline: none; box-shadow: none; }
+.rich-text-prose::selection, .rich-text-prose *::selection { background-color: var(--accent); color: var(--accent-foreground); }
+.rich-text-prose p { margin: .75em 0; line-height: 1.85; }
+.rich-text-prose > :first-child { margin-top: 0; }
+.rich-text-prose > :last-child { margin-bottom: 0; }
+.rich-text-prose h1, .rich-text-prose h2, .rich-text-prose h3 {
+  font-weight: 600;
+  color: var(--foreground);
+  scroll-margin-top: 1rem;
+  line-height: 1.4;
+  text-wrap: balance;
+  margin: 1.6em 0 .5em;
+}
+.rich-text-prose h1 { font-size: 1.75rem; }
+.rich-text-prose h2 { font-size: 1.5rem; }
+.rich-text-prose h3 { font-size: 1.25rem; }
+.rich-text-prose a { color: var(--primary); cursor: pointer; text-decoration: underline; text-underline-offset: .2em; }
+.rich-text-prose code { font-family: ui-monospace, monospace; font-size: .875em; background-color: var(--muted); padding: .1em .25em; border-radius: .2rem; }
+.rich-text-prose pre { margin: 1em 0; padding: 1rem; background-color: var(--muted); border-radius: var(--radius); overflow-x: auto; border: 1px solid var(--border); white-space: pre; }
+.rich-text-prose pre code { background-color: transparent; padding: 0; border: none; font-size: .875rem; line-height: 1.7; color: var(--foreground); }
+.rich-text-prose blockquote { margin: 1em 0; padding-inline-start: 1.25em; border-inline-start: 1px solid var(--border); color: var(--muted-foreground); }
+.rich-text-prose ul, .rich-text-prose ol { margin: 1em 0; padding-inline-start: 1.5em; }
+.rich-text-prose li { margin: .35em 0; }
+.rich-text-prose li p { margin: 0; }
+.rich-text-prose ul { list-style-type: disc; }
+.rich-text-prose ul ul { list-style-type: circle; }
+.rich-text-prose ul ul ul { list-style-type: square; }
+.rich-text-prose ol { list-style-type: decimal; }
+.rich-text-prose ol ol { list-style-type: lower-alpha; }
+.rich-text-prose ol ol ol { list-style-type: lower-roman; }
+.rich-text-prose img { max-width: 100%; height: auto; border-radius: var(--radius); display: block; margin: .25rem 0; }
+.rich-text-prose hr { margin: 1.5em 0; border: none; border-top: 1px solid var(--border); }
+.rich-text-prose .ProseMirror-selectednode { outline: 2px solid var(--ring); outline-offset: 2px; }
+.rich-text-prose[contenteditable="true"]:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before { color: var(--muted-foreground); content: attr(data-placeholder); float: left; height: 0; pointer-events: none; }
