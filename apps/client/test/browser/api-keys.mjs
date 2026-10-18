@@ -98,6 +98,8 @@ try{
  await settings.getByRole('button',{name:'编辑 Cross workspace',exact:true}).click();
  const aLabel=`${current.name} (${current.id}) / Permissions fixture`;
  const bLabel=`${current.name} (${b.id}) / Permissions fixture`;
+ await dialog.getByRole('button',{name:`修改此表授权：${aLabel}`,exact:true}).click();
+ await dialog.getByRole('button',{name:`修改此表授权：${bLabel}`,exact:true}).click();
  assert(await dialog.getByRole('checkbox',{name:`${aLabel} · 读取`,exact:true}).isChecked());
  assert(await dialog.getByRole('checkbox',{name:`${bLabel} · 读取`,exact:true}).isChecked());
  await fits(); assert(await dialog.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
@@ -116,6 +118,7 @@ try{
  await settings.getByRole('button',{name:'刷新',exact:true}).click();
  await settings.getByText('另有 1 张不可用的表',{exact:true}).waitFor();
  await settings.getByRole('button',{name:'编辑 Removed target',exact:true}).click();
+ await dialog.getByRole('button',{name:`修改此表授权：不可用的表格 (${missingId})`,exact:true}).click();
  assert(await dialog.getByRole('checkbox',{name:`不可用的表格 (${missingId}) · 读取`,exact:true}).isChecked());
  const rejectedSave=page.waitForResponse(response=>response.request().method()==='PATCH'&&new URL(response.url()).pathname===`/api/user/api-keys/${emptyKey.id}`);
  await dialog.getByRole('button',{name:'保存',exact:true}).click();

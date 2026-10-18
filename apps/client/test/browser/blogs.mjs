@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { rm, readFile } from 'node:fs/promises';
 import { createBrowserFixture, artifact as artifactPath, pause } from './fixture.mjs';
 const directory = artifactPath('blog-files'), port = process.env.BROWSER_API_PORT ?? '3152';
-const fixture = await createBrowserFixture({ name: '博客浏览器作者', serverEnv: { FILE_STORAGE_DRIVER: 'local', FILE_STORAGE_LOCAL_DIR: directory, SITE_PUBLIC_ORIGIN: `http://localhost:${port}`, REDIS_URL: process.env.REDIS_URL ?? 'redis://127.0.0.1:16392', QUEUE_PREFIX: 'agrid-queue-test-blog-browser' } });
+const fixture = await createBrowserFixture({ name: '博客浏览器作者', serverEnv: { FILE_STORAGE_DRIVER: 'local', FILE_STORAGE_LOCAL_DIR: directory, SITE_PUBLIC_ORIGIN: `http://localhost:${port}`, REDIS_URL: process.env.REDIS_URL ?? 'redis://127.0.0.1:16392', QUEUE_PREFIX: process.env.QUEUE_PREFIX ?? 'agrid-queue-test-blog-browser' } });
 const { page, api, frontend, base, browser, artifact, errors } = fixture;
 page.setDefaultTimeout(15000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
@@ -123,8 +123,8 @@ try {
     assert((await client.callTool({ name: 'unpublish_blog', arguments: { siteId, expectedVersion: recalled.version, expectedPublishedRevisionId: recalled.publishedRevisionId, idempotencyKey: request() } })).isError);
   } finally { await client.close(); }
   await page.goto(frontend + '/app/settings?tab=api-keys'); await page.getByRole('button', { name: '编辑 Blog MCP', exact: true }).click();
-  await page.getByRole('dialog').getByRole('checkbox', { name: '团队手记 · 构建与分享预览', exact: true }).check(); await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  const edited = (await api('/user/api-keys')).keys.find(v => v.id === key.key.id); assert.deepEqual(edited.permissions, key.key.permissions); assert.deepEqual(edited.documentPermissions, key.key.documentPermissions); assert.deepEqual(edited.calendarPermissions, key.key.calendarPermissions); assert.deepEqual(edited.schedulePermissions, key.key.schedulePermissions); assert.equal(edited.blogPermissions[0].canBuild, true);
+  await page.getByRole('dialog').getByRole('checkbox', { name: /团队手记 · 允许发布$/, exact: true }).check(); await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  const edited = (await api('/user/api-keys')).keys.find(v => v.id === key.key.id); assert.deepEqual(edited.permissions, key.key.permissions); assert.deepEqual(edited.documentPermissions, key.key.documentPermissions); assert.deepEqual(edited.calendarPermissions, key.key.calendarPermissions); assert.deepEqual(edited.schedulePermissions, key.key.schedulePermissions); assert.equal(edited.blogPermissions[0].canBuild, true); assert.equal(edited.blogPermissions[0].canPublish, true);
   await page.goto(frontend + `/app/sites/${siteId}`); await page.getByRole('button', { name: '撤下整站', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: '确认操作', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' }); assert.equal((await fetch(blog.publicUrl)).status, 404);
   // Boundary copy must wrap in the static reader, including without JavaScript.
   await command('updateCell', { rowId: articles[1].row.id, columnId: category.id, value: 'W'.repeat(80), expectedVersion: 1 });

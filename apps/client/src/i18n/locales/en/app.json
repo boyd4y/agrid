@@ -176,8 +176,8 @@
       "name": "Name",
       "permissions": "Permissions",
       "tables": "Table",
-      "tablesHint": "Permissions apply to all records in each table. Unchecked operations are denied.",
-      "grantDescription": "Set permissions for each table.",
+      "tablesHint": "Choose tables and allowed actions by workspace, including bodies and images. Allow publishing makes content public.",
+      "grantDescription": "Grant only the resources and actions needed. Enable publishing separately.",
       "createdTitle": "API key created",
       "once": "Copy the key now. It will not be displayed again.",
       "key": "API key",
@@ -205,8 +205,24 @@
         "canRead": "Read",
         "canCreate": "Create",
         "canUpdate": "Update",
-        "canDelete": "Delete"
-      }
+        "canDelete": "Delete",
+        "canPublish": "Allow publishing"
+      },
+      "legacyPreserved": "Original access preserved: this table has permissions that differ from the unified options.",
+      "legacyConversion": "Modifying converts the current record actions and publishing permission to unified access, adds matching body and image access, and replaces this table’s original permissions. Other resources stay unchanged.",
+      "modifyTable": "Modify table access",
+      "modifyTableNamed": "Modify table access: {{name}}",
+      "recordFields": "Titles and properties",
+      "recordBody": "Bodies and images",
+      "publication": "Content publishing",
+      "otherLegacyGrants": "Additional original permissions are preserved",
+      "notGranted": "No access",
+      "granted": "Granted",
+      "otherResources": "Calendars and schedules · {{count}} granted",
+      "otherResourcesNamed": "{{name}}: calendars and schedules",
+      "calendarResource": "Calendar: {{name}}",
+      "scheduleResource": "Schedule: {{name}}",
+      "publishDescription": "Allows publishing, sharing previews, and withdrawing published content."
     },
     "generalDescription": "Adjust appearance and language."
   },

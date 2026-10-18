@@ -55,7 +55,7 @@ export async function listSiteKeys(deps: RuntimeDependencies, actor: Actor) { ma
     name: tables.name, description: tables.description, icon: tables.icon, pinned: tables.pinned, createdAt: tables.createdAt, updatedAt: tables.updatedAt,
     workspaceId: tables.workspaceId, workspaceName: workspaces.name }).from(tables).innerJoin(workspaces, eq(workspaces.id, tables.workspaceId))
     .where(eq(tables.organizationId, actor.organizationId)).orderBy(asc(workspaces.createdAt), asc(tables.createdAt)),
-    schedules: await deps.database.select({ id: automations.id, name: automations.name, workspaceName: workspaces.name }).from(automations).innerJoin(workspaces, eq(workspaces.id, automations.workspaceId)).where(and(eq(automations.organizationId, actor.organizationId), isNull(automations.deletedAt), sql`${automations.source}->>'kind' = 'schedule'`)),
+    schedules: await deps.database.select({ id: automations.id, name: automations.name, workspaceId: automations.workspaceId, workspaceName: workspaces.name }).from(automations).innerJoin(workspaces, eq(workspaces.id, automations.workspaceId)).where(and(eq(automations.organizationId, actor.organizationId), isNull(automations.deletedAt), sql`${automations.source}->>'kind' = 'schedule'`)),
     calendars: await deps.database.select({ id: calendars.id, name: calendars.name, workspaceId: calendars.workspaceId, workspaceName: workspaces.name }).from(calendars).innerJoin(workspaces, eq(workspaces.id, calendars.workspaceId)).where(eq(calendars.organizationId, actor.organizationId)).orderBy(asc(workspaces.createdAt), asc(calendars.id)) }; }
 async function grantTables(tx: Transaction, organizationId: string, tableIds: string[]) {
   if (!tableIds.length) return;

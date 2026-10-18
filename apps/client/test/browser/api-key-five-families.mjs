@@ -15,25 +15,30 @@ try {
     permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }],
     calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canTriggerAgent: true, canSubscribe: false, canReadDeliveries: false, canManageSubscriptions: false }],
     schedulePermissions: [{ automationId: plan, canRead: true, canUpdate: false }],
-    documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }],
-    blogPermissions: [{ tableId: table.id, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }],
+    documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canReadHistory: true, canRestore: true, canUpload: false }],
+    blogPermissions: [{ tableId: table.id, canRead: true, canConfigure: false, canBuild: true, canPublish: false, canRestore: true }],
   };
   const saved = (await api('/user/api-keys', input)).key;
   await page.goto(frontend + '/app/settings?tab=api-keys');
   const panel = page.getByTestId('api-keys-settings'), dialog = page.getByRole('dialog');
+  await panel.getByRole('button', { name: '编辑 Five families', exact: true }).click();
+  await dialog.getByText('保留原授权：此表的原有权限与下方统一选项不同。', { exact: true }).waitFor();
+  assert.equal(await dialog.getByRole('checkbox', { name: /Combined content/ }).count(), 0, 'legacy reads are not shown as full body/image access');
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  const original = (await api('/user/api-keys')).keys.find(item => item.id === saved.id);
+  for (const name of ['permissions', 'calendarPermissions', 'schedulePermissions', 'documentPermissions', 'blogPermissions']) assert.deepEqual(original[name], input[name]);
   const edits = [
-    ['calendarPermissions', 'canSubscribe', 'Combined calendar · 订阅事件', true],
-    ['calendarPermissions', 'canReadDeliveries', 'Combined calendar · 读取投递记录', true],
-    ['calendarPermissions', 'canManageSubscriptions', 'Combined calendar · 管理订阅', true],
-    ['blogPermissions', 'canBuild', 'Combined content · 构建与分享预览', true],
-    ['documentPermissions', 'canUpload', 'Combined content · 上传图片', true],
-    ['schedulePermissions', 'canUpdate', `${workspace.name} · Combined plan · 修改计划`, true],
-    ['permissions', 'canCreate', `${workspace.name} / Combined content · 新增`, true],
-    ['calendarPermissions', 'canTriggerAgent', 'Combined calendar · 触发智能体提醒', false],
+    ['calendarPermissions', 'canSubscribe', `${workspace.name} / Combined calendar · 订阅事件`, true],
+    ['calendarPermissions', 'canReadDeliveries', `${workspace.name} / Combined calendar · 读取投递记录`, true],
+    ['calendarPermissions', 'canManageSubscriptions', `${workspace.name} / Combined calendar · 管理订阅`, true],
+    ['schedulePermissions', 'canUpdate', `${workspace.name} / Combined plan · 修改计划`, true],
+    ['calendarPermissions', 'canTriggerAgent', `${workspace.name} / Combined calendar · 触发智能体提醒`, false],
   ];
-  // Save/reopen for every edit so hidden families must survive the full UI/HTTP round trip.
   for (const [family, operation, label, value] of edits) {
     await panel.getByRole('button', { name: '编辑 Five families', exact: true }).click();
+    assert.equal(await dialog.getByRole('checkbox', { name: label, exact: true }).count(), 0, 'other resources start collapsed');
+    await dialog.getByRole('button', { name: `${workspace.name}：日历与定时计划`, exact: true }).click();
+    if (family === 'calendarPermissions') await dialog.getByRole('button', { name: /^日历：Combined calendar/ }).click();
     await dialog.getByRole('checkbox', { name: label, exact: true }).setChecked(value);
     input = { ...input, [family]: [{ ...input[family][0], [operation]: value }] };
     await dialog.getByRole('button', { name: '保存', exact: true }).click();
@@ -41,14 +46,27 @@ try {
     const actual = (await api('/user/api-keys')).keys.find(item => item.id === saved.id);
     for (const name of ['permissions', 'calendarPermissions', 'schedulePermissions', 'documentPermissions', 'blogPermissions']) assert.deepEqual(actual[name], input[name], `${family}.${operation} preserves ${name}`);
   }
+  await panel.getByRole('button', { name: '编辑 Five families', exact: true }).click();
+  await dialog.getByRole('button', { name: `修改此表授权：${workspace.name} / Combined content`, exact: true }).click();
+  await dialog.getByRole('checkbox', { name: `${workspace.name} / Combined content · 新增`, exact: true }).check();
+  input = { ...input,
+    permissions: [{ ...input.permissions[0], canCreate: true }],
+    documentPermissions: [{ ...input.documentPermissions[0], canCreate: true, canUpdate: true, canUpload: true, canReadHistory: false, canRestore: false }],
+    blogPermissions: [{ ...input.blogPermissions[0], canConfigure: true, canBuild: false, canRestore: false }],
+  };
+  await dialog.getByRole('button', { name: '保存', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
+  const actual = (await api('/user/api-keys')).keys.find(item => item.id === saved.id);
+  for (const name of ['permissions', 'calendarPermissions', 'schedulePermissions', 'documentPermissions', 'blogPermissions']) assert.deepEqual(actual[name], input[name]);
+  assert.equal(actual.blogPermissions[0].canBuild, false); assert.equal(actual.blogPermissions[0].canPublish, false);
   await page.setViewportSize({ width: 390, height: 844 });
   await panel.getByRole('button', { name: '编辑 Five families', exact: true }).click();
-  for (const label of ['Combined calendar · 订阅事件', 'Combined calendar · 读取投递记录', 'Combined calendar · 管理订阅']) assert(await dialog.getByRole('checkbox', { name: label, exact: true }).isChecked());
-  assert.equal(await dialog.getByRole('checkbox', { name: 'Combined calendar · 触发智能体提醒', exact: true }).isChecked(), false);
+  await dialog.getByRole('button', { name: `${workspace.name}：日历与定时计划`, exact: true }).click();
+  await dialog.getByRole('button', { name: /^日历：Combined calendar/ }).click();
+  for (const label of ['订阅事件', '读取投递记录', '管理订阅']) assert(await dialog.getByRole('checkbox', { name: `${workspace.name} / Combined calendar · ${label}`, exact: true }).isChecked());
+  assert.equal(await dialog.getByRole('checkbox', { name: `${workspace.name} / Combined calendar · 触发智能体提醒`, exact: true }).isChecked(), false);
   assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
-  await dialog.getByRole('checkbox', { name: 'Combined calendar · 订阅事件', exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: f.artifact('api-key-five-families-mobile.png') });
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
   assert.deepEqual(f.errors, []);
-  console.log('PASS five-family Key browser: eight separate edits preserve all grants; outbound bits and agent triggering stay independent; mobile persisted matrix.');
+  console.log('PASS five-family Key browser: workspace resource edits preserve all grants; outbound bits and agent triggering stay independent; mobile persisted matrix.');
 } finally { await db.end(); await f.close(); }

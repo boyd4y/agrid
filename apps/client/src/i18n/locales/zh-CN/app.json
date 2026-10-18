@@ -176,8 +176,8 @@
       "name": "名称",
       "permissions": "权限",
       "tables": "表格",
-      "tablesHint": "权限覆盖表内全部记录，未勾选的操作不允许访问。",
-      "grantDescription": "按表格勾选需要开放的操作。",
+      "tablesHint": "按工作区选择表格及允许的操作，包含正文和图片。允许发布会将内容公开。",
+      "grantDescription": "只授权所需资源与操作；允许发布需单独开启。",
       "createdTitle": "API Key 已创建",
       "once": "请立即复制 Key，关闭后不会再次显示。",
       "key": "API Key",
@@ -202,8 +202,24 @@
         "canRead": "读取",
         "canCreate": "新增",
         "canUpdate": "更新",
-        "canDelete": "删除"
-      }
+        "canDelete": "删除",
+        "canPublish": "允许发布"
+      },
+      "legacyPreserved": "保留原授权：此表的原有权限与下方统一选项不同。",
+      "legacyConversion": "修改将按现有记录操作与发布权限转换为统一授权，补齐对应正文和图片能力，并替换此表原有权限。其他资源不变。",
+      "modifyTable": "修改此表授权",
+      "modifyTableNamed": "修改此表授权：{{name}}",
+      "recordFields": "标题与属性",
+      "recordBody": "正文与图片",
+      "publication": "内容发布",
+      "otherLegacyGrants": "另有原有授权保持不变",
+      "notGranted": "未授权",
+      "granted": "已授权",
+      "otherResources": "日历与定时计划 · 已授权 {{count}} 项",
+      "otherResourcesNamed": "{{name}}：日历与定时计划",
+      "calendarResource": "日历：{{name}}",
+      "scheduleResource": "定时计划：{{name}}",
+      "publishDescription": "允许通过发布或分享预览公开内容，也可撤下已发布的内容。"
     },
     "generalDescription": "调整外观和语言。"
   },
