@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { useOutletContext } from "react-router-dom";
 import { ChatPanel, type OpenPreviewPayload } from "@/components/chat/ChatPanel";
+import { previewShortcutKind } from "@/components/preview/preview-shortcuts";
 import { PreviewSlot } from "@/components/preview/PreviewSlot";
 import { getPreviewTabKey, type PreviewSlotContext, type PreviewTab } from "@/components/preview/preview-slot";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@tabdo/ui/components/resizable";
@@ -20,6 +21,7 @@ export function WorkspaceHomePage() {
   const narrow = useMediaQuery("(max-width: 767px)");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Record<string, string>>({});
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [siteRefreshTokens, setSiteRefreshTokens] = useState<Record<string, number>>({});
   const [cache, setCache] = useState<Record<string, FullTable>>({});
@@ -53,14 +55,35 @@ export function WorkspaceHomePage() {
   const openTab = useCallback((tab: PreviewTab) => {
     const key = getPreviewTabKey(tab);
     setTabs(previous => previous.some(entry => getPreviewTabKey(entry) === key) ? previous : [...previous, tab]);
+    setSelectedKeys(previous => ({ ...previous, [tab.kind]: key }));
     setActiveKey(key);
     setPreviewOpen(true);
   }, []);
 
-  const closeTab = (key: string) => {
-    const remaining = tabs.filter(tab => getPreviewTabKey(tab) !== key);
+  const openType = useCallback((kind: string) => {
+    const current = tabs.find(tab => getPreviewTabKey(tab) === selectedKeys[kind]);
+    openTab(current ?? { kind });
+  }, [tabs, selectedKeys, openTab]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const kind = previewShortcutKind(event);
+      if (!kind) return;
+      event.preventDefault();
+      openType(kind);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openType]);
+
+  const closeTab = (kind: string) => {
+    const remaining = tabs.filter(tab => tab.kind !== kind);
     setTabs(remaining);
-    if (activeKey === key) setActiveKey(remaining.length ? getPreviewTabKey(remaining[remaining.length - 1]) : null);
+    setSelectedKeys(previous => { const next = { ...previous }; delete next[kind]; return next; });
+    if (tabs.find(tab => getPreviewTabKey(tab) === activeKey)?.kind === kind) {
+      const last = remaining.at(-1);
+      setActiveKey(last ? selectedKeys[last.kind] ?? getPreviewTabKey(last) : null);
+    }
   };
 
   const createTable = async () => {
@@ -84,10 +107,12 @@ export function WorkspaceHomePage() {
     const current = tabs.find(tab => getPreviewTabKey(tab) === activeKey);
     const kind = payload.kind ?? current?.kind ?? "table";
     if (kind === "site" && payload.siteId) { openTab({ kind, siteId: payload.siteId }); setPreviewOpen(payload.open !== false); return; }
+    if (kind === "report" && payload.reportId) { openTab({ kind, reportId: payload.reportId }); setPreviewOpen(payload.open !== false); return; }
     const tableId = payload.tableId ?? (current?.kind === kind ? current.tableId : tabs.filter(tab => tab.kind === kind).at(-1)?.tableId);
     if (tableId) openTab({ kind, tableId, viewId: payload.viewId });
+    else if (payload.open !== false) openType(kind);
     setPreviewOpen(payload.open !== false);
-  }, [activeKey, tabs, openTab]);
+  }, [activeKey, tabs, openTab, openType]);
 
   useEffect(() => {
     const listener = (event: Event) => handleOpenPreview((event as CustomEvent<OpenPreviewPayload>).detail ?? {});
@@ -97,11 +122,11 @@ export function WorkspaceHomePage() {
 
   const contexts: Record<string, PreviewSlotContext> = {};
   for (const tab of tabs) contexts[getPreviewTabKey(tab)] = {
-    active: getPreviewTabKey(tab) === activeKey && previewOpen, siteId: tab.siteId, tableId: tab.tableId ?? null, viewId: tab.viewId, table: cache[tab.tableId ?? ""] ?? null,
+    active: getPreviewTabKey(tab) === activeKey && previewOpen, siteId: tab.siteId, reportId: tab.reportId, tableId: tab.tableId ?? null, viewId: tab.viewId, table: cache[tab.tableId ?? ""] ?? null,
     refreshToken: getTableRefreshToken(tab.tableId) + (siteRefreshTokens[getPreviewTabKey(tab)] ?? 0),
     setTable: (table) => setCache((previous) => ({ ...previous, [tab.tableId ?? ""]: table })),
     loading: loading[tab.tableId ?? ""] ?? !cache[tab.tableId ?? ""], error: errors[tab.tableId ?? ""] ?? null,
-    onRefresh: () => tab.kind === "site" ? setSiteRefreshTokens(previous => ({ ...previous, [getPreviewTabKey(tab)]: (previous[getPreviewTabKey(tab)] ?? 0) + 1 })) : notifyTableMutated(tab.tableId), tablesMeta: tables,
+    onRefresh: () => (tab.kind === "site" || tab.kind === "report") ? setSiteRefreshTokens(previous => ({ ...previous, [getPreviewTabKey(tab)]: (previous[getPreviewTabKey(tab)] ?? 0) + 1 })) : notifyTableMutated(tab.tableId), tablesMeta: tables,
     onSelectTable: (id) => openTab({ kind: tab.kind, tableId: id }),
     onCreateTable: () => { void createTable(); },
   };
@@ -120,7 +145,7 @@ export function WorkspaceHomePage() {
         }} className="flex h-full min-h-0 flex-col">
           <div id="workspace-preview-panel" className="h-full min-h-0 min-w-0" hidden={!previewOpen}>
             {createError && <p role="alert" className="p-3 text-sm text-destructive">{createError}</p>}
-            <PreviewSlot tabs={tabs} activeKey={activeKey} contexts={contexts} tables={tables} onOpenTab={openTab} onCloseTab={closeTab} onSelectTab={setActiveKey} onShowTables={() => setActiveKey(null)} />
+            <PreviewSlot selectedKeys={selectedKeys} onOpenType={openType} tabs={tabs} activeKey={activeKey} contexts={contexts} tables={tables} onOpenTab={openTab} onCloseTab={closeTab} onSelectTab={setActiveKey} onShowTables={() => setActiveKey(null)} />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

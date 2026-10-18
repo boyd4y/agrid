@@ -1,3 +1,6 @@
+import { OPEN_PREVIEW_SCHEMA } from "@tabdo/shared";
+import { getReport } from "../../reports/service.js";
+import { requireOrgId } from "../../tenant/scope.js";
 import { CREATE_CALENDAR_VIEW_SCHEMA, UPDATE_CALENDAR_VIEW_SCHEMA, QUERY_CALENDAR_VIEW_SCHEMA } from "@tabdo/shared";
 import { createBlogTools } from "./blogs.js";
 import { createDocumentTools } from "./documents.js";
@@ -397,31 +400,14 @@ export function createTableTools(
 
     open_preview: tool({
       description:
-        "切换右侧工作面板并展示内容。面板默认打开，可手动收起。kind=table|form|automations|site；site传siteId，form 时可传 viewId。",
-      inputSchema: zodSchema(
-        z.object({
-          kind: z
-            .string()
-            .optional()
-            .describe("工作面板种类：table、form、automations或site，默认table"),
-          siteId: z.string().uuid().optional().describe("站点ID（kind=site时）"),
-          tableId: z
-            .string()
-            .uuid()
-            .optional()
-            .describe("要预览的表格 ID；省略则用当前绑定表"),
-          viewId: z
-            .string()
-            .uuid()
-            .optional()
-            .describe("表单视图 ID（kind=form 时）"),
-          open: z
-            .boolean()
-            .optional()
-            .describe("true 打开（默认），false 关闭"),
-        })
-      ),
-      execute: async ({ kind, tableId, viewId, siteId, open }) => {
+        "切换右侧工作面板并展示内容。面板默认打开，可手动收起。kind=table|form|automations|site|report；site传siteId，report传reportId，form 时可传 viewId。",
+      inputSchema: zodSchema(OPEN_PREVIEW_SCHEMA),
+      execute: async (input) => {
+        const { kind, tableId, viewId, siteId, reportId, open } = OPEN_PREVIEW_SCHEMA.parse(input);
+        if (kind === "report") {
+          await getReport(dependencies(), reportId!, requireOrgId(organizationId), currentTransaction());
+          return { ok: true, open: open !== false, kind, reportId };
+        }
         if (kind === "site") {
           if (!siteId) throw new Error("请指定siteId");
           await getSite(dependencies(), { siteId, organizationId }, currentTransaction());

@@ -8,9 +8,9 @@ import type { FullTable } from "@/types/table";
  */
 export type PreviewSlotKind = "table" | "form" | "automations" | (string & {});
 
-export type PreviewTab = { kind: PreviewSlotKind; tableId?: string; siteId?: string; viewId?: string | null };
+export type PreviewTab = { kind: PreviewSlotKind; tableId?: string; siteId?: string; reportId?: string; viewId?: string | null };
 
-export const getPreviewTabKey = (tab: PreviewTab) => JSON.stringify([tab.kind, tab.siteId ?? null, tab.tableId ?? null, tab.viewId ?? null]);
+export const getPreviewTabKey = (tab: PreviewTab) => JSON.stringify([tab.kind, tab.siteId ?? tab.reportId ?? null, tab.tableId ?? null, tab.viewId ?? null]);
 
 /** Resource-owned details/actions rendered in the slot's single header. */
 export type PreviewSlotHeader = {
@@ -24,6 +24,7 @@ export type PreviewSlotContext = {
   onHeaderChange?: (header: PreviewSlotHeader | null) => void;
   active?: boolean;
   siteId?: string;
+  reportId?: string;
   tableId: string | null;
   /** Form view id when kind=form */
   viewId?: string | null;

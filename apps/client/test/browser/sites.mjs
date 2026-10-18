@@ -72,7 +72,7 @@ try {
   assert(readSkill); assert.equal(calls, 4);
   const workspacePreview = page.getByTestId('workspace-preview-slot');
   await workspacePreview.getByRole('link', { name: '编辑站点', exact: true }).waitFor();
-  await workspacePreview.getByRole('tab', { name: '站点 · 活动报名网站', exact: true }).waitFor();
+  await workspacePreview.getByRole('tab', { name: '站点', exact: true }).waitFor();
   assert.equal(await workspacePreview.locator('header').count(), 1);
   assert.equal(await workspacePreview.getByRole('button', { name: /刷新/ }).count(), 1);
   assert.equal(await workspacePreview.getByRole('button', { name: /打开表单|打开自动化/ }).count(), 0);

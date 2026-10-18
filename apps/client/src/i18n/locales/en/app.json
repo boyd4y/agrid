@@ -234,7 +234,7 @@
     "searchPlaceholder": "Search {{label}}"
   },
   "preview": {
-    "table": "Table",
+    "table": "Tables",
     "form": "Form",
     "automations": "Automations",
     "openTable": "Open table",
@@ -249,7 +249,19 @@
     "emptyHint": "Open a table, form, or automation from the menus above.",
     "openTabs": "Open work items",
     "closeTab": "Close {{label}} tab",
-    "noContent": "Nothing here yet"
+    "noContent": "Nothing here yet",
+    "title": "Preview",
+    "site": "Sites",
+    "report": "Reports",
+    "home": "Preview home",
+    "chooseResource": "Choose resource",
+    "selectResource": "Select resource · {{name}}",
+    "searchResources": "Search resources…",
+    "noMatches": "No matching resources",
+    "noSites": "No sites yet",
+    "noReports": "No reports yet",
+    "selectHint": "Choose a resource at the top left.",
+    "duplicateResource": "Same name {{index}}"
   },
   "automationPanel": {
     "newRule": "New rule",
