@@ -1,7 +1,7 @@
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useEffect, useState } from "react";
-import { Pin, PinOff } from "lucide-react";
+import { NiPin, NiPinOff } from "@/components/icons";
 import { TableIcon } from "@/components/table/TableIcon";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
@@ -306,7 +306,7 @@ function SidebarTable({ table, collapsed, onTogglePin }: { table: TableMeta; col
         try { await onTogglePin(table); }
         catch (error) { setError(error instanceof Error ? error.message : t("errors:pinFailed")); }
         finally { setBusy(false); }
-      }}>{table.pinned ? <PinOff /> : <Pin />}</Button>}
+      }}>{table.pinned ? <NiPinOff /> : <NiPin />}</Button>}
     </div>
     {error && <p role="alert" className="px-2 text-xs text-destructive">{error}</p>}
   </div>;

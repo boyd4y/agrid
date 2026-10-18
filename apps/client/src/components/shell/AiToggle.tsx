@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { NiChevronDown } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { Button } from "@tabdo/ui/components/button";
 import { useAppShell } from "@/context/AppShellContext";
@@ -26,7 +26,7 @@ export function AiToggle() {
       title={aiOpen ? t("collapseChatMod", { mod: "⌘" }) : t("openChatMod", { mod: "⌘" })}
       data-testid="global-ai-toggle"
     >
-      {aiOpen ? <ChevronDown className="size-4" /> : <Icon className="size-4" />}
+      {aiOpen ? <NiChevronDown className="size-4" /> : <Icon className="size-4" />}
       {t("chat")}
     </Button>
   );
