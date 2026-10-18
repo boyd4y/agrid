@@ -1,4 +1,7 @@
 {
+  "eventDirection": "事件方向",
+  "receiveEvents": "接收事件",
+  "sendEvents": "发送事件",
   "description": "连接邮箱并接收 Webhook 事件。",
   "new": "新增",
   "search": "搜索连接…",

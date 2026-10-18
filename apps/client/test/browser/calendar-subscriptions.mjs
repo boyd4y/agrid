@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createBrowserFixture, postgres, databaseUrl } from './fixture.mjs';
-const f = await createBrowserFixture({ name: '0046 Calendar subscriptions', serverEnv: { INTEGRATION_ENCRYPTION_KEY: '11'.repeat(32) } });
+const f = await createBrowserFixture({ name: '0069 Webhook calendar subscriptions', serverEnv: { INTEGRATION_ENCRYPTION_KEY: '11'.repeat(32) } });
 const { page, api, frontend } = f;
 page.setDefaultTimeout(15000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
@@ -11,8 +11,51 @@ try {
   const calendar = await command('createCalendar', { name: '订阅测试日历', timeZone: 'UTC', idempotencyKey: key() });
   const person = await command('createCalendarPerson', { calendarId: calendar.id, name: '订阅测试医生', timeZone: 'UTC', idempotencyKey: key() });
   await command('setWorkingHours', { calendarId: calendar.id, personId: person.id, expectedVersion: 1, windows: [{ day: 1, start: '00:00', end: '24:00' }], idempotencyKey: key() });
-  await page.goto(frontend + '/app/settings?tab=calendar-events');
+  await page.goto(frontend + '/app/settings?tab=general&keep=history');
+  await page.getByRole('tab', { name: '常规', exact: true }).waitFor();
+  await page.goto(frontend + '/app/settings?tab=calendar-events&keep=history');
+  await page.waitForURL(url => url.searchParams.get('tab') === 'webhook' && url.searchParams.get('direction') === 'outbound');
+  assert.equal(new URL(page.url()).searchParams.get('keep'), 'history');
+  const navigation = page.getByRole('tablist', { name: '设置分类', exact: true });
+  assert.equal(await navigation.getByRole('tab').count(), 4);
+  assert.equal(await navigation.getByRole('tab', { name: '日历事件订阅', exact: true }).count(), 0);
+  assert.equal(await navigation.getByRole('tab', { name: 'Webhook', exact: true }).getAttribute('aria-selected'), 'true');
+  const directions = page.getByRole('tablist', { name: '事件方向', exact: true });
+  assert.equal(await directions.getByRole('tab', { name: '发送事件', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.goBack();
+  await page.waitForURL(url => url.searchParams.get('tab') === 'general');
+  await page.goForward();
+  await page.waitForURL(url => url.searchParams.get('direction') === 'outbound');
+  await directions.getByRole('tab', { name: '接收事件', exact: true }).click();
+  await page.getByTestId('integrations-settings').getByRole('button', { name: '新增 Webhook', exact: true }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('keep'), 'history');
+  await page.goBack();
+  await directions.getByRole('tab', { name: '发送事件', exact: true }).waitFor();
+  await page.waitForURL(url => url.searchParams.get('direction') === 'outbound');
+  await page.goForward();
+  await page.waitForURL(url => url.searchParams.get('direction') === 'inbound');
+  await page.goto(frontend + '/app/settings?tab=webhook');
+  assert.equal(await directions.getByRole('tab', { name: '接收事件', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.goto(frontend + '/app/settings?tab=webhook&direction=outbound&keep=direct');
   const panel = page.getByTestId('calendar-subscriptions-settings');
+  // Reloads choose the first calendar; never depend on random UUID ordering.
+  async function selectPrimaryCalendar(label = '日历') {
+    const picker = panel.getByRole('combobox', { name: label, exact: true });
+    await picker.click();
+    await page.getByRole('option', { name: calendar.name, exact: true }).click();
+  }
+  await panel.getByText('暂无事件订阅', { exact: true }).waitFor();
+  assert.equal(await panel.getByRole('button', { name: '刷新', exact: true }).count(), 1);
+  assert.equal(await panel.getByRole('navigation', { name: '分页', exact: true }).count(), 0);
+  const secondCalendar = await command('createCalendar', { name: '另一个日历', timeZone: 'UTC', idempotencyKey: key() });
+  const refreshCalendars = responseFor('listCalendars'), refreshSubscriptions = responseFor('listCalendarSubscriptions');
+  await panel.getByRole('button', { name: '刷新', exact: true }).click();
+  assert.equal((await refreshCalendars).status(), 200); assert.equal((await refreshSubscriptions).status(), 200);
+  await panel.getByRole('combobox', { name: '日历', exact: true }).click();
+  await page.getByRole('option', { name: secondCalendar.name, exact: true }).click();
+  await panel.getByText('暂无事件订阅', { exact: true }).waitFor();
+  await panel.getByRole('combobox', { name: '日历', exact: true }).click();
+  await page.getByRole('option', { name: calendar.name, exact: true }).click();
   await panel.getByRole('button', { name: '新建订阅', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('名称', { exact: true }).fill('预约外发订阅');
@@ -32,8 +75,13 @@ try {
   await panel.getByText('预约外发订阅', { exact: true }).waitFor();
   const subscription = (await command('listCalendarSubscriptions', { calendarId: calendar.id })).items[0];
   assert.equal(JSON.stringify(subscription).includes(secret), false);
-  await page.reload(); await panel.getByText('预约外发订阅', { exact: true }).waitFor();
+  await page.reload(); await selectPrimaryCalendar(); await panel.getByText('预约外发订阅', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('签名密钥', { exact: true }).count(), 0);
+  await panel.getByRole('button', { name: '投递记录', exact: true }).click();
+  await dialog.getByText('暂无符合条件的投递，仅投递订阅创建后的事件。', { exact: true }).waitFor();
+  assert.equal(await dialog.getByRole('navigation', { name: '分页', exact: true }).count(), 0);
+  assert.equal(await dialog.getByRole('button', { name: '刷新', exact: true }).count(), 1);
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
   await command('createBooking', { calendarId: calendar.id, personId: person.id, title: '客户姓名不外发', time: { start: '2030-01-07T09:00:00Z', end: '2030-01-07T09:30:00Z', timeZone: 'UTC' }, idempotencyKey: key() });
   const list = await command('listCalendarDeliveries', { calendarId: calendar.id, subscriptionId: subscription.id });
   const delivery = list.items[0];
@@ -61,17 +109,24 @@ try {
   const rotated = responseFor('rotateCalendarSubscriptionSecret'); await dialog.getByRole('button', { name: '轮换签名密钥', exact: true }).click(); await rotated;
   await dialog.getByLabel('签名密钥', { exact: true }).waitFor(); assert.notEqual(await dialog.getByLabel('签名密钥', { exact: true }).inputValue(), secret);
   await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
-  // Bounded visual pass: both themes and desktop/mobile, including the creation form and history.
-  await page.screenshot({ path: f.artifact('subscriptions-desktop-light.png') });
-  await page.evaluate(() => { localStorage.setItem('table-theme', 'dark'); }); await page.reload(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
-  await page.screenshot({ path: f.artifact('subscriptions-desktop-dark.png') });
+  // One batched visual pass across desktop and narrow screens, both themes and languages.
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => { localStorage.setItem('table-theme', theme); }, theme);
+    await page.reload(); await selectPrimaryCalendar(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
+    for (const width of [1600, 390, 320]) {
+      await page.setViewportSize({ width, height: width === 1600 ? 1000 : 844 });
+      if (width < 400) await page.waitForFunction(() => document.querySelector('[data-testid=app-sidebar]')?.getBoundingClientRect().width <= 60);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.getByTestId('webhook-settings').evaluate(el => el.scrollWidth > el.clientWidth), false);
+      assert.equal(await panel.evaluate(el => el.scrollWidth > el.clientWidth), false);
+      assert.equal(await panel.getByRole('button', { name: '刷新', exact: true }).count(), 1);
+      await page.screenshot({ path: f.artifact(`subscriptions-${width}-${theme}.png`) });
+    }
+  }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForFunction(() => document.querySelector('[data-testid=app-sidebar]')?.getBoundingClientRect().width <= 60);
-  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  assert.equal(await panel.evaluate(el => el.scrollWidth > el.clientWidth), false);
   await panel.getByRole('button', { name: '编辑', exact: true }).click();
   assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth), false);
-  await page.screenshot({ path: f.artifact('subscriptions-mobile-dark.png') });
+  await page.screenshot({ path: f.artifact('subscriptions-form-mobile-dark.png') });
   await dialog.getByRole('button', { name: '关闭', exact: true }).first().click(); await dialog.waitFor({ state: 'hidden' });
   await panel.getByRole('button', { name: '投递记录', exact: true }).click();
   await dialog.getByRole('button').filter({ hasText: delivery.id }).click();
@@ -79,12 +134,58 @@ try {
   assert.equal(await dialog.evaluate(el => el.scrollWidth > el.clientWidth), false);
   await page.screenshot({ path: f.artifact('subscription-history-mobile-dark.png') });
   await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
+  await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en'));
+  await page.reload(); await selectPrimaryCalendar('Calendar');
+  await page.getByRole('tab', { name: 'Send events', exact: true }).waitFor();
+  await panel.getByText('Send calendar change notifications to your HTTPS endpoint.', { exact: true }).waitFor();
+  await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
+  await page.screenshot({ path: f.artifact('subscriptions-mobile-en-dark.png') });
+  await page.evaluate(() => localStorage.setItem('tabdo.locale', 'zh-CN'));
+  await page.reload(); await selectPrimaryCalendar(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
   await page.setViewportSize({ width: 1600, height: 1000 });
   await panel.getByRole('button', { name: '撤销订阅', exact: true }).click();
   const revoked = responseFor('revokeCalendarSubscription'); await page.getByRole('alertdialog').getByRole('button', { name: '撤销订阅', exact: true }).click(); await revoked;
   await panel.getByText('已撤销', { exact: true }).waitFor();
   assert.equal((await command('getCalendarSubscription', { calendarId: calendar.id, subscriptionId: subscription.id })).status, 'revoked');
-  assert.equal(new URL(page.url()).searchParams.get('tab'), 'calendar-events');
+  assert.equal(new URL(page.url()).searchParams.get('tab'), 'webhook');
+  assert.equal(new URL(page.url()).searchParams.get('direction'), 'outbound');
+  assert.equal(new URL(page.url()).searchParams.get('keep'), 'direct');
+  // Calendar selection and archived guards remain scoped to the chosen calendar.
+  await panel.getByRole('combobox', { name: '日历', exact: true }).click();
+  await page.getByRole('option', { name: secondCalendar.name, exact: true }).click();
+  await panel.getByText('暂无事件订阅', { exact: true }).waitFor();
+  assert.equal(await panel.getByText('已编辑预约订阅', { exact: true }).count(), 0);
+  await command('archiveCalendar', { calendarId: secondCalendar.id, expectedVersion: secondCalendar.version, idempotencyKey: key() });
+  await panel.getByRole('button', { name: '刷新', exact: true }).click();
+  await panel.locator('button:disabled', { hasText: '新建订阅' }).waitFor();
+  assert.equal(await panel.getByRole('button', { name: '新建订阅', exact: true }).isDisabled(), true);
+  // A failed list load stays recoverable from the sole refresh action.
+  let failList = true;
+  const listFailure = async route => {
+    if (failList && route.request().postDataJSON()?.command === 'listCalendarSubscriptions') { failList = false; await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ code: 'SERVICE_UNAVAILABLE' }) }); }
+    else await route.fallback();
+  };
+  await page.route('**/api/commands', listFailure);
+  await panel.getByRole('button', { name: '刷新', exact: true }).click();
+  await panel.getByRole('button', { name: '重新加载', exact: true }).waitFor();
+  await panel.getByRole('button', { name: '重新加载', exact: true }).click();
+  await panel.getByText('暂无事件订阅', { exact: true }).waitFor();
+  await page.unroute('**/api/commands', listFailure);
+  const currentWorkspace = (await command('getWorkspace', {})).workspace;
+  const otherWorkspace = await command('createWorkspace', { name: '订阅隔离工作区' });
+  await page.goto(frontend + '/app/settings?tab=webhook&direction=outbound&workspace=' + otherWorkspace.id);
+  await panel.getByText('请先创建日历', { exact: true }).waitFor();
+  assert.equal(await panel.getByRole('combobox').count(), 0);
+  await page.goto(frontend + '/app/settings?tab=webhook&direction=outbound&workspace=' + currentWorkspace.id);
+  await panel.getByRole('combobox', { name: '日历', exact: true }).waitFor();
+  await panel.getByRole('combobox', { name: '日历', exact: true }).click();
+  await page.getByRole('option', { name: calendar.name, exact: true }).click();
+  await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
+  await db`update member set role='member' where organization_id=${f.organizations[0]} and user_id=${f.users[0]}`;
+  await page.reload();
+  await panel.getByText('仅企业所有者和管理员可在此管理出站订阅。', { exact: true }).waitFor();
+  assert.equal(await panel.getByRole('button', { name: '新建订阅', exact: true }).count(), 0);
+  assert.equal(await panel.getByRole('combobox').count(), 0);
   assert.deepEqual(f.errors, []);
   console.log('CALENDAR_SUBSCRIPTIONS_BROWSER_PASS', JSON.stringify({ subscriptionId: subscription.id, deliveryId: delivery.id, screenshots: f.artifact('') }));
 } finally { await db.end(); await f.close(); }

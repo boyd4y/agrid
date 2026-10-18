@@ -1,4 +1,4 @@
-import { CalendarSubscriptionsSettings } from "@/components/settings/CalendarSubscriptionsSettings";
+import { WebhookSettings } from "@/components/settings/WebhookSettings";
 import { workspaceCacheKey } from "@/lib/workspace-scope";
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -25,23 +25,24 @@ export function SettingsPage() {
     { id: "general", label: t("settings.tabs.general"), icon: Settings2 },
     ...(user && user.kind !== "agent" ? [{ id: "api-keys", label: t("settings.tabs.apiKeys"), icon: KeyRound }] : []),
     { id: "agentmail", label: "AgentMail", icon: Mail },
-    { id: "calendar-events", label: t("calendar:subscriptions.title"), icon: Webhook },
     { id: "webhook", label: "Webhook", icon: Webhook },
   ];
   const requestedTab = searchParams.get("tab") ?? "general";
-  const normalizedTab = requestedTab === "integrations" ? "agentmail" : requestedTab === "site-api" ? "api-keys" : requestedTab;
+  const normalizedTab = requestedTab === "integrations" ? "agentmail" : requestedTab === "site-api" ? "api-keys" : requestedTab === "calendar-events" ? "webhook" : requestedTab;
   const activeTab = tabs.some(tab => tab.id === normalizedTab) ? normalizedTab : "general";
   useEffect(() => {
     if (isPending || requestedTab === activeTab) return;
     setSearchParams(current => {
       const next = new URLSearchParams(current);
       next.set("tab", activeTab);
+      if (requestedTab === "calendar-events") next.set("direction", "outbound");
       return next;
     }, { replace: true });
   }, [isPending, requestedTab, activeTab, setSearchParams]);
   const changeTab = (value: string) => setSearchParams(current => {
     const next = new URLSearchParams(current);
     next.set("tab", value);
+    next.delete("direction");
     return next;
   });
   const locale = (i18n.language?.startsWith("en") ? "en" : "zh-CN") as AppLocale;
@@ -85,8 +86,12 @@ export function SettingsPage() {
         </TabsContent>
         {user && user.kind !== "agent" && <TabsContent value="api-keys" className={paneClass}><ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} /></TabsContent>}
         <TabsContent value="agentmail" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:agentmail`} kind="agentmail" /></TabsContent>
-        <TabsContent value="calendar-events" className={paneClass}><CalendarSubscriptionsSettings key={workspaceCacheKey()} /></TabsContent>
-        <TabsContent value="webhook" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:webhook`} kind="webhook" /></TabsContent>
+        <TabsContent value="webhook" className={paneClass}><WebhookSettings key={workspaceCacheKey()} direction={requestedTab === "calendar-events" ? "outbound" : searchParams.get("direction") === "outbound" ? "outbound" : "inbound"} onDirectionChange={direction => setSearchParams(current => {
+          const next = new URLSearchParams(current);
+          next.set("tab", "webhook");
+          next.set("direction", direction);
+          return next;
+        })} /></TabsContent>
       </Tabs>
     </Card>
   </AppPage>;

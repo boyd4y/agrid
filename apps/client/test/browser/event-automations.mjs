@@ -120,7 +120,8 @@ try {
   await page.getByRole('button', { name: wizardConnection.name, exact: true }).waitFor();
   await settingsTabs.getByRole('tab', { name: 'Webhook', exact: true }).click();
   await page.getByTestId('integrations-empty').waitFor();
-  await page.getByTestId('integrations-settings').getByRole('heading', { name: 'Webhook', level: 3, exact: true }).waitFor();
+  await page.getByTestId('webhook-settings').getByRole('heading', { name: 'Webhook', level: 3, exact: true }).waitFor();
+  assert.equal(await page.getByRole('tab', { name: '接收事件', exact: true }).getAttribute('aria-selected'), 'true');
   await page.getByTestId('integrations-settings').getByText('接收外部事件，更新数据或运行智能体。', { exact: true }).waitFor();
   assert.equal(await page.getByTestId('integrations-settings').getByRole('button', { name: '新增 Webhook', exact: true }).count(), 1, 'empty webhook settings have exactly one creation action');
   await page.getByRole('button', { name: '新增 Webhook', exact: true }).click();
@@ -149,6 +150,16 @@ try {
   const editDialog = page.getByTestId('integration-edit-dialog');
   await assertCentered(editDialog, editDialog.getByRole('button', { name: '保存', exact: true }));
   assert.equal(await editDialog.getByLabel('令牌', { exact: true }).count(), 0, 'one-time token is not recovered on reopen');
+  endpoint.name = 'Browser edited incoming hook';
+  await editDialog.getByLabel('名称', { exact: true }).fill(endpoint.name);
+  const savedEndpoint = page.waitForResponse(response => response.url().endsWith('/api/webhook-endpoints/' + endpoint.id) && response.request().method() === 'PATCH');
+  await editDialog.getByRole('button', { name: '保存', exact: true }).click();
+  assert.equal((await savedEndpoint).status(), 200);
+  assert.equal((await api('/webhook-endpoints')).endpoints.find(item => item.id === endpoint.id).name, endpoint.name);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: endpoint.name, exact: true }).click();
+  assert.equal(await editDialog.getByLabel('名称', { exact: true }).inputValue(), endpoint.name);
+  assert.equal(await editDialog.getByLabel('令牌', { exact: true }).count(), 0);
   await page.keyboard.press('Escape');
   const secondEndpoint = (await api('/webhook-endpoints', { name: 'Browser second hook' })).endpoint;
   await page.getByTestId('integrations-toolbar').getByRole('button', { name: '刷新', exact: true }).click();
@@ -273,5 +284,5 @@ try {
   await page.getByText('Browser deep link persisted reply', { exact: true }).waitFor();
   assert.equal(attemptedMissingHistory, false, 'an invalid deep link is rejected before switching the SDK thread');
   assert.deepEqual(errors, []);
-  console.log('PASS event automation UI: navigation without dot+selected background, two rounded hook rows+gap+hover/focus/destructive feedback, centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, four left settings tabs without inner tabs/search+illustrated empty/error states, one-time webhook token, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint 400 retry retains draft, schedule/event filtering before pagination, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
+  console.log('PASS event automation UI: navigation without dot+selected background, two rounded hook rows+gap+hover/focus/destructive feedback, centered integration create/edit dialogs+320/700 visible footers, real mail connection create with mocked mailbox API+failure retries without duplicate POST, four left settings tabs+Webhook receive/send navigation+illustrated empty/error states, one-time webhook token+real endpoint edit save/reopen, registered AgentMail hooks persist/reopen/status/delete cancel, endpoint 400 retry retains draft, schedule/event filtering before pagination, webhook event binding/conditions persistence, external rule runs Sheet, narrow cancel, previous-step binding, invalid JSON save protection, schema-action computed-column target recovery, SDK deep-link history+missing ownership guard; no screenshots/models');
 } finally { await fixture.close(); }

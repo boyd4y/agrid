@@ -53,7 +53,7 @@ export function IntegrationsPage({ kind }: { kind: "agentmail" | "webhook" }) {
   const content = <>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <CardTitle>{kind === "agentmail" ? "AgentMail" : "Webhook"}</CardTitle>
+        {kind === "agentmail" && <CardTitle>AgentMail</CardTitle>}
         <CardDescription>{t(kind === "agentmail" ? "mailPurpose" : "webhookPurpose")}</CardDescription>
         {!loading && !error && items.length > 0 && <p className="text-xs text-muted-foreground">{t("count", { count: items.length })}</p>}
       </div>

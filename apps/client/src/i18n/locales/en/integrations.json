@@ -1,4 +1,7 @@
 {
+  "eventDirection": "Event direction",
+  "receiveEvents": "Receive events",
+  "sendEvents": "Send events",
   "description": "Connect mail and receive webhook events.",
   "new": "New",
   "search": "Search connections…",
