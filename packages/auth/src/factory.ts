@@ -44,6 +44,17 @@ export function assertProductionAuthSecret(raw: string | undefined): string {
   return secret;
 }
 
+export type GoogleAuthCredentials = { clientId: string; clientSecret: string };
+
+export function isGoogleAuthConfigured(google?: GoogleAuthCredentials): boolean {
+  return Boolean(google?.clientId.trim() && google?.clientSecret.trim());
+}
+
+export function resolveSocialProviders(google?: GoogleAuthCredentials): BetterAuthOptions["socialProviders"] {
+  if (!google || !isGoogleAuthConfigured(google)) return undefined;
+  return { google: { clientId: google.clientId.trim(), clientSecret: google.clientSecret.trim() } };
+}
+
 export function createAuth(options: {
   database: Parameters<typeof drizzleAdapter>[0];
   appUrl: string;
@@ -51,6 +62,7 @@ export function createAuth(options: {
   secret: string;
   production: boolean;
   hooks?: BetterAuthOptions["hooks"];
+  google?: GoogleAuthCredentials;
   sendInviteEmail: (input: { to: string; organizationName: string; inviterName: string; inviteLink: string }) => Promise<unknown>;
 }) {
   if (!options.secret.trim()) throw new Error("Missing authentication secret");
@@ -74,6 +86,9 @@ export function createAuth(options: {
         invitation: schema.invitation,
       },
     }),
+    socialProviders: resolveSocialProviders(options.google),
+    // Trusted Google identities link to existing same-email password accounts.
+    account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
