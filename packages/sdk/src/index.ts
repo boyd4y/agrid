@@ -2,6 +2,7 @@ import type { BlogCommand, BlogCommands, BlogResults } from "@tabdo/shared";
 import type { DocumentCommand, DocumentCommands, DocumentResults } from "@tabdo/shared";
 import type { CalendarCommand, CalendarCommands, CalendarResults } from "@tabdo/shared";
 import type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteCreateReceipt } from "@tabdo/shared";
+export type { DocumentContent, DocumentNode, DocumentMark, DocumentCommands, DocumentResults } from "@tabdo/shared";
 export type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteFile, SiteCreateReceipt } from "@tabdo/shared";
 
 export class TabdoApiError extends Error {

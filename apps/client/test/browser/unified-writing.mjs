@@ -20,7 +20,7 @@ try {
   const panel = page.getByTestId('related-record-panel'); await body(panel).waitFor();
   assert.equal(await panel.locator('[data-rich-text-editor]').count(), 1);
   assert.equal(await panel.getByRole('button', { name: '启用正文', exact: true }).count(), 0);
-  assert.equal(await panel.getByRole('button', { name: '正文', exact: true }).count(), 0);
+  assert.equal(await panel.getByTestId('editor-toolbar').count(), 1);
   assert.equal(await command('getDocument', identity), null, 'opening does not create a document');
   assert.equal(await panel.getByRole('textbox', { name: title.name, exact: true }).count(), 1);
   // No debounce wait: normal close must flush both independent saves without a decision dialog.

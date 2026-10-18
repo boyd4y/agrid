@@ -3,6 +3,22 @@ Commit: 84e08b1f77ea4d0a80f5bcb498935ecee40aa95b
 Registry: https://tiptap-shadcn.vercel.app/r/basic.json
 Attribution: Ehtisham Afzal and contributors.
 
+Adapted source: registry/basic/components/rich-text-editor.tsx,
+toolbars/{editor-toolbar,toolbar-provider,headings,alignment,color-and-highlight,
+search-and-replace-toolbar,bold,italic,underline,strikethrough,code,code-block,
+blockquote,bullet-list,ordered-list,undo,redo}.tsx,
+extensions/{floating-menu,search-and-replace}.tsx and tiptap.css.
+Registry snapshot was read via shadcn CLI; its files are not claimed to be a
+byte-for-byte copy of the pinned Git commit.
+
+Adaptations: Tiptap 3 APIs and safe state subscriptions, shared shadcn controls,
+semantic theme tokens, bilingual labels, one horizontally scrolling toolbar on all widths,
+IME-safe non-focus-stealing slash menu with collision handling, bounded safe
+hex colors and alignment, literal search across marks with atomic replacement,
+and application-owned private-image callback (no external URL/base64 node).
+The heading contract remains H1-H3. Upstream H4 is not in tabdo's document schema.
+No general shared UI controls were overwritten.
+
 Upstream README declares MIT; that commit contains no separate LICENSE file.
 The MIT terms applicable to these adapted components follow:
 

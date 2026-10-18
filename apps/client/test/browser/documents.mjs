@@ -36,9 +36,9 @@ try {
   await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor();
   assert(JSON.stringify((await command('getDocument', identity)).content).includes('中文输入法'));
   console.log("stage IME committed");
-  await page.keyboard.press('Enter'); await modal.getByRole('button', { name: '插入/格式', exact: true }).click(); await page.getByRole('dialog', { name: '正文排版' }).getByLabel('标题 2', { exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('可视化标题');
+  await page.keyboard.press('Enter'); await modal.getByTestId('editor-toolbar').getByRole('button', { name: '正文', exact: true }).click(); await page.getByRole('menuitem', { name: '标题 2', exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('可视化标题');
   await page.keyboard.press('Enter'); await page.keyboard.type('正文段落');
-  await page.keyboard.press('Enter'); await modal.getByRole('button', { name: '插入/格式', exact: true }).click(); await page.getByRole('dialog', { name: '正文排版' }).getByLabel('无序列表', { exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('列表一');
+  await page.keyboard.press('Enter'); await modal.getByTestId('editor-toolbar').getByRole('button', { name: '无序列表', exact: true }).click(); await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容'); await page.keyboard.insertText('列表一');
   await page.keyboard.press('Enter'); await page.keyboard.insertText('列表二'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
   await page.evaluate(() => { window.__documentXss = false; });
   await body.evaluate(element => {

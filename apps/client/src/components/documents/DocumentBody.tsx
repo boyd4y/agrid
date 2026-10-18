@@ -128,7 +128,13 @@ export default function DocumentBody(scope: Scope) {
   };
   const backToDraft = () => { editor?.commands.setContent(content.current, { emitUpdate: false }); setPreview(null); };
   const uploadOnce = async (file?: File) => {
-    if (!file || doc === undefined || inFlight.current || dirty.current) { setError(t("saveBeforeImage")); return; }
+    if (!file) return;
+    if (doc === undefined || conflicted.current || composing.current) { setError(t("saveBeforeImage")); return; }
+    // The slash prefix was removed immediately before opening the existing file picker.
+    // Drain that edit through the same CAS/idempotent save path before authorizing the upload.
+    if (saveFlight.current && !await saveFlight.current) return;
+    while (dirty.current) { if (!await save()) return; }
+    if (inFlight.current) { setError(t("saveBeforeImage")); return; }
     if (file.size > 5 * 1024 * 1024) { setError(t("imageBudget")); return; }
     setBusy(true); inFlight.current = true; setError("");
     try {
@@ -164,7 +170,7 @@ export default function DocumentBody(scope: Scope) {
   };
   useEffect(() => { scope.onStateChange?.({ dirty: dirty.current, busy: busy || inFlight.current, status }); }, [tick, busy, status, scope.onStateChange]);
   const toolbarDisabled = busy || !!preview || doc === undefined;
-  const labels: RichTextLabels = { insertFormat: t("insertFormat"), formatting: t("formatting"), selectionFormatting: t("selectionFormatting"), bold: t("bold"), italic: t("italic"), heading: level => t("heading", { level }), bulletList: t("bulletList"), orderedList: t("orderedList"), quote: t("quote"), codeBlock: t("codeBlock"), link: t("link"), image: t("image"), undo: t("undo"), redo: t("redo"), close: t("close"), linkHint: t("linkHint"), url: t("url"), applyLink: t("applyLink"), removeLink: t("removeLink") };
+  const labels: RichTextLabels = { paragraph: t("paragraph"), underline: t("underline"), strike: t("strike"), code: t("code"), horizontalRule: t("horizontalRule"), alignment: t("alignment"), colorHighlight: t("colorHighlight"), color: t("color"), highlight: t("highlight"), defaultColor: t("defaultColor"), searchReplace: t("searchReplace"), search: t("search"), replaceWith: t("replaceWith"), replace: t("replace"), replaceAll: t("replaceAll"), previousMatch: t("previousMatch"), nextMatch: t("nextMatch"), matchCase: t("matchCase"), slashCommands: t("slashCommands"), noResults: t("noResults"), basicBlocks: t("basicBlocks"), inline: t("inline"), align: value => t(value), colorName: name => t(`colors.${name}`), commandDescription: key => t(`commands.${key}`), insertFormat: t("insertFormat"), formatting: t("formatting"), selectionFormatting: t("selectionFormatting"), bold: t("bold"), italic: t("italic"), heading: level => t("heading", { level }), bulletList: t("bulletList"), orderedList: t("orderedList"), quote: t("quote"), codeBlock: t("codeBlock"), link: t("link"), image: t("image"), undo: t("undo"), redo: t("redo"), close: t("close"), linkHint: t("linkHint"), url: t("url"), applyLink: t("applyLink"), removeLink: t("removeLink") };
   const actions = <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={t("more")}><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuGroup>
     {scope.onRefresh && <DropdownMenuItem disabled={scope.refreshDisabled} onSelect={scope.onRefresh}><RefreshCw />{t("table:refreshRecord")}</DropdownMenuItem>}
     {!scope.embedded && <DropdownMenuItem disabled={busy || status === "saving" || !dirty.current || status === "conflict"} onSelect={() => void save()}>{t("save")}</DropdownMenuItem>}
@@ -178,7 +184,7 @@ export default function DocumentBody(scope: Scope) {
     {doc === undefined ? <div className="flex flex-col gap-4 py-8"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" />{error && <Button variant="outline" onClick={() => setLoadRevision(v => v + 1)}>{t("table:retry")}</Button>}</div> : <>
       {preview && <div className="flex flex-wrap items-center gap-2 py-3"><p className="mr-auto text-sm">{t("comparingServer")}</p><Button variant="outline" size="sm" disabled={busy} onClick={backToDraft}>{t("backToDraft")}</Button></div>}
       {pasteNotice && <div role="status" className="flex items-center gap-2 py-2 text-xs text-muted-foreground"><p className="flex-1">{t("pasteNotice")}</p><Button variant="ghost" size="sm" onClick={() => setPasteNotice(false)}>{t("dismiss")}</Button></div>}
-      <RichTextEditor editor={editor} labels={labels} disabled={toolbarDisabled} isAllowedUri={safeDocumentLink} onImage={() => fileInput.current?.click()} imageDisabled={dirty.current || status === "saving" || status === "conflict"} imageSources={images} actions={actions} />
+      <RichTextEditor editor={editor} labels={labels} disabled={toolbarDisabled} isAllowedUri={safeDocumentLink} onImage={() => fileInput.current?.click()} imageDisabled={status === "conflict"} imageSources={images} actions={actions} />
       {busy && <p role="status" className="text-xs text-muted-foreground">{t("uploading")}</p>}
     </>}
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent closeLabel={t("close")}><DialogHeader><DialogTitle>{t("writingHelp")}</DialogTitle><DialogDescription>{t("budget")}</DialogDescription></DialogHeader><p className="text-sm text-muted-foreground">{t("draftRetained")}</p></DialogContent></Dialog>

@@ -451,3 +451,17 @@ test("granted Key SDK writes use the non-default blog workspace rather than ambi
   }
   assert.deepEqual((await call("getBlog", { siteId: blog.id }, targetDeps)).config.articles, []);
 });
+
+test("formatted documents survive blog preview and explicit publication without widening image or link access", async () => {
+  const { saved, ids } = await fixture(1);
+  const content: DocumentContent = { type: "doc", content: [{ type: "heading", attrs: { level: 2, textAlign: "right" }, content: [{ type: "text", text: "Formatted article", marks: [{ type: "underline" }, { type: "textStyle", attrs: { color: "#337ea9" } }, { type: "highlight", attrs: { color: "#fdecc8" } }] }] }, { type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "Private destination", marks: [{ type: "link", attrs: { href: "https://example.test/private?token=private" } }, { type: "underline" }] }] }] };
+  await executeDocument(a, who as any, "replaceDocument", { tableId, rowId: ids[0], expectedVersion: 1, content, idempotencyKey: k() });
+  const built = await build(saved);
+  const preview = await call("createBlogPreview", { siteId: built.id, buildId: built.revisionId, idempotencyKey: k() });
+  const previewHtml = await (await app.request(new URL("articles/article-0.html", preview.url).href)).text();
+  assert(previewHtml.includes('style="color:#337ea9"')); assert(previewHtml.includes('<u>Formatted article</u>'));
+  assert(preview); assert.equal((await page(built)).status, 404, "building does not publish");
+  const published = await publish(built), html = await (await page(published, "articles/article-0.html")).text();
+  assert(html.includes('style="text-align:right"')); assert(html.includes('<u>Formatted article</u>')); assert(html.includes('style="color:#337ea9"')); assert(html.includes('style="background-color:#fdecc8;color:inherit"')); assert(html.includes('<p style="text-align:center">')); assert(!html.includes('href="https://example.test/private?token=private"'));
+  assert.deepEqual((await executeDocument(a, who as any, "getDocument", { tableId, rowId: ids[0] }))!.content, content);
+});

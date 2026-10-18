@@ -31,3 +31,16 @@ test("current body is the only public document capability; old history flags onl
   assert.deepEqual(documentPermissionSchema.parse(grant), { ...grant, canReadHistory: false, canRestore: false });
   assert(documentPermissionSchema.safeParse({ ...grant, canReadHistory: true, canRestore: true }).success);
 });
+
+test("formatting grammar preserves underline, alignment and safe hex ink/highlights while rejecting style injection", () => {
+  const formatted = (marks: unknown[], attrs: unknown = { textAlign: "center" }) => body({ type: "paragraph", attrs, content: [{ type: "text", text: "格式", marks }] });
+  assert(documentContentSchema.safeParse(formatted([{ type: "bold" }, { type: "italic" }, { type: "underline" }, { type: "strike" }, { type: "textStyle", attrs: { color: "#337eA9" } }, { type: "highlight", attrs: { color: "#fdecc8" } }, { type: "link", attrs: { href: "https://example.com" } }])).success);
+  for (const textAlign of [null, "left", "center", "right", "justify"]) assert(documentContentSchema.safeParse(formatted([], { textAlign })).success);
+  for (const type of ["textStyle", "highlight"]) {
+    assert.equal(documentContentSchema.safeParse(formatted([{ type, attrs: { color: null } }])).success, type === "highlight");
+    for (const color of ["red", "#fff", "#12345678", "var(--x)", "url(https://evil.test)", "#123456;color:red", "rgb(1,2,3)", { color: "#123456" }, "#123456\n"]) assert(!documentContentSchema.safeParse(formatted([{ type, attrs: { color } }])).success, `${type}: ${JSON.stringify(color)}`);
+    assert(!documentContentSchema.safeParse(formatted([{ type, attrs: { color: "#123456", style: "background:url(x)" } }])).success);
+  }
+  for (const textAlign of ["start", "center;position:fixed", "CENTER", {}, 1]) assert(!documentContentSchema.safeParse(formatted([], { textAlign })).success);
+  assert(!documentContentSchema.safeParse(formatted([{ type: "underline", attrs: {} }])).success);
+});
