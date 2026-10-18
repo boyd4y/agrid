@@ -38,6 +38,12 @@ try {
   assert.equal(await directions.getByRole('tab', { name: '接收事件', exact: true }).getAttribute('aria-selected'), 'true');
   await page.goto(frontend + '/app/settings?tab=webhook&direction=outbound&keep=direct');
   const panel = page.getByTestId('calendar-subscriptions-settings');
+  // Reloads choose the first calendar; never depend on random UUID ordering.
+  async function selectPrimaryCalendar(label = '日历') {
+    const picker = panel.getByRole('combobox', { name: label, exact: true });
+    await picker.click();
+    await page.getByRole('option', { name: calendar.name, exact: true }).click();
+  }
   await panel.getByText('暂无事件订阅', { exact: true }).waitFor();
   assert.equal(await panel.getByRole('button', { name: '刷新', exact: true }).count(), 1);
   assert.equal(await panel.getByRole('navigation', { name: '分页', exact: true }).count(), 0);
@@ -69,7 +75,7 @@ try {
   await panel.getByText('预约外发订阅', { exact: true }).waitFor();
   const subscription = (await command('listCalendarSubscriptions', { calendarId: calendar.id })).items[0];
   assert.equal(JSON.stringify(subscription).includes(secret), false);
-  await page.reload(); await panel.getByText('预约外发订阅', { exact: true }).waitFor();
+  await page.reload(); await selectPrimaryCalendar(); await panel.getByText('预约外发订阅', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('签名密钥', { exact: true }).count(), 0);
   await panel.getByRole('button', { name: '投递记录', exact: true }).click();
   await dialog.getByText('暂无符合条件的投递，仅投递订阅创建后的事件。', { exact: true }).waitFor();
@@ -106,7 +112,7 @@ try {
   // One batched visual pass across desktop and narrow screens, both themes and languages.
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => { localStorage.setItem('table-theme', theme); }, theme);
-    await page.reload(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
+    await page.reload(); await selectPrimaryCalendar(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
     for (const width of [1600, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1600 ? 1000 : 844 });
       if (width < 400) await page.waitForFunction(() => document.querySelector('[data-testid=app-sidebar]')?.getBoundingClientRect().width <= 60);
@@ -129,13 +135,13 @@ try {
   await page.screenshot({ path: f.artifact('subscription-history-mobile-dark.png') });
   await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
   await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en'));
-  await page.reload();
+  await page.reload(); await selectPrimaryCalendar('Calendar');
   await page.getByRole('tab', { name: 'Send events', exact: true }).waitFor();
   await panel.getByText('Send calendar change notifications to your HTTPS endpoint.', { exact: true }).waitFor();
   await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
   await page.screenshot({ path: f.artifact('subscriptions-mobile-en-dark.png') });
   await page.evaluate(() => localStorage.setItem('tabdo.locale', 'zh-CN'));
-  await page.reload(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
+  await page.reload(); await selectPrimaryCalendar(); await panel.getByText('已编辑预约订阅', { exact: true }).waitFor();
   await page.setViewportSize({ width: 1600, height: 1000 });
   await panel.getByRole('button', { name: '撤销订阅', exact: true }).click();
   const revoked = responseFor('revokeCalendarSubscription'); await page.getByRole('alertdialog').getByRole('button', { name: '撤销订阅', exact: true }).click(); await revoked;
@@ -151,7 +157,7 @@ try {
   assert.equal(await panel.getByText('已编辑预约订阅', { exact: true }).count(), 0);
   await command('archiveCalendar', { calendarId: secondCalendar.id, expectedVersion: secondCalendar.version, idempotencyKey: key() });
   await panel.getByRole('button', { name: '刷新', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('[data-testid=calendar-subscriptions-settings] button')?.disabled === false);
+  await panel.locator('button:disabled', { hasText: '新建订阅' }).waitFor();
   assert.equal(await panel.getByRole('button', { name: '新建订阅', exact: true }).isDisabled(), true);
   // A failed list load stays recoverable from the sole refresh action.
   let failList = true;
