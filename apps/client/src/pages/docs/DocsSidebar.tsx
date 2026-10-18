@@ -17,6 +17,7 @@ export function DocsMobileNav() {
   const { t, i18n } = useTranslation("docs");
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const [q, setQ] = useState("");
   const nav = docsNav(i18n.language);
   const current =
     pathname === "/docs" ||
@@ -25,76 +26,81 @@ export function DocsMobileNav() {
       : "/docs";
 
   return (
-    <div className="mb-6 space-y-3 lg:hidden">
-      <DocsSearch />
-      <Select
-        value={current}
-        onValueChange={(v) => {
-          if (v) navigate(v);
-        }}
-      >
-        <SelectTrigger aria-label={t("tocAria")}>
-          <SelectValue placeholder={t("browse")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="/docs">{t("welcomeNav")}</SelectItem>
-          {nav.map((section) =>
-            section.pages.map((p) => (
-              <SelectItem key={p.slug} value={`/docs/${p.slug}`}>
-                {section.title} · {p.title}
-              </SelectItem>
-            ))
-          )}
+    <div className="mb-6 flex flex-col gap-3 lg:hidden">
+      <DocsSearch q={q} onQueryChange={setQ} />
+      {q.trim() ? <DocsSearchResults q={q} /> : (
+        <Select
+          value={current}
+          onValueChange={(v) => {
+            if (v) navigate(v);
+          }}
+        >
+          <SelectTrigger aria-label={t("tocAria")}>
+            <SelectValue placeholder={t("browse")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="/docs">{t("welcomeNav")}</SelectItem>
+            {nav.map((section) =>
+              section.pages.map((p) => (
+                <SelectItem key={p.slug} value={`/docs/${p.slug}`}>
+                  {section.title} · {p.title}
+                </SelectItem>
+              ))
+            )}
         </SelectContent>
       </Select>
-    </div>
-  );
-}
-
-function DocsSearch({ className }: { className?: string }) {
-  const { t, i18n } = useTranslation("docs");
-  const [q, setQ] = useState("");
-  const results = useMemo(() => searchDocs(q, i18n.language), [q, i18n.language]);
-
-  return (
-    <div className={cn("relative", className)}>
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("searchPlaceholder")}
-          className="h-9 pl-8 text-sm"
-          aria-label={t("searchAria")}
-          data-testid="docs-search"
-        />
-      </div>
-      {q.trim() && (
-        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-border bg-background py-1 shadow-[0_8px_24px_rgba(55,53,47,0.08)]">
-          {results.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">{t("noMatches")}</p>
-          ) : (
-            results.map((p) => (
-              <Link
-                key={p.slug}
-                to={`/docs/${p.slug}`}
-                onClick={() => setQ("")}
-                className="block px-3 py-2 hover:bg-accent"
-              >
-                <div className="text-sm font-medium text-foreground">{p.title}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {p.description}
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
       )}
     </div>
   );
 }
 
+function DocsSearch({ q, onQueryChange }: { q: string; onQueryChange: (q: string) => void }) {
+  const { t } = useTranslation("docs");
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={q}
+        onChange={(e) => onQueryChange(e.target.value)}
+        placeholder={t("searchPlaceholder")}
+        className="h-9 pl-8 text-sm"
+        aria-label={t("searchAria")}
+        data-testid="docs-search"
+      />
+    </div>
+  );
+}
+
+function DocsSearchResults({ q }: { q: string }) {
+  const { t, i18n } = useTranslation("docs");
+  const { pathname } = useLocation();
+  const results = useMemo(() => searchDocs(q, i18n.language), [q, i18n.language]);
+  return (
+    <nav aria-label={t("tocAria")}>
+      {results.length === 0 ? (
+        <p role="status" className="px-2 py-2 text-xs text-muted-foreground">{t("noMatches")}</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {results.map((p) => (
+            <li key={p.slug}>
+              <Link
+                to={`/docs/${p.slug}`}
+                aria-current={pathname === `/docs/${p.slug}` ? "page" : undefined}
+                className="block rounded-md px-2 py-2 hover:bg-accent aria-[current=page]:bg-accent"
+              >
+                <div className="text-sm font-medium text-foreground">{p.title}</div>
+                <div className="text-xs text-muted-foreground">{p.description}</div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </nav>
+  );
+}
+
 export function DocsSidebar() {
+  const [q, setQ] = useState("");
   const { t, i18n } = useTranslation("docs");
   const { pathname } = useLocation();
   const nav = docsNav(i18n.language);
@@ -102,46 +108,50 @@ export function DocsSidebar() {
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
       <div className="sticky top-20 max-h-[calc(100vh-6rem)] space-y-6 overflow-y-auto pb-8 pr-2 text-sm">
-        <DocsSearch />
-        <Link
-          to="/docs"
-          className={cn(
-            "block rounded-md px-2 py-1.5 font-medium",
-            pathname === "/docs"
-              ? "bg-accent text-foreground"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
-          )}
-        >
-          {t("home")}
-        </Link>
-        {nav.map((section) => (
-          <div key={section.id}>
-            <p className="mb-1.5 px-2 text-[11px] font-semibold tracking-wide text-muted-foreground">
-              {section.title}
-            </p>
-            <ul className="space-y-0.5">
-              {section.pages.map((p) => {
-                const to = `/docs/${p.slug}`;
-                const active = pathname === to;
-                return (
-                  <li key={p.slug}>
-                    <Link
-                      to={to}
-                      className={cn(
-                        "block rounded-md px-2 py-1.5",
-                        active
-                          ? "bg-accent font-medium text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      )}
-                    >
-                      {p.title}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+        <DocsSearch q={q} onQueryChange={setQ} />
+        {q.trim() ? <DocsSearchResults q={q} /> : (
+          <>
+            <Link
+              to="/docs"
+              className={cn(
+                "block rounded-md px-2 py-1.5 font-medium",
+                pathname === "/docs"
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              {t("home")}
+            </Link>
+            {nav.map((section) => (
+              <div key={section.id}>
+                <p className="mb-1.5 px-2 text-[11px] font-semibold tracking-wide text-muted-foreground">
+                  {section.title}
+                </p>
+                <ul className="space-y-0.5">
+                  {section.pages.map((p) => {
+                    const to = `/docs/${p.slug}`;
+                    const active = pathname === to;
+                    return (
+                      <li key={p.slug}>
+                        <Link
+                          to={to}
+                          className={cn(
+                            "block rounded-md px-2 py-1.5",
+                            active
+                              ? "bg-accent font-medium text-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                          )}
+                        >
+                          {p.title}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </aside>
   );

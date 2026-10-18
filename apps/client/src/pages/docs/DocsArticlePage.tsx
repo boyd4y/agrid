@@ -23,7 +23,7 @@ export function DocsArticlePage() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-56"
         style={{
           background:
-            "radial-gradient(ellipse 50% 80% at 80% 0%, #F1E3B7 0%, transparent 55%)",
+            "radial-gradient(ellipse 50% 80% at 80% 0%, var(--tabdo-yellow-soft) 0%, transparent 55%)",
         }}
       />
       <div className="mx-auto max-w-6xl px-4 py-12">

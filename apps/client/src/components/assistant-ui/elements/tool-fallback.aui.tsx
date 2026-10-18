@@ -176,7 +176,7 @@ function ToolFallbackTrigger({
         className={cn(
           "aui-tool-fallback-trigger-icon size-4 shrink-0",
           isCancelled && "text-muted-foreground",
-          isRunning && "animate-spin [animation-duration:0.6s]",
+          isRunning && "animate-spin motion-reduce:animate-none [animation-duration:0.6s]",
         )}
       />
       <span
@@ -598,7 +598,7 @@ function ToolFallbackApprovalQuestions({
           >
             <p className="aui-tool-fallback-approval-question-prompt text-foreground whitespace-pre-line">
               {question.header ? (
-                <span className="text-muted-foreground me-1.5 text-xs font-medium uppercase">
+                <span className="text-muted-foreground me-1.5 text-xs font-medium">
                   {question.header}
                 </span>
               ) : null}

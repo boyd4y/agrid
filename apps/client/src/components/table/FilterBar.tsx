@@ -169,7 +169,7 @@ export function FilterBar({
                     className="flex flex-wrap items-center gap-1.5"
                   >
                     {idx > 0 ? (
-                      <span className="w-8 text-center text-[10px] font-medium uppercase text-muted-foreground">
+                      <span className="w-8 text-center text-[10px] font-medium text-muted-foreground">
                         {filterLogic}
                       </span>
                     ) : (

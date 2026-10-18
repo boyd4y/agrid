@@ -20,14 +20,14 @@ export const FORM_THEME_PRESET_META: Record<
   { label: string; tokens: ResolvedFormTheme }
 > = {
   "notion-light": {
-    label: "Notion Light",
+    label: "Tabdo Light",
     tokens: {
       background: "#F7F6F3",
       question: "#37352F",
       answer: "#37352F",
-      button: "#2383E2",
+      button: "#1769b7",
       buttonText: "#FFFFFF",
-      accent: "#2383E2",
+      accent: "#1769b7",
       radius: "md",
       font: "sans",
     },

@@ -196,3 +196,62 @@ export function NiMoreHorizontal(props: IconProps) {
     </Ni>
   );
 }
+
+export function NiMessage(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <path d="M6 4.5h12a2.5 2.5 0 0 1 2.5 2.5v9a2.5 2.5 0 0 1-2.5 2.5H9l-5.5 3V7A2.5 2.5 0 0 1 6 4.5Z" {...s} />
+    </Ni>
+  );
+}
+
+export function NiGlobe(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <circle cx="12" cy="12" r="8.5" {...s} />
+      <ellipse cx="12" cy="12" rx="3.5" ry="8.5" {...s} />
+      <path d="M3.5 12h17" {...s} />
+    </Ni>
+  );
+}
+
+export function NiPlug(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <path d="M8 3.5V8m8-4.5V8M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v3.5" {...s} />
+    </Ni>
+  );
+}
+
+export function NiClock(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <circle cx="12" cy="12" r="8.5" {...s} />
+      <path d="M12 7v5l3.5 2" {...s} />
+    </Ni>
+  );
+}
+
+export function NiChevronDown(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <path d="m6 9.5 6 5.5 6-5.5" {...s} />
+    </Ni>
+  );
+}
+
+export function NiPin(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <path d="m9 4 9 9-3 1-2 4-7-7 4-2-1-5ZM9.5 14.5 4 20" {...s} />
+    </Ni>
+  );
+}
+
+export function NiPinOff(props: IconProps) {
+  return (
+    <Ni {...props}>
+      <path d="m3.5 3.5 17 17M10 5l-1-1 9 9-3 1M7 10l-1 1 7 7 1-2M9.5 14.5 4 20" {...s} />
+    </Ni>
+  );
+}

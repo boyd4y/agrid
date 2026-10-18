@@ -1,4 +1,4 @@
-import { NiChevronRight } from "@/components/icons";
+import { NiChevronDown } from "@/components/icons";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -31,7 +31,7 @@ export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
             <span className="text-sm font-semibold tracking-tight">{BRAND.name}</span>
             <span className="w-full truncate text-left text-xs text-muted-foreground">{busy ? t("workspaces.switching") : current.name}</span>
           </span>
-          <NiChevronRight className="rotate-90" />
+          <NiChevronDown  />
         </>}
         {busy && <span role="status" className="sr-only">{t("workspaces.switching")}</span>}
       </Button></DropdownMenuTrigger>

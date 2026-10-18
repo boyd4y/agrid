@@ -94,7 +94,7 @@ export function AgentEditorPage() {
   return <AppPage contentWidth="standard" header={<AppPageHeader page="agents" title={agentId ? editing?.name ?? t("editAgent") : t("createAgent")} >
     <Button variant="ghost" size="sm" disabled={busy || avatarProcessing} onClick={() => navigate("/app/agents")}><ArrowLeft data-icon="inline-start" />{t("backToList")}</Button>
   </AppPageHeader>}>
-    {loading ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />{t("loadingConfig")}</p>
+    {loading ? <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin motion-reduce:animate-none" />{t("loadingConfig")}</p>
       : !ready ? <div className="flex flex-col items-center gap-3"><FieldError>{createError}</FieldError><Button variant="outline" onClick={() => setRetry((n) => n + 1)}><RefreshCw data-icon="inline-start" />{t("common:retry")}</Button></div>
       : !canManage ? <p className="text-sm text-muted-foreground">{t("adminOnly")}</p>
       : <Card padding="none" className="@container/agent-editor w-full min-w-0 shrink-0 overflow-hidden" data-testid="agent-editor">
@@ -149,7 +149,7 @@ export function AgentEditorPage() {
                   <Button type="button" variant="outline" disabled={busy || avatarProcessing} onClick={() => navigate("/app/agents")}><X data-icon="inline-start" />{t("cancel")}</Button>
                   {!agentId && stepIndex > 0 && <Button type="button" variant="outline" onClick={() => setSection(steps[stepIndex - 1].id)}><ArrowLeft data-icon="inline-start" />{t("prev")}</Button>}
                   <Button type="submit" disabled={busy || avatarProcessing || !basicValid || (Boolean(agentId) && !dirty)}>
-                    {busy ? <Loader2 data-icon="inline-start" className="animate-spin" /> : agentId ? <Save data-icon="inline-start" /> : section !== "tools" ? <ArrowRight data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
+                    {busy ? <Loader2 data-icon="inline-start" className="animate-spin motion-reduce:animate-none" /> : agentId ? <Save data-icon="inline-start" /> : section !== "tools" ? <ArrowRight data-icon="inline-start" /> : <Plus data-icon="inline-start" />}
                     {busy ? t("saving") : agentId ? t("saveChanges") : section !== "tools" ? t("next") : t("createAgent")}
                   </Button>
                 </div>

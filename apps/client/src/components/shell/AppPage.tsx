@@ -16,7 +16,7 @@ export function AppPage({ className, header, contentWidth = "full", children, ..
   return (
     <div
       className={cn(
-        "h-full min-h-0 min-w-0 w-full flex-1 overflow-auto px-6 py-10 md:px-10",
+        "h-full min-h-0 min-w-0 w-full flex-1 overflow-auto px-6 py-6 md:px-10",
         contentWidth === "standard" && "mx-auto max-w-5xl",
         className
       )}

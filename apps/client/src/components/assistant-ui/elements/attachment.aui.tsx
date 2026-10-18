@@ -210,7 +210,7 @@ const AttachmentUI: FC = () => {
                     aria-hidden="true"
                     className="aui-attachment-tile-uploading bg-background/60 animate-in fade-in-0 absolute inset-0 flex items-center justify-center backdrop-blur-[2px] motion-reduce:animate-none"
                   >
-                    <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+                    <Loader2Icon className="text-muted-foreground size-4 animate-spin motion-reduce:animate-none" />
                   </div>
                 )}
                 {isError && (
@@ -242,7 +242,7 @@ const AttachmentRemove: FC<{ name: string }> = ({ name }) => {
     <AttachmentPrimitive.Remove asChild>
       <TooltipIconButton
         tooltip={`Remove ${name}`}
-        className="aui-attachment-tile-remove absolute end-1 top-1 size-5 rounded-full bg-black/50! text-white after:absolute after:-inset-1.5 hover:bg-black/70! hover:text-white! active:scale-[0.96] motion-reduce:transition-none"
+        className="aui-attachment-tile-remove absolute end-1 top-1 size-5 rounded-full bg-popover! text-popover-foreground ring-1 ring-border after:absolute after:-inset-1.5 hover:bg-accent! hover:text-accent-foreground! active:scale-[0.96] motion-reduce:transition-none"
         side="top"
       >
         <XIcon className="aui-attachment-remove-icon size-3 stroke-[2.5]" />

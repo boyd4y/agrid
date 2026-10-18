@@ -1,7 +1,6 @@
 import { BookOpen, Monitor, Cloud, X } from "lucide-react";
 import type { SkillSummary, SandboxProvider, RuntimeProviderStatus } from "@tabdo/shared";
 import { Field, FieldGroup, FieldLabel, FieldDescription } from "@tabdo/ui/components/field";
-import { Card, CardHeader, CardTitle, CardDescription } from "@tabdo/ui/components/card";
 import { Button } from "@tabdo/ui/components/button";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
@@ -84,13 +83,13 @@ export function AgentSkillFields({ skills, selected, onChange, disabled }: {
       <FieldDescription>{t("skillsSelected", { count: chosen.length })}</FieldDescription>
       <SkillPicker skills={skills} selected={chosen.map((skill) => skill.name)} onChange={onChange} disabled={disabled} />
     </div>
-    {chosen.map((skill) => <Card key={skill.id} variant="flat" padding="sm" data-testid={`agent-selected-skill-${skill.name}`}>
-      <CardHeader className="mb-0 flex-row items-start gap-3">
+    {chosen.length > 0 && <ul className="divide-y divide-border">{chosen.map((skill) => <li key={skill.id} className="py-3" data-testid={`agent-selected-skill-${skill.name}`}>
+      <div className="flex items-start gap-3">
         <BookOpen className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <div className="flex min-w-0 flex-1 flex-col gap-2"><CardTitle>{skill.name}</CardTitle><CardDescription>{skill.description}</CardDescription></div>
+        <div className="flex min-w-0 flex-1 flex-col gap-2"><h3 className="text-sm font-medium">{skill.name}</h3><p className="text-sm text-muted-foreground">{skill.description}</p></div>
         <Button type="button" size="icon" variant="ghost" disabled={disabled} aria-label={t("removeSkill", { name: skill.name })} onClick={() => onChange(selected.filter((name) => name !== skill.name))}><X data-icon="inline-start" /></Button>
-      </CardHeader>
-    </Card>)}
+      </div>
+    </li>)}</ul>}
     {!chosen.length && <FieldDescription>{skills.some((skill) => skill.enabled) ? t("noSkillsYet") : t("noSkillsEnabled")}</FieldDescription>}
   </div>;
 }

@@ -1,7 +1,7 @@
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useEffect, useState } from "react";
-import { Pin, PinOff } from "lucide-react";
+import { NiPin, NiPinOff } from "@/components/icons";
 import { TableIcon } from "@/components/table/TableIcon";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import {
@@ -87,7 +87,7 @@ function NavItem({
           base,
           collapsed && "justify-center px-2",
           active
-            ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border"
+            ? "bg-card font-medium text-foreground ring-1 ring-border"
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
         );
       }}
@@ -124,7 +124,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r border-border bg-muted transition-[width] duration-200 ease-out",
+        "flex h-full shrink-0 flex-col border-r border-border bg-muted transition-[width] motion-reduce:transition-none duration-200 ease-out",
         sidebarCollapsed ? "w-[56px]" : "w-[240px]"
       )}
       data-testid="app-sidebar"
@@ -190,7 +190,7 @@ export function AppSidebar({ tables, onCreateTable, tablesLoading, onTogglePin }
           {!sidebarCollapsed && (
             <div className="mb-1 flex items-center justify-between px-2.5">
               <button type="button" onClick={() => setTablesExpanded((expanded) => !expanded)} aria-expanded={tablesExpanded} aria-controls="sidebar-my-tables" className="flex items-center gap-1 rounded py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground">
-                <NiChevronRight className={cn("size-3 transition-transform", tablesExpanded && "rotate-90")} />{t("shell.myTables")}
+                <NiChevronRight className={cn("size-3 transition-transform motion-reduce:transition-none", tablesExpanded && "rotate-90")} />{t("shell.myTables")}
               </button>
               <button
                 type="button"
@@ -298,7 +298,7 @@ function SidebarTable({ table, collapsed, onTogglePin }: { table: TableMeta; col
   const [error, setError] = useState<string | null>(null);
   return <div>
     <div className="group relative">
-      <Link to={`/app/tables/${table.id}`} title={table.name} data-testid={`sidebar-table-${table.id}`} className={cn(SIDEBAR_ROW, "w-full", collapsed ? "justify-center px-2" : "pr-9", location.pathname.includes(table.id) ? "bg-card font-medium text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
+      <Link to={`/app/tables/${table.id}`} title={table.name} data-testid={`sidebar-table-${table.id}`} className={cn(SIDEBAR_ROW, "w-full", collapsed ? "justify-center px-2" : "pr-9", location.pathname.includes(table.id) ? "bg-card font-medium text-foreground ring-1 ring-border" : "text-muted-foreground hover:bg-accent hover:text-foreground")}>
         <TableIcon name={table.icon} className={SIDEBAR_ICON} />{!collapsed && <span className="truncate">{table.name}</span>}
       </Link>
       {!collapsed && <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 size-6 -translate-y-1/2 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100" disabled={busy} title={table.pinned ? t("shell.unpinFromWorkspace") : t("shell.pinToWorkspace")} aria-label={`${table.pinned ? t("shell.unpin") : t("shell.pin")}${table.name}`} onClick={async () => {
@@ -306,7 +306,7 @@ function SidebarTable({ table, collapsed, onTogglePin }: { table: TableMeta; col
         try { await onTogglePin(table); }
         catch (error) { setError(error instanceof Error ? error.message : t("errors:pinFailed")); }
         finally { setBusy(false); }
-      }}>{table.pinned ? <PinOff /> : <Pin />}</Button>}
+      }}>{table.pinned ? <NiPinOff /> : <NiPin />}</Button>}
     </div>
     {error && <p role="alert" className="px-2 text-xs text-destructive">{error}</p>}
   </div>;

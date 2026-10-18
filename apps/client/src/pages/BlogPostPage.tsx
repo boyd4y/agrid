@@ -37,7 +37,7 @@ export function BlogPostPage() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64"
         style={{
           background:
-            "radial-gradient(ellipse 50% 80% at 30% 0%, var(--tabdo-purple-soft) 0%, transparent 60%), radial-gradient(ellipse 40% 60% at 80% 10%, var(--tabdo-yellow-soft) 0%, transparent 50%)",
+            "radial-gradient(ellipse 50% 80% at 30% 0%, var(--tabdo-purple-soft) 0%, transparent 60%)",
         }}
       />
       <div className="mx-auto max-w-3xl px-4 py-14">
@@ -48,7 +48,7 @@ export function BlogPostPage() {
           <ArrowLeft className="h-3.5 w-3.5" /> {t("blog.back")}
         </Link>
 
-        <div className="mb-8 overflow-hidden rounded-2xl border border-border bg-muted shadow-sm">
+        <div className="mb-8 overflow-hidden rounded-xl border border-border bg-muted">
           <BlogCover id={post.cover} className="aspect-[16/9] w-full" />
         </div>
 
@@ -64,7 +64,7 @@ export function BlogPostPage() {
           {post.title}
         </h1>
         <p className="mt-3 text-muted-foreground">{post.excerpt}</p>
-        <div className="mt-8 space-y-4 rounded-2xl border border-border bg-background/80 p-6 text-[15px] leading-7 text-foreground shadow-sm backdrop-blur sm:p-8">
+        <div className="mt-8 space-y-4 rounded-xl border border-border bg-background p-6 text-[15px] leading-7 text-foreground sm:p-8">
           {post.body.map((para, i) => (
             <p key={i}>{para}</p>
           ))}

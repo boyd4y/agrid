@@ -84,17 +84,17 @@ export const blogPosts: BlogPost[] = [
   },
   {
     slug: "notion-style-workspace",
-    title: "Notion-Style Workspace Without the Toy Table",
+    title: "A Document-Style Workspace with Capable Tables",
     excerpt:
       "Quiet typography, soft illustrations, and a left rail that stays out of the way of the grid.",
     date: "2026-09-20",
     author: "tabdo Team",
     category: "Design",
-    tags: ["design", "Notion"],
+    tags: ["design", "workspace"],
     cover: "notion-style-workspace",
     coverImage: "/blog-covers/notion-style-workspace.svg",
     body: [
-      "Visual language follows Notion: warm paper backgrounds, #37352f body text, light borders, almost no drop shadows.",
+      "The workspace uses warm paper backgrounds, ink-colored body text, light borders, and almost no drop shadows.",
       "Marketing, docs, blog, and the signed-in shell share one illustration skill and shadcn tokens so dark mode does not invent a second brand.",
       "The app chrome is a slim left rail; AI sits in a right drawer so the table keeps the width it needs.",
     ],

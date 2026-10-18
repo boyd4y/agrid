@@ -30,7 +30,7 @@ export function BlogPage() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72"
         style={{
           background:
-            "radial-gradient(ellipse 60% 80% at 70% 0%, var(--tabdo-green-soft) 0%, transparent 60%), radial-gradient(ellipse 50% 60% at 20% 20%, var(--tabdo-yellow-soft) 0%, transparent 55%)",
+            "radial-gradient(ellipse 60% 80% at 70% 0%, var(--tabdo-green-soft) 0%, transparent 60%)",
         }}
       />
       <div className="mx-auto max-w-5xl px-4 py-14">
@@ -48,7 +48,7 @@ export function BlogPage() {
               type="button"
               onClick={() => setCat(c)}
               className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium transition",
+                "rounded-full border px-3 py-1 text-xs font-medium transition motion-reduce:transition-none",
                 cat === c
                   ? "border-foreground bg-foreground text-background"
                   : "border-border bg-background text-muted-foreground hover:text-foreground"
@@ -64,12 +64,12 @@ export function BlogPage() {
             <li key={p.slug}>
               <Link
                 to={`/blog/${p.slug}`}
-                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/90 shadow-sm transition hover:border-foreground/20 hover:shadow-md"
+                className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-background/90 transition motion-reduce:transition-none hover:border-foreground/20"
               >
                 <div className="aspect-[16/9] w-full overflow-hidden border-b border-border bg-muted">
                   <BlogCover
                     id={p.cover}
-                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                    className="h-full w-full object-cover transition motion-reduce:transition-none duration-300 group-hover:scale-[1.02] motion-reduce:group-hover:scale-100"
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-5">
