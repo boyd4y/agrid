@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ImagePlus, Loader2, UserPlus, X, Send, RefreshCw, Save } from "lucide-react";
+import { ImagePlus, Loader2, UserPlus, X, Send, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
 import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Badge } from "@tabdo/ui/components/badge";
 import { Input } from "@tabdo/ui/components/input";
 import { Field, FieldLabel, FieldGroup, FieldError } from "@tabdo/ui/components/field";
@@ -89,7 +90,7 @@ export function MembersPage() {
   useEffect(() => pagination.resetPage(), [query, pagination.resetPage]);
   return <Dialog open={showInvite} onOpenChange={(open) => { if (!busy) setShowInvite(open); }}>
     <AppPage contentWidth="standard" data-testid="members-page" className="items-center" header={<AppPageHeader page="members" description={<>{t("members.descriptionBefore")}<Link to="/app/agents" className="underline underline-offset-2">{t("members.descriptionLink")}</Link>{t("members.descriptionAfter")}</>}>
-      <Button variant="ghost" size="icon" aria-label={t("members.refreshAria")} disabled={loading} onClick={() => void refresh()}><RefreshCw data-icon="inline-start" /></Button>{invite}
+      <DataRefreshButton label={t("members.refreshAria")} disabled={loading} onRefresh={() => void refresh()} />{invite}
     </AppPageHeader>}>
       <MemberDirectory label={t("nav.members")} count={members.length} query={query} onQueryChange={setQuery} loading={loading} error={loadError} onRetry={() => void refresh()}
         pagination={visible.length > 0 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}

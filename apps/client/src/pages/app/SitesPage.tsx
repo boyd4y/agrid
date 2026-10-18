@@ -1,10 +1,11 @@
 import { BlogCreateDialog } from "@/components/sites/BlogCreateDialog";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Globe, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Globe, Plus, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SiteSummary } from "@tabdo/shared";
 import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Input } from "@tabdo/ui/components/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@tabdo/ui/components/dialog";
 import { Field, FieldLabel } from "@tabdo/ui/components/field";
@@ -44,7 +45,7 @@ export function SitesPage() {
     } catch(e) { setFormError((e as Error).message); } finally { setSaving(false); }
   }
   const action = <Button onClick={openCreate}><Plus data-icon="inline-start" />{t("create")}</Button>;
-  return <AppPage contentWidth="standard" className="gap-5" header={<AppPageHeader page="sites" description={t("description")}><Button variant="ghost" size="icon" aria-label={t("refresh")} disabled={loading} onClick={() => void load()}><RefreshCw /></Button><Button variant="outline" onClick={() => setBlogCreate(true)}>{t("blogs:create")}</Button>{action}</AppPageHeader>}>
+  return <AppPage contentWidth="standard" className="gap-5" header={<AppPageHeader page="sites" description={t("description")}><DataRefreshButton label={t("refresh")} disabled={loading} onRefresh={() => void load()} /><Button variant="outline" onClick={() => setBlogCreate(true)}>{t("blogs:create")}</Button>{action}</AppPageHeader>}>
     {sites.length > 0 && <div className="relative max-w-sm"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label={t("search")} placeholder={t("search")} value={search} onChange={event => { setSearch(event.target.value); pagination.resetPage(); }} className="pl-9" /></div>}
     {error ? <ListErrorState title={t("loadFailed")} description={error} onRetry={() => void load()} /> : loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p>
       : !sites.length ? <AppEmptyState illustration={NOTIOLY.painting} title={t("emptyTitle")} description={t("emptyDescription")} action={action} />

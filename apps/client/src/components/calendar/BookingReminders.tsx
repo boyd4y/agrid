@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { Booking, BookingReceipt, BookingReminder, CalendarResults } from "@tabdo/shared";
 import { calendarCommand } from "@/lib/calendar-api";
 import { useMemberOptions } from "@/hooks/useMemberOptions";
 import { Button } from "@tabdo/ui/components/button";
+import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Input } from "@tabdo/ui/components/input";
 import { Textarea } from "@tabdo/ui/components/textarea";
 import { Badge } from "@tabdo/ui/components/badge";
@@ -44,7 +45,7 @@ export function BookingReminders({ booking, disabled, onPending, onSaved }: Prop
   const valid = configuration.every(item => item.agentUserId && item.prompt.trim() && item.maxLatenessMinutes >= 1 && item.maxLatenessMinutes <= 1440 && (item.kind === "at_end" || item.offsetMinutes > 0 && item.offsetMinutes <= 43200));
   return <section className="flex flex-col gap-4 p-4" data-testid="booking-reminders">
     <Separator />
-    <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-medium">{t("reminders.title")}</h3><Button type="button" variant="ghost" size="icon" aria-label={t("reminders.refresh")} disabled={pending || loading || disabled} onClick={() => setRevision(value => value + 1)}><RefreshCw /></Button></div>
+    <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-medium">{t("reminders.title")}</h3><DataRefreshButton label={t("reminders.refresh")} disabled={pending || loading || disabled} onRefresh={() => setRevision(value => value + 1)} /></div>
     <p className="text-xs text-muted-foreground">{t("reminders.boundary")}</p>
     {loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p> : <form noValidate onSubmit={save} className="flex flex-col gap-4" aria-busy={pending}>
       <fieldset disabled={pending || disabled || booking.status !== "confirmed"} className="flex min-w-0 flex-col gap-4">
