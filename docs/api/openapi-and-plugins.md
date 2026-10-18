@@ -6,7 +6,7 @@ Fetch the public OpenAPI 3.1 document at `GET /api/openapi.json`, for example:
 curl https://YOUR_TABDO_ORIGIN/api/openapi.json
 ```
 
-The maintained source is `apps/server/src/business/http/openapi.ts`. It uses full `/api/...` paths with server URL `/` (the deployment origin). It covers table listing and metadata, row pagination and filtered queries, row create/read/update/delete, and the table record commands at `POST /api/commands`. Request and response schemas describe column-ID cell maps, cursors, limits (default 50, maximum 100), mutation receipts, and `{ error: string }` errors. Keep this source aligned when changing the routes.
+The maintained source is `apps/server/src/business/http/openapi.ts`. It uses full `/api/...` paths with server URL `/` (the deployment origin). It covers table listing and metadata, row pagination and filtered queries, row create/read/update/delete, and the table record commands at `POST /api/commands`. Request and response schemas describe column-ID cell maps, cursors, limits (default 50, maximum 100), mutation receipts, and `{ error: string }` errors. Keep this source aligned when changing the routes. The published OpenAPI is a curated subset of the table Site API and commands and may lag the full command surface; see [site-api.md](site-api.md) for authoritative details.
 
 GraphQL is available separately at `POST /api/graphql`; its full schema and calendar, document, and blog operations are outside this document. See [the data API guide](site-api.md).
 
