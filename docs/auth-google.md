@@ -14,4 +14,6 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the server, alongside the e
 
 Both credentials must be non-empty after trimming. Missing or incomplete configuration disables Google sign-in and hides the button without preventing startup. The SPA reads the public `/api/public/auth-features` endpoint; failed requests also hide the button.
 
-Google is a trusted account-linking provider. Better Auth automatically links a Google identity to an existing same-email user under its account-linking defaults, rather than creating a duplicate password account. Its existing email ownership and verification checks remain enabled. New OAuth users receive a workspace through the existing authenticated route's organization initializer.
+Google is NOT a trusted auto-link provider while password emails are unverified. Account linking remains enabled under Better Auth defaults for verified ownership. Password signup does not currently require email verification. Operators who later implement email verification may reconsider `trustedProviders`.
+
+New OAuth users receive a workspace through the existing authenticated route's organization initializer.

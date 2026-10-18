@@ -25,7 +25,7 @@ test("createAuth optionally configures Google without connecting to a database",
       google,
     });
     assert.deepEqual(auth.options.socialProviders, resolveSocialProviders(google));
-    assert.deepEqual(auth.options.account?.accountLinking, { enabled: true, trustedProviders: ["google"] });
+    assert.deepEqual(auth.options.account?.accountLinking, { enabled: true });
     assert.deepEqual(auth.options.trustedOrigins, ["http://localhost:5173", "http://localhost:5173", "http://127.0.0.1:5173"]);
   }
 });

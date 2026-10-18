@@ -87,8 +87,8 @@ export function createAuth(options: {
       },
     }),
     socialProviders: resolveSocialProviders(options.google),
-    // Trusted Google identities link to existing same-email password accounts.
-    account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
+    // Keep ownership checks for linking: password signup does not verify email.
+    account: { accountLinking: { enabled: true } },
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,
