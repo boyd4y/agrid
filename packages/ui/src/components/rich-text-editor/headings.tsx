@@ -1,12 +1,11 @@
-// Adapted from ehtisham-afzal/tiptap-shadcn @ 84e08b1f77ea4d0a80f5bcb498935ecee40aa95b (MIT).
-// See packages/ui/third-party/tiptap-shadcn.LICENSE.
-import { Heading1, Heading2, Heading3 } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@tabdo/ui/components/toggle-group";
+// Adapted from upstream basic/components/toolbars/headings.tsx @ 84e08b1 (MIT).
 import { useToolbar } from "./toolbar-provider";
+import { ToolbarMenu, ToolbarMenuItem } from "./toolbar-menu";
 export function HeadingsToolbar() {
-  const { editor, labels, disabled } = useToolbar();
+  const { editor, labels } = useToolbar();
   const activeLevel = ([1, 2, 3] as const).find(level => editor.isActive("heading", { level }));
-  return <ToggleGroup type="single" size="sm" disabled={disabled} value={String(activeLevel ?? "")} onValueChange={value => { const level = Number(value || activeLevel) as 1 | 2 | 3; editor.chain().focus().toggleHeading({ level }).run(); }}>
-    {[Heading1, Heading2, Heading3].map((Icon, index) => <ToggleGroupItem key={index} value={String(index + 1)} aria-label={labels.heading(index + 1)}><Icon /></ToggleGroupItem>)}
-  </ToggleGroup>;
+  return <ToolbarMenu label={activeLevel ? labels.heading(activeLevel) : labels.paragraph} active={!!activeLevel}>{run => <>
+    <ToolbarMenuItem onSelect={() => run(() => { editor.chain().focus().setParagraph().run(); })}>{labels.paragraph}</ToolbarMenuItem>
+    {([1, 2, 3] as const).map(level => <ToolbarMenuItem key={level} onSelect={() => run(() => { editor.chain().focus().setHeading({ level }).run(); })}>{labels.heading(level)}</ToolbarMenuItem>)}
+  </>}</ToolbarMenu>;
 }

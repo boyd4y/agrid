@@ -11,18 +11,21 @@ export function documentImageIds(content: DocumentContent): string[] {
 export function renderDocumentHtml(value: DocumentContent): string {
   documentContentSchema.parse(value);
   const render = (node: DocumentNode): string => {
+    const alignment = node.attrs?.textAlign ? ` style="text-align:${node.attrs.textAlign}"` : "";
     const children = () => (node.content ?? []).map(render).join("");
     switch (node.type) {
       case "text": {
         let result = escape(node.text!);
         for (const mark of node.marks ?? []) {
           if (mark.type === "link") result = `<a href="${escape(mark.attrs.href)}" rel="noopener noreferrer nofollow">${result}</a>`;
-          else { const tag = { bold: "strong", italic: "em", strike: "s", code: "code" }[mark.type]; result = `<${tag}>${result}</${tag}>`; }
+          else if (mark.type === "textStyle") result = mark.attrs.color ? `<span style="color:${mark.attrs.color}">${result}</span>` : result;
+          else if (mark.type === "highlight") result = `<mark${mark.attrs.color ? ` style="background-color:${mark.attrs.color};color:inherit"` : ""}>${result}</mark>`;
+          else { const tag = { underline: "u", bold: "strong", italic: "em", strike: "s", code: "code" }[mark.type]; result = `<${tag}>${result}</${tag}>`; }
         }
         return result;
       }
-      case "heading": { const tag = `h${node.attrs!.level}`; return `<${tag}>${children()}</${tag}>`; }
-      case "paragraph": return `<p>${children()}</p>`;
+      case "heading": { const tag = `h${node.attrs!.level}`; return `<${tag}${alignment}>${children()}</${tag}>`; }
+      case "paragraph": return `<p${alignment}>${children()}</p>`;
       case "bulletList": return `<ul>${children()}</ul>`;
       case "orderedList": return `<ol start="${node.attrs?.start ?? 1}">${children()}</ol>`;
       case "listItem": return `<li>${children()}</li>`;

@@ -251,3 +251,22 @@ test("first body save is lazy, CAS serialized, idempotent and requires independe
   await assert.rejects(resource.db.transaction(async tx => { await executeDocument(a, caller, "replaceDocument", { ...input, rowId: rollback.id, idempotencyKey: k() }, tx); throw new Error("late lazy rollback"); }), /late lazy rollback/);
   assert.equal(await call("getDocument", { ...scope, rowId: rollback.id }), null);
 });
+
+test("new formatting survives SDK replace/read/render; unsafe attrs fail without changing the current document", async () => {
+  const api = createSiteApiRoutes(async () => ({ commands: a, identity: { database: a.database, resolveSession: async () => null }, siteRateLimit: async () => {}, async close() {} }));
+  const key = await createSiteKey(a, actor, { name: "Formatting", permissions: [], documentPermissions: [grant({ canRead: true, canUpdate: true })] });
+  const { Hono } = await import("hono");
+  const host = new Hono().route("/api", api);
+  const sdk = createClient({ url: "http://local.test", key: key.secret, fetch: (async (input: RequestInfo | URL, init?: RequestInit) => host.request(new Request(input, init))) as typeof fetch });
+  const current = (await sdk.documents.getDocument(identity()))!;
+  const content: DocumentContent = { type: "doc", content: [{ type: "heading", attrs: { level: 2, textAlign: "center" }, content: [{ type: "text", text: "Styled <heading>", marks: [{ type: "underline" }, { type: "textStyle", attrs: { color: "#337ea9" } }, { type: "highlight", attrs: { color: "#fdecc8" } }] }] }, { type: "paragraph", attrs: { textAlign: "justify" }, content: [{ type: "text", text: "Second paragraph" }] }] };
+  await sdk.documents.replaceDocument({ ...identity(), expectedVersion: current.version, content, idempotencyKey: k() });
+  const reloaded = (await sdk.documents.getDocument(identity()))!; assert.deepEqual(reloaded.content, content);
+  const rendered = await sdk.documents.renderDocument(identity());
+  assert(rendered.html.includes('<h2 style="text-align:center">')); assert(rendered.html.includes('<u>Styled &lt;heading&gt;</u>')); assert(rendered.html.includes('style="color:#337ea9"')); assert(rendered.html.includes('style="background-color:#fdecc8;color:inherit"')); assert(rendered.html.includes('<p style="text-align:justify">'));
+  for (const invalid of [{ ...content.content[0], attrs: { level: 2, textAlign: "center;position:fixed" } }, { type: "paragraph", content: [{ type: "text", text: "bad", marks: [{ type: "textStyle", attrs: { color: "#ffffff;background:url(x)" } }] }] }]) {
+    await assert.rejects(sdk.documents.replaceDocument({ ...identity(), expectedVersion: reloaded.version, content: { type: "doc", content: [invalid] } as DocumentContent, idempotencyKey: k() }));
+    assert.throws(() => renderDocumentHtml({ type: "doc", content: [invalid] } as DocumentContent));
+  }
+  assert.deepEqual((await sdk.documents.getDocument(identity()))!.content, content);
+});

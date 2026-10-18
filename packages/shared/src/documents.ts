@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 export const DOCUMENT_LIMITS = { bytes: 64 * 1024, nodes: 4000, depth: 12, images: 20, imageBytes: 5 * 1024 * 1024, attachmentBytes: 50 * 1024 * 1024, attachments: 40 } as const;
-export type DocumentMark = { type: "bold" | "italic" | "strike" | "code" } | { type: "link"; attrs: { href: string } };
+export const safeDocumentColor = (value: unknown): value is string => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value);
+export type DocumentMark = { type: "bold" | "italic" | "strike" | "code" | "underline" } | { type: "link"; attrs: { href: string } } | { type: "textStyle"; attrs: { color: string } } | { type: "highlight"; attrs: { color: string | null } };
 export type DocumentNode = { type: string; text?: string; attrs?: Record<string, unknown>; marks?: DocumentMark[]; content?: DocumentNode[] };
 export type DocumentContent = { type: "doc"; content: DocumentNode[] };
 export const EMPTY_DOCUMENT: DocumentContent = { type: "doc", content: [{ type: "paragraph" }] };
@@ -33,7 +34,9 @@ export function documentContentProblem(value: unknown): string | null {
     const attrs = node.attrs;
     if (attrs !== undefined && !object(attrs)) return "Invalid attributes";
     const a = (attrs ?? {}) as Record<string, unknown>;
-    if (type === "heading") { if (!keys(a, ["level"]) || ![1, 2, 3].includes(a.level as number)) return "Heading level must be 1–3"; }
+    if (["paragraph", "heading"].includes(type) && a.textAlign != null && !["left", "center", "right", "justify"].includes(a.textAlign as string)) return "Invalid text alignment";
+    if (type === "paragraph") { if (!keys(a, ["textAlign"])) return "Unknown paragraph attributes"; }
+    else if (type === "heading") { if (!keys(a, ["level", "textAlign"]) || ![1, 2, 3].includes(a.level as number)) return "Heading level must be 1–3"; }
     else if (type === "orderedList") { if (!keys(a, ["start", "type"]) || a.start !== undefined && (!Number.isInteger(a.start) || Number(a.start) < 1 || Number(a.start) > 1000000) || a.type != null) return "Invalid ordered list attributes"; }
     else if (type === "codeBlock") { if (!keys(a, ["language"]) || a.language != null && (typeof a.language !== "string" || !/^[\w+-]{1,40}$/.test(a.language))) return "Invalid code language"; }
     else if (type === "image") {
@@ -41,7 +44,7 @@ export function documentContentProblem(value: unknown): string | null {
       bytes += new TextEncoder().encode(a.alt).length;
     } else if (Object.keys(a).length) return "Unknown node attributes";
     if (node.marks !== undefined) {
-      if (type !== "text" || parent === "codeBlock" || !Array.isArray(node.marks) || node.marks.length > 5) return "Invalid text marks";
+      if (type !== "text" || parent === "codeBlock" || !Array.isArray(node.marks) || node.marks.length > 8) return "Invalid text marks";
       const types = new Set<string>();
       for (const mark of node.marks) {
         if (!object(mark) || !keys(mark, ["type", "attrs"]) || typeof mark.type !== "string" || types.has(mark.type)) return "Unknown or duplicate mark";
@@ -50,7 +53,9 @@ export function documentContentProblem(value: unknown): string | null {
         if (mark.type === "link") {
           if (!object(mark.attrs) || !keys(mark.attrs, ["href"]) || !safeDocumentLink(mark.attrs.href)) return "Unsafe link";
           bytes += new TextEncoder().encode(mark.attrs.href).length;
-        } else if (!["bold", "italic", "strike", "code"].includes(mark.type) || mark.attrs !== undefined) return "Unsupported mark";
+        } else if (mark.type === "textStyle" || mark.type === "highlight") {
+          if (!object(mark.attrs) || !keys(mark.attrs, ["color"]) || !(mark.type === "highlight" && mark.attrs.color === null) && !safeDocumentColor(mark.attrs.color)) return "Invalid document color";
+        } else if (!["bold", "italic", "strike", "code", "underline"].includes(mark.type) || mark.attrs !== undefined) return "Unsupported mark";
       }
     }
     if (bytes > DOCUMENT_LIMITS.bytes) return "Document exceeds content budget";
@@ -100,7 +105,7 @@ export type DocumentResults = {
 };
 export const DOCUMENT_TOOLS = {
   get_document: { command: "getDocument", description: "按tableId和rowId按需读取独立正文（不存在为null），不通过query_rows读取全文。" },
-  create_document: { command: "createDocument", description: "为记录创建唯一正文；schemaVersion=1，受限Tiptap JSON。最多64KiB/4000节点/12层/20图片。带幂等key，仅返回版本回执，不隐含读取权限。" },
+  create_document: { command: "createDocument", description: "为记录创建唯一正文；schemaVersion=1，受限Tiptap JSON（含underline、textStyle.color/ highlight.color六位hex、paragraph/heading的textAlign:left/center/right/justify或null）。最多64KiB/4000节点/12层/20图片。带幂等key，仅返回版本回执，不隐含读取权限。" },
   replace_document: { command: "replaceDocument", description: "以expectedVersion整篇替换正文；0仅在不存在时创建（另需canCreate）；409时保留草稿并重新读取，绝不覆盖。未知节点/属性及危险链接拒绝。" },
   render_document: { command: "renderDocument", description: "读取当前正文的安全静态HTML与私有图片清单。相对document-assets路径需获权读取图片后解析，不能公开私有下载凭证。" },
   upload_document_image: { command: "uploadDocumentImage", description: "上传正文专属PNG/JPEG/WebP/GIF，base64不含data前缀；单图5MiB、每正文累计40文件/50MiB。需正文版本、幂等key和上传权。返回稳定fileId，无登录token。" },

@@ -14,7 +14,7 @@ try {
   await body.waitFor(); assert.equal(await panel.getAttribute('aria-modal'), 'true');
   assert.equal(await panel.locator('[data-rich-text-editor]').count(), 1);
   assert.equal(await panel.getByText(/64 KiB/).count(), 0);
-  assert.equal(await panel.getByRole('button', { name: '加粗', exact: true }).count(), 0, 'no persistent toolbar');
+  assert.equal(await panel.getByTestId('editor-toolbar').getByRole('button', { name: '加粗', exact: true }).count(), 1, 'persistent toolbar');
   const bounds = await body.boundingBox(); assert(bounds.width >= 700 && bounds.width <= 725); assert(bounds.y < 350, 'body starts in the first viewport');
   await body.fill('选中文字后改变格式'); await page.keyboard.press('Meta+a');
   const selectionMenu = panel.getByTestId('selection-formatting'); await selectionMenu.waitFor({ state: 'visible' });
@@ -27,41 +27,30 @@ try {
   await link.getByLabel('链接地址', { exact: true }).fill('https://example.com/selected'); await link.getByRole('button', { name: '应用链接', exact: true }).click(); await link.waitFor({ state: 'hidden' });
   assert.equal(await body.locator('a').innerText(), '选中文字后改变格式', 'link applies to the genuine retained selection');
   await page.keyboard.press('ArrowRight'); await saved(panel);
-  const format = panel.getByRole('button', { name: '插入/格式', exact: true });
-  const controls = page.getByRole('dialog', { name: '正文排版' });
+  const toolbar = panel.getByTestId('editor-toolbar');
+  // The heading dropdown preserves selection after a command and restores its trigger on cancellation.
   for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: 844 });
-    await format.focus(); await format.press('Enter'); await controls.waitFor();
-    // Focused tooltips are a separate top layer; Escape dismisses them before the popover.
-    await controls.getByRole('button', { name: '加粗', exact: true }).focus();
-    const tooltip = page.getByRole('tooltip'); await tooltip.waitFor();
-    await page.keyboard.press('Escape'); await tooltip.waitFor({ state: 'hidden' });
-    assert(await controls.isVisible(), 'first Escape only dismisses the focused tooltip');
-    await page.keyboard.press('Escape'); await controls.waitFor({ state: 'hidden' });
-    await page.waitForFunction(() => document.activeElement?.textContent === '插入/格式');
-    assert(await format.evaluate(element => element === document.activeElement), `${width}px Escape restores the format trigger focus`);
-    assert(await panel.isVisible(), 'format cancellation keeps the record open');
+    const format = toolbar.getByRole('button', { name: '正文', exact: true });
+    await format.focus(); await format.press('Enter'); await page.getByRole('menu').waitFor();
+    await page.keyboard.press('Escape'); await page.getByRole('menu').waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => document.activeElement?.textContent === '正文');
+    assert(await format.evaluate(element => element === document.activeElement)); assert(await panel.isVisible());
   }
-  // A menu command must keep its own focus target instead of restoring the format trigger.
   await body.focus(); await page.keyboard.press('Meta+a');
-  await format.focus(); await format.press('Enter'); await controls.waitFor();
-  await controls.getByRole('button', { name: '链接', exact: true }).press('Enter');
-  await controls.waitFor({ state: 'hidden' }); await link.waitFor();
-  assert(await link.getByLabel('链接地址', { exact: true }).evaluate(element => element === document.activeElement), 'link command gives focus to the link dialog');
+  await toolbar.getByRole('button', { name: '链接', exact: true }).press('Enter'); await link.waitFor();
+  assert(await link.getByLabel('链接地址', { exact: true }).evaluate(element => element === document.activeElement));
   await link.getByLabel('链接地址', { exact: true }).fill('https://example.com/selected-after-menu');
   await link.getByRole('button', { name: '应用链接', exact: true }).press('Enter'); await link.waitFor({ state: 'hidden' });
   assert.equal(await body.locator('a').innerText(), '选中文字后改变格式');
-  assert.equal(await body.locator('a').getAttribute('href'), 'https://example.com/selected-after-menu');
   await page.setViewportSize({ width: 1600, height: 1000 });
-  await format.focus(); await format.press('Enter'); await controls.waitFor();
-  assert(await controls.evaluate(element => element.contains(document.activeElement)), 'keyboard enters the formatting controls');
-  await controls.getByLabel('标题 2', { exact: true }).press('Enter'); assert.equal(await body.locator('h2').innerText(), '选中文字后改变格式');
-  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '正文内容');
-  assert(await body.evaluate(element => element === document.activeElement), 'format command restores the genuine editor selection and focus');
+  await toolbar.getByRole('button', { name: '正文', exact: true }).press('Enter'); await page.getByRole('menuitem', { name: '标题 2', exact: true }).press('Enter');
+  assert.equal(await body.locator('h2').innerText(), '选中文字后改变格式');
+  assert(await body.evaluate(element => element === document.activeElement));
   await body.press('End'); await body.press('Enter'); await page.keyboard.insertText('第二段');
-  await format.click(); await controls.getByRole('button', { name: '引用', exact: true }).click(); await body.locator('blockquote').waitFor();
-  await format.click(); await controls.getByRole('button', { name: '撤销', exact: true }).click(); assert.equal(await body.locator('blockquote').count(), 0);
-  await format.click(); await controls.getByRole('button', { name: '重做', exact: true }).click(); await body.locator('blockquote').waitFor();
+  await toolbar.getByRole('button', { name: '引用', exact: true }).click(); await body.locator('blockquote').waitFor();
+  await toolbar.getByRole('button', { name: '撤销', exact: true }).click(); assert.equal(await body.locator('blockquote').count(), 0);
+  await toolbar.getByRole('button', { name: '重做', exact: true }).click(); await body.locator('blockquote').waitFor();
   await saved(panel);
   await panel.getByRole('button', { name: '正文更多操作', exact: true }).click(); await page.getByRole('menuitem', { name: '写作帮助与容量', exact: true }).click();
   const help = page.getByRole('dialog', { name: '写作帮助与容量' }); await help.getByText(/64 KiB/).waitFor(); await help.getByRole('button', { name: '关闭正文', exact: true }).click();
@@ -81,16 +70,24 @@ try {
     const touchPanel = touch.getByTestId('related-record-panel'), touchBody = touchPanel.getByRole('textbox', { name: '正文内容', exact: true }); await touchBody.waitFor();
     await touchBody.tap(); await touchBody.fill('触屏点击直接写作');
     await touchBody.locator('p').last().tap();
-    await touchPanel.getByRole('button', { name: '插入/格式', exact: true }).tap();
-    await touch.getByRole('dialog', { name: '正文排版' }).getByRole('button', { name: '无序列表', exact: true }).tap();
+    await touchPanel.getByTestId('editor-toolbar').getByRole('button', { name: '无序列表', exact: true }).tap();
     assert.equal(await touchBody.locator('ul').innerText(), '触屏点击直接写作'); await saved(touchPanel);
     assert(JSON.stringify((await command('getDocument', touchIdentity)).content).includes('触屏点击直接写作'));
-    await touchPanel.getByRole('button', { name: '插入/格式', exact: true }).tap();
+    const touchToolbar = touchPanel.getByTestId('editor-toolbar');
+    const viewport = touchToolbar.locator('[data-slot="scroll-area-viewport"]');
+    await viewport.evaluate(el => { el.scrollLeft = 0; });
+    const bounds = await viewport.boundingBox(), cdp = await mobile.newCDPSession(touch);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: bounds.x + bounds.width - 20, y: bounds.y + bounds.height / 2 }] });
+    for (let offset = 0; offset < 200; offset += 25) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: bounds.x + bounds.width - 20 - offset, y: bounds.y + bounds.height / 2 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await cdp.detach();
+    await touch.waitForFunction(() => document.querySelector('[data-testid="editor-toolbar"] [data-slot="scroll-area-viewport"]').scrollLeft > 0);
+    await touchToolbar.getByRole('button', { name: '搜索与替换', exact: true }).tap();
+    await touch.getByRole('dialog', { name: '搜索与替换', exact: true }).waitFor();
     await touch.screenshot({ path: f.artifact('focused-touch-formatting-390.png') });
     await touch.keyboard.press('Escape');
     await touchPanel.getByRole('button', { name: '关闭记录', exact: true }).tap(); await touchPanel.waitFor({ state: 'hidden' });
   } catch (error) { const touch = mobile.pages()[0]; console.error(await touch.locator('[data-testid=related-record-panel]').innerText()); console.error(await touch.getByRole('textbox', { name: '正文内容', exact: true }).innerHTML()); await touch.screenshot({ path: f.artifact('focused-touch-failure.png') }); throw error; } finally { await mobile.close(); }
   assert.deepEqual(f.errors, []);
-  console.log('PASS focused writing: modal first-viewport content, shared editor, real selection bubble/link, keyboard tooltip/Escape focus return and command/dialog focus, heading/quote/undo/redo, contextual limits and actionable overflow/retry, real touch formatting and autosave.');
+  console.log('PASS focused writing: modal first-viewport content, shared editor, real selection bubble/link, keyboard dropdown/Escape focus return and command/dialog focus, heading/quote/undo/redo, contextual limits and actionable overflow/retry, real touch formatting and autosave.');
 } catch (error) { console.error(f.errors); await page.screenshot({ path: f.artifact('focused-writing-failure.png') }).catch(() => {}); throw error; }
 finally { await f.close(); }

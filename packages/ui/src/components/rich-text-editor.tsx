@@ -7,6 +7,7 @@ import { TooltipProvider } from "@tabdo/ui/components/tooltip";
 import { createRichTextExtensions } from "@tabdo/ui/lib/rich-text-extensions";
 import { ToolbarProvider } from "./rich-text-editor/toolbar-provider";
 import { EditorToolbar } from "./rich-text-editor/editor-toolbar";
+import { FloatingMenu } from "./rich-text-editor/floating-menu";
 import { FloatingToolbar } from "./rich-text-editor/floating-toolbar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
 import { Field, FieldGroup, FieldLabel } from "@tabdo/ui/components/field";
@@ -14,6 +15,8 @@ import { Input } from "@tabdo/ui/components/input";
 import { Button } from "@tabdo/ui/components/button";
 
 export type RichTextLabels = {
+  paragraph: string; underline: string; strike: string; code: string; horizontalRule: string; alignment: string; colorHighlight: string; color: string; highlight: string; defaultColor: string; searchReplace: string; search: string; replaceWith: string; replace: string; replaceAll: string; previousMatch: string; nextMatch: string; matchCase: string; slashCommands: string; noResults: string; basicBlocks: string; inline: string;
+  align(value: string): string; colorName(name: string): string; commandDescription(key: string): string;
   insertFormat: string; formatting: string; selectionFormatting: string;
   bold: string; italic: string; heading(level: number): string; bulletList: string; orderedList: string; quote: string; codeBlock: string;
   link: string; image: string; undo: string; redo: string; close: string; linkHint: string; url: string; applyLink: string; removeLink: string;
@@ -29,7 +32,9 @@ export function RichTextEditor({ editor, labels, disabled, actions, onImage, ima
   // Upstream toolbars read editor state through their provider; transactions refresh active/can state.
   useEditorState({ editor, selector: ({ editor }) => editor ? {
     from: editor.state.selection.from, to: editor.state.selection.to,
-    active: ["bold", "italic", "bulletList", "orderedList", "blockquote", "codeBlock", "link"].map(name => editor.isActive(name)),
+    active: ["bold", "italic", "underline", "strike", "code", "highlight", "bulletList", "orderedList", "blockquote", "codeBlock", "link"].map(name => editor.isActive(name)),
+    color: editor.getAttributes("textStyle").color, highlight: editor.getAttributes("highlight").color,
+    align: ["left", "center", "right", "justify"].map(textAlign => editor.isActive({ textAlign })),
     headings: [1, 2, 3].map(level => editor.isActive("heading", { level })),
     undo: editor.can().undo(), redo: editor.can().redo(),
   } : null });
@@ -39,6 +44,7 @@ export function RichTextEditor({ editor, labels, disabled, actions, onImage, ima
     <ToolbarProvider editor={editor} labels={labels} disabled={disabled}><TooltipProvider>
       <EditorToolbar actions={actions} onImage={onImage} imageDisabled={imageDisabled} onLink={openLink} />
       <FloatingToolbar root={root} onLink={openLink} suppress={linkOpen} />
+      <FloatingMenu onImage={onImage} imageDisabled={imageDisabled} suppress={linkOpen} />
       <EditorContent editor={editor} className="min-w-0 cursor-text py-3" />
     </TooltipProvider></ToolbarProvider>
     <div hidden aria-hidden="true">{Object.entries(imageSources).map(([id, url]) => <img key={id} data-private-source={id} src={url} alt="" />)}</div>

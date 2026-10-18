@@ -48,3 +48,7 @@
 .rich-text-prose hr { margin: 1.5em 0; border: none; border-top: 1px solid var(--border); }
 .rich-text-prose .ProseMirror-selectednode { outline: 2px solid var(--ring); outline-offset: 2px; }
 .rich-text-prose[contenteditable="true"]:has(> p:only-child > br.ProseMirror-trailingBreak:only-child)::before { color: var(--muted-foreground); content: attr(data-placeholder); float: left; height: 0; pointer-events: none; }
+.rich-text-prose u { text-decoration: underline; text-underline-offset: .2em; }
+.rich-text-prose mark { color: inherit; background-color: var(--accent); border-radius: .15em; }
+.rich-text-search-result { background-color: var(--accent); color: var(--accent-foreground); }
+.rich-text-search-selected { background-color: var(--primary); color: var(--primary-foreground); }
