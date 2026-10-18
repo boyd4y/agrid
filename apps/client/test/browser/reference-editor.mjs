@@ -90,7 +90,8 @@ try {
   const picker = page.waitForEvent('filechooser'); await item('image').click(); const chooser = await picker;
   await chooser.setFiles({ name: 'slash.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVQIHWP4DwABAQEAG7buVgAAAABJRU5ErkJggg==', 'base64') });
   await body.locator('img').waitFor(); await saved(panel); doc = await command('getDocument', identity);
-  const image = doc.content.content.find(n => n.type === 'image'); assert.match(image.attrs.fileId, /^[0-9a-f-]{36}$/); assert(!JSON.stringify(doc.content).includes('/image')); assert(!JSON.stringify(doc.content).includes('data:image'));
+  const findImage = node => node.type === 'image' ? node : node.content?.map(findImage).find(Boolean);
+  const image = findImage(doc.content); assert.match(image.attrs.fileId, /^[0-9a-f-]{36}$/); assert(!JSON.stringify(doc.content).includes('/image')); assert(!JSON.stringify(doc.content).includes('data:image'));
   // Responsive menus stay in bounds at the actual caret, inside the record dialog.
   for (const width of [1440, 390, 320]) for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width, height: width < 500 ? 844 : 1000 }); await page.evaluate(theme => document.documentElement.classList.toggle('dark', theme === 'dark'), theme);

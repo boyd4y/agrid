@@ -17,6 +17,7 @@ import { Button } from "@tabdo/ui/components/button";
 export type RichTextLabels = {
   paragraph: string; underline: string; strike: string; code: string; horizontalRule: string; alignment: string; colorHighlight: string; color: string; highlight: string; defaultColor: string; searchReplace: string; search: string; replaceWith: string; replace: string; replaceAll: string; previousMatch: string; nextMatch: string; matchCase: string; slashCommands: string; noResults: string; basicBlocks: string; inline: string;
   align(value: string): string; colorName(name: string): string; commandDescription(key: string): string;
+  structure: string; insert: string; styles: string;
   insertFormat: string; formatting: string; selectionFormatting: string;
   bold: string; italic: string; heading(level: number): string; bulletList: string; orderedList: string; quote: string; codeBlock: string;
   link: string; image: string; undo: string; redo: string; close: string; linkHint: string; url: string; applyLink: string; removeLink: string;

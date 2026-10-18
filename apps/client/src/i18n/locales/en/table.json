@@ -1,4 +1,6 @@
 {
+  "showAllProperties": "Show all properties ({{count}} more)",
+  "collapseProperties": "Collapse properties",
   "columnTypes": {
     "text": "Text",
     "number": "Number",
