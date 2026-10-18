@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
 import { createOrganizationInitializer } from "@/lib/ensure-organization";
+import i18n from "@/i18n";
 
 export type SessionUser = {
   id: string;
@@ -29,6 +30,21 @@ export function useAuth() {
     }
   }, [userId, userName, activeOrganizationId]);
 
+  // Authentication updates the session asynchronously. Read its current value
+  // instead of using the user/workspace captured by the submitting render.
+  const ensureOrganizationForUser = useCallback(async (authenticatedUser?: SessionUser) => {
+    const current = await authClient.getSession({ query: { disableCookieCache: true } });
+    if (current.error || !current.data || (authenticatedUser && current.data.user.id !== authenticatedUser.id)) {
+      throw new Error(current.error?.message || i18n.t("common:orgLoadFailed"));
+    }
+    const organization = await initializeOrganization(
+      authenticatedUser ?? current.data.user,
+      current.data.session.activeOrganizationId,
+    );
+    await refetch();
+    return organization;
+  }, [refetch]);
+
   return {
     user,
     session,
@@ -36,6 +52,7 @@ export function useAuth() {
     error,
     refetch,
     ensureOrganization,
+    ensureOrganizationForUser,
     isAuthenticated: !!user,
   };
 }
