@@ -1,10 +1,11 @@
 import { BlogCreateDialog } from "@/components/sites/BlogCreateDialog";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Globe, Plus, Search, Trash2 } from "lucide-react";
+import { Globe, Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SiteSummary } from "@tabdo/shared";
 import { Button } from "@tabdo/ui/components/button";
+import { SearchInput } from "@tabdo/ui/components/search-input";
 import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Input } from "@tabdo/ui/components/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@tabdo/ui/components/dialog";
@@ -46,7 +47,7 @@ export function SitesPage() {
   }
   const action = <Button onClick={openCreate}><Plus data-icon="inline-start" />{t("create")}</Button>;
   return <AppPage contentWidth="standard" className="gap-5" header={<AppPageHeader page="sites" description={t("description")}><DataRefreshButton label={t("refresh")} disabled={loading} onRefresh={() => void load()} /><Button variant="outline" onClick={() => setBlogCreate(true)}>{t("blogs:create")}</Button>{action}</AppPageHeader>}>
-    {sites.length > 0 && <div className="relative max-w-sm"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input aria-label={t("search")} placeholder={t("search")} value={search} onChange={event => { setSearch(event.target.value); pagination.resetPage(); }} className="pl-9" /></div>}
+    {sites.length > 0 && <SearchInput containerClassName="max-w-sm" aria-label={t("search")} placeholder={t("search")} value={search} onChange={event => { setSearch(event.target.value); pagination.resetPage(); }} />}
     {error ? <ListErrorState title={t("loadFailed")} description={error} onRetry={() => void load()} /> : loading ? <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p>
       : !sites.length ? <AppEmptyState illustration={NOTIOLY.painting} title={t("emptyTitle")} description={t("emptyDescription")} action={action} />
       : <><ul className="flex flex-col gap-3" aria-label={t("title")}>{pagination.items.map(site => <ListItem key={site.id} className="flex items-start gap-3">

@@ -1,6 +1,4 @@
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
-import { Input } from "@tabdo/ui/components/input";
 import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListPagination } from "@/components/controls/list-pagination";
 import { ListItemLink } from "@/components/controls/list-item-link";
@@ -11,6 +9,7 @@ import { TableActions } from "@/components/table/TableActions";
 import { useOutletContext } from "react-router-dom";
 import { NiPlus } from "@/components/icons";
 import { Button } from "@tabdo/ui/components/button";
+import { SearchInput } from "@tabdo/ui/components/search-input";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import type { AppOutletContext } from "@/layouts/AppShell";
@@ -37,7 +36,7 @@ export function TablesPage() {
       </AppPageHeader>
     }>
 
-      <div className="relative w-full max-w-sm"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label={t("directory.searchAria", { label: t("nav.tables") })} placeholder={t("directory.searchPlaceholder", { label: t("nav.tables") })} className="pl-9" value={query} disabled={tablesLoading && tables.length === 0} onChange={event => setQuery(event.target.value)} /></div>
+      <SearchInput containerClassName="w-full max-w-sm" aria-label={t("directory.searchAria", { label: t("nav.tables") })} placeholder={t("directory.searchPlaceholder", { label: t("nav.tables") })} value={query} disabled={tablesLoading && tables.length === 0} onChange={event => setQuery(event.target.value)} />
       {tablesLoading ? (
         <p className="text-sm text-muted-foreground">{t("common:loading")}</p>
       ) : tables.length === 0 ? (

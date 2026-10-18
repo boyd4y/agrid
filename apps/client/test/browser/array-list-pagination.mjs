@@ -10,7 +10,9 @@ try {
   const humans = Array.from({ length: 20 }, (_, index) => ({ id: crypto.randomUUID(), name: `分页成员 ${String(index + 1).padStart(2, '0')}`, email: `${crypto.randomUUID()}@local.test` }));
   users.push(...humans.map(user => user.id));
   // Existing custom skills are supported by the list even while new skill creation is closed.
-  const skills = Array.from({ length: 17 }, (_, index) => {
+  const builtinSkillCount = (await api('/skills')).skills.length;
+  assert(builtinSkillCount < 21, 'fixture leaves room for custom skills on two pages');
+  const skills = Array.from({ length: 21 - builtinSkillCount }, (_, index) => {
     const name = `pagination-skill-${String(index + 1).padStart(2, '0')}`;
     return { organization_id: organizationId, name, description: '分页验收技能', document: `---\nname: ${name}\ndescription: 分页验收技能\n---\n\nOnly a local pagination fixture.\n` };
   });
@@ -21,22 +23,30 @@ try {
   });
   for (let index = 1; index <= 21; index++) {
     await api('/tables', { name: `分页表格 ${String(index).padStart(2, '0')}` });
+    await api('/sites', { name: `分页站点 ${String(index).padStart(2, '0')}`, files: [{ path: 'index.html', content: '<!doctype html><title>Pagination fixture</title>' }] });
     const result = await api('/members/agents', { name: `分页智能体 ${String(index).padStart(2, '0')}`, persona: { defaultHarness: 'pi', defaultModel: 'fixture/model', runtime: 'local' } });
     users.push(result.member.userId);
   }
   const pager = page.getByRole('navigation', { name: '分页', exact: true });
   const countRows = async (selector, count) => page.waitForFunction(({ selector, count }) => document.querySelectorAll(selector).length === count, { selector, count });
   const aligned = async expectedWidth => {
-    const header = await page.locator('[data-slot=app-page-header-content]').boundingBox();
-    const content = await page.locator('[data-slot=app-page-content]').boundingBox();
-    assert(Math.abs(header.x - content.x) < 1 && Math.abs(header.width - content.width) < 1, 'header and list share their horizontal bounds');
+    const measured = await page.waitForFunction(expectedWidth => {
+      const header = document.querySelector('[data-slot=app-page-header-content]')?.getBoundingClientRect();
+      const content = document.querySelector('[data-slot=app-page-content]')?.getBoundingClientRect();
+      const sidebar = document.querySelector('[data-testid=app-sidebar]')?.getBoundingClientRect();
+      if (!header || !content || !sidebar || (!expectedWidth && Math.abs(sidebar.width - 56) >= 1)) return false;
+      if (Math.abs(header.x - content.x) >= 1 || Math.abs(header.width - content.width) >= 1) return false;
+      return { header: header.toJSON(), content: content.toJSON(), sidebar: sidebar.toJSON() };
+    }, expectedWidth);
+    const { content, sidebar } = await measured.jsonValue();
     if (expectedWidth) assert.equal(content.width, expectedWidth, 'wide pages use the common 1024px content width');
-    else assert(content.width <= 700 - 240 - 48 && content.x + content.width <= 700, 'narrow content fits the available workspace pane');
+    else assert(content.x >= sidebar.x + sidebar.width + 24 - 1 && content.x + content.width <= 700 - 24 + 1, 'narrow content fits the actual responsive sidebar bounds');
   };
   const cases = [
     { path: 'tables', search: '搜索表格', rows: '[data-testid=table-list-item]', fullQuery: '分页', exactQuery: '分页表格 01' },
     { path: 'members', search: '搜索成员', rows: '[data-testid=member-directory-row]', fullQuery: '分页', exactQuery: '分页成员 01' },
     { path: 'agents', search: '搜索智能体', rows: '[data-testid=member-directory-row]', fullQuery: '分页', exactQuery: '分页智能体 01' },
+    { path: 'sites', search: '搜索站点', rows: 'ul[aria-label=站点] > li', fullQuery: '分页', exactQuery: '分页站点 01' },
     { path: 'skills', search: '搜索技能', rows: 'tbody > tr', fullQuery: '', exactQuery: 'pagination-skill-01' },
   ];
   for (const scenario of cases) {
@@ -119,5 +129,5 @@ try {
   await memberRow.locator('div.relative').getByRole('button').click(); await avatarEditor.waitFor();
   await page.keyboard.press('Escape'); await avatarEditor.waitFor({ state: 'detached' });
   assert.deepEqual(errors, []);
-  console.log('PASS four real array lists: 20/page, full-list search/reset, empty search, last-page delete clamp, complete sidebar/member API, 1024px header/content alignment and 700px scroll, native whole-item navigation/plain titles/independent actions/member Popover; no screenshots/model calls');
+  console.log('PASS five real array lists (including Sites): 20/page, full-list search/reset, empty search, last-page delete clamp, complete sidebar/member API, 1024px header/content alignment and 700px scroll, native whole-item navigation/plain titles/independent actions/member Popover; no screenshots/model calls');
 } finally { await db.end(); await fixture.close(); }
