@@ -11,3 +11,6 @@ export function connectionKey(connection: Parameters<typeof service.connectionKe
 }
 export const hydrateAgentMailEvent = (...args: Arguments<typeof service.hydrateAgentMailEvent>) => businessCall(() => service.hydrateAgentMailEvent(integrationDependencies(), ...args));
 export function normalizeAgentMailMessage(raw: unknown, fallback = new Date().toISOString()) { return service.normalizeAgentMailMessage(raw, fallback); }
+
+export const sendAgentMailMessage = (...args: Arguments<typeof service.sendAgentMailMessage>) => businessCall(() => service.sendAgentMailMessage(integrationDependencies(), ...args));
+export const replyAgentMailMessage = (...args: Arguments<typeof service.replyAgentMailMessage>) => businessCall(() => service.replyAgentMailMessage(integrationDependencies(), ...args));

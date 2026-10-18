@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { ServiceError } from "../errors.js";
 import { z } from "zod";
-import type { IntegrationInbox } from "@tabdo/shared";
+import { sendAgentMailMessageSchema, replyAgentMailMessageSchema, type IntegrationInbox, type SendAgentMailMessageInput, type ReplyAgentMailMessageInput } from "@tabdo/shared";
 import type { ExternalAutomationEvent } from "../automation/events.js";
 import type { IntegrationDependencies, IntegrationCapabilities } from "./dependencies.js";
 type ProviderDependencies = Pick<IntegrationCapabilities, "fetch">;
@@ -76,4 +76,48 @@ export async function hydrateAgentMailEvent(deps: IntegrationDependencies, event
   const normalized = normalizeAgentMailMessage(full, event.occurredAt);
   if (normalized.inboxId !== event.source.inboxId || normalized.messageId !== message.messageId) throw new Error("AgentMail message identity mismatch");
   return { ...event, data: { ...event.data, message: normalized } };
+}
+
+const outboundResultSchema = z.object({ message_id: z.string().min(1), thread_id: z.string().min(1) });
+type OutboundDependencies = Pick<IntegrationDependencies, "database" | "fetch" | "encryptionKey">;
+
+async function outboundAgentMailMessage(deps: OutboundDependencies, organizationId: string,
+  input: SendAgentMailMessageInput | ReplyAgentMailMessageInput): Promise<{ messageId: string; threadId: string }> {
+  const [connection] = await deps.database.select().from(integrationConnections).where(and(
+    eq(integrationConnections.id, input.connectionId), eq(integrationConnections.organizationId, organizationId),
+    eq(integrationConnections.enabled, true), isNull(integrationConnections.deletedAt),
+  ));
+  if (!connection) throw new ServiceError(404, { message: "集成不存在或已停用" });
+  const key = await connectionKey(deps, connection);
+  const inboxes = await agentMailInboxes(deps, key);
+  if (!inboxes.some(inbox => inbox.inboxId === input.inboxId)) throw new ServiceError(400, { message: "AgentMail 收件箱不属于此连接" });
+  const reply = "messageId" in input;
+  const path = `/v0/inboxes/${encodeURIComponent(input.inboxId)}/messages/${reply ? `${encodeURIComponent(input.messageId)}/reply` : "send"}`;
+  const body = {
+    ...(input.to?.length ? { to: input.to } : {}),
+    ...(input.cc?.length ? { cc: input.cc } : {}),
+    ...(input.bcc?.length ? { bcc: input.bcc } : {}),
+    ...(input.replyTo?.length ? { reply_to: input.replyTo } : {}),
+    ...("subject" in input && input.subject !== undefined ? { subject: input.subject } : {}),
+    ...(reply && input.replyAll !== undefined ? { reply_all: input.replyAll } : {}),
+    ...(input.text !== undefined ? { text: input.text } : {}),
+    ...(input.html !== undefined ? { html: input.html } : {}),
+  };
+  const result = outboundResultSchema.safeParse(await agentMailRequest(deps, key, path, { method: "POST", body }));
+  if (!result.success) throw new ServiceError(502, { message: "AgentMail 发信响应格式不正确" });
+  return { messageId: result.data.message_id, threadId: result.data.thread_id };
+}
+
+export async function sendAgentMailMessage(deps: OutboundDependencies, input: SendAgentMailMessageInput & { organizationId: string }): Promise<{ messageId: string; threadId: string }> {
+  const { organizationId, ...message } = input;
+  const parsed = sendAgentMailMessageSchema.safeParse(message);
+  if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 发信参数不正确" });
+  return outboundAgentMailMessage(deps, organizationId, parsed.data);
+}
+
+export async function replyAgentMailMessage(deps: OutboundDependencies, input: ReplyAgentMailMessageInput & { organizationId: string }): Promise<{ messageId: string; threadId: string }> {
+  const { organizationId, ...message } = input;
+  const parsed = replyAgentMailMessageSchema.safeParse(message);
+  if (!parsed.success) throw new ServiceError(400, { message: "AgentMail 回复参数不正确" });
+  return outboundAgentMailMessage(deps, organizationId, parsed.data);
 }

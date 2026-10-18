@@ -74,7 +74,7 @@ type AutomationEventEnvelope = {
 
 ## AgentMail 连接与收信
 
-首次覆盖连接校验、收件箱选择、创建收信 webhook 和邮件事件触发；不因为支持收信就宣传发送、回复或附件自动导入。AgentMail 的 `POST /v0/webhooks` 使用 Bearer API Key，创建请求明确发送 `event_types:["message.received"]`；可带 inbox_ids（官方最多10）。响应 webhook_id/secret 只保存在服务端。pod/inbox scoped key 需对应 scoped endpoint，不能假称所有 key 均能调用组织级 API。[官方创建契约](https://docs.agentmail.to/api-reference/webhooks/create)、[scoped webhook 说明](https://docs.agentmail.to/webhooks-overview)。
+首次覆盖连接校验、收件箱选择、创建收信 webhook 和邮件事件触发；现已增加已连接收件箱的发送/回复服务，自动化动作和 agent 工具尚未接入；不支持附件发送或自动导入。协议 fixture 不等于真实邮箱验收。AgentMail 的 `POST /v0/webhooks` 使用 Bearer API Key，创建请求明确发送 `event_types:["message.received"]`；可带 inbox_ids（官方最多10）。响应 webhook_id/secret 只保存在服务端。pod/inbox scoped key 需对应 scoped endpoint，不能假称所有 key 均能调用组织级 API。[官方创建契约](https://docs.agentmail.to/api-reference/webhooks/create)、[scoped webhook 说明](https://docs.agentmail.to/webhooks-overview)。
 
 连接接口建议：POST/GET/PATCH/DELETE `/api/integrations`，POST `/:id/test`，GET `/:id/inboxes`，POST `/:id/webhooks`。管理连接复用现有 workspace 管理身份；读接口只返回 id/provider/name/state/邮箱摘要/最近事件或错误，绝不回传 API key、signing secret 或加密密文。首次连接失败保留待修复配置而不是展示已连接。远端创建采用稳定 client_id 及记录状态，处理创建成功但本地保存失败后的核对；不能在 SQL 事务里等待远端注册。
 
