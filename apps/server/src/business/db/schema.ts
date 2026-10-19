@@ -15,6 +15,7 @@ import {
   index,
   uniqueIndex,
   check,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 
 export { COLUMN_TYPES } from "@tabdo/shared";
@@ -74,6 +75,30 @@ export const agentProfile = pgTable("agent_profile", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+/** A scope lock serializes index/topic mutations across API and worker processes. */
+export const agentMemoryScopes = pgTable("agent_memory_scopes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").notNull(),
+  agentProfileId: uuid("agent_profile_id").notNull().references(() => agentProfile.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+}, t => [
+  uniqueIndex("agent_memory_scope_key").on(t.organizationId, t.workspaceId, t.agentProfileId, t.userId),
+  foreignKey({ columns: [t.workspaceId, t.organizationId], foreignColumns: [workspaces.id, workspaces.organizationId] }).onDelete("cascade"),
+]);
+
+export const agentMemoryTopics = pgTable("agent_memory_topics", {
+  scopeId: uuid("scope_id").notNull().references(() => agentMemoryScopes.id, { onDelete: "cascade" }),
+  topic: text("topic").notNull(),
+  revision: uuid("revision").notNull().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  type: text("type").$type<import("@tabdo/shared").MemoryDocument["type"]>().notNull(),
+  body: text("body").notNull(),
+}, t => [uniqueIndex("agent_memory_topic_key").on(t.scopeId, t.topic),
+  check("agent_memory_type_check", sql`${t.type} in ('user', 'feedback', 'project', 'reference')`),
+]);
 
 /* ───────────── App tables (scoped to organization) ───────────── */
 
