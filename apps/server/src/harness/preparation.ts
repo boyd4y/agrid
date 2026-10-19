@@ -1,3 +1,7 @@
+import { admitAgentMemory, listAgentMemory, memoryInstructions } from "../business/agent/memory.js";
+import { createMemoryTools } from "../business/agent/tools/memory.js";
+import { runtimeDependencies, businessCall } from "../services/dependencies.js";
+import { getToolTransaction } from "../ai/execution-context.js";
 import { createTableTools } from "../ai/tools.js";
 import type { Actor } from "../auth/actor.js";
 import type { resolveChatContext } from "../chat/context.js";
@@ -23,7 +27,14 @@ export async function prepareNativeChatAgent(options: {
   const modelId = harness === "pi" ? resolvePiModelId(configuration.modelId, env) : configuration.modelId;
   const skillContext = await resolveAgentSkills(actor.organizationId, profile.persona?.skillNames, siteSdkUrl(env));
   const tools = createTableTools(tableId, actor.organizationId, actor.userId, actor.workspaceId);
-  const { agentsDocument, system } = buildChatAgentInstructions({ ...configuration, modelId }, context, skillContext.instructions);
+  const { agentsDocument, system: baseSystem } = buildChatAgentInstructions({ ...configuration, modelId }, context, skillContext.instructions);
+  let system = baseSystem;
+  if (harness === "pi") {
+    const scope = await businessCall(() => admitAgentMemory(runtimeDependencies(), actor, profile.id));
+    const { index } = await businessCall(() => listAgentMemory(runtimeDependencies(), scope));
+    system = `${baseSystem}\n\n${memoryInstructions(index)}`;
+    Object.assign(tools, createMemoryTools(runtimeDependencies, scope, getToolTransaction));
+  }
   // Reject unavailable configuration before saving user input or claiming a Run.
   const piModel = harness === "pi" ? await resolvePiModelMetadata(modelId, env) : undefined;
   resolveNativeConfiguration({ harness, mode, provider, modelId, piModel, env });
