@@ -1,0 +1,80 @@
+name: GHCR image bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full reviewed commit SHA already merged into master
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize all bootstrap attempts, including the existence checks and push.
+concurrency:
+  group: tabdo-ghcr-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  image:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master' && github.repository == 'boyd4y/agrid'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      BOOTSTRAP_SHA: ${{ inputs.source_sha }}
+    outputs:
+      digest: ${{ steps.result.outputs.digest }}
+    steps:
+      - name: Isolate registry credentials outside the source checkout
+        run: printf 'DOCKER_CONFIG=%s/ghcr-bootstrap-docker\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      # Run guards from the dispatched master workflow, never from input code.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '24.14.1'
+      - name: Verify master dispatch and prepare clean exact source checkout
+        id: source
+        run: node scripts/release/bootstrap.mjs prepare
+      - name: Require an absent bootstrap tag before building
+        env:
+          PACKAGE_TOKEN: ${{ github.token }}
+        run: node scripts/release/bootstrap.mjs check
+      - name: Authenticate GHCR with this job's package token
+        env:
+          PACKAGE_TOKEN: ${{ github.token }}
+        run: printf '%s' "$PACKAGE_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build the source image without production credentials
+        env:
+          SOURCE_DIR: ${{ steps.source.outputs.source }}
+          IMAGE: ${{ steps.source.outputs.image }}
+        run: |
+          docker buildx create --use
+          docker buildx build --platform linux/amd64 --provenance=false \
+            --label "org.opencontainers.image.revision=$BOOTSTRAP_SHA" \
+            --label "org.opencontainers.image.source=https://github.com/boyd4y/agrid" \
+            --tag "$IMAGE" --load --file "$SOURCE_DIR/Dockerfile.server" "$SOURCE_DIR"
+      # Recheck after the long build so a tag created meanwhile is never reused.
+      - name: Recheck clean source and refuse an existing tag before pushing
+        env:
+          PACKAGE_TOKEN: ${{ github.token }}
+        run: node scripts/release/bootstrap.mjs check
+      - name: Push only the bootstrap tag
+        env:
+          IMAGE: ${{ steps.source.outputs.image }}
+        run: docker push "$IMAGE"
+      - name: Output immutable digest for separate anonymous verification
+        id: result
+        run: node scripts/release/bootstrap.mjs result
+      - name: Clear registry login and temporary files
+        if: always()
+        run: |
+          trap 'rm -rf -- "$DOCKER_CONFIG" "$RUNNER_TEMP/ghcr-bootstrap-source"' EXIT
+          docker logout ghcr.io
