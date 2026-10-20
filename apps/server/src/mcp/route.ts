@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { RequestScope, RequestScopeResolver } from "../business/http/request.js";
 import { resolveActor } from "../business/auth/actor.js";
 import { resolveSiteKey } from "../business/data-api/keys.js";
-import { dispatchKeyCommand } from "../business/data-api/commands.js";
+import { dispatchKeyCommand, keyCommandRateLimitKind } from "../business/data-api/commands.js";
 import { dispatchCommand } from "../business/services/command-dispatch.js";
 import { requireWorkspace } from "../business/tenant/workspace.js";
 import { ServiceError } from "../business/errors.js";
@@ -70,7 +70,7 @@ export function createMcpRoute(acquire: RequestScopeResolver, options: {
         try {
           if (siteContext) {
             if (!requestScope.siteRateLimit) throw new ServiceError(503, { message: "API rate limiting is unavailable" });
-            await requestScope.siteRateLimit({ keyId: siteContext.principal.id, ip: options.clientIp?.(c) ?? "unknown", kind: "create" });
+            await requestScope.siteRateLimit({ keyId: siteContext.principal.id, ip: options.clientIp?.(c) ?? "unknown", kind: keyCommandRateLimitKind(command) });
             return (await dispatchKeyCommand(requestScope.commands, siteContext, { command, input }, c.req.header("Idempotency-Key"))).result;
           }
           return (await dispatchCommand(requestScope.commands, actor!, { command, input })).result;

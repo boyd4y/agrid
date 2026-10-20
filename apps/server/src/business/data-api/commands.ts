@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BLOG_READ_COMMANDS, CALENDAR_READ_COMMANDS, DOCUMENT_READ_COMMANDS } from "@tabdo/shared";
 import { and, eq } from "drizzle-orm";
 import type { CommandDependencies } from "../dependencies.js";
 import { rows, tables } from "../db/schema.js";
@@ -12,6 +13,16 @@ import { executeDocument } from "../documents/service.js";
 import { isCalendarCommand, calendarTransportInput } from "../calendar/transport.js";
 import { executeCalendar } from "../calendar/service.js";
 import { updateScheduledAutomation } from "../calendar/schedules.js";
+
+const tableReadCommands = ["listTables", "getTable", "queryRows", "getRow"];
+const readCommands = new Set<string>([
+  ...tableReadCommands, "queryCalendarView", ...BLOG_READ_COMMANDS, ...CALENDAR_READ_COMMANDS, ...DOCUMENT_READ_COMMANDS,
+]);
+
+/** Reuse each capability's read classification; unknown commands stay write-limited. */
+export function keyCommandRateLimitKind(command: string): "read" | "create" {
+  return readCommands.has(command) ? "read" : "create";
+}
 
 /** The same capability command boundary for REST and remote MCP. */
 export async function dispatchKeyCommand(deps: CommandDependencies, context: data.SiteContext, body: Record<string, unknown>, idempotencyKey?: string) {
@@ -28,7 +39,7 @@ export async function dispatchKeyCommand(deps: CommandDependencies, context: dat
   if (command === "updateAutomation") return { ok: true, command, result: await updateScheduledAutomation(deps, context.secret, args) };
   if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, idempotencyKey)) };
   if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, idempotencyKey)) };
-  if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
+  if (![...tableReadCommands, "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
   let result: unknown;
   if (command === "listTables") result = await data.siteTables(deps, context);
   else {

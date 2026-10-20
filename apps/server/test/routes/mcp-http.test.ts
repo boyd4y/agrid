@@ -8,6 +8,8 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { eq } from "drizzle-orm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { createRedisClient, redisConnectionOptions, waitForRedisReady } from "@tabdo/queue/redis";
+import { createSiteRateLimiter } from "../../src/site-api/rate-limit.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createDatabase } from "../../src/business/db/factory.js";
 import { hashApiKey } from "../../src/business/auth/actor.js";
@@ -44,9 +46,9 @@ const value = (result: Awaited<ReturnType<Client["callTool"]>>) => {
   const content = result.content as { type: string; text: string }[];
   return JSON.parse(content[0].text);
 };
-async function connect(key: string, workspace?: string) {
+async function connect(key: string, workspace?: string, address = endpoint) {
   const client = new Client({ name: "remote-mcp-regression", version: "1" }); clients.push(client);
-  const transport = new StreamableHTTPClientTransport(new URL(endpoint), { requestInit: { headers: {
+  const transport = new StreamableHTTPClientTransport(new URL(address), { requestInit: { headers: {
     Authorization: `Bearer ${key}`, ...(workspace ? { "X-Workspace-Id": workspace } : {}),
   } } });
   await client.connect(transport);
@@ -128,6 +130,64 @@ test("real authorized read/write/delete honors grants, errors and never returns 
   await updateSiteKey(deps, actor, keyA, { name: "MCP A", permissions: [permission(tableA)] });
   value(await client.callTool({ name: "delete_row", arguments: { rowId: created.id } }));
   assert.equal((await db.select().from(rows).where(eq(rows.id, created.id))).length, 0);
+});
+
+test("real Redis gives remote MCP reads 120 calls and keeps the 20-write budget independent", { skip: !process.env.REDIS_URL }, async () => {
+  const redisUrl = process.env.REDIS_URL!;
+  const parsed = new URL(redisUrl);
+  assert(parsed.hostname === "127.0.0.1" && ["6381", "16381"].includes(parsed.port), "Use dedicated local test Redis on port 6381 or 16381");
+  const prefix = `agrid-queue-test-mcp-limit-${randomUUID()}`;
+  const limiter = createSiteRateLimiter({ redisUrl, prefix });
+  const cleanup = createRedisClient(redisConnectionOptions(redisUrl, "producer"), { name: "mcp-limit-test-cleanup", onError: () => {} });
+  const charges: ("read" | "create")[] = [];
+  const limitedApp = new Hono().route("/mcp", createMcpRoute(async () => ({
+    commands: deps, identity: { database: db, resolveSession: async () => null },
+    async siteRateLimit(input) { charges.push(input.kind); await limiter.check(input); }, close: async () => {},
+  }), { publicOrigin: "https://tabdo.example.test", allowedOrigins: [] }));
+  const limitedServer = serve({ fetch: limitedApp.fetch, hostname: "127.0.0.1", port: 0 });
+  const createdRows: string[] = [];
+  let first: Client | undefined, second: Client | undefined;
+  try {
+    await waitForRedisReady(cleanup);
+    if (!limitedServer.listening) await new Promise(resolve => limitedServer.once("listening", resolve));
+    const address = limitedServer.address(); assert(address && typeof address !== "string");
+    const saved = await createSiteKey(deps, actor, { name: "MCP rate limits", permissions: [permission(tableA)] });
+    const target = `http://127.0.0.1:${address.port}/mcp`;
+    first = await connect(saved.secret, undefined, target); second = await connect(saved.secret, undefined, target);
+    // These use the real tool schemas and dispatcher. Missing document/blog/calendar
+    // grants still produce ordinary tool errors and must consume the read class.
+    for (const [name, args] of [
+      ["list_tables", {}], ["get_table", { tableId: tableA }], ["query_rows", { tableId: tableA, limit: 1 }], ["get_row", { rowId: fileRow }],
+      ["get_calendar", { calendarId: randomUUID() }], ["get_document", { tableId: tableA, rowId: fileRow }], ["get_blog_sources", { tableId: tableA }],
+      ["query_calendar_view", { viewId: randomUUID(), rangeStart: "2030-01-01", rangeEnd: "2030-02-01" }],
+    ] as const) {
+      await first.callTool({ name, arguments: args });
+      assert.equal(charges.at(-1), "read", name);
+    }
+    assert.equal(charges.length, 8, "each family reached the actual limiter after schema validation");
+    for (let index = charges.length; index < 120; index++) value(await (index % 2 ? first : second).callTool({ name: "list_tables" }));
+    const readDenied = await first.callTool({ name: "list_tables" });
+    assert.equal(readDenied.isError, true); assert.match(JSON.stringify(readDenied), /Too many requests/);
+    assert.deepEqual(charges, Array(121).fill("read"));
+    for (let index = 0; index < 20; index++) {
+      const created = value(await first.callTool({ name: "add_row", arguments: { tableId: tableA, cells: { [textColumn]: "Limited write" } } }));
+      createdRows.push(created.id);
+    }
+    const writeDenied = await second.callTool({ name: "add_row", arguments: { tableId: tableA, cells: {} } });
+    assert.equal(writeDenied.isError, true); assert.match(JSON.stringify(writeDenied), /Too many requests/);
+    assert.deepEqual(charges.slice(121), Array(21).fill("create"));
+    assert.equal((await db.select().from(rows).where(eq(rows.tableId, tableA))).length, 21, "the rejected write has no side effect");
+    const keys = await cleanup.keys(`${prefix}:site-api:*`);
+    assert.equal(keys.length, 2, "separate read and write counters for the same Key and IP");
+  } finally {
+    await first?.close(); await second?.close();
+    if ("closeAllConnections" in limitedServer) limitedServer.closeAllConnections();
+    await new Promise<void>((resolve, reject) => limitedServer.close(error => error ? reject(error) : resolve()));
+    for (const id of createdRows) await db.delete(rows).where(eq(rows.id, id));
+    await limiter.close();
+    if (cleanup.status === "ready") { const keys = await cleanup.keys(`${prefix}:site-api:*`); if (keys.length) await cleanup.del(...keys); }
+    cleanup.disconnect();
+  }
 });
 
 test("concurrent Keys and agent workspace selectors never share identity", async () => {
