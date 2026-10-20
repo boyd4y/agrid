@@ -5,6 +5,7 @@ import { Button } from "@tabdo/ui/components/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { BRAND } from "@/lib/brand";
 
 export function MarketingLayout() {
@@ -39,7 +40,8 @@ export function MarketingLayout() {
               </Link>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <LanguageToggle />
             <ThemeToggle />
             {!isPending && isAuthenticated ? (
               <Button asChild size="sm">

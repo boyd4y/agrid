@@ -16,6 +16,7 @@
   "disabled": "已停用",
   "user": "用户",
   "language": "语言",
+  "languageCurrent": "切换语言，当前：{{label}}",
   "languageZh": "中文",
   "languageEn": "English",
   "modKey": "⌘",
