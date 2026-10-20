@@ -125,7 +125,8 @@ export async function listAutomations(deps: CommandDependencies, input: ListAuto
 export async function createAutomation(deps: CommandDependencies, input: CreateAutomationInput & OrgScoped, transaction?: Transaction) {
   const { organizationId, actorId, ...wire } = input;
   if (!organizationId || !actorId) throw new Error("缺少自动化创建者或工作区上下文");
-  const body = AUTOMATION_CREATE_SCHEMA.parse(wire);
+  const { workspaceId, ...body } = AUTOMATION_CREATE_SCHEMA.parse(wire);
+  if (workspaceId && workspaceId !== (await requireWorkspace(deps, organizationId, transaction)).id) throw new Error("工作区不匹配");
   const source: AutomationSource = body.source ?? { kind: "table", tableId: body.tableId! };
   if (body.tableId && (source.kind !== "table" || source.tableId !== body.tableId)) throw new Error("来源表格不一致");
   return inTransaction(deps, transaction, async tx => {

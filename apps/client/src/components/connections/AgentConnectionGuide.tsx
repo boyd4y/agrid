@@ -7,7 +7,7 @@ import { CardDescription, CardTitle } from "@tabdo/ui/components/card";
 import { ToggleGroup, ToggleGroupItem } from "@tabdo/ui/components/toggle-group";
 import { connectionClient, connectionClients, connectionRecipe, connectionSources } from "@/components/connections/connection-guide";
 
-export function AgentConnectionGuide({ publicMode = false }: { publicMode?: boolean }) {
+export function AgentConnectionGuide({ publicMode = false, canManageKeys = true }: { publicMode?: boolean; canManageKeys?: boolean }) {
   const { t } = useTranslation("app");
   const text = (key: string) => t(`settings.connections.${key}`);
   const [params, setParams] = useSearchParams();
@@ -20,7 +20,7 @@ export function AgentConnectionGuide({ publicMode = false }: { publicMode?: bool
 
   return <section className="flex min-w-0 flex-col gap-5" data-testid="agent-connection-guide">
     <header className="flex flex-col gap-2">
-      <CardTitle>{t("settings.tabs.connections")}</CardTitle>
+      <CardTitle>{text("guideTitle")}</CardTitle>
       <CardDescription>{text("description")}</CardDescription>
     </header>
     <ToggleGroup type="single" variant="outline" size="sm" value={client} aria-label={text("clientLabel")} className="flex-wrap justify-start gap-2" onValueChange={value => {
@@ -34,7 +34,7 @@ export function AgentConnectionGuide({ publicMode = false }: { publicMode?: bool
         <div className="flex flex-col items-start gap-2">
           <h3 className="font-medium">{text("prepareTitle")}</h3>
           <p className="max-w-prose leading-relaxed text-muted-foreground">{text("prepare")}</p>
-          <Button asChild variant="outline" size="sm"><Link to={publicMode ? "/app/settings?tab=connections" : "/app/settings?tab=api-keys"}>{text(publicMode ? "openWorkspace" : "manageKeys")}</Link></Button>
+          {publicMode ? <Button asChild variant="outline" size="sm"><Link to="/app/settings?tab=connections&section=api-keys">{text("openWorkspace")}</Link></Button> : canManageKeys && <Button variant="outline" size="sm" onClick={() => setParams(current => { const next = new URLSearchParams(current); next.set("tab", "connections"); next.set("section", "api-keys"); return next; })}>{text("manageKeys")}</Button>}
         </div>
       </li>
       <li className="min-w-0 pl-1">

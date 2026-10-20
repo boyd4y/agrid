@@ -12,7 +12,9 @@ const row = await table.get('ROW_UUID');
 await table.create({ COLUMN_UUID: 'New submission' });
 ```
 
-Create a key in **Settings → API Key** and independently select Read, Create, Update, and Delete for each table. Use stable table and column IDs; select values use option IDs.
+Create a key in **Settings → Connect agents → API Key** and independently select Read, Create, Update, and Delete for each table. Use stable table and column IDs; select values use option IDs.
+
+API keys, including raw `client.graphql` calls, cannot read site configuration, configure or publish sites, or generate reports. Manage sites in the signed-in app. Record bodies and attachments use their table grants.
 
 Every operation supports a final `{ signal }`. Inject a custom transport through `createClient({ url, key, fetch })`. Use `tabdo.graphql<T>(query, variables, { operationName, signal })` for raw GraphQL. Failures throw `TabdoApiError`; writes are never retried automatically.
 

@@ -130,7 +130,7 @@ function uploadFiles(tableId: string, columnId: string, files: File[], onProgres
 export type UserApiKeyInfo = import("@tabdo/shared").ApiKeyInfo;
 
 export const api = {
-  listApiKeys: (signal?: AbortSignal) => request<{ keys: UserApiKeyInfo[]; schedules: { id: string; name: string; workspaceId: string; workspaceName: string }[]; tables: (TableMeta & { workspaceName: string })[]; calendars: { id: string; name: string; workspaceName: string; workspaceId: string }[] }>("/api/user/api-keys", { signal }),
+  listApiKeys: (signal?: AbortSignal) => request<{ keys: UserApiKeyInfo[]; workspaces: { id: string; name: string }[]; automations: { id: string; name: string; workspaceId: string; workspaceName: string }[]; schedules: { id: string; name: string; workspaceId: string; workspaceName: string }[]; tables: (TableMeta & { workspaceName: string })[]; calendars: { id: string; name: string; workspaceName: string; workspaceId: string }[] }>("/api/user/api-keys", { signal }),
   createApiKey: (input: import("@tabdo/shared").ApiKeyInput) => request<{ key: UserApiKeyInfo; secret: string }>("/api/user/api-keys", { method: "POST", body: JSON.stringify(input), errorToast: false }),
   updateApiKey: (id: string, input: import("@tabdo/shared").ApiKeyInput) => request<{ key: UserApiKeyInfo }>(`/api/user/api-keys/${id}`, { method: "PATCH", body: JSON.stringify(input), errorToast: false }),
   deleteApiKey: (id: string) => request<{ id: string }>(`/api/user/api-keys/${id}`, { method: "DELETE", errorToast: false }),

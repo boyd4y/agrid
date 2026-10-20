@@ -1,6 +1,7 @@
+import { executeKeyAutomation } from "../data-api/automations.js";
 import { z } from "zod";
 import { and, asc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
-import { AUTOMATION_UPDATE_SCHEMA, scheduledOccurrenceQuerySchema, type ScheduledOccurrence, type AutomationRule } from "@tabdo/shared";
+import { scheduledOccurrenceQuerySchema, type ScheduledOccurrence, type AutomationRule } from "@tabdo/shared";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
 import type { CalendarCaller } from "./service.js";
@@ -8,7 +9,6 @@ import { automations, automationSchedules, automationOccurrences, automationRuns
 import { resolveSiteKey } from "../data-api/keys.js";
 import { requireWorkspace } from "../tenant/workspace.js";
 import { schedulePreview } from "../automation/schedule.js";
-import { updateAutomation } from "../automation/crud.js";
 import { CalendarError } from "./errors.js";
 
 /** Bounded read projection. Neither cron nor predicted points are copied into bookings/occurrences. */
@@ -34,7 +34,6 @@ export async function queryScheduledOccurrences(deps: CommandDependencies, calle
         workspaceId ? eq(automations.workspaceId, workspaceId) : undefined, ids ? inArray(automations.id, ids) : undefined)).orderBy(asc(automations.id)).limit(101);
     if (rules.length > 100) throw new CalendarError(400, "QUERY_LIMIT", "Select at most 100 scheduled rules");
     if (ids && rules.length !== new Set(ids).size) throw new CalendarError(404, "NOT_FOUND", "Scheduled rule not found");
-    if (caller.kind === "key" && new Set(rules.map(v => v.rule.workspaceId)).size > 1) throw new CalendarError(400, "BAD_INPUT", "Query one workspace at a time");
     const items: ScheduledOccurrence[] = [];
     const append = (item: ScheduledOccurrence) => { if (items.length >= input.limit) throw new CalendarError(400, "QUERY_LIMIT", "Schedule projection exceeds limit; reduce range or select fewer rules"); items.push(item); };
     const rangeStart = new Date(input.rangeStart), rangeEnd = new Date(input.rangeEnd), now = deps.now();
@@ -74,24 +73,7 @@ export async function queryScheduledOccurrences(deps: CommandDependencies, calle
   return transaction ? transaction.transaction(work) : deps.database.transaction(work);
 }
 
-/** Key grants authorize only explicitly selected schedule rules, never all calendar automations. */
+/** Compatibility wrapper uses the same command authorization as REST and MCP. */
 export async function updateScheduledAutomation(deps: CommandDependencies, secret: string, raw: unknown) {
-  const schema = AUTOMATION_UPDATE_SCHEMA.extend({ automationId: z.uuid() });
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success) throw new CalendarError(400, "BAD_INPUT", "Invalid scheduled rule update");
-  if (!parsed.data.expectedVersion) throw new CalendarError(400, "BAD_INPUT", "expectedVersion is required");
-  return deps.database.transaction(async tx => {
-    const principal = await resolveSiteKey(tx, secret, true);
-    if (!principal.schedulePermissions?.get(parsed.data.automationId)?.canUpdate) throw new CalendarError(403, "FORBIDDEN", "Schedule update is not granted");
-    const [rule] = await tx.select().from(automations).where(and(eq(automations.id, parsed.data.automationId), eq(automations.organizationId, principal.organizationId), isNull(automations.deletedAt))).for("update");
-    if (!rule || rule.source.kind !== "schedule") throw new CalendarError(404, "NOT_FOUND", "Scheduled rule not found");
-    if (!principal.userId) throw new CalendarError(403, "FORBIDDEN", "A current key owner is required");
-    const [owner] = await tx.select({ id: member.id }).from(member).where(and(eq(member.userId, principal.userId), eq(member.organizationId, principal.organizationId))).for("share");
-    if (!owner) throw new CalendarError(403, "FORBIDDEN", "Key owner is no longer a member");
-    // A schedule grant can edit its timing/name/enabled state; it cannot grant arbitrary agent/data actions.
-    if (parsed.data.actions || parsed.data.trigger || parsed.data.conditions || parsed.data.eventConditions || parsed.data.conditionLogic)
-      throw new CalendarError(403, "FORBIDDEN", "Schedule grants only allow timing, name and enabled changes");
-    const result = await updateAutomation({ ...deps, workspaceId: rule.workspaceId }, { ...parsed.data, organizationId: principal.organizationId, actorId: principal.userId }, tx);
-    return { automationId: result.id, version: result.version, enabled: result.enabled, name: result.name, source: result.source };
-  });
+  return executeKeyAutomation(deps, secret, "updateAutomation", z.record(z.string(), z.unknown()).parse(raw));
 }

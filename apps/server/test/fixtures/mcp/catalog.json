@@ -1,75 +1,19 @@
 [
   {
-    "name": "create_blog",
-    "sha256": "4fd1f5b217441cfe43c5c09245b16f32382820673c1e23484e23f0f651f84592"
+    "name": "create_view",
+    "sha256": "517a6df0d5abc40f97d1e8687d1900bc168ebabb26310526f24144353d82990d"
   },
   {
-    "name": "start_blog_article",
-    "sha256": "95e234504adfe4dd8f4937b21b5058881be4f3bda5e193fc8ece39f18fefb43c"
+    "name": "update_view",
+    "sha256": "c261087005d4fdf540dfc7e0a783a14233c8c3649829fad2ee9724f98701b0cb"
   },
   {
-    "name": "get_blog_sources",
-    "sha256": "184f32f9f2efea4569a817f832e19c7cb95178d2f6a7cc1da919bc16352a64c6"
+    "name": "upload_row_attachment",
+    "sha256": "6387479810ecaccfc12b1709abb8af90305c4af53e2dd60b2d09093879c40064"
   },
   {
-    "name": "get_blog",
-    "sha256": "fa82166387debb030732ca7adc750e56058e708c6df7e744b9e31d0f557cebb2"
-  },
-  {
-    "name": "save_blog",
-    "sha256": "5fd6d4a8ca00aac472e7976aed84efe7e516a2d3542bf6129e76ce9bdc3cd938"
-  },
-  {
-    "name": "build_blog",
-    "sha256": "ef8bbbffc1bea035f4d61a9525f188b0aaad8b0d1fee35cdd753f9ef68d79365"
-  },
-  {
-    "name": "publish_blog",
-    "sha256": "0f23809204433d16940fa0ab7e8772c2e624cdd78626e5edef6e4554052f2cf5"
-  },
-  {
-    "name": "withdraw_blog_article",
-    "sha256": "b5be653442cb7d15c3787b0c969036361971c21e5243bc9102847925b56d365c"
-  },
-  {
-    "name": "unpublish_blog",
-    "sha256": "49eaa43efbf02a37ba013193aa3cb3f4edbd2106f7da3dc98b6d6e6495902f0f"
-  },
-  {
-    "name": "restore_blog_revision",
-    "sha256": "aa7043c96dddd7a94c0cfc82bab5382438f9c8c217529170daf729d8618552c1"
-  },
-  {
-    "name": "create_blog_preview",
-    "sha256": "b9973e99bbd0788e5d885d0c91ed87130fd1a21b1b094c1f9cfda697ca67dccf"
-  },
-  {
-    "name": "revoke_blog_previews",
-    "sha256": "dd9b2d4701c678af77dbe658ece760f98cccf678921636af74e3179e958c246c"
-  },
-  {
-    "name": "get_document",
-    "sha256": "42a52ba9bc08b7b83a3da9dd4ed364f10405ac06ba58dd3d32f5b69062a312bf"
-  },
-  {
-    "name": "create_document",
-    "sha256": "d026cb98bdb458ecfc2f1b0428f57c635d0249e64b10d4fcce9d243d1aee8688"
-  },
-  {
-    "name": "replace_document",
-    "sha256": "793e2ce5dc5ab828939312a57bd4f952e6737d7ce8817cb0e018104894124792"
-  },
-  {
-    "name": "render_document",
-    "sha256": "83ca1494e6d09b844819c5f79dcc12863a099e14466ec684822e30aca0268351"
-  },
-  {
-    "name": "upload_document_image",
-    "sha256": "7635186de5c9e7980a77205f23b635cbfa4714bb4561b468963abbad45996507"
-  },
-  {
-    "name": "get_document_image",
-    "sha256": "402ff7802eac3e945215cc4b1d093cdfc8fba6ce582c7dfbc5c42e6f234b3837"
+    "name": "get_row_attachment",
+    "sha256": "5446be61d1109bfe30561535980a368bcd6bbd3814ee6a9746462d6ffcbe3db7"
   },
   {
     "name": "list_calendar_subscriptions",
@@ -216,6 +160,10 @@
     "sha256": "6ef447b7247a224ae5ae1bdbef2a22fbcece3b75c86b81938d1062426ab9a074"
   },
   {
+    "name": "list_workspaces",
+    "sha256": "4c5dab16c9b515ccb54294627e543bd7199520f24e9ff6a088a435df98cdf0b7"
+  },
+  {
     "name": "get_workspace",
     "sha256": "db278c964613cddc63a5a58b0a6a9baf6760338fdb2da52de3b52a6cfd239449"
   },
@@ -261,7 +209,7 @@
   },
   {
     "name": "create_automation",
-    "sha256": "8d69ea9738beebb79ab854bd8c8cb611a493c9224b3f1793781a20c12ea0d1fb"
+    "sha256": "4a1f89e70b70f91a1a1aabf1d94a5def87b877d37b4cb26851d192282f781bfd"
   },
   {
     "name": "update_automation",
@@ -321,7 +269,7 @@
   },
   {
     "name": "get_row",
-    "sha256": "dc0c7677149aa9e2ae62d764c17dfd3b2f38cf0b9465b265e39fd2c592794544"
+    "sha256": "30f1ae6805261af718d8b67cfbd221dc04f4462ab8ccdfa9ebc184328fd35d0a"
   },
   {
     "name": "list_tables",
@@ -341,11 +289,11 @@
   },
   {
     "name": "update_cells",
-    "sha256": "f7119bb25f2e54bfa51936202d044746dc1b01b1cc4fb51c11b67a0f10022c78"
+    "sha256": "6a1c60dd98b0e7c729781af5b88cc7e7da9aa41fd1546eae5247bc223d11135e"
   },
   {
     "name": "add_row",
-    "sha256": "c0bd0b3bbada415bcdab866ab42b3821b267bb624ac4e67c9c5cfba619eddafe"
+    "sha256": "00573733540e0289ba37c06a33d938827beaf8ed9f6d546be31fc35bfdcf1dc7"
   },
   {
     "name": "delete_row",

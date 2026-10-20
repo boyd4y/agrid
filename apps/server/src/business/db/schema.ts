@@ -1,6 +1,6 @@
 import { sites } from "./sites-schema.js";
 import { workspaces, workspaceColumn } from "./workspaces-schema.js";
-export { workspaces } from "./workspaces-schema.js";
+export { workspaces };
 import { user, session, account, verification, organization, member, invitation, userApiKeys } from "@tabdo/auth/schema";
 export { user, session, account, verification, organization, member, invitation, userApiKeys, MEMBER_KINDS, MEMBER_ROLES, type MemberKind, type MemberRole } from "@tabdo/auth/schema";
 
@@ -267,6 +267,8 @@ export const automations = pgTable(
     workspaceId: workspaceColumn(),
     organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
     createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    // Keep the binding after key deletion: a missing key must stop execution, never inherit the owner.
+    executionKeyId: uuid("execution_key_id"),
     source: jsonb("source").$type<import("@tabdo/shared").AutomationSource>().notNull(),
     eventConditions: jsonb("event_conditions").$type<import("@tabdo/shared").AutomationEventCondition[]>().default([]).notNull(),
     tableId: uuid("table_id")
@@ -573,10 +575,22 @@ export { calendars, calendarPeople, availabilityExceptions, bookings, calendarRe
 export const apiKeySchedules = pgTable("api_key_schedules", {
   keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }),
   automationId: uuid("automation_id").notNull().references(() => automations.id, { onDelete: "cascade" }),
-  canRead: boolean("can_read").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false),
-}, t => [uniqueIndex("api_key_schedules_key_rule_idx").on(t.keyId, t.automationId), check("api_key_schedules_capability", sql`${t.canRead} OR ${t.canUpdate}`)]);
+  grantVersion: integer("grant_version").$type<1 | 2>().notNull().default(1),
+  canRead: boolean("can_read").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false), canDelete: boolean("can_delete").notNull().default(false),
+}, t => [uniqueIndex("api_key_schedules_key_rule_idx").on(t.keyId, t.automationId), check("api_key_schedules_grant_version", sql`${t.grantVersion} IN (1, 2)`), check("api_key_schedules_capability", sql`${t.canRead} OR ${t.canUpdate} OR ${t.canDelete}`)]);
 
 export { recordDocuments, recordDocumentLinks, documentRevisions, documentReceipts, documentImages, apiKeyDocuments } from "./documents-schema.js";
 
 export { calendarEvents, calendarSubscriptions, calendarDeliveries, calendarDeliveryAttempts } from "./calendar-subscriptions-schema.js";
 export * from "./blogs-schema.js";
+
+export const apiKeyAutomations = pgTable("api_key_automations", {
+  keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }),
+  automationId: uuid("automation_id").notNull().references(() => automations.id, { onDelete: "cascade" }),
+  canRead: boolean("can_read").notNull().default(false), canUpdate: boolean("can_update").notNull().default(false), canDelete: boolean("can_delete").notNull().default(false),
+}, t => [uniqueIndex("api_key_automations_key_rule_idx").on(t.keyId, t.automationId), check("api_key_automations_capability", sql`${t.canRead} OR ${t.canUpdate} OR ${t.canDelete}`)]);
+export const apiKeyWorkspaces = pgTable("api_key_workspaces", {
+  keyId: uuid("key_id").notNull().references(() => userApiKeys.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  canCreateAutomations: boolean("can_create_automations").notNull().default(false), canCreateSchedules: boolean("can_create_schedules").notNull().default(false),
+}, t => [uniqueIndex("api_key_workspaces_key_workspace_idx").on(t.keyId, t.workspaceId), check("api_key_workspaces_capability", sql`${t.canCreateAutomations} OR ${t.canCreateSchedules}`)]);

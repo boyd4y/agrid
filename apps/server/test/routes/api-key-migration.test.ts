@@ -38,3 +38,26 @@ test("unification preserves existing key hashes and per-table capabilities witho
     }), error => error === rolledBack);
   } finally { await sql.end(); }
 });
+
+test("four-resource grants preserve old schedule bits and grant no creation, deletion or execution binding", async () => {
+  const sql = postgres(url, { max: 1 });
+  const schema = `key_scope_${randomUUID().replaceAll("-", "")}`;
+  const rolledBack = new Error("fixture rollback");
+  try {
+    await assert.rejects(sql.begin(async tx => {
+      await tx.unsafe(`CREATE SCHEMA "${schema}"; SET LOCAL search_path TO "${schema}"`);
+      await tx.unsafe('CREATE TABLE api_keys (id uuid PRIMARY KEY, key_hash text NOT NULL); CREATE TABLE automations (id uuid PRIMARY KEY); CREATE TABLE workspaces (id uuid PRIMARY KEY); CREATE TABLE api_key_schedules (key_id uuid, automation_id uuid, can_read boolean NOT NULL, can_update boolean NOT NULL, CONSTRAINT api_key_schedules_capability CHECK (can_read OR can_update))');
+      const key = randomUUID(), rule = randomUUID();
+      await tx`INSERT INTO api_keys VALUES (${key}, 'same-secret-hash')`; await tx`INSERT INTO automations VALUES (${rule})`;
+      await tx`INSERT INTO api_key_schedules VALUES (${key}, ${rule}, true, true)`;
+      const raw = readFileSync(new URL("../../drizzle/0042_agent_access_permissions.sql", import.meta.url), "utf8").replaceAll('"public".', `"${schema}".`);
+      for (const statement of raw.split("--> statement-breakpoint").filter(x => x.trim())) await tx.unsafe(statement);
+      assert.deepEqual([...(await tx`SELECT can_read, can_update, can_delete, grant_version FROM api_key_schedules`)], [{ can_read: true, can_update: true, can_delete: false, grant_version: 1 }]);
+      assert.equal((await tx`SELECT key_hash FROM api_keys`)[0].key_hash, 'same-secret-hash');
+      assert.equal((await tx`SELECT execution_key_id FROM automations`)[0].execution_key_id, null);
+      assert.equal((await tx`SELECT * FROM api_key_automations`).length, 0);
+      assert.equal((await tx`SELECT * FROM api_key_workspaces`).length, 0);
+      throw rolledBack;
+    }), error => error === rolledBack);
+  } finally { await sql.end(); }
+});

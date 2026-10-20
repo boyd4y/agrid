@@ -47,3 +47,9 @@ test('workspace grouping includes calendars and plans in workspaces without tabl
   assert.equal(groups.length, 1); assert.equal(groups[0].tables.length, 0);
   assert.equal(groups[0].calendars[0].id, 'cal'); assert.equal(groups[0].schedules[0].id, 'plan');
 });
+
+test('four resource groups include empty workspaces and retain stable identities', () => {
+  const groups = groupPermissionResources(tables, [], [], [{ id: 'rule', name: 'Rule', workspaceId: 'workspace-b', workspaceName: 'Team' }], [{ id: 'empty', name: 'Empty' }, { id: 'workspace-a', name: 'Team' }, { id: 'workspace-b', name: 'Team' }]);
+  assert.equal(groups[0].workspaceId, 'empty'); assert.equal(groups[0].tables.length, 0); assert.equal(groups[0].automations.length, 0);
+  assert.equal(groups[2].automations[0].id, 'rule'); assert.equal(groups[1].name, 'Team (workspace-a)');
+});

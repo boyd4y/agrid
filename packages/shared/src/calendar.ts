@@ -83,8 +83,8 @@ export type CompleteCalendarPage<T> = { items: T[]; complete: true; limit: numbe
 export type BookingReminder = z.output<typeof bookingReminderSchema>;
 export type BookingReminderIntent = { id: string; revision: number; kind: BookingReminder["kind"]; offsetMinutes: number; scheduledFor: string; status: string; reason: string | null; acceptedAt: string | null; runId: string | null; threadId: string | null };
 export type ScheduledOccurrence = { automationId: string; ruleVersion: number; name: string; enabled: boolean; cron: string; scheduledFor: string; timeZone: string; projection: "planned" | "occurred"; delayed: boolean; status: string | null; threadId: string | null };
-export type SchedulePermission = { automationId: string; canRead: boolean; canUpdate: boolean };
-export const schedulePermissionSchema = z.strictObject({ automationId: id, canRead: z.boolean(), canUpdate: z.boolean() }).refine(v => v.canRead || v.canUpdate);
+export type SchedulePermission = { automationId: string; canRead: boolean; canUpdate: boolean; canDelete?: boolean; grantVersion?: 1 | 2 };
+export const schedulePermissionSchema = z.strictObject({ automationId: id, canRead: z.boolean(), canUpdate: z.boolean(), canDelete: z.boolean().default(false), grantVersion: z.union([z.literal(1), z.literal(2)]).default(1) }).refine(v => v.canRead || v.canUpdate || v.canDelete);
 export type CalendarResults = CalendarSubscriptionResults & {
   queryScheduledOccurrences: CompleteCalendarPage<ScheduledOccurrence>;
   setBookingReminders: BookingReceipt;

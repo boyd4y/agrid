@@ -159,8 +159,8 @@
       "name": "Name",
       "permissions": "Permissions",
       "tables": "Table",
-      "tablesHint": "Read includes bodies and owned attachments. Create adds rows; Update edits rows. Read + Update also configures and explicitly publishes site views. Saving source data does not publish it.",
-      "grantDescription": "Grant only the resources and data actions needed.",
+      "tablesHint": "Grants apply across workspaces in this organization. Rule permissions do not grant access to their table data. Creation requires a workspace grant; external rules support table record actions.",
+      "grantDescription": "Choose operations for each resource. Only granted operations are available to this key.",
       "createdTitle": "API key created",
       "once": "Copy the key now. It will not be displayed again.",
       "key": "API key",
@@ -194,7 +194,19 @@
       "otherResources": "Calendars and schedules · {{count}} granted",
       "otherResourcesNamed": "{{name}}: calendars and schedules",
       "calendarResource": "Calendar: {{name}}",
-      "scheduleResource": "Schedule: {{name}}"
+      "scheduleResource": "Schedule: {{name}}",
+      "resource": "Resource",
+      "permissionTabs": "Resource permissions",
+      "categories": {
+        "tables": "Tables",
+        "automations": "Automations",
+        "calendars": "Calendars",
+        "schedules": "Scheduled tasks"
+      },
+      "emptyResources": "No resources in this workspace",
+      "createInWorkspace": "Create in this workspace",
+      "automationCount": "{{count}} automations",
+      "creationCount": "Create in {{count}} workspaces"
     },
     "generalDescription": "Adjust appearance and language.",
     "connections": {
@@ -254,7 +266,8 @@
           "note": "If your version only offers OAuth and has no secure HTTP headers form, this connection is unavailable. Use a client that supports Bearer headers. Grok Bot needs a public HTTPS URL; never paste the key into chat or a URL.",
           "verify": "Open Connect apps and add the connector if prompted. Attach tabdo to a task with @, then ask it to list your authorized tables."
         }
-      }
+      },
+      "guideTitle": "Connection guide"
     }
   },
   "directory": {

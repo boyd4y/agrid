@@ -22,7 +22,7 @@ export const docsPages: DocsPage[] = [
       {
         type: "callout",
         tone: "info",
-        text: "You do not need a separate API key to use agents in tabdo. To access table data from your own application, a workspace owner or admin can create a per-table data key under Settings → API Key.",
+        text: "You do not need a separate API key to use agents in tabdo. To access table data from your own application, a workspace owner or admin can create a per-table data key under Settings → Connect agents → API Key.",
       },
       { type: "h2", text: "Get started" },
       {
@@ -122,12 +122,12 @@ export const docsPages: DocsPage[] = [
     title: "Connect an AI client with MCP",
     description: "Connect an external MCP client to tabdo from your workspace settings.",
     body: [
-      { type: "p", text: "Open Settings → Connect agents, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
-      { type: "p", text: "If the client needs a data access key, create a standard key under Settings → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
-      { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing a site view requires both Read and Update. See Tables and the REST API reference for those shared data operations." },
+      { type: "p", text: "Open Settings → Connect agents → Connection guide, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
+      { type: "p", text: "If the client needs a data access key, create a standard key under Settings → Connect agents → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
+      { type: "p", text: "MCP tools follow the same permissions as REST and GraphQL. Table Read/Create/Update/Delete permissions govern records, bodies and attachments. API keys cannot read site configuration, configure or publish sites, or generate reports. Manage sites in the signed-in app; see Tables and the REST API reference for supported data operations." },
       { type: "cards", items: [
         { title: "Tables and records", description: "Learn how table fields, record properties, and record bodies fit together.", href: "/docs/tables", badge: "Data" },
-        { title: "REST API", description: "Read the shared row, body, attachment, and site view API reference.", href: "/docs/rest", badge: "API" },
+        { title: "REST API", description: "Read the record, body and attachment API reference.", href: "/docs/rest", badge: "API" },
       ] },
     ],
   },
@@ -184,7 +184,7 @@ curl -s "$TABDO_API_URL/api/tables" \\
       },
       {
         type: "p",
-        text: "Create tab_ keys under Settings → API Key; only workspace owners/admins can manage them. Choose read, create, update, and delete permissions independently for each table. A key can access records only in tables you authorize; new tables are not added automatically, and write permission does not imply read access. Changes take effect on the next request, and deleting a key revokes access. The full key is shown only once. Use it with table REST, GraphQL, or @tabdo/sdk. A data key cannot change table structure, manage the workspace, or run agents.",
+        text: "Create tab_ keys under Settings → Connect agents → API Key; only workspace owners/admins can manage them. Choose read, create, update, and delete permissions independently for each table. A key can access records only in tables you authorize; new tables are not added automatically, and write permission does not imply read access. Changes take effect on the next request, and deleting a key revokes access. The full key is shown only once. Use it with table REST, GraphQL, or @tabdo/sdk. A data key cannot change table structure, manage the organization, configure or publish sites, generate reports, or create or change agent actions. Use MCP list_workspaces or POST /api/commands with command listWorkspaces to get authorized workspace IDs; pass workspaceId when creating an automation. Keys apply across workspaces in the same organization; new resources are not granted automatically. Automations and scheduled tasks have separate read, update and delete grants; creation requires a workspace grant. Rule permissions do not grant access to source or target table data. External rules support table record actions; agent, mail and schema actions require a member. Existing schedule update grants continue to cover timing, name and enabled state only; deselect and reselect Update in the key editor to authorize definition changes. For existing scheduled tasks, keys can adjust timing, name and enabled state while keeping the approved actions and execution identity unchanged, including tasks that run agents. New or changed agent and mail actions require a member. A key stops working if its manager loses organization owner/admin access.",
       },
       { type: "h2", text: "Minimal data flow" },
       { type: "p", text: "Start with GET /api/tables or GET /api/tables/:tableId to discover tables and column metadata. Keep table.id, column.id, and options[].id for select fields. Use IDs, not column names or option labels, in write requests. Keys, IDs, and host names below are fictional placeholders." },
@@ -249,7 +249,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       },
       {
         type: "callout",
-        text: "To connect your own application, ask a workspace owner or admin to create a data key under Settings → API Key and grant only the operations needed for each table. The key does not inherit the creator’s other permissions and cannot change table structure or manage the workspace.",
+        text: "To connect your own application, ask a workspace owner or admin to create a data key under Settings → Connect agents → API Key and grant only the operations needed for each table. The key does not inherit the creator’s other permissions and cannot change table structure or manage the workspace.",
       },
     ],
   },
@@ -382,7 +382,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "Scheduled plans appear on the calendar by default, alongside events. Predicted times are previews and recorded points show runs; neither reserves event time. Select a plan point to review it, or open the scheduled plan to edit its rule. Plan visibility requires separate read access to each selected plan.",
       ] },
       { type: "h2", text: "Connect with the REST API" },
-      { type: "p", text: "A workspace owner/admin can create a key under Settings → API Key and grant access to each calendar separately. Event detail, create, update, cancel, calendar management, and triggering an agent reminder are separate grants. Create access does not include event detail. Reading the member directory requires at least one of calendar read, create, update, or manage access. Reminder setup requires both event update and trigger-agent access. Scheduled plan projections use separate per-plan read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
+      { type: "p", text: "A workspace owner/admin can create a key under Settings → Connect agents → API Key and grant access to each calendar separately. Event detail, create, update, cancel, calendar management, and triggering an agent reminder are separate grants. Create access does not include event detail. Reading the member directory requires at least one of calendar read, create, update, or manage access. Reminder setup requires both event update and trigger-agent access. Scheduled plan projections use separate per-plan read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
@@ -419,7 +419,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
         ["Set / read reminders (POST / GET)", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["Query scheduled task times (POST)", "/api/schedules/occurrences/query"],
       ] },
-      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → API Key. The people, working-hours, unavailable-time, and availability routes above remain available for legacy personId bookings; they are not a setup step for ordinary events." },
+      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → Connect agents → API Key. The people, working-hours, unavailable-time, and availability routes above remain available for legacy personId bookings; they are not a setup step for ordinary events." },
       { type: "p", text: "Use userId rather than personId when creating a new event. Event queries can filter by userId; personId remains available for legacy records. Legacy personId bookings keep their working-hours and time-off checks. All events still check for overlapping time across the workspace calendars. The batch route accepts 1–100 event create, update, or cancel operations and applies them together; if one operation fails validation or conflicts, the batch is rolled back." },
       { type: "code", lang: "bash", code: `# Update an event. Use the latest version you have read.
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
@@ -538,7 +538,7 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
       { type: "p", text: "Outbound event subscriptions send calendar changes from a granted calendar to your HTTPS receiver. The app shows calendar bookings as events, while existing subscription event types such as booking.created and person.updated retain their names for compatibility. Use subscriptions to let your own application know when something changes in tabdo. They are not two-way sync with Google, Outlook, or another calendar, and they do not send email or text messages." },
       { type: "h2", text: "Set up permissions and a receiver" },
       { type: "ol", items: [
-        "Create or edit an API key under Settings → API Key. An owner/admin grants subscription, delivery-read, and subscription-management permissions separately for the target calendar. Creating a subscription also requires read access to that calendar. New keys have none of these grants by default.",
+        "Create or edit an API key under Settings → Connect agents → API Key. An owner/admin grants subscription, delivery-read, and subscription-management permissions separately for the target calendar. Creating a subscription also requires read access to that calendar. New keys have none of these grants by default.",
         "Prepare a publicly reachable HTTPS receiver on the standard port 443. The URL cannot include a username, password, or fragment. Your receiver must retain the original request bytes to verify the signature.",
         "Create a subscription with POST /api/calendars/{calendarId}/subscriptions. Choose a name, receiver URL, and event types. The successful response displays a signing secret once; save it securely because its plaintext cannot be read again.",
       ] },
@@ -691,7 +691,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     slug: "rest",
     sectionId: "reference",
     title: "Data REST API",
-    description: "Table and record routes, including optional record bodies, attachments, and site views for tab_ keys.",
+    description: "Table and record routes, including optional record bodies and attachments for tab_ keys.",
     body: [
       {
         type: "table",
@@ -707,10 +707,10 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["DELETE /api/tables/:tableId/rows/:rowId", "Delete a record; requires delete grant"],
           ["POST /api/tables/:tableId/rows/:rowId/attachments", "Upload with { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey }; requires Update"],
           ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "Read an authorized body attachment; requires Read"],
-          ["POST /api/commands (getView/listViews/createView/updateView)", "Read views with Read; create, configure, or explicitly publish/unpublish/withdraw with Read+Update"],
+          ["POST /api/commands (getView/listViews)", "Read non-site table views with Read; site configuration is not available to API keys"],
         ],
       },
-      { type: "h2", text: "Record bodies and site views" },
+      { type: "h2", text: "Record bodies and attachments" },
       { type: "p", text: "A record body is a built-in row field alongside ordinary cells. Row list endpoints omit its full content. GET one record with ?include=body&bodyFormat=json (or html) returns body content, version, schemaVersion, attachments, and optional rendered HTML. POST can create a row with body: { content }; PATCH can update it with body: { content, expectedVersion }, where expectedVersion is required and is independent of the row version. The first write to an empty body uses version 0. Body writes require idempotencyKey and return a version receipt, not body content." },
       { type: "p", text: "To add an image, upload it to the row attachment endpoint with target=body, the current body expectedVersion, name, mimeType, base64, and idempotencyKey. The response includes fileId and bodyVersion; reference fileId in the body's image content. Upload requires Update permission. GET an attachment by fileId requires Read permission." },
       { type: "code", lang: "json", code: `{
@@ -721,12 +721,12 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "base64": "BASE64_ENCODED_IMAGE_CONTENT",
   "idempotencyKey": "upload-cover-1"
 }` },
-      { type: "p", text: "POST /api/commands with this input to read a site view and its current publication state:" },
+      { type: "p", text: "POST /api/commands with this input to read a non-site table view:" },
       { type: "code", lang: "json", code: `{
   "command": "getView",
   "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
 }` },
-      { type: "p", text: "Create a site view with createView({ tableId, type: \"site\", name, config, idempotencyKey }) and configure its Blog template, source-table field mapping, and selected row IDs. getView returns the view plus site state { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }; use site.publishedRevisionId as expectedPublishedRevisionId when publishing. On first publish, use null. Use the current published revision ID to unpublish, or to withdraw a specific row include rowId. Saving source rows or view config does not publish. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing it requires both Read and Update on its table." },
+      { type: "p", text: "API keys cannot read, create, configure, publish, unpublish or withdraw site views, even with table Read and Update grants. These operations return 403; listViews omits site views. Manage sites in the signed-in app. Record bodies and attachments remain available under their table grants." },
       { type: "code", lang: "json", code: `{
   "cells": { "col_title": "Field notes" },
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "A first draft." }] }] } },
@@ -736,56 +736,8 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "An updated draft." }] }] }, "expectedVersion": 1 },
   "idempotencyKey": "update-row-body-1"
 }` },
-      { type: "p", text: "POST /api/commands with this input to create a site view:" },
-      { type: "code", lang: "json", code: `{
-  "command": "createView",
-  "input": {
-    "tableId": "00000000-0000-4000-8000-000000000001",
-    "type": "site",
-    "name": "Field notes",
-    "config": {
-      "template": "blog",
-      "mapping": { "title": "00000000-0000-4000-8000-000000000011", "slug": "00000000-0000-4000-8000-000000000012" },
-      "authorName": "Tabdo Team",
-      "description": "Notes and updates",
-      "language": "en",
-      "articles": [{ "rowId": "00000000-0000-4000-8000-000000000021", "imageIds": [] }]
-    },
-    "idempotencyKey": "create-site-view-1"
-  }
-}` },
-      { type: "p", text: "After reviewing the saved view, publish it with the current view version. For the first publication, expectedPublishedRevisionId is null:" },
-      { type: "code", lang: "json", code: `{
-  "command": "updateView",
-  "input": {
-    "viewId": "00000000-0000-4000-8000-000000000031",
-    "expectedVersion": 1,
-    "idempotencyKey": "publish-site-view-1",
-    "publication": { "action": "publish", "expectedPublishedRevisionId": null }
-  }
-}` },
-      { type: "p", text: "To unpublish, set expectedPublishedRevisionId to the current publishedRevisionId returned by getView:" },
-      { type: "code", lang: "json", code: `{
-  "command": "updateView",
-  "input": {
-    "viewId": "00000000-0000-4000-8000-000000000031",
-    "expectedVersion": 2,
-    "idempotencyKey": "unpublish-site-view-1",
-    "publication": { "action": "unpublish", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041" }
-  }
-}` },
-      { type: "p", text: "To withdraw one selected record from the published site, also provide its rowId:" },
-      { type: "code", lang: "json", code: `{
-  "command": "updateView",
-  "input": {
-    "viewId": "00000000-0000-4000-8000-000000000031",
-    "expectedVersion": 2,
-    "idempotencyKey": "withdraw-site-row-1",
-    "publication": { "action": "withdraw", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041", "rowId": "00000000-0000-4000-8000-000000000021" }
-  }
-}` },
       { type: "h2", text: "Requests and responses" },
-      { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. Row and attachment resource routes return resource data directly. POST /api/commands returns { ok, command, result }; for getView/createView, read the view ID from result.id and the current view version and publication pointer from result.site.version and result.site.publishedRevisionId. GraphQL command results use data.getView or data.createView." },
+      { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. Row and attachment resource routes return resource data directly. POST /api/commands returns { ok, command, result }; read a non-site view from result for getView. GraphQL command results use the standard data envelope." },
       { type: "p", text: "POST row body: { \"cells\": { \"col_title\": \"New task\" } }. PATCH row body: { \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }. A stale version returns HTTP 409 with { error: \"Record changed; reload before updating\" }." },
       { type: "ul", items: [
         "cells accepts writable API types only: text, number, date, checkbox, select, and multi_select. Use options[].id from field metadata for select values, not the label. Deleting a row with linked records may also require update permission on the target table to remove inverse links.",
@@ -822,7 +774,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "query": "query Browse($tableId: ID!, $limit: Int!, $cursor: String) { table(id: $tableId) { id name columns { id name type options { id label color } readable writable } rows(options: { limit: $limit, cursor: $cursor }) { rows { id version cells createdAt updatedAt } nextCursor hasMore totalMatched } } }",
   "variables": { "tableId": "tbl_example", "limit": 50, "cursor": null }
 }` },
-      { type: "p", text: "Query tables or table(id), columns, rows(options), and row(id). rows defaults to 50 records per page and caps at 100; pass the returned nextCursor as options.cursor for the next page. Select Row.body explicitly to read it. createRow and updateRow accept body and an idempotency key; the body uses its own expectedVersion. Site views use the same createView/updateView operations as REST. Data is returned in the standard { data } envelope." },
+      { type: "p", text: "Query tables or table(id), columns, rows(options), and row(id). rows defaults to 50 records per page and caps at 100; pass the returned nextCursor as options.cursor for the next page. Select Row.body explicitly to read it. createRow and updateRow accept body and an idempotency key; the body uses its own expectedVersion. Site configuration and publication are unavailable to API keys through GraphQL, as they are through REST and MCP. Data is returned in the standard { data } envelope." },
       { type: "h2", text: "Record mutations" },
       { type: "code", lang: "graphql", code: `mutation UpdateTask($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int) {
   updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version) {
@@ -849,7 +801,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     title: "JavaScript / TypeScript SDK",
     description: "Access tab_ authorized data APIs with @tabdo/sdk.",
     body: [
-      { type: "p", text: "Install the public @tabdo/sdk package from npm and use createClient with your tabdo URL and a tab_ data access key. The published 0.1.1 release provides table data methods and does not use your signed-in browser session. Use REST, GraphQL, or an authorized MCP connection for record bodies and site views. They use the same table access grants as other record and view operations." },
+      { type: "p", text: "Install the public @tabdo/sdk package from npm and use createClient with your tabdo URL and a tab_ data access key. The published 0.1.1 release provides table data methods and does not use your signed-in browser session. Use REST, GraphQL, or an authorized MCP connection for record bodies and attachments under the same table grants. Site configuration and publication are not available to API keys through these interfaces or client.graphql; manage sites in the signed-in app." },
       { type: "code", lang: "bash", code: `npm install @tabdo/sdk` },
       { type: "code", lang: "typescript", code: `import { createClient } from "@tabdo/sdk";
 
@@ -892,7 +844,7 @@ if (row) {
         type: "ul",
         items: [
           "Signed-in account: use your tabdo account for workspace features.",
-          "Data access key: a workspace owner/admin creates Authorization: Bearer tab_… under Settings → API Key. It grants only the selected read, create, update, and delete operations for each table.",
+          "Data access key: a workspace owner/admin creates Authorization: Bearer tab_… under Settings → Connect agents → API Key. It grants only the selected read, create, update, and delete operations for each table.",
           "tab_ keys cannot change table schemas, manage the workspace, or run agents; unsupported operations are rejected.",
         ],
       },

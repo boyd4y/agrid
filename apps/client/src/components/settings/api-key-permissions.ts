@@ -41,17 +41,15 @@ export function setTableAccess(input: ApiKeyInput, tableId: string, access: Tabl
 export function authorizedTableIds(input: ApiKeyInput) { return input.permissions.filter(grant => operations.some(op => grant[op])).map(grant => grant.tableId); }
 
 export type PermissionResource = { id: string; name: string; workspaceId: string; workspaceName: string };
-export function groupPermissionResources(tables: readonly ApiKeyTable[], calendars: readonly PermissionResource[], schedules: readonly PermissionResource[]) {
-  const groups = new Map(groupPermissionTables(tables).map(group => [group.workspaceId, { ...group, calendars: [] as PermissionResource[], schedules: [] as PermissionResource[] }]));
-  for (const [kind, resources] of [["calendars", calendars], ["schedules", schedules]] as const) {
+export function groupPermissionResources(tables: readonly ApiKeyTable[], calendars: readonly PermissionResource[], schedules: readonly PermissionResource[], automations: readonly PermissionResource[] = [], workspaces: readonly { id: string; name: string }[] = []) {
+  const groups = new Map(workspaces.map(workspace => [workspace.id, { workspaceId: workspace.id, name: workspace.name, tables: [] as ApiKeyTable[], calendars: [] as PermissionResource[], schedules: [] as PermissionResource[], automations: [] as PermissionResource[] }]));
+  for (const [kind, resources] of [["tables", tables], ["calendars", calendars], ["schedules", schedules], ["automations", automations]] as const) {
     for (const resource of resources) {
-      const group = groups.get(resource.workspaceId) ?? { workspaceId: resource.workspaceId, name: resource.workspaceName, tables: [], calendars: [], schedules: [] };
-      group[kind].push(resource); groups.set(resource.workspaceId, group);
+      const group = groups.get(resource.workspaceId) ?? { workspaceId: resource.workspaceId, name: resource.workspaceName, tables: [], calendars: [], schedules: [], automations: [] };
+      (group[kind] as PermissionResource[]).push(resource); groups.set(resource.workspaceId, group);
     }
   }
-  const originalNames = new Map([...tables, ...calendars, ...schedules].map(resource => [resource.workspaceId, resource.workspaceName]));
   const counts = new Map<string, number>();
-  for (const name of originalNames.values()) counts.set(name, (counts.get(name) ?? 0) + 1);
-  return [...groups.values()].map(group => ({ ...group, name: counts.get(originalNames.get(group.workspaceId)!)! > 1
-    ? `${originalNames.get(group.workspaceId)} (${group.workspaceId})` : originalNames.get(group.workspaceId)! }));
+  for (const group of groups.values()) counts.set(group.name, (counts.get(group.name) ?? 0) + 1);
+  return [...groups.values()].map(group => ({ ...group, name: counts.get(group.name)! > 1 ? `${group.name} (${group.workspaceId})` : group.name }));
 }

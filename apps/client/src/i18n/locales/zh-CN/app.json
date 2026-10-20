@@ -159,8 +159,8 @@
       "name": "名称",
       "permissions": "权限",
       "tables": "表格",
-      "tablesHint": "读取包含正文和记录附件；创建新增记录；更新编辑记录。读取 + 更新也可配置并显式发布站点视图，保存来源数据不会自动发布。",
-      "grantDescription": "仅授权所需的资源和数据操作。",
+      "tablesHint": "授权适用于本企业内的各工作区。规则权限不会授予其表格数据权限；创建需勾选工作区权限，外部规则支持表格记录动作。",
+      "grantDescription": "按资源选择允许的操作，Key 仅可调用已授权的能力。",
       "createdTitle": "API Key 已创建",
       "once": "请立即复制 Key，关闭后不会再次显示。",
       "key": "API Key",
@@ -191,7 +191,19 @@
       "otherResources": "日历与定时计划 · 已授权 {{count}} 项",
       "otherResourcesNamed": "{{name}}：日历与定时计划",
       "calendarResource": "日历：{{name}}",
-      "scheduleResource": "定时计划：{{name}}"
+      "scheduleResource": "定时计划：{{name}}",
+      "resource": "资源",
+      "permissionTabs": "资源权限",
+      "categories": {
+        "tables": "表格",
+        "automations": "自动化",
+        "calendars": "日历",
+        "schedules": "定时任务"
+      },
+      "emptyResources": "此工作区暂无资源",
+      "createInWorkspace": "在此工作区创建",
+      "automationCount": "{{count}} 个自动化",
+      "creationCount": "可在 {{count}} 个工作区创建"
     },
     "generalDescription": "调整外观和语言。",
     "connections": {
@@ -251,7 +263,8 @@
           "note": "如果当前版本仅提供 OAuth，没有安全的 HTTP 请求头表单，则无法使用此方式接入，请改用支持 Bearer 请求头的客户端。Grok Bot 需要公网 HTTPS 地址，切勿将密钥粘贴到聊天或 URL 中。",
           "verify": "按提示在 Connect apps 中添加连接器，在任务中用 @ 挂载 tabdo，再请它列出已授权的表格。"
         }
-      }
+      },
+      "guideTitle": "接入指南"
     }
   },
   "directory": {

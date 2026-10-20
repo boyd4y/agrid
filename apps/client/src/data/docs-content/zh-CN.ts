@@ -22,7 +22,7 @@ export const docsPages: DocsPage[] = [
       {
         type: "callout",
         tone: "info",
-        text: "在 tabdo 中使用智能体无需单独配置 API Key。需要从自己的应用访问表格数据时，工作区 owner/admin 可在「设置 → API Key」创建按表授权的数据 Key。",
+        text: "在 tabdo 中使用智能体无需单独配置 API Key。需要从自己的应用访问表格数据时，工作区 owner/admin 可在「设置 → 连接 Agent → API Key」创建按表授权的数据 Key。",
       },
       { type: "h2", text: "开始使用" },
       {
@@ -122,12 +122,12 @@ export const docsPages: DocsPage[] = [
     title: "通过 MCP 连接 AI 客户端",
     description: "在工作区设置中连接外部 MCP 客户端。",
     body: [
-      { type: "p", text: "打开「设置 → 连接智能体」，选择你的客户端，并按页面显示的连接指南操作。指南会提供当前工作区的 MCP 地址和客户端对应步骤，也会说明凭证设置与常见连接问题。" },
-      { type: "p", text: "如果客户端需要数据访问 Key，请在「设置 → API Key」创建标准 Key，并只授予所需表格操作。没有单独的 Bot Key 或自动创建的智能体专用 Key。请将 Key 保存在客户端的安全凭证设置中。" },
-      { type: "p", text: "MCP 工具与 REST、GraphQL 使用同一套记录、正文、附件和视图操作。表级读取/新增/更新/删除权限覆盖记录正文及附件。读取站点视图需要 Read；创建、配置和显式发布、撤下或撤回站点视图需要 Read 与 Update。具体数据操作见「表格」和 REST API 参考。" },
+      { type: "p", text: "打开「设置 → 连接 Agent → 接入指南」，选择你的客户端，并按页面显示的连接指南操作。指南会提供当前工作区的 MCP 地址和客户端对应步骤，也会说明凭证设置与常见连接问题。" },
+      { type: "p", text: "如果客户端需要数据访问 Key，请在「设置 → 连接 Agent → API Key」创建标准 Key，并只授予所需表格操作。没有单独的 Bot Key 或自动创建的智能体专用 Key。请将 Key 保存在客户端的安全凭证设置中。" },
+      { type: "p", text: "MCP 工具与 REST、GraphQL 遵循相同权限。表级读取/新增/更新/删除权限覆盖记录、正文和附件。API Key 不开放站点配置读取、配置、发布或报告能力；请在登录后的应用中管理站点。可用数据操作见「表格」和 REST API 参考。" },
       { type: "cards", items: [
         { title: "表格与记录", description: "了解字段、记录属性和记录正文的关系。", href: "/docs/tables", badge: "数据" },
-        { title: "REST API", description: "查看记录、正文、附件和站点视图的统一 API 参考。", href: "/docs/rest", badge: "API" },
+        { title: "REST API", description: "查看记录、正文和附件的 API 参考。", href: "/docs/rest", badge: "API" },
       ] },
     ],
   },
@@ -184,7 +184,7 @@ curl -s "$TABDO_API_URL/api/tables" \\
       },
       {
         type: "p",
-        text: "在「设置 → API Key」创建数据 Key；仅工作区 owner/admin 可管理。按表分别授予读取、新增、更新和删除权限。授权适用于该表中的全部记录；新表默认未授权，写权限也不包含读取。更改权限或删除 Key 会影响后续请求。完整 Key 只显示一次，请妥善保存。",
+        text: "在「设置 → 连接 Agent → API Key」创建数据 Key；仅工作区 owner/admin 可管理。按表分别授予读取、新增、更新和删除权限。授权适用于该表中的全部记录；新表默认未授权，写权限也不包含读取。更改权限或删除 Key 会影响后续请求。可用 MCP list_workspaces 或 POST /api/commands（command 为 listWorkspaces）获取已授权工作区 ID，创建自动化时传入 workspaceId。Key 可跨本企业内的工作区使用，新资源不会自动获权。自动化、定时任务分别授权读取、更新和删除；创建需要工作区授权，规则权限不会授予来源表或目标表的数据权限。外部规则支持表格记录动作；智能体、邮件及表结构动作需由成员操作。旧定时任务更新授权继续限于时间、名称和启停；在 Key 编辑器中取消后重新勾选更新，才会授权修改规则配置。既有定时任务可调整时间、名称和启停，同时保留已批准的动作及执行身份，包括运行智能体的任务；新增或修改智能体、邮件动作仍需由成员操作。Key 不开放站点配置/发布或报告能力；管理者失去企业 owner/admin 权限后，Key 停止访问。完整 Key 只显示一次，请妥善保存。",
       },
       { type: "h2", text: "最小数据流程" },
       { type: "p", text: "先读取 GET /api/tables 或 GET /api/tables/:tableId 返回的表和字段元数据，保存 table.id、column.id 与 select 字段 options[].id。不要把字段名称或选项标签当作写入标识。以下示例中的 Key、ID 和 URL 均为虚构占位值。" },
@@ -249,7 +249,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       },
       {
         type: "callout",
-        text: "如果要从自己的应用读取或修改表格数据，请让工作区 owner/admin 在「设置 → API Key」创建数据 Key，并为每张表单独选择操作权限。API Key 只访问已授权的表格和记录，不会继承创建者的其他权限，也不能修改表结构或管理工作区。",
+        text: "如果要从自己的应用读取或修改表格数据，请让工作区 owner/admin 在「设置 → 连接 Agent → API Key」创建数据 Key，并为每张表单独选择操作权限。API Key 只访问已授权的表格和记录，不会继承创建者的其他权限，也不能修改表结构或管理工作区。",
       },
       { type: "cards", items: [
         { title: "工作区成员", description: "了解角色权限和邀请方式。", href: "/docs/members", badge: "成员" },
@@ -397,7 +397,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "定时计划默认显示在日历中，与事件同时查看。预计时间是预览，已记录的时间点表示运行记录；两者都不会占用事件时段。选择计划时间点可查看详情；要修改计划规则，请打开对应定时计划。查看计划还需单独获得所选计划的读取权限。",
       ] },
       { type: "h2", text: "通过 REST API 接入" },
-      { type: "p", text: "工作区 owner/admin 可在「设置 → API Key」创建 Key，并为每个日历单独授权。事件详情、新建、更新、取消、日历管理和触发智能体提醒是不同权限；新建权限不包含事件详情读取。读取成员目录需要日历读取、新建、更新或管理权限中的至少一项。设置提醒还需要事件更新权和触发智能体权。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
+      { type: "p", text: "工作区 owner/admin 可在「设置 → 连接 Agent → API Key」创建 Key，并为每个日历单独授权。事件详情、新建、更新、取消、日历管理和触发智能体提醒是不同权限；新建权限不包含事件详情读取。读取成员目录需要日历读取、新建、更新或管理权限中的至少一项。设置提醒还需要事件更新权和触发智能体权。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
@@ -433,7 +433,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
         ["设置 / 读取提醒（POST / GET）", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["查询定时任务时间（POST）", "/api/schedules/occurrences/query"],
       ] },
-      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → API Key」为 Key 授权。上表中的人员、工作时间、不可用时间和空档路由继续供旧 personId 预约使用，不是普通事件的配置前置。" },
+      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → 连接 Agent → API Key」为 Key 授权。上表中的人员、工作时间、不可用时间和空档路由继续供旧 personId 预约使用，不是普通事件的配置前置。" },
       { type: "p", text: "新建事件时使用 userId，而不是 personId；事件查询也可按 userId 筛选，personId 仍可用于查询旧记录。旧 personId 预约继续遵守工作时间和临时休息规则；所有事件仍会检查同一工作区各日历间的重叠。批量路径接受 1–100 项事件创建、更新或取消，并作为一个整体应用；任一项校验失败或冲突，整批都会回滚。" },
       { type: "code", lang: "bash", code: `# 更新事件：expectedVersion 取自最近读取的事件
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
@@ -551,7 +551,7 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
       { type: "p", text: "出站事件订阅会把获权日历的变更发送到你的 HTTPS 接收地址。应用界面将日历 booking 显示为事件，但现有订阅事件类型（例如 booking.created、person.updated）为兼容而保留原名称。它适合让自己的应用及时获知 tabdo 中发生的变化；不是 Google、Outlook 或其他日历的双向同步，也不会发送邮件或短信。" },
       { type: "h2", text: "准备权限和接收地址" },
       { type: "ol", items: [
-        "在「设置 → API Key」创建或编辑 Key，由 owner/admin 为目标日历分别授予订阅、投递记录读取和订阅管理权限。创建订阅还需要该日历的读取权限。新 Key 默认没有这些授权。",
+        "在「设置 → 连接 Agent → API Key」创建或编辑 Key，由 owner/admin 为目标日历分别授予订阅、投递记录读取和订阅管理权限。创建订阅还需要该日历的读取权限。新 Key 默认没有这些授权。",
         "准备一个公开可访问的 HTTPS 接收地址，使用标准 443 端口。地址不能带用户名、密码或 URL 片段；接收服务应在处理请求时保留原始请求字节，以便验证签名。",
         "使用 POST /api/calendars/{calendarId}/subscriptions 创建订阅。选择名称、接收地址和要监听的事件。成功响应会显示签名密钥；立即安全保存，因为之后无法再次读取明文。",
       ] },
@@ -704,7 +704,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     slug: "rest",
     sectionId: "reference",
     title: "数据 REST API",
-    description: "tab_ Key 的表和记录路径，包含可选正文、附件与站点视图。",
+    description: "tab_ Key 的表和记录路径，包含可选正文与附件。",
     body: [
       {
         type: "table",
@@ -720,10 +720,10 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["DELETE /api/tables/:tableId/rows/:rowId", "删除记录；需 delete grant"],
           ["POST /api/tables/:tableId/rows/:rowId/attachments", "使用 { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey } 上传；需 Update"],
           ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "读取已授权的正文附件；需 Read"],
-          ["POST /api/commands (getView/listViews/createView/updateView)", "Read 可读取视图；Read+Update 可创建、配置并显式发布/撤下/撤回"],
+          ["POST /api/commands (getView/listViews)", "Read 可读取非站点表视图；API Key 不开放站点配置"],
         ],
       },
-      { type: "h2", text: "记录正文与站点视图" },
+      { type: "h2", text: "记录正文与附件" },
       { type: "p", text: "正文是记录的内置行字段，行列表不返回完整正文。读取单条记录时使用 ?include=body&bodyFormat=json（或 html），返回的 body 含 content、version、schemaVersion、attachments，以及可选的渲染 HTML。POST 新建记录时可传 body: { content }；PATCH 更新正文时传 body: { content, expectedVersion }，其中 expectedVersion 必填，且与行版本分开检查。首次写入空正文时使用版本 0。正文写入必须带 idempotencyKey；API Key 写操作只返回版本回执，不返回正文内容。" },
       { type: "p", text: "添加图片时，向记录附件路径上传 target=body、当前正文 expectedVersion、name、mimeType、base64 和 idempotencyKey。响应包含 fileId 与 bodyVersion；在正文图片内容中引用 fileId。上传需要 Update 权限；通过 fileId 获取附件需要 Read 权限。" },
       { type: "code", lang: "json", code: `{
@@ -734,12 +734,12 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "base64": "BASE64_ENCODED_IMAGE_CONTENT",
   "idempotencyKey": "upload-cover-1"
 }` },
-      { type: "p", text: "使用此请求体 POST /api/commands 读取视图及当前发布状态：" },
+      { type: "p", text: "使用此请求体 POST /api/commands 读取非站点表视图：" },
       { type: "code", lang: "json", code: `{
   "command": "getView",
   "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
 }` },
-      { type: "p", text: "使用 createView({ tableId, type: \"site\", name, config, idempotencyKey }) 创建站点视图，并设置博客模板、来源表字段映射和所选记录 ID。getView 除视图信息外还返回 site 状态 { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }；发布时将 site.publishedRevisionId 用作 expectedPublishedRevisionId。首次发布使用 null。撤下时使用当前已发布修订 ID；撤回某条记录时另传 rowId。保存来源记录或视图配置不会发布。读取站点视图需要 Read；创建、配置和显式发布、撤下或撤回站点视图需要该表的 Read 与 Update。" },
+      { type: "p", text: "即使具有表格 Read 和 Update 授权，API Key 也不能读取、创建、配置、发布、撤下或撤回站点视图；这些操作返回 403，listViews 不返回站点视图。请在登录后的应用中管理站点。记录正文和附件继续按表格权限开放。" },
       { type: "code", lang: "json", code: `{
   "cells": { "col_title": "旅行手记" },
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "第一篇记录。" }] }] } },
@@ -749,56 +749,8 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "更新后的记录。" }] }] }, "expectedVersion": 1 },
   "idempotencyKey": "update-row-body-1"
 }` },
-      { type: "p", text: "使用此请求体 POST /api/commands 创建站点视图：" },
-      { type: "code", lang: "json", code: `{
-  "command": "createView",
-  "input": {
-    "tableId": "00000000-0000-4000-8000-000000000001",
-    "type": "site",
-    "name": "旅行手记",
-    "config": {
-      "template": "blog",
-      "mapping": { "title": "00000000-0000-4000-8000-000000000011", "slug": "00000000-0000-4000-8000-000000000012" },
-      "authorName": "Tabdo 团队",
-      "description": "旅行记录",
-      "language": "zh-CN",
-      "articles": [{ "rowId": "00000000-0000-4000-8000-000000000021", "imageIds": [] }]
-    },
-    "idempotencyKey": "create-site-view-1"
-  }
-}` },
-      { type: "p", text: "检查并保存视图后，用当前视图版本显式发布。首次发布时 expectedPublishedRevisionId 为 null：" },
-      { type: "code", lang: "json", code: `{
-  "command": "updateView",
-  "input": {
-    "viewId": "00000000-0000-4000-8000-000000000031",
-    "expectedVersion": 1,
-    "idempotencyKey": "publish-site-view-1",
-    "publication": { "action": "publish", "expectedPublishedRevisionId": null }
-  }
-}` },
-      { type: "p", text: "撤下站点时，将 expectedPublishedRevisionId 设为 getView 返回的当前 publishedRevisionId：" },
-      { type: "code", lang: "json", code: `{
-  "command": "updateView",
-  "input": {
-    "viewId": "00000000-0000-4000-8000-000000000031",
-    "expectedVersion": 2,
-    "idempotencyKey": "unpublish-site-view-1",
-    "publication": { "action": "unpublish", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041" }
-  }
-}` },
-      { type: "p", text: "从已发布站点撤回一条记录时，另传 rowId：" },
-      { type: "code", lang: "json", code: `{
-  "command": "updateView",
-  "input": {
-    "viewId": "00000000-0000-4000-8000-000000000031",
-    "expectedVersion": 2,
-    "idempotencyKey": "withdraw-site-row-1",
-    "publication": { "action": "withdraw", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041", "rowId": "00000000-0000-4000-8000-000000000021" }
-  }
-}` },
       { type: "h2", text: "请求与响应" },
-      { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。行和附件资源路径直接返回资源数据；POST /api/commands 返回 { ok, command, result }。对 getView/createView，从 result.id 读取视图 ID，从 result.site.version 和 result.site.publishedRevisionId 读取当前视图版本与发布指针。GraphQL 命令结果位于 data.getView 或 data.createView。" },
+      { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。行和附件资源路径直接返回资源数据；POST /api/commands 返回 { ok, command, result }。getView 的非站点视图结果位于 result 中。GraphQL 命令结果使用标准 data 响应。" },
       { type: "p", text: "POST 新增行：{ \"cells\": { \"col_title\": \"New task\" } }。PATCH 更新行：{ \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }。版本过期时返回 HTTP 409，错误体为 { error: \"Record changed; reload before updating\" }。" },
       { type: "ul", items: [
         "cells 只接受 API 可写字段：text、number、date、checkbox、select、multi_select。select 值使用字段元数据的 options[].id，不使用标签。删除带有关联记录的行时，可能还需要目标表的 update 权限以移除反向关联。",
@@ -835,7 +787,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "query": "query Browse($tableId: ID!, $limit: Int!, $cursor: String) { table(id: $tableId) { id name columns { id name type options { id label color } readable writable } rows(options: { limit: $limit, cursor: $cursor }) { rows { id version cells createdAt updatedAt } nextCursor hasMore totalMatched } } }",
   "variables": { "tableId": "tbl_example", "limit": 50, "cursor": null }
 }` },
-      { type: "p", text: "查询 tables 或 table(id)、columns、rows(options) 与 row(id)。rows 每页默认 50，最大 100；把返回的 nextCursor 传回 options.cursor。可在 Row 选择中显式请求 body；createRow 和 updateRow 接受 body 与幂等键，正文使用自己的 expectedVersion。Site 通过 createView/updateView 通用字段操作，与 REST 使用相同权限模型。数据位于标准 { data } 响应中。" },
+      { type: "p", text: "查询 tables 或 table(id)、columns、rows(options) 与 row(id)。rows 每页默认 50，最大 100；把返回的 nextCursor 传回 options.cursor。可在 Row 选择中显式请求 body；createRow 和 updateRow 接受 body 与幂等键，正文使用自己的 expectedVersion。与 REST 和 MCP 一样，GraphQL 不向 API Key 开放站点配置和发布能力。数据位于标准 { data } 响应中。" },
       { type: "h2", text: "记录变更" },
       { type: "code", lang: "graphql", code: `mutation UpdateTask($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int) {
   updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version) {
@@ -862,7 +814,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     title: "JavaScript / TypeScript SDK",
     description: "通过 @tabdo/sdk 访问 tab_ 授权的数据 API。",
     body: [
-      { type: "p", text: "从 npm 安装公开的 @tabdo/sdk 包，并使用 createClient 连接你的 tabdo 地址和 tab_ 数据访问 Key。已发布的 0.1.1 版本提供表格数据方法，不使用浏览器登录会话。记录正文和站点视图可通过 REST、GraphQL 或已授权的 MCP 连接访问，并沿用相同的表格权限。" },
+      { type: "p", text: "从 npm 安装公开的 @tabdo/sdk 包，并使用 createClient 连接你的 tabdo 地址和 tab_ 数据访问 Key。已发布的 0.1.1 版本提供表格数据方法，不使用浏览器登录会话。记录正文和附件可通过 REST、GraphQL 或已授权的 MCP 连接访问，并沿用相同的表格权限。上述接口和 client.graphql 均不向 API Key 开放站点配置和发布；请在登录后的应用中管理站点。" },
       { type: "code", lang: "bash", code: `npm install @tabdo/sdk` },
       { type: "code", lang: "typescript", code: `import { createClient } from "@tabdo/sdk";
 
@@ -905,7 +857,7 @@ if (row) {
         type: "ul",
         items: [
           "登录账号：使用 tabdo 账号访问工作区功能。",
-          "数据访问 Key：工作区 owner/admin 在「设置 → API Key」创建 Authorization: Bearer tab_…；只对逐表勾选的记录读取、新增、更新、删除权限生效。",
+          "数据访问 Key：工作区 owner/admin 在「设置 → 连接 Agent → API Key」创建 Authorization: Bearer tab_…；只对逐表勾选的记录读取、新增、更新、删除权限生效。",
           "tab_ Key 不授予修改表结构、管理工作区或运行智能体的权限；不支持的操作会被拒绝。",
         ],
       },

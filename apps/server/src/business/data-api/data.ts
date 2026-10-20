@@ -1,3 +1,4 @@
+import { inTransaction, type Transaction } from "../db/context.js";
 import { readRowBody } from "../commands/row-body.js";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -8,9 +9,9 @@ import type { Database } from "../db/types.js";
 import { addRow, queryRows, updateCells, deleteRow } from "../commands/rows.js";
 import { readRow } from "../commands/relation-reads.js";
 import { ServiceError } from "../errors.js";
-import { requireSiteTable, resolveSiteKey, canAccess, type Operation, type SitePrincipal } from "./keys.js";
+import { requireSiteTable, resolveSiteKey, resolveSiteKeyId, canAccess, type Operation, type SitePrincipal } from "./keys.js";
 
-export type SiteContext = { principal: SitePrincipal; secret: string; baseUrl: string; fileAuth?: "bearer" };
+export type SiteContext = { principal: SitePrincipal; secret: string; executionKeyId?: string; baseUrl: string; fileAuth?: "bearer" };
 export const cellSchema = z.union([z.string().max(64000), z.number().finite(), z.boolean(), z.array(z.string().max(64000)).max(100), z.null()]);
 export const rowsOptions = z.object({ cursor: z.string().max(4000).nullable().optional(), limit: z.number().int().min(1).max(100).default(50),
   filters: z.array(z.object({ id: z.string().optional(), columnId: z.uuid(), op: z.enum(FILTER_OPS), value: cellSchema.optional() })).max(30).optional(),
@@ -102,11 +103,11 @@ export async function siteRow(deps: CommandDependencies, context: SiteContext, t
   const row = await readRow(deps, rowId, cols);
   return { ...(await serializeRows(deps, context, tableId, cols, [row]))[0], ...(projection.includeBody ? { body: await readRowBody(deps.database, tableId, rowId, projection.bodyFormat) } : {}) };
 }
-export async function siteCreateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rawCells: unknown, options: unknown = {}) {
+export async function siteCreateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rawCells: unknown, options: unknown = {}, transaction?: Transaction) {
   const cells = z.record(z.uuid(), cellSchema).parse(rawCells ?? {});
   const { body, idempotencyKey } = createBodyOptions.parse(options);
-  return deps.database.transaction(async tx => {
-    const principal = await resolveSiteKey(tx, context.secret, true);
+  return inTransaction(deps, transaction, async tx => {
+    const principal = await (context.executionKeyId ? resolveSiteKeyId(tx, context.executionKeyId, true) : resolveSiteKey(tx, context.secret, true));
     requireSiteTable(principal, tableId, "create");
     // Schema writers lock the table first; hold it before validating columns.
     await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
@@ -118,7 +119,7 @@ export async function siteCreateRow(deps: CommandDependencies, context: SiteCont
       if (error) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
     }
     // Public visitors are not the key creator. No forged human actor is used.
-    const row = await addRow({ ...deps, workspaceId: table.workspaceId }, { tableId, cells, body: body as RowBodyCreate | undefined, idempotencyKey, receiptPrincipalId: `key:${principal.id}`, organizationId: principal.organizationId }, tx);
+    const row = await addRow({ ...deps, workspaceId: table.workspaceId }, { tableId, cells, body: body as RowBodyCreate | undefined, idempotencyKey, skipAutomation: !!context.executionKeyId, receiptPrincipalId: `key:${principal.id}`, organizationId: principal.organizationId }, tx);
     return { id: row.id, createdAt: new Date(row.createdAt).toISOString(), ...(row.bodyVersion !== undefined ? { bodyVersion: row.bodyVersion } : {}) };
   });
 }
@@ -134,12 +135,12 @@ export async function siteFileReference(deps: CommandDependencies, context: Site
 }
 
 /** Writes revalidate live grants and keep schema/record validation inside the transaction. */
-export async function siteUpdateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, rawCells: unknown, expectedVersion?: number, options: unknown = {}) {
+export async function siteUpdateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, rawCells: unknown, expectedVersion?: number, options: unknown = {}, transaction?: Transaction) {
   const cells = z.record(z.uuid(), cellSchema).parse(rawCells ?? {});
   const { body, idempotencyKey } = updateBodyOptions.parse(options);
   if (expectedVersion !== undefined) z.number().int().min(1).parse(expectedVersion);
-  return deps.database.transaction(async tx => {
-    const principal = await resolveSiteKey(tx, context.secret, true);
+  return inTransaction(deps, transaction, async tx => {
+    const principal = await (context.executionKeyId ? resolveSiteKeyId(tx, context.executionKeyId, true) : resolveSiteKey(tx, context.secret, true));
     requireSiteTable(principal, tableId, "update");
     await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
     const { table, cols } = await tableColumns(tx, principal, tableId, "update");
@@ -151,7 +152,7 @@ export async function siteUpdateRow(deps: CommandDependencies, context: SiteCont
       if (validateCell(col.type, value, col.config.options)) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
     }
     try {
-      const saved = await updateCells({ ...deps, workspaceId: table.workspaceId }, { rowId, cells, expectedVersion, body: body as RowBodyWrite | undefined, idempotencyKey, receiptPrincipalId: `key:${principal.id}`, organizationId: principal.organizationId }, tx);
+      const saved = await updateCells({ ...deps, workspaceId: table.workspaceId }, { rowId, cells, expectedVersion, body: body as RowBodyWrite | undefined, idempotencyKey, skipAutomation: !!context.executionKeyId, receiptPrincipalId: `key:${principal.id}`, organizationId: principal.organizationId }, tx);
       return { id: saved.id, updatedAt: new Date(saved.updatedAt).toISOString(), version: saved.version ?? 1, ...(saved.bodyVersion !== undefined ? { bodyVersion: saved.bodyVersion } : {}) };
     } catch (error) {
       if (error instanceof Error && error.message.includes("版本冲突")) throw new ServiceError(409, { message: "Record changed; reload before updating" });
@@ -159,9 +160,9 @@ export async function siteUpdateRow(deps: CommandDependencies, context: SiteCont
     }
   });
 }
-export async function siteDeleteRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string) {
-  return deps.database.transaction(async tx => {
-    const principal = await resolveSiteKey(tx, context.secret, true);
+export async function siteDeleteRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, transaction?: Transaction) {
+  return inTransaction(deps, transaction, async tx => {
+    const principal = await (context.executionKeyId ? resolveSiteKeyId(tx, context.executionKeyId, true) : resolveSiteKey(tx, context.secret, true));
     requireSiteTable(principal, tableId, "delete");
     await tx.select({ id: tables.id }).from(tables).where(and(eq(tables.id, tableId), eq(tables.organizationId, principal.organizationId))).for("update");
     const { table, cols } = await tableColumns(tx, principal, tableId, "delete");
