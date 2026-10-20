@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 
-# Serialize the whole release, including checks/build. Never cancel a migration.
+# Serialize the whole release, including checks and Railway builds. Never cancel a migration.
 concurrency:
   group: tabdo-production-release
   cancel-in-progress: false
@@ -30,6 +30,7 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '24.14.1'
+          package-manager-cache: false
       - id: tag
         name: Verify new stable tag, exact commit and master ancestry
         run: node scripts/release/git.mjs
@@ -38,46 +39,8 @@ jobs:
     needs: authorize
     uses: ./.github/workflows/checks.yml
 
-  image:
-    needs: [authorize, checks]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-        with:
-          ref: ${{ needs.authorize.outputs.sha }}
-          persist-credentials: false
-      - name: Authenticate GHCR with this job's package token
-        env:
-          PACKAGE_TOKEN: ${{ github.token }}
-        run: printf '%s' "$PACKAGE_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Build and push one image without production credentials
-        id: build
-        env:
-          RELEASE_SHA: ${{ needs.authorize.outputs.sha }}
-        run: |
-          docker buildx create --use
-          docker buildx build --platform linux/amd64 --provenance=false \
-            --label "org.opencontainers.image.revision=$RELEASE_SHA" \
-            --label "org.opencontainers.image.source=https://github.com/boyd4y/agrid" \
-            --tag "ghcr.io/boyd4y/agrid:sha-$RELEASE_SHA" \
-            --metadata-file "$RUNNER_TEMP/image-metadata.json" --push . -f Dockerfile.server
-          node --input-type=module -e '
-            import {readFileSync,appendFileSync} from "node:fs";
-            const digest=JSON.parse(readFileSync(process.env.RUNNER_TEMP+"/image-metadata.json"))["containerimage.digest"];
-            if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error("Invalid image digest");
-            appendFileSync(process.env.GITHUB_OUTPUT,`digest=${digest}\n`);'
-      - name: Clear registry login
-        if: always()
-        run: docker logout ghcr.io
-
   production:
-    needs: [authorize, checks, image]
+    needs: [authorize, checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: tabdo / production
@@ -89,39 +52,32 @@ jobs:
           ref: ${{ needs.authorize.outputs.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9.15.0
-          run_install: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: '24.14.1'
-      # Install has no production secrets, and no package lifecycle scripts run
-      # in this privileged job. Migration uses the built image, not runner dist.
-      - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Preflight, snapshot, migrate once, deploy and verify
+          package-manager-cache: false
+      # Install outside the checkout, before credentials are available. The
+      # release source is exported separately and never contains CLI packages.
+      - name: Install pinned Railway CLI in runner temp
+        run: npm install --prefix "$RUNNER_TEMP/railway-cli" --no-audit --no-fund @railway/cli@5.71.0
+      - name: Upload API, wait for preDeploy and health, then upload worker
         env:
           RELEASE_ENVIRONMENT: tabdo / production
           RELEASE_BOOTSTRAP_READY: ${{ vars.RELEASE_BOOTSTRAP_READY }}
-          RELEASE_IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
           RELEASE_TAG_OID: ${{ needs.authorize.outputs.tagOid }}
           RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
           RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_API_SERVICE_ID }}
           RAILWAY_WORKER_SERVICE_ID: ${{ vars.RAILWAY_WORKER_SERVICE_ID }}
-          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
-          NEON_BRANCH_ID: ${{ vars.NEON_BRANCH_ID }}
           RELEASE_PUBLIC_URL: ${{ vars.RELEASE_PUBLIC_URL }}
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          RELEASE_DATABASE_URL: ${{ secrets.RELEASE_DATABASE_URL }}
         run: node scripts/release/run.mjs
       - name: Preserve sanitized release result even on failure
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-result-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .release/result.json
+          path: .release/*.json
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 30

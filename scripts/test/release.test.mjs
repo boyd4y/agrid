@@ -14,9 +14,9 @@ const sha = "a".repeat(40);
 const databaseUrl = "postgresql://owner:very-private@ep-demo.eu-central-1.aws.neon.tech/db?sslmode=require";
 const env = {
   GITHUB_EVENT_NAME: "push", GITHUB_REF_TYPE: "tag", GITHUB_REF: "refs/tags/v1.2.3", GITHUB_SHA: sha, GITHUB_REPOSITORY: "boyd4y/agrid",
-  RELEASE_ENVIRONMENT: "tabdo / production", RELEASE_BOOTSTRAP_READY: "true", RELEASE_IMAGE_DIGEST: `sha256:${"b".repeat(64)}`, RELEASE_TAG_OID: sha,
+  RELEASE_ENVIRONMENT: "tabdo / production", RELEASE_BOOTSTRAP_READY: "true", RELEASE_TAG_OID: sha,
   RAILWAY_API_TOKEN: "secret-railway", NEON_API_KEY: "secret-neon", RELEASE_DATABASE_URL: databaseUrl,
-  RAILWAY_PROJECT_ID: "project", RAILWAY_ENVIRONMENT_ID: "production", RAILWAY_API_SERVICE_ID: "api", RAILWAY_WORKER_SERVICE_ID: "worker",
+  RAILWAY_PROJECT_ID: "11111111-1111-1111-1111-111111111111", RAILWAY_ENVIRONMENT_ID: "22222222-2222-2222-2222-222222222222", RAILWAY_API_SERVICE_ID: "33333333-3333-3333-3333-333333333333", RAILWAY_WORKER_SERVICE_ID: "44444444-4444-4444-4444-444444444444",
   NEON_PROJECT_ID: "neon", NEON_BRANCH_ID: "branch", RELEASE_PUBLIC_URL: "https://tabdo.example",
 };
 const event = { created: true, forced: false, deleted: false, after: sha };
@@ -55,11 +55,11 @@ test("git verification rejects tag rebinding, checkout drift and commits off mas
 
 test("production fails closed on missing configuration, wrong environment, targets or runtime variables", () => {
   const config = productionConfig(env);
-  for (const key of ["RAILWAY_API_TOKEN", "NEON_API_KEY", "RELEASE_DATABASE_URL", "RAILWAY_PROJECT_ID", "RAILWAY_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "NEON_PROJECT_ID", "NEON_BRANCH_ID", "RELEASE_PUBLIC_URL"]) assert.throws(() => productionConfig({ ...env, [key]: "" }), new RegExp(`missing_${key}`));
-  for (const override of [{ RELEASE_BOOTSTRAP_READY: "false" }, { RELEASE_ENVIRONMENT: "development" }, { RELEASE_DATABASE_URL: databaseUrl.replace("ep-demo.", "ep-demo-pooler.") }, { RELEASE_PUBLIC_URL: "http://tabdo.example" }, { RAILWAY_API_SERVICE_ID: "worker" }, { MIGRATION_ALLOW_ORPHAN_DELETE: "true" }]) assert.throws(() => productionConfig({ ...env, ...override }));
+  for (const key of ["RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID", "RAILWAY_ENVIRONMENT_ID", "RAILWAY_API_SERVICE_ID", "RAILWAY_WORKER_SERVICE_ID", "RELEASE_PUBLIC_URL"]) assert.throws(() => productionConfig({ ...env, [key]: "" }), new RegExp(`missing_${key}`));
+  for (const override of [{ RELEASE_BOOTSTRAP_READY: "false" }, { RELEASE_ENVIRONMENT: "development" }, { RELEASE_PUBLIC_URL: "http://tabdo.example" }, { RAILWAY_API_SERVICE_ID: "worker" }]) assert.throws(() => productionConfig({ ...env, ...override }));
   const values = { NODE_ENV: "production", TABDO_ENV: "production", AUTH_REQUIRED: "true", QUEUE_PREFIX: "tabdo-production", DATABASE_URL: databaseUrl.replace("ep-demo.", "ep-demo-pooler."), DATABASE_URL_UNPOOLED: databaseUrl, APP_URL: config.publicUrl, BETTER_AUTH_URL: config.publicUrl };
-  checkRuntimeVariables(values, config);
-  for (const override of [{ TABDO_ENV: "development" }, { DATABASE_URL: databaseUrl.replace("/db?", "/other?") }, { DATABASE_URL_UNPOOLED: undefined }, { APP_URL: "https://other.example" }, { QUEUE_PREFIX: "test" }]) assert.throws(() => checkRuntimeVariables({ ...values, ...override }, config));
+  checkRuntimeVariables(values, { ...config, databaseUrl });
+  for (const override of [{ TABDO_ENV: "development" }, { DATABASE_URL: databaseUrl.replace("/db?", "/other?") }, { DATABASE_URL_UNPOOLED: undefined }, { APP_URL: "https://other.example" }, { QUEUE_PREFIX: "test" }]) assert.throws(() => checkRuntimeVariables({ ...values, ...override }, { ...config, databaseUrl }));
 });
 
 test("migration plans accept migrator aliases, require explicit hash-bound compatibility, and reject gaps/unknown ledger", () => {
@@ -84,75 +84,65 @@ test("migration plans accept migrator aliases, require explicit hash-bound compa
   assert.throws(() => pendingMigrations(entries, [{ hash: "hash6" }], approval), /ledger_gap/);
 });
 
-function fixture({ fail, pending = ["0034_safe"] } = {}) {
-  const calls = [];
-  let plans = 0;
+function fixture({ fail } = {}) {
+  const calls = [], saved = [];
   const call = (name, value) => async (...args) => {
     calls.push([name, ...args]);
-    if (name === fail) throw new Error(`raw private error ${env.RELEASE_DATABASE_URL} ${env.RAILWAY_API_TOKEN} ${env.NEON_API_KEY}`);
+    if (name === fail) throw new Error(`private ${databaseUrl} ${env.RAILWAY_API_TOKEN}`);
     return typeof value === "function" ? value(...args) : value;
   };
   const ports = {
-    verifyGit: call("git", release => release), anonymousImage: call("image"), preflight: call("preflight", [{ serviceId: "api", deploymentId: "old-api" }, { serviceId: "worker", deploymentId: "old-worker" }]),
-    migrationPlan: call("plan", () => plans++ === 0 ? pending : []), snapshot: call("snapshot", "snap-1"), migrate: call("migrate"),
-    deploy: call("deploy", id => `new-${id}`), wait: call("wait"), smoke: call("smoke"),
+    verifyGit: call("git", release => release),
+    prepareSource: call("source", sha => ({ sha, manifestSha256: "b".repeat(64), fileCount: 2 })),
+    preflight: call("preflight", []), deploy: call("deploy", id => `new-${id}`), wait: call("wait"), smoke: call("smoke"),
   };
-  const saved = [];
-  return { calls, saved, execute: overrides => runRelease({ env: { ...env, ...overrides }, event, ports, save: value => saved.push(JSON.stringify(value)) }), ports };
+  return { calls, saved, ports, execute: overrides => runRelease({ env: { ...env, ...overrides }, event, ports, save: value => saved.push(JSON.stringify(value)) }) };
 }
 
-test("release snapshots before exactly one migration and serializes the same immutable image across both services", async () => {
+test("release pins one source manifest and serializes API health before worker with exact IDs", async () => {
   const f = fixture();
   const result = await f.execute();
   assert.equal(result.status, "success");
-  assert.deepEqual(f.calls.map(c => c[0]), ["git", "image", "preflight", "smoke", "plan", "git", "snapshot", "migrate", "plan", "deploy", "wait", "smoke", "deploy", "wait", "wait", "wait", "smoke", "git"]);
-  assert.equal(f.calls.filter(c => c[0] === "migrate").length, 1);
-  const deploys = f.calls.filter(c => c[0] === "deploy");
-  assert.deepEqual(deploys.map(c => c[1]), ["api", "worker"]);
-  assert.equal(deploys[0][2], deploys[1][2]);
-  assert.match(deploys[0][2], /@sha256:/);
-  assert.equal(result.backupId, "snap-1");
+  assert.deepEqual(f.calls.map(c => c[0]), ["git", "source", "preflight", "smoke", "git", "deploy", "wait", "smoke", "git", "deploy", "wait", "wait", "wait", "smoke", "git"]);
+  const uploads = f.calls.filter(c => c[0] === "deploy");
+  assert.deepEqual(uploads.map(c => c[1]), [env.RAILWAY_API_SERVICE_ID, env.RAILWAY_WORKER_SERVICE_ID]);
+  assert.equal(uploads[0][2].sha, sha);
+  assert.deepEqual(uploads[0][2], uploads[1][2]);
+  assert(result.deployments.every(d => d.manifestSha256 === result.source.manifestSha256));
 });
 
-test("no pending migrations skips backup and migration", async () => {
-  const f = fixture({ pending: [] });
-  assert.equal((await f.execute()).status, "success");
-  assert(!f.calls.some(c => ["snapshot", "migrate"].includes(c[0])));
-});
-
-for (const failure of ["git", "image", "preflight", "plan", "snapshot", "migrate", "deploy", "wait", "smoke"]) {
-  test(`${failure} failure stops subsequent production stages and preserves sanitized results`, async () => {
+for (const failure of ["git", "source", "preflight", "deploy", "wait", "smoke"]) {
+  test(`${failure} failure stops later stages and preserves sanitized evidence`, async () => {
     const f = fixture({ fail: failure });
     const result = await f.execute();
     assert.notEqual(result.status, "success");
     const calls = f.calls.map(c => c[0]);
-    if (["git", "image", "preflight", "plan", "snapshot", "migrate"].includes(failure)) assert(!calls.includes("deploy"));
-    if (["git", "image", "preflight", "plan", "snapshot"].includes(failure)) assert(!calls.includes("migrate"));
-    if (failure === "wait") assert.equal(calls.filter(c => c === "deploy").length, 1);
-    if (failure === "smoke") assert(!calls.includes("deploy"));
+    if (["git", "source", "preflight", "smoke"].includes(failure)) assert(!calls.includes("deploy"));
+    if (failure === "wait") { assert.equal(calls.filter(c => c === "deploy").length, 1); assert.equal(result.deployments.length, 1); }
     assert.doesNotMatch(f.saved.join(""), /very-private|secret-railway|secret-neon|postgresql:/);
-    if (["migrate", "deploy", "wait"].includes(failure)) assert.equal(result.status, "manual_recovery_required");
+    if (["deploy", "wait"].includes(failure)) assert.equal(result.status, "manual_recovery_required");
   });
 }
 
-test("bootstrap, bad digest and credentials fail before platform reads or writes", async () => {
-  for (const override of [{ RELEASE_BOOTSTRAP_READY: "" }, { RELEASE_IMAGE_DIGEST: "latest" }, { RAILWAY_API_TOKEN: "" }]) {
+test("bootstrap, raw tag pin and missing credentials fail before platform operations", async () => {
+  for (const override of [{ RELEASE_BOOTSTRAP_READY: "" }, { RELEASE_TAG_OID: "" }, { RAILWAY_API_TOKEN: "" }]) {
     const f = fixture();
     assert.notEqual((await f.execute(override)).status, "success");
     assert.equal(f.calls.length, 0);
   }
 });
 
-test("second-service failures and final drift never report success", async () => {
-  for (const failure of ["second-deploy", "final-api", "final-tag", "deployed-health"]) {
+test("late failures preserve exact uploaded ID and never report success", async () => {
+  for (const failure of ["second-deploy", "final-api", "final-tag", "deployed-health", "post-upload"]) {
     const f = fixture();
-    if (failure === "second-deploy") f.ports.deploy = async id => { if (id === "worker") throw new ReleaseError("worker_failed"); return "new-api"; };
+    if (failure === "second-deploy") f.ports.deploy = async id => { if (id === env.RAILWAY_WORKER_SERVICE_ID) throw new ReleaseError("worker_failed"); return "new-api"; };
+    if (failure === "post-upload") f.ports.deploy = async (_id, _release, save) => { save("new-api"); throw new ReleaseError("upload_source_changed"); };
     if (failure === "final-api") { let waits = 0; f.ports.wait = async () => { if (++waits === 3) throw new ReleaseError("late_api_failure"); }; }
-    if (failure === "final-tag") { let checks = 0; f.ports.verifyGit = async release => { if (++checks === 3) throw new ReleaseError("tag_rebound"); return release; }; }
+    if (failure === "final-tag") { let checks = 0; f.ports.verifyGit = async release => { if (++checks === 4) throw new ReleaseError("tag_rebound"); return release; }; }
     if (failure === "deployed-health") { let smokes = 0; f.ports.smoke = async () => { if (++smokes === 2) throw new ReleaseError("health_schema_failed"); }; }
     const result = await f.execute();
     assert.equal(result.status, "manual_recovery_required");
-    assert.equal(result.previous[0].deploymentId, "old-api");
+    if (["deployed-health", "post-upload"].includes(failure)) assert.equal(result.deployments.length, 1);
   }
 });
 
@@ -204,7 +194,7 @@ test("isolated Git origin accepts raw/peeled annotated events through authorize 
         assert.equal(result.status, "success");
         assert.equal(result.sha, commit);
         assert.equal(result.tagOid, raw);
-        assert.equal(f.calls.find(call => call[0] === "image")[2], commit, "image revision uses the commit, never the tag object");
+        assert.equal(f.calls.find(call => call[0] === "source")[1], commit, "source export uses the commit, never the tag object");
       }
     }
   }
