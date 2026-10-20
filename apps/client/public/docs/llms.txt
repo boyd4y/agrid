@@ -10,22 +10,23 @@
 ## Agents
 - [Choose a model and run mode](https://tabdo.ai/docs/harness): Choose an available model, Local or Sandbox mode, and provider for a new conversation; review environment limits.
 - [Create and manage agents](https://tabdo.ai/docs/agent-auth): Create agents, edit settings, and review workspace permissions.
+- [Connect an AI client with MCP](https://tabdo.ai/docs/mcp): Connect an external MCP client from Settings → Connect agents.
 
 ## For people
 - [Getting started](https://tabdo.ai/docs/human-quickstart): Choose a workspace and agent, organize information, add records, and review results.
 - [HTTP API](https://tabdo.ai/docs/api-quickstart): Discover tables, paginate records, and manage records with per-table tab_ permissions.
-- [Tables, columns, and records](https://tabdo.ai/docs/tables): Create columns, enter records, and use files, relations, rollups, and formulas.
-- [Views and boards](https://tabdo.ai/docs/views): Create grid, board, and form views; filter, sort, and review records.
+- [Tables, columns, and records](https://tabdo.ai/docs/tables): Create columns and records, edit record bodies, and use files, relations, rollups, and formulas.
+- [Views and boards](https://tabdo.ai/docs/views): Create grid, board, form, and site views; filter, sort, publish, and review records.
 - [Forms](https://tabdo.ai/docs/forms): Design a data entry view and review submissions in the same table.
 - [Automations and scheduled tasks](https://tabdo.ai/docs/automations): Trigger agent and data actions from table changes, webhooks, email, or a schedule.
 - [Event sources: AgentMail and Webhook](https://tabdo.ai/docs/integrations): Configure email or HTTP event sources and review their automation results.
 - [Reports](https://tabdo.ai/docs/reports): Summarize workspace tables with metrics, charts, and text.
-- [Sites](https://tabdo.ai/docs/sites): Edit HTML, CSS, and JavaScript files, preview changes, and publish a site version.
+- [Sites](https://tabdo.ai/docs/sites): Publish selected records from a table or edit site files, preview changes, and publish a version.
 
 ## Concepts and references
 - [Data access and permissions](https://tabdo.ai/docs/architecture): Understand workspace roles and per-table data access keys.
 - [Workspace members](https://tabdo.ai/docs/members): Review roles and invite workspace members.
-- [Data REST API](https://tabdo.ai/docs/rest): Table metadata, paginated reads, and record CRUD routes.
+- [Data REST API](https://tabdo.ai/docs/rest): Table and record routes, including record bodies, attachments, and site views.
 - [GraphQL API](https://tabdo.ai/docs/graphql): GraphQL queries, pagination, mutations, and limits.
 - [JavaScript / TypeScript SDK](https://tabdo.ai/docs/sdk): Install and use the published @tabdo/sdk package.
 - [Authentication](https://tabdo.ai/docs/auth): Use your tabdo account for workspace features and tab_ keys for authorized table data.

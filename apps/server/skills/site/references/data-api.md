@@ -25,6 +25,10 @@ const receipt = await tabdo.table(config.submissionsTableId).create({
 
 `table.columns()` 返回字段元数据；`get(rowId)`、`update(rowId, cells, { expectedVersion })`、`delete(rowId)` 分别受读取、更新、删除权限约束。`list()` 默认 50 行、最多 100 行，使用 nextCursor/hasMore 分页。查询总数需 includeTotal；不要一次下载所有记录。
 
+记录正文是行的内置 `body` 字段，不是自定义文本列。需要正文时显式用 `table.get(rowId, { includeBody: true })` 读取；新建记录的正文输入为 `{ content }`，更新现有正文为 `{ content, expectedVersion }`，其中正文 expectedVersion 必填且独立于行版本。正文写入需提供 `idempotencyKey`，写入回执不返回正文。正文附件通过记录附件操作传 `target: "body"`。读取正文需要 Read；随新行创建正文需要 Create；更新现有正文或上传正文附件需要 Update；读取附件需要 Read。
+
+网站可由任意表创建 `site` 视图并选择 `blog` 展示模板。配置映射来源表字段和要公开的 rowId、图片；保存视图设置或源记录不会发布内容。通过通用视图更新明确发布、撤下或撤回单条已发布记录。读取视图需要来源表 Read 权限；创建、配置和显式发布、撤下或撤回需要 Read 与 Update。
+
 ## 直接使用 GraphQL
 
 原生 fetch 即可连接同一接口，无需等待安装或额外服务。以下是页面内的请求示例，不是平台已存在的工具。config 需替换为真实配置；构建页面时可先留集中配置位置，待用户在可信配置入口填写 Key。

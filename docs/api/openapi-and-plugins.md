@@ -1,4 +1,4 @@
-# OpenAPI and Grok Bot
+# OpenAPI and Connect Agents
 
 Fetch the public OpenAPI 3.1 document at `GET /api/openapi.json`, for example:
 
@@ -6,30 +6,19 @@ Fetch the public OpenAPI 3.1 document at `GET /api/openapi.json`, for example:
 curl https://YOUR_TABDO_ORIGIN/api/openapi.json
 ```
 
-The maintained source is `apps/server/src/business/http/openapi.ts`. It uses full `/api/...` paths with server URL `/` (the deployment origin). It covers table listing and metadata, row pagination and filtered queries, row create/read/update/delete, and the table record commands at `POST /api/commands`. Request and response schemas describe column-ID cell maps, cursors, limits (default 50, maximum 100), mutation receipts, and `{ error: string }` errors. Keep this source aligned when changing the routes. The published OpenAPI is a curated subset of the table Site API and commands and may lag the full command surface; see [site-api.md](site-api.md) for authoritative details.
+It describes the public table API, including row CRUD, optional record bodies and attachments, plus site views. GraphQL is available separately at `POST /api/graphql`; see [the data API guide](site-api.md) for the shared record and view model and the matching operations.
 
-GraphQL is available separately at `POST /api/graphql`; its full schema and calendar, document, and blog operations are outside this document. See [the data API guide](site-api.md).
+## Connect an external agent through MCP
 
-## Connect Grok Bot through remote MCP
+1. In tabdo, open **Settings → Connect agents** and choose the client you want to connect.
+2. Follow the selected client’s instructions. Use the workspace MCP URL shown in the connection guide and the requested authentication method.
+3. If the client requires a data access key, create a generic key under **Settings → API Key**. Grant only the table operations needed for the task; there is no separate bot enablement or automatic special key creation.
+4. Keep credentials in the client’s secure credential field. Do not put them in a chat message, URL, public website, or source control.
 
-1. As a workspace owner or admin, open **Settings → API Key → Enable Grok Bot**.
-2. Select at least one table and confirm the listed names. The selection starts empty. This creates a `Grok Bot` key with **Read only** access to those tables. New tables are not added automatically.
-3. Save the API key shown once. Copy the MCP server URL and configure the HTTP header as `Authorization` with value `Bearer <your API key>`; replace the placeholder with the saved key. Do not put the key in a chat message or URL.
-4. In Grok Bot, add a custom MCP server, choose **Remote HTTPS**, and enter the MCP URL. Use the Streamable HTTP transport. Set the `Authorization` header as described above, leave OAuth Client ID and Client Secret empty, and add the server.
-5. If Grok Bot does not install the server automatically, find it in **Connect apps** (or Marketplace in versions that use that label) and install it. In a conversation, type `@` and select the connector to attach it to the task.
+Connection examples use placeholders such as `<workspace MCP URL>` and `<your API key>`; replace them with the values displayed in your workspace. MCP uses the workspace MCP endpoint and does not import the OpenAPI document. The OpenAPI document is for clients that call the REST API directly.
 
-For the tabdo deployment, the MCP URL is `https://tabdo.dev/mcp`. On another deployment, use that deployment's public HTTPS origin followed by `/mcp`. Grok Bot must be able to reach the URL over the public internet. For local development, expose the MCP server through a public tunnel and use the tunnel URL ending in `/mcp`.
+## Authentication and access
 
-This API-key setup requires a Grok Bot version with a custom MCP server form that supports secure HTTP headers. If your version only offers OAuth and has no HTTP headers field, this static Bearer-key connection is unavailable in that version. Use a client that supports Bearer headers. The Grok Bot help documents Connect apps and attaching installed connectors with `@`; the custom server fields and separate install step can vary by version.
+Data API calls use a restricted `tab_` key via `Authorization: Bearer <your API key>` or the supported `X-Tabdo-Key` header. Permissions are enforced per table and operation. Key management requires a signed-in owner/admin session.
 
-If an active key named exactly `Grok Bot` already exists, the action reuses it and shows its metadata and connection instructions without creating another key. Its secret cannot be retrieved or shown again. Use your saved key, or revoke the old key and enable Grok Bot again to create a replacement. Review existing grants in the key editor because reusing the key does not reset its permissions. Add Create/Update there only if writes are needed, and avoid Delete unless required.
-
-The remote MCP connection uses `/mcp`; it does not import the OpenAPI document. The public OpenAPI document at `GET /api/openapi.json` remains available for clients that use the table REST API. The public JSON at `GET /api/plugins/grok-bot` is a tabdo connection guide: it includes `mcp_url`, `transport`, authentication guidance, and setup steps. It is not an official Grok registration protocol. Its `openapi_url` field is retained for compatibility and is not needed to connect Grok Bot through MCP. The guide uses the configured public origin (`BETTER_AUTH_URL`, then `APP_URL`), falling back to the request origin; `/docs` is its documentation entry.
-
-Grok Bot connector setup is documented in [Use the computer and apps](https://docs.x.ai/grok-bot/computer-and-apps) and [Settings and notifications](https://docs.x.ai/grok-bot/settings-and-notifications). The custom MCP network requirements are in [Custom MCP Server Tunneling](https://docs.x.ai/grok/connectors/custom-mcp-tunneling). The custom-header field sequence above was also checked against [Grok Bot's custom MCP setup guide](https://qbash.com/docs/mcp-servers/grok-bot); field availability can depend on the Grok Bot version.
-
-## Authentication and security
-
-The specification and manifest require no authentication. Data calls require a restricted `tab_` key via `Authorization: Bearer tab_...` or the alternative `X-Tabdo-Key` header. Permissions remain enforced per table and operation. Key management requires a signed-in owner/admin session.
-
-Prefer Read-only bot keys and review the tables granted before sharing the secret. Treat keys embedded in websites as public to every visitor. Keep secrets out of source control, public URLs, and logs; store them in the connector's credential field. Revoke compromised or unused keys in Settings. See [API key management](../user-api-keys.md).
+Record body reads use table Read; creating a row with a body uses Create; updating an existing body or uploading a body attachment uses Update. Downloading an attachment requires Read. Reading a site view requires Read; creating or changing its configuration and explicitly publishing, unpublishing, or withdrawing content requires both Read and Update on the source table. See [API key management](../user-api-keys.md) and [the data API guide](site-api.md).

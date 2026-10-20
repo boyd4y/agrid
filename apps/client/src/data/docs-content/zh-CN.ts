@@ -120,60 +120,15 @@ export const docsPages: DocsPage[] = [
     slug: "mcp",
     sectionId: "agents",
     title: "通过 MCP 连接 AI 客户端",
-    description: "使用受限 API Key，通过 HTTPS 将远程 MCP 客户端连接到 tabdo。",
+    description: "在工作区设置中连接外部 MCP 客户端。",
     body: [
-      { type: "p", text: "连接 MCP 客户端时无需安装或运行本地服务。远程端点为 https://tabdo.dev/mcp，使用 Streamable HTTP。每个请求都必须在 Authorization 请求头中携带 API Key。" },
-      { type: "h2", text: "创建并妥善保管 API Key" },
-      { type: "ol", items: [
-        "在 tabdo 中打开「设置 → API Key」，创建权限范围符合集成需要的 Key。只有工作区 owner 或 admin 可以管理 Key。",
-        "Key 显示时立即复制，并保存在 MCP 客户端的安全设置中。完整 Key 只显示一次；不要放入共享文件、浏览器代码或公开仓库。",
-        "在 MCP 客户端中添加远程 HTTP 服务 https://tabdo.dev/mcp，并将 Authorization 请求头设为 Bearer 加上你的 Key。",
+      { type: "p", text: "打开「设置 → 连接智能体」，选择你的客户端，并按页面显示的连接指南操作。指南会提供当前工作区的 MCP 地址和客户端对应步骤，也会说明凭证设置与常见连接问题。" },
+      { type: "p", text: "如果客户端需要数据访问 Key，请在「设置 → API Key」创建标准 Key，并只授予所需表格操作。没有单独的 Bot Key 或自动创建的智能体专用 Key。请将 Key 保存在客户端的安全凭证设置中。" },
+      { type: "p", text: "MCP 工具与 REST、GraphQL 使用同一套记录、正文、附件和视图操作。表级读取/新增/更新/删除权限覆盖记录正文及附件。读取站点视图需要 Read；创建、配置和显式发布、撤下或撤回站点视图需要 Read 与 Update。具体数据操作见「表格」和 REST API 参考。" },
+      { type: "cards", items: [
+        { title: "表格与记录", description: "了解字段、记录属性和记录正文的关系。", href: "/docs/tables", badge: "数据" },
+        { title: "REST API", description: "查看记录、正文、附件和站点视图的统一 API 参考。", href: "/docs/rest", badge: "API" },
       ] },
-      { type: "h2", text: "从 Cursor 连接" },
-      { type: "ol", items: [
-        "个人配置可新建或打开 ~/.cursor/mcp.json；项目配置可使用项目目录下的 .cursor/mcp.json。不要把真实 Key 提交到共享项目文件。",
-        "添加以下远程服务配置，将占位值替换成你的 Key，然后保存并重启 Cursor。",
-        "在 Customize → MCPs 中确认 tabdo 已启用；在聊天窗口工具列表中确认可见 tabdo 工具。若连接失败，可在 Output 面板选择 MCP Logs 查看日志。",
-      ] },
-      { type: "code", lang: "json", code: `{"mcpServers":{"tabdo":{"url":"https://tabdo.dev/mcp","headers":{"Authorization":"Bearer tab_replace_with_your_key"}}}}` },
-      { type: "p", text: "Cursor 配置参考：https://prod.cursor.com/help/customization/mcp（MCP integrations）。" },
-      { type: "h2", text: "从 Codex 连接" },
-      { type: "ol", items: [
-        "在 shell 环境中设置 TABDO_MCP_KEY，值为你的 API Key；启动 Codex 时也要确保该环境变量可用。不要把 Key 放入共享仓库文件。",
-        "运行 codex mcp add tabdo --url https://tabdo.dev/mcp --bearer-token-env-var TABDO_MCP_KEY。",
-        "运行 codex mcp list，再打开 Codex 并使用 /mcp，确认服务器已列出且工具可用。",
-      ] },
-      { type: "code", lang: "bash", code: `export TABDO_MCP_KEY="tab_replace_with_your_key"\ncodex mcp add tabdo --url https://tabdo.dev/mcp --bearer-token-env-var TABDO_MCP_KEY` },
-      { type: "p", text: "Codex 默认将此连接保存在 ~/.codex/config.toml。配置参考：https://learn.chatgpt.com/docs/extend/mcp。" },
-      { type: "h2", text: "从 Claude Code 连接" },
-      { type: "ol", items: [
-        "在可运行 Claude Code 的终端中执行下方命令，并将占位值替换成你的 API Key。配置会写入本机 Claude Code 设置。",
-        "运行 claude mcp list，然后打开 Claude Code 并执行 /mcp。确认 tabdo 已连接；若状态失败，请检查 URL 或 Bearer Key。",
-      ] },
-      { type: "code", lang: "bash", code: `claude mcp add --transport http tabdo https://tabdo.dev/mcp \\\n  --header "Authorization: Bearer tab_replace_with_your_key"` },
-      { type: "p", text: "Claude Code 配置参考：https://code.claude.com/docs/en/mcp。" },
-      { type: "h2", text: "从 Claude 网页版或桌面版连接" },
-      { type: "ol", items: [
-        "Pro 或 Max 用户打开 Customize → Connectors → + Add → Add custom connector。Team 或 Enterprise 组织可能需要先由 owner 或 primary owner 在 Organization settings → Connectors 添加连接器。",
-        "填写连接器名称和远程 MCP URL https://tabdo.dev/mcp。选择 No sign in，然后添加请求头 Authorization，值为 Bearer 加上你的 API Key。添加后，在对话的 Connectors 中启用连接器，并确认其工具可用。",
-        "No sign in 表示不走 OAuth 流程，并非匿名访问；此端点仍要求静态 Bearer Key。Claude 可用入口和组织权限取决于你的计划。",
-        "此处使用的是 Claude 远程连接器流程。Claude Desktop 的本地 MCP 配置是另一种独立方式，连接这个 HTTPS 端点无需使用它。",
-      ] },
-      { type: "p", text: "Claude 远程连接器参考：https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp。" },
-      { type: "h2", text: "连接 Grok Bot" },
-      { type: "p", text: "Grok Bot 可在任务中使用已连接的工具。在你的 Grok 账号通过 Grok Connectors 支持自定义 MCP 连接器时，使用上方连接信息：服务 URL 为 https://tabdo.dev/mcp，请求头 Authorization 的值为 Bearer 加上 API Key。连接器可供 Grok Bot 使用后，在任务中用 @ 附加它。Grok 官方文档分别说明了 Bot 通过 Connect apps 使用连接器，以及 Grok Connectors 添加自定义 MCP；具体选项取决于账号是否开放。不要将 Grok Build 的配置步骤当作 Grok Bot 配置。" },
-      { type: "p", text: "Grok Bot 连接器参考：https://docs.x.ai/grok-bot/computer-and-apps。自定义 MCP 连接器参考：https://docs.x.ai/grok/connectors。" },
-      { type: "h2", text: "按任务选择 Key" },
-      { type: "p", text: "连接提供表格与记录、视图、关联、自动化、日历、正文和博客等工具。工具列表不表示每种 Key 都能调用全部工具。tab_ 数据 Key 受其配置的资源权限限制，例如不能管理工作区成员，也不能创建表或字段。部分成员或表结构级命令需要 agt_ 智能体 Key 和相应工作区权限。只授予集成所需的权限。" },
-      { type: "p", text: "旧版 agt_ 智能体 Key 可选用 X-Workspace-Id 请求头选择智能体有权访问的工作区。tab_ Key 按已有资源授权访问不同工作区；如果发送 X-Workspace-Id，该工作区必须属于此 Key 所属组织。不需要选择工作区时可省略该请求头。" },
-      { type: "h2", text: "连接问题排查" },
-      { type: "table", headers: ["结果", "检查方式"], rows: [
-        ["401 Unauthorized", "添加 Authorization: Bearer <API Key>；检查 Key 是否有效且未被撤销。"],
-        ["403 Forbidden", "Key 没有目标资源的权限，或所选工作区不属于其组织。"],
-        ["工具返回错误", "检查 Key 的资源权限和该工具要求的输入。"],
-        ["客户端要求 OAuth", "此端点不提供 OAuth。请使用支持远程 HTTP MCP 与静态 Authorization 请求头的客户端。"],
-      ] },
-      { type: "callout", tone: "info", text: "端点使用无状态 Streamable HTTP，无需本地进程或 OAuth 登录。请妥善保管 Key；如果 Key 泄露，请在「设置 → API Key」中撤销。" },
     ],
   },
   {
@@ -306,13 +261,14 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
     slug: "tables",
     sectionId: "concepts",
     title: "表格、字段与行",
-    description: "创建字段、录入记录，并使用附件、关联、汇总和公式。",
+    description: "创建表和记录，编辑属性与正文，并使用附件、关联、汇总和公式。",
     body: [
       { type: "h2", text: "创建和编辑" },
       { type: "ol", items: [
         "在 /app/tables 新建表，或在 /app 对话中描述目标，让已配置的智能体创建表和字段。",
         "进入表格后，用列标题菜单添加字段、修改名称或配置；在行内点击单元格填写或修改记录。选择字段类型后，按字段配置输入值。",
         "添加单选或多选字段时，先设置用户可选的选项。人员字段可从当前工作区成员中选择。",
+        "打开记录可编辑标题、属性和正文。正文是内置行字段，不是自定义列；除非请求指定，行列表不会返回正文全文。你创建的‘内容’等字段仍是普通属性。属性与正文分别保存。",
       ] },
       {
         type: "table",
@@ -336,6 +292,11 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "添加 file 字段后，点击记录中的附件单元格并选择上传；上传完成后文件名会显示在单元格中，点击文件名可下载。",
         "要限制为一个文件，打开列设置并关闭‘多个文件’；默认允许多个。文件大小和上传数量受工作区限制；超出限制时减少文件数量或选择较小文件后重试。",
       ] },
+      { type: "h2", text: "编辑记录正文" },
+      { type: "ul", items: [
+        "在记录中使用正文编辑器添加格式文本和图片。正文与记录标题、属性分别保存；离开记录前请确认正文已保存。",
+        "如果保存失败，请保持编辑器打开，检查网络和访问权限后重试。如果其他编辑已更新正文版本，请重新载入记录，并在保存前重新应用未保存的修改。",
+      ] },
       { type: "h2", text: "关联记录与汇总" },
       { type: "ol", items: [
         "添加‘关联’字段，选择目标表，并选择每条记录可关联一条或多条；可选填写反向字段名称。编辑单元格后搜索并勾选目标记录，点击已关联标签可打开目标记录继续编辑。",
@@ -350,35 +311,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         text: "只有有权访问工作区的成员才能查看和下载附件。通过 API 添加附件时，请先在 tabdo 中上传文件。",
       },
       { type: "cards", items: [
-        { title: "使用记录正文", description: "在记录页直接编辑标题、属性和当前正文。", href: "/docs/record-documents", badge: "正文" },
-        { title: "正文 API", description: "通过 REST、GraphQL 或 MCP 读取和更新正文。", href: "/docs/document-api", badge: "API" },
         { title: "表格日历视图", description: "把日期记录显示为全天日历，并在原记录中编辑。", href: "/docs/table-calendar", badge: "视图" },
-      ] },
-    ],
-  },
-  {
-    slug: "record-documents",
-    sectionId: "humans",
-    title: "使用记录正文",
-    description: "在记录页直接编辑标题、属性和正文，查看自动保存状态并处理冲突草稿。",
-    body: [
-      { type: "p", text: "打开记录后会显示宽屏居中的编辑窗口，标题、属性和正文排在同一页。点击标题、属性值或正文即可直接编辑。普通属性不超过三项时全部显示；超过三项时默认显示前三项，选择“显示全部属性（另外 N 项）”可展开其余属性，再选择“收起属性”恢复。正文不占用表格字段，也不会随表格行列表读取；你自建的“内容”等字段和值仍保留为普通属性，不会被搬到正文或覆盖。" },
-      { type: "ol", items: [
-        "在表格或看板中打开一条记录，即可编辑标题、属性和正文。新记录首次保存正文时才会创建正文；仅打开记录不会创建正文。",
-        "点击正文开始写作。桌面宽屏会在正文上方显示完整的一排工具栏；窄屏直接显示常用格式，并将结构、插入和样式操作分别放入菜单。也可以在段落开头输入 / 并用键盘选择命令；斜杠菜单包含正文、标题、列表、引用、代码、图片、分隔线和对齐命令。链接和图片也可从工具栏添加。粘贴的外部图片不会自动上传。页面会显示标题、属性和正文的保存状态。",
-        "属性与正文分别保存，一项成功不代表另一项也成功。保存失败时，页面会保留对应草稿并提供重试；关闭记录、切换记录、从博客文章返回文章列表或切换工作区时，tabdo 会先等待保存。若仍失败，可继续编辑或保留草稿后离开。刷新或关闭浏览器标签页前也请留意未保存提示。",
-        "如果正文在其他位置更新，保存会提示冲突并保留当前标签页中的草稿。你可以查看服务器当前内容、返回自己的草稿，或导出草稿后加载当前内容；比较后再继续编辑。冲突保护用于避免新内容被覆盖，不提供旧正文版本的浏览或恢复。",
-        "获授权的 tabdo 智能体、MCP 客户端及 API 调用方可读取、创建或替换当前正文；图片操作需要相应正文权限。通过 REST 或 GraphQL 接入时，见「正文 API」。",
-      ] },
-      { type: "h2", text: "格式、图片与保存限制" },
-      { type: "ul", items: [
-        "正文支持段落和 1–3 级标题（可左对齐、居中、右对齐或两端对齐）、无序/有序列表、引用、代码块、分隔线、换行、加粗、斜体、下划线、删除线、行内代码、安全链接、文字颜色、高亮和图片。链接只支持完整的 http、https 或 mailto 地址。工具栏提供九种预设文字颜色和高亮色。",
-        "正文最多 64 KiB 序列化 JSON、4,000 个节点、12 层和 20 张被引用图片。图片支持 PNG、JPEG、WebP、GIF；每张最多 5 MiB，每篇正文最多上传 40 个文件、总计 50 MiB。",
-        "未保存的属性和正文草稿会保留在当前浏览器标签页中，不是跨设备备份。关闭标签页前确认已保存；如遇冲突，可导出需要保留的草稿。",
-      ] },
-      { type: "cards", items: [
-        { title: "正文 API", description: "查看当前正文的授权、读写、冲突保护和图片接口。", href: "/docs/document-api", badge: "API" },
-        { title: "发布博客", description: "在博客中写作，再明确选择文章预览和发布。", href: "/docs/blogging", badge: "博客" },
       ] },
     ],
   },
@@ -409,13 +342,15 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
     slug: "views",
     sectionId: "concepts",
     title: "视图、筛选与看板",
-    description: "新建表格、看板和表单视图，用筛选与排序查看记录。",
+    description: "新建表格、看板、表单和站点视图，用筛选、排序和发布查看记录。",
     body: [
       { type: "ol", items: [
         "打开 /app/tables 中的一张表，使用顶部视图标签在现有视图间切换。点击加号，选择表格、看板或表单来新建视图。",
         "在表格视图中点击列标题排序；打开筛选控件，选择字段、条件和值，可添加多条条件并选择全部满足或任一满足。再次打开视图可调整条件。",
         "切换到看板视图后，在看板设置中选择用于分列的 select 字段；拖动卡片到另一列即可更新该记录的状态。可按当前状态列筛选记录。",
         "点击视图菜单可重命名、设为默认或删除视图；每张表至少保留一个视图。视图显示同一批记录，不会复制数据。",
+        "如需把表中的记录发布为网站，可添加‘站点’视图并选择‘博客’模板。映射标题和要公开的字段，再选择要包含的记录与图片。站点视图呈现来源表的数据，不会创建单独的博客数据表；任何表都可以使用此模板。",
+        "保存站点视图或编辑来源记录都不会自动更新线上网站。使用视图中的发布操作，明确发布当前选中的内容；需要时可撤下网站或单独撤回已发布记录。请只发布可公开的信息。",
       ] },
       {
         type: "callout",
@@ -751,62 +686,25 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     slug: "sites",
     sectionId: "humans",
     title: "站点",
-    description: "编辑 HTML、CSS 和 JavaScript 文件，预览并发布站点版本。",
+    description: "从任意表发布站点视图，或编辑站点文件、预览并发布版本。",
     body: [
       { type: "ol", items: [
-        "打开 /app/sites 并创建站点。系统提供 index.html、styles.css、app.js 和 tabdo-config.js 起始文件。",
-        "在站点编辑器中编辑网站文件，并使用预览检查草稿。可添加 HTML、CSS、JS、MJS、JSON、SVG、TXT 或 MD 文件；保存后会生成新版本。",
-        "发布已保存版本后，从站点详情复制公开地址并打开检查；修改后再次保存并发布新版本。站点历史可查看旧版本并恢复；可随时撤下已发布版本。",
+        "打开 /app/sites 创建代码站点（含起始文件），或进入任意表添加‘站点’视图，使用‘博客’模板发布所选记录。",
+        "代码站点可在编辑器修改网站文件并使用预览检查草稿，可添加 HTML、CSS、JS、MJS、JSON、SVG、TXT 或 MD 文件；保存后会生成新版本。表格站点视图则配置‘博客’模板、字段映射，并选择记录和图片。",
+        "代码站点发布已保存版本，表格站点视图则明确发布所选内容。发布后从站点详情复制公开地址并检查。来源记录或视图配置变化不会自动发布；再次发布才会更新线上网站。可撤下站点或撤回单条已发布记录。",
         "如需读取或提交表格数据，在编辑器选择连接数据，粘贴单独创建的 tab_ API Key。只授予该站点必需表格与操作权限，保存后用预览验证。",
       ] },
       { type: "callout", tone: "warn", text: "站点编辑器可直接编辑网站文件；每个站点最多 50 个文件，文件类型见上方列表。发布时使用已保存的版本。tab_ Key 会随站点前端代码提供，不能存放高权限凭证；Key 只应授予必要的逐表数据权限。" },
       { type: "cards", items: [
-        { title: "发布博客", description: "在博客中写作，再明确选择文章预览和发布。", href: "/docs/blogging", badge: "博客" },
-        { title: "HTTP API 与数据访问 Key", description: "了解 tab_ Key 的逐表权限和访问边界。", href: "/docs/api-quickstart", badge: "安全" },
+                { title: "HTTP API 与数据访问 Key", description: "了解 tab_ Key 的逐表权限和访问边界。", href: "/docs/api-quickstart", badge: "安全" },
       ] },
     ],
   },
-  {
-    slug: "blogging",
-    sectionId: "humans",
-    title: "发布博客",
-    description: "在博客中直接写作，明确选择文章后预览、发布和更新。",
-    body: [
-      { type: "p", text: "博客把你明确选择的文章整理成可公开阅读的内容。新建博客后即可在博客页面写标题和正文；每次构建和发布都是固定版本。保存草稿不会公开内容，你可以先预览，再决定是否让读者访问。" },
-      { type: "ol", items: [
-        "在工作区打开「站点」并新建博客，填写名称即可；简介可选。tabdo 会准备博客内容和写作所需字段。若要继续使用已有内容表，可展开「高级：绑定已有内容表」并选择对应表与字段。",
-        "进入博客后选择「新建文章」，在同一页面填写标题并直接编辑正文。桌面宽屏会在正文上方显示完整的一排工具栏；窄屏直接显示常用格式，并将结构、插入和样式操作分别放入菜单。也可以在段落开头输入 / 并用键盘选择命令；斜杠菜单包含正文、标题、列表、引用、代码、图片、分隔线和对齐命令。链接和图片也可从工具栏添加。已有文章也可在博客中打开并继续写作；记录窗口中显示相同的标题、属性和当前正文。正文只保留当前内容，不提供历史浏览或恢复。",
-        "文章 URL slug 会自动生成；非空的已有 slug 会保留。需要时可在高级设置中调整映射或 slug。新文章和保存的修改不会自动加入发布列表；逐篇选择要发布的文章，并逐项选择正文图片和封面。未选中的记录、关联记录和附件不会加入博客。",
-        "保存配置后构建博客。查看构建结果和预览链接；预览链接在 10 分钟后过期，任何持有链接的人都可访问。预览不进入搜索索引；你也可以提前撤销所有预览链接。",
-        "检查无误后发布构建版本。发布后复制博客地址分享给读者。继续编辑正文或博客设置不会自动改动线上文章；发现待发布更改时，重新构建、预览并发布，线上内容才会更新。",
-        "要撤下一篇文章，选择该文章并确认撤回；要停止整个博客，选择撤下博客。也可以将较早的博客配置恢复为新草稿，再重新构建并发布。",
-      ] },
-      { type: "h2", text: "发布内容与访问范围" },
-      { type: "ul", items: [
-        "每篇正文的受限 JSON 内容最多 64 KiB（按完整序列化 JSON 字节计算），最多 4,000 个节点、12 层和 20 张图片。博客生成的全部 HTML 另有 4 MiB 总预算。每个博客最多选择 20 篇文章；图片资源最多 60 个、每个最多 5 MiB、总计最多 30 MiB，仅支持 PNG、JPEG、WebP 和 GIF。",
-        "公开内容包括已映射并选择的文章字段、正文和选中的图片。作者显示为公开姓名，不包含邮箱或内部成员 ID；不要在公开字段、正文或链接中放入秘密或私人资料。",
-        "博客发布的是内容快照。源记录或正文后续变化不会同步到线上；重新构建前请确认所选记录、图片和公开字段仍正确。",
-        "撤回会阻止博客旧版本中的文章和图片继续通过博客地址访问；已被读者下载、复制或缓存到其他位置的副本无法远程收回。删除来源前，先按需要撤回相应文章。",
-        "删除博客前必须先撤下整站。博客配置历史版本和暂存上传可能在站点删除前保留；每个博客最多保留 100 个历史版本，达到上限后请新建博客继续发布。",
-      ] },
-      { type: "h2", text: "权限与排错" },
-      { type: "ul", items: [
-        "工作区成员需有权查看并编辑所选记录和正文。通过 API 连接时，owner/admin 在「设置 → API Key」为内容表单独授予博客读取、配置、构建、发布或恢复权限；只授予实际需要的权限。",
-        "若标题或正文未保存，请查看页面状态并重试。关闭文章、返回博客文章列表或切换工作区时，tabdo 会先等待保存；若仍失败，可继续编辑或保留草稿后离开。出现正文冲突时，当前标签页中的草稿会保留；查看服务器当前内容，或导出草稿后加载当前内容，再决定如何继续。构建提示来源已变化时，重新读取记录、核对内容并重新构建。",
-        "若 slug 不符合博客要求，可在高级设置中调整；新建文章会自动生成合法且唯一的 slug。若无法发布或预览，请检查 Key 的对应权限、构建版本和待发布更改；过期预览需要重新生成。",
-      ] },
-      { type: "cards", items: [
-        { title: "博客 API", description: "通过 REST、GraphQL 或可用的 MCP 工具读取和管理博客。", href: "/docs/blog-api", badge: "API" },
-        { title: "使用记录正文", description: "在记录页直接编辑标题、属性和当前正文。", href: "/docs/record-documents", badge: "正文" },
-      ] },
-    ],
-  },
-
   {
     slug: "rest",
     sectionId: "reference",
     title: "数据 REST API",
-    description: "tab_ Key 的表元数据、分页读取和记录 CRUD 路径。",
+    description: "tab_ Key 的表和记录路径，包含可选正文、附件与站点视图。",
     body: [
       {
         type: "table",
@@ -816,22 +714,92 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["GET /api/tables/:tableId", "读取表元数据与字段"],
           ["GET /api/tables/:tableId/rows?limit=&cursor=&includeTotal=", "读取一页记录；默认 50、最大 100，需 read grant"],
           ["POST /api/tables/:tableId/rows/query", "按 JSON filters、filterLogic、sort、cursor、limit 查询；需 read grant"],
-          ["GET /api/tables/:tableId/rows/:rowId", "读取单条记录；需 read grant"],
-          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value } } 新增；需 create grant"],
-          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells, expectedVersion? } 更新；需 update grant"],
+          ["GET /api/tables/:tableId/rows/:rowId", "读取单条记录；添加 ?include=body&bodyFormat=json|html 返回正文；需 Read"],
+          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value }, body?: { content } } 新增；需 create grant"],
+          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells?, expectedVersion?, body?: { content, expectedVersion } } 更新；正文 expectedVersion 必填；需 update grant"],
           ["DELETE /api/tables/:tableId/rows/:rowId", "删除记录；需 delete grant"],
+          ["POST /api/tables/:tableId/rows/:rowId/attachments", "使用 { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey } 上传；需 Update"],
+          ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "读取已授权的正文附件；需 Read"],
+          ["POST /api/commands (getView/listViews/createView/updateView)", "Read 可读取视图；Read+Update 可创建、配置并显式发布/撤下/撤回"],
         ],
       },
+      { type: "h2", text: "记录正文与站点视图" },
+      { type: "p", text: "正文是记录的内置行字段，行列表不返回完整正文。读取单条记录时使用 ?include=body&bodyFormat=json（或 html），返回的 body 含 content、version、schemaVersion、attachments，以及可选的渲染 HTML。POST 新建记录时可传 body: { content }；PATCH 更新正文时传 body: { content, expectedVersion }，其中 expectedVersion 必填，且与行版本分开检查。首次写入空正文时使用版本 0。正文写入必须带 idempotencyKey；API Key 写操作只返回版本回执，不返回正文内容。" },
+      { type: "p", text: "添加图片时，向记录附件路径上传 target=body、当前正文 expectedVersion、name、mimeType、base64 和 idempotencyKey。响应包含 fileId 与 bodyVersion；在正文图片内容中引用 fileId。上传需要 Update 权限；通过 fileId 获取附件需要 Read 权限。" },
+      { type: "code", lang: "json", code: `{
+  "target": "body",
+  "expectedVersion": 1,
+  "name": "cover.png",
+  "mimeType": "image/png",
+  "base64": "BASE64_ENCODED_IMAGE_CONTENT",
+  "idempotencyKey": "upload-cover-1"
+}` },
+      { type: "p", text: "使用此请求体 POST /api/commands 读取视图及当前发布状态：" },
+      { type: "code", lang: "json", code: `{
+  "command": "getView",
+  "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
+}` },
+      { type: "p", text: "使用 createView({ tableId, type: \"site\", name, config, idempotencyKey }) 创建站点视图，并设置博客模板、来源表字段映射和所选记录 ID。getView 除视图信息外还返回 site 状态 { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }；发布时将 site.publishedRevisionId 用作 expectedPublishedRevisionId。首次发布使用 null。撤下时使用当前已发布修订 ID；撤回某条记录时另传 rowId。保存来源记录或视图配置不会发布。读取站点视图需要 Read；创建、配置和显式发布、撤下或撤回站点视图需要该表的 Read 与 Update。" },
+      { type: "code", lang: "json", code: `{
+  "cells": { "col_title": "旅行手记" },
+  "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "第一篇记录。" }] }] } },
+  "idempotencyKey": "create-row-with-body-1"
+}` },
+      { type: "code", lang: "json", code: `{
+  "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "更新后的记录。" }] }] }, "expectedVersion": 1 },
+  "idempotencyKey": "update-row-body-1"
+}` },
+      { type: "p", text: "使用此请求体 POST /api/commands 创建站点视图：" },
+      { type: "code", lang: "json", code: `{
+  "command": "createView",
+  "input": {
+    "tableId": "00000000-0000-4000-8000-000000000001",
+    "type": "site",
+    "name": "旅行手记",
+    "config": {
+      "template": "blog",
+      "mapping": { "title": "00000000-0000-4000-8000-000000000011", "slug": "00000000-0000-4000-8000-000000000012" },
+      "authorName": "Tabdo 团队",
+      "description": "旅行记录",
+      "language": "zh-CN",
+      "articles": [{ "rowId": "00000000-0000-4000-8000-000000000021", "imageIds": [] }]
+    },
+    "idempotencyKey": "create-site-view-1"
+  }
+}` },
+      { type: "p", text: "检查并保存视图后，用当前视图版本显式发布。首次发布时 expectedPublishedRevisionId 为 null：" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 1,
+    "idempotencyKey": "publish-site-view-1",
+    "publication": { "action": "publish", "expectedPublishedRevisionId": null }
+  }
+}` },
+      { type: "p", text: "撤下站点时，将 expectedPublishedRevisionId 设为 getView 返回的当前 publishedRevisionId：" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "unpublish-site-view-1",
+    "publication": { "action": "unpublish", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041" }
+  }
+}` },
+      { type: "p", text: "从已发布站点撤回一条记录时，另传 rowId：" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "withdraw-site-row-1",
+    "publication": { "action": "withdraw", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041", "rowId": "00000000-0000-4000-8000-000000000021" }
+  }
+}` },
       { type: "h2", text: "请求与响应" },
-      { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。REST 成功直接返回资源数据，不包在 { ok, result } 中。" },
-      { type: "code", lang: "json", code: `// POST /api/tables/tbl_example/rows
-{ "cells": { "col_title": "New task", "col_status": "opt_todo" } }
-
-// PATCH /api/tables/tbl_example/rows/row_example
-{ "cells": { "col_title": "Updated task" }, "expectedVersion": 3 }
-
-// stale version: HTTP 409
-{ "error": "Record changed; reload before updating" }` },
+      { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。行和附件资源路径直接返回资源数据；POST /api/commands 返回 { ok, command, result }。对 getView/createView，从 result.id 读取视图 ID，从 result.site.version 和 result.site.publishedRevisionId 读取当前视图版本与发布指针。GraphQL 命令结果位于 data.getView 或 data.createView。" },
+      { type: "p", text: "POST 新增行：{ \"cells\": { \"col_title\": \"New task\" } }。PATCH 更新行：{ \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }。版本过期时返回 HTTP 409，错误体为 { error: \"Record changed; reload before updating\" }。" },
       { type: "ul", items: [
         "cells 只接受 API 可写字段：text、number、date、checkbox、select、multi_select。select 值使用字段元数据的 options[].id，不使用标签。删除带有关联记录的行时，可能还需要目标表的 update 权限以移除反向关联。",
         "请求体上限 128 KiB；每个 Key 默认每分钟最多 120 次读取、20 次写入。限流依赖服务可用，不可用时拒绝请求。",
@@ -867,7 +835,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "query": "query Browse($tableId: ID!, $limit: Int!, $cursor: String) { table(id: $tableId) { id name columns { id name type options { id label color } readable writable } rows(options: { limit: $limit, cursor: $cursor }) { rows { id version cells createdAt updatedAt } nextCursor hasMore totalMatched } } }",
   "variables": { "tableId": "tbl_example", "limit": 50, "cursor": null }
 }` },
-      { type: "p", text: "查询 tables 或 table(id)、columns、rows(options) 与 row(id)。rows 每页默认 50，最大 100；把返回的 nextCursor 传回 options.cursor。数据位于标准 { data } 响应中。" },
+      { type: "p", text: "查询 tables 或 table(id)、columns、rows(options) 与 row(id)。rows 每页默认 50，最大 100；把返回的 nextCursor 传回 options.cursor。可在 Row 选择中显式请求 body；createRow 和 updateRow 接受 body 与幂等键，正文使用自己的 expectedVersion。Site 通过 createView/updateView 通用字段操作，与 REST 使用相同权限模型。数据位于标准 { data } 响应中。" },
       { type: "h2", text: "记录变更" },
       { type: "code", lang: "graphql", code: `mutation UpdateTask($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int) {
   updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version) {
@@ -894,7 +862,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     title: "JavaScript / TypeScript SDK",
     description: "通过 @tabdo/sdk 访问 tab_ 授权的数据 API。",
     body: [
-      { type: "p", text: "从 npm 安装公开的 @tabdo/sdk 包，并使用 createClient 连接你的 tabdo 地址和 tab_ 数据访问 Key。已发布的 0.1.1 版本提供表格数据方法，不使用浏览器登录会话；正文 API 可通过 client.graphql 调用，也可直接使用 REST 或已授权的 MCP 连接。正文 Key 权限与表格权限分开设置。" },
+      { type: "p", text: "从 npm 安装公开的 @tabdo/sdk 包，并使用 createClient 连接你的 tabdo 地址和 tab_ 数据访问 Key。已发布的 0.1.1 版本提供表格数据方法，不使用浏览器登录会话。记录正文和站点视图可通过 REST、GraphQL 或已授权的 MCP 连接访问，并沿用相同的表格权限。" },
       { type: "code", lang: "bash", code: `npm install @tabdo/sdk` },
       { type: "code", lang: "typescript", code: `import { createClient } from "@tabdo/sdk";
 
@@ -924,194 +892,7 @@ if (row) {
         "client.graphql<T>(query, variables, { operationName, signal }) 可执行 GraphQL。请求失败抛出 TabdoApiError，包含 code、status 与 errors；SDK 不会自动重试变更。",
       ] },
       { type: "callout", tone: "info", text: "不要把高权限 Key 嵌入公开网页；浏览器代码会暴露 Key。私密集成请将 Key 保存在环境变量中；公开站点应使用仅具所需逐表权限的专用 Key。" },
-      { type: "cards", items: [{ title: "API 入门", description: "查看完整 REST 流程和权限说明。", href: "/docs/api-quickstart", badge: "指南" }, { title: "GraphQL", description: "查看 GraphQL Schema 与限制。", href: "/docs/graphql", badge: "GraphQL" }, { title: "正文 API", description: "查看当前正文读写、权限与冲突保护。", href: "/docs/document-api", badge: "正文" }] },
-    ],
-  },
-  {
-    slug: "blog-api",
-    sectionId: "reference",
-    title: "博客 API",
-    description: "使用专用博客权限，通过 REST、GraphQL 或 MCP 管理博客快照。",
-    body: [
-      { type: "p", text: "博客命令可通过 REST 命令入口、GraphQL 或已授权的 tabdo MCP 连接使用。博客权限按内容表单独授予；旧的数据读写权限或正文权限不会自动获得博客配置、构建或发布权限。createBlog 必须使用已登录的成员会话，不能使用 API Key。已发布的 @tabdo/sdk 0.1.1 版本尚未包含任何博客命令；API 接入请使用 REST、GraphQL 或 MCP。" },
-      { type: "h2", text: "创建访问 Key" },
-      { type: "ol", items: [
-        "请工作区 owner/admin 打开「设置 → API Key」并创建专用 Key。仅添加需要访问的内容表及博客权限：canRead 读取来源和配置，canConfigure 保存博客设置，canBuild 构建和预览，canPublish 授权该 Key 发布或撤回，canRestore 恢复历史配置。",
-        "将完整 Key 存放在服务端密钥管理或环境变量中，不放在浏览器、公开网页、博客正文或 URL 中。完整 Key 只显示一次；删除 Key 可撤销后续访问。",
-        "博客 API 的写命令都要提供 1–200 字符的幂等键。可通过 Idempotency-Key 请求头提供；不要为同一请求的重试生成新值。相同 Key 重放会返回原结果；相同 Key 用于不同请求会返回冲突。",
-      ] },
-      { type: "h2", text: "REST 命令入口" },
-      { type: "p", text: "向 POST /api/commands 发送 JSON，使用 Authorization: Bearer tab_…。每个请求包含 command 和 input；写操作应附带 Idempotency-Key。以下是只读示例，使用虚构 ID 和占位 Key：" },
-      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
-export TABDO_API_KEY="tab_replace_with_your_key"
-
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
-      { type: "h2", text: "以已登录成员身份创建博客" },
-      { type: "p", text: "要新建博客并使用 tabdo 准备内容字段，请在已登录的工作区成员会话中向 POST /api/commands 发送下方请求体。该请求使用成员登录会话，不使用 tab_ API Key；API Key 不能创建博客。命令会创建内容表和默认标题/slug 字段。REST 命令成功响应为 { ok, command, result }；BlogDetail 站点 ID 为 result.id。" },
-      { type: "code", lang: "json", code: `{
-  "command": "createBlog",
-  "input": {
-    "name": "Field Notes",
-    "description": "Notes and updates",
-    "language": "zh-CN",
-    "idempotencyKey": "create-blog-example-1"
-  }
-}` },
-      { type: "p", text: "在已登录成员会话下，可向 POST /api/commands 发送下方请求体；也可通过 REST 或 GraphQL 使用 API Key 调用 startBlogArticle。提供博客 siteId、当前 expectedVersion 和标题。命令会创建或准备来源记录；缺少 slug 时会生成合法 slug。它不会创建正文、选择文章发布或发布内容。结果包含 tableId 和 rowId，之后可通过正文 API 编写内容。API Key 调用者还需博客 canConfigure 和内容表 canCreate（新建文章），或 canRead 与 canUpdate（准备已有记录）；正文授权仍单独检查。" },
-      { type: "code", lang: "json", code: `{
-  "command": "startBlogArticle",
-  "input": {
-    "siteId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 1,
-    "title": "第一篇笔记",
-    "idempotencyKey": "start-article-example-1"
-  }
-}` },
-      { type: "p", text: "继续使用已有内容表时，可通过 saveBlog 配置该表和字段映射。以下高级配置使用虚构 UUID；将字段 ID、表 ID 和记录 ID 替换为 getBlogSources 与字段元数据返回的值。saveBlog 返回的站点 ID 在 REST 中为 result.id、GraphQL 中为 data.saveBlog.id；getBlog 的结果分别为 result.id 与 data.getBlog.id。" },
-      { type: "code", lang: "json", code: `{
-  "command": "saveBlog",
-  "input": {
-    "name": "Field Notes",
-    "idempotencyKey": "save-blog-example-1",
-    "config": {
-      "tableId": "00000000-0000-4000-8000-000000000001",
-      "authorName": "Tabdo Team",
-      "description": "Notes and updates",
-      "language": "en",
-      "mapping": {
-        "title": "00000000-0000-4000-8000-000000000011",
-        "slug": "00000000-0000-4000-8000-000000000012"
-      },
-      "articles": [{
-        "rowId": "00000000-0000-4000-8000-000000000021",
-        "imageIds": []
-      }]
-    }
-  }
-}` },
-      { type: "p", text: "使用 saveBlog 成功结果的 result.id（GraphQL 为 data.saveBlog.id）作为 siteId，并用其 version 调用 buildBlog。构建成功后，从结果的 result.id（GraphQL 为 data.buildBlog.id）取 siteId，从 result.revisionId 取 buildId；publishBlog 的 expectedVersion 和 expectedPublishedRevisionId 也取自这份构建结果。首次发布的 expectedPublishedRevisionId 为 null；更新发布内容前重新读取并确认当前线上版本。" },
-      { type: "code", lang: "json", code: `{
-  "command": "buildBlog",
-  "input": {
-    "siteId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 1,
-    "idempotencyKey": "build-blog-example-1"
-  }
-}` },
-      { type: "code", lang: "json", code: `{
-  "command": "publishBlog",
-  "input": {
-    "siteId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 2,
-    "expectedPublishedRevisionId": null,
-    "buildId": "00000000-0000-4000-8000-000000000003",
-    "idempotencyKey": "publish-blog-example-1"
-  }
-}` },
-      { type: "p", text: "createBlog 为已登录成员创建博客和默认内容表；startBlogArticle 创建或准备文章记录，但不会选择文章或发布。getBlogSources 返回可选文章字段、用于检测来源变更的正文版本和可明确选择的图片；limit 最大为 50，可用 nextAfterId 继续分页。getBlog 读取配置、当前构建、已发布文章、配置修订和 pendingChanges。saveBlog 保存配置和显式文章列表；buildBlog 从当前来源生成固定快照；createBlogPreview 返回 10 分钟分享链接；publishBlog 发布指定 buildId；withdrawBlogArticle 撤回单篇；unpublishBlog 撤下整站；restoreBlogRevision 将历史配置恢复成新草稿。博客 REST 请求体上限为 128 KiB，具体博客内容和图片预算见博客使用指南。" },
-      { type: "h2", text: "GraphQL" },
-      { type: "p", text: "GraphQL 入口为 POST /api/graphql，同样使用 Authorization: Bearer tab_… 和专用博客权限。每个命令以 JSON input 作为参数；读取命令放在 query，写命令放在 mutation。对 REST 和 GraphQL 写操作使用相同的幂等键与版本前提。" },
-      { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
-  getBlog(input: $input)
-}` },
-      { type: "code", lang: "json", code: `{
-  "query": "query ReadBlog($input: JSON!) { getBlog(input: $input) }",
-  "variables": { "input": { "siteId": "00000000-0000-4000-8000-000000000002" } }
-}` },
-      { type: "p", text: "写命令使用 Idempotency-Key 请求头；GraphQL 单次请求体上限为 128 KiB。GraphQL 返回标准 { data } 或 { errors }。常见错误包括 FORBIDDEN（缺少权限）、NOT_FOUND（对象不存在或不可见）、VERSION_CONFLICT（配置或发布版本已变化）、SOURCE_CHANGED（来源变化，需要重新构建）、IDEMPOTENCY_MISMATCH（幂等键被不同请求复用）和 LIMIT_EXCEEDED（超过博客预算）。发生版本冲突时重新调用 getBlog 并核对后再继续。" },
-      { type: "h2", text: "MCP 与公开阅读" },
-      { type: "p", text: "已连接 tabdo MCP 的客户端可使用 create_blog、start_blog_article、get_blog_sources、get_blog、save_blog、build_blog、create_blog_preview、revoke_blog_previews、publish_blog、withdraw_blog_article、unpublish_blog 和 restore_blog_revision 工具。API Key 不能调用 create_blog；start_blog_article 遵循上述内容表博客与表格权限。发布权限只应交给受信任的集成。" },
-      { type: "p", text: "已发布博客无需 Key 即可公开读取：GET /s/{siteId}/（即 getBlog 返回的 publicUrl）可访问文章列表；文章、分页、分类和选中图片使用该地址下的子路径。未发布内容、撤下文章的旧路径以及已撤下博客不可公开读取。预览 URL 是任何持链接者均可访问的短时链接，不要将其当作私有登录预览。" },
-      { type: "callout", tone: "warn", text: "不要将可发布的 Key 交给浏览器或不受信任的自动化。保存、构建和发布是不同操作；只有明确授权的 Key 才能发布，重新构建不会自动更新线上内容。已发布的 @tabdo/sdk 0.1.1 版本尚未包含任何博客命令；请使用 REST、GraphQL 或已授权的 MCP 连接。" },
-      { type: "cards", items: [
-        { title: "发布博客", description: "查看从正文写作到发布和撤回的完整步骤。", href: "/docs/blogging", badge: "指南" },
-        { title: "API Key", description: "了解 Key 的创建、逐表授权和使用边界。", href: "/docs/auth", badge: "权限" },
-      ] },
-    ],
-  },
-  {
-    slug: "document-api",
-    sectionId: "reference",
-    title: "正文 API",
-    description: "通过 REST、GraphQL 或 MCP 按需读取、创建、替换和渲染当前正文。",
-    body: [
-      { type: "p", text: "正文接口按需访问一条记录的当前正文，不会把正文混进表格行查询；每次保存只保留最新内容，不提供正文历史列表、旧版本渲染或恢复。旧 REST 历史路径已移除并返回 404，历史 GraphQL 命令和 MCP 工具也不可用。API Key 需要单独的正文权限；表格读写授权、博客权限和正文授权彼此独立。" },
-      { type: "h2", text: "为 Key 配置最小权限" },
-      { type: "ol", items: [
-        "请工作区 owner/admin 在「设置 → API Key」为目标内容表配置正文权限：canRead 读取当前正文、图片和安全渲染；canCreate 创建正文；canUpdate 替换正文；canUpload 上传图片。旧 Key 中的 canReadHistory 和 canRestore 不再提供正文历史访问或恢复能力。",
-        "只授予调用方所需操作。canCreate 不包含正文读取；正文权限也不会授予表格 CRUD、博客配置或发布权限。",
-        "请求使用 Authorization: Bearer tab_…；不要把 Key 放进 URL 或公开网页。所有写命令都需 1–200 字符的 idempotencyKey，也可通过 Idempotency-Key 请求头传入；相同请求重试时复用原值。",
-      ] },
-      { type: "h2", text: "REST 命令示例" },
-      { type: "p", text: "POST /api/commands 接受 { command, input } 并返回 { ok, command, result }。下面先读取正文，再展示创建和替换的命令形状；将示例 UUID 换成 Key 已获授权的表与记录 ID。createDocument 只返回版本回执，不隐含读取权限；创建后如需正文内容，再单独调用 getDocument。" },
-      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
-export TABDO_API_KEY="tab_replace_with_your_key"
-
-# Read; result is null if this row has no body yet
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"command":"getDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002"}}'
-
-# Create on a row that does not have a body
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: create-body-example-1" \\
-  -d '{"command":"createDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","idempotencyKey":"create-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"A first draft."}]}]}}}'
-
-# Replace after reading the current version
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: replace-body-example-1" \\
-  -d '{"command":"replaceDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","expectedVersion":1,"idempotencyKey":"replace-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"An updated draft."}]}]}}}'` },
-      { type: "p", text: "REST 成功回执位于 result；getDocument 返回 { id, tableId, rowId, version, content, updatedAt } 或 null。version 是防止覆盖较新内容的并发令牌，不代表可浏览或恢复的正文历史。替换时使用刚读到的 version 作为 expectedVersion；过期版本返回 409 VERSION_CONFLICT，先重读并比较草稿，不要覆盖新版本。写请求幂等键长度为 1–200；普通 REST 请求体上限为 128 KiB，单独上传正文图片的请求可使用 8 MiB 请求体预算。" },
-      { type: "h2", text: "REST 路径与 GraphQL" },
-      { type: "table", headers: ["操作", "REST 路径", "最低正文权限"], rows: [
-        ["读取/创建/替换", "GET/POST/PUT /api/tables/{tableId}/rows/{rowId}/document", "canRead / canCreate / canUpdate"],
-        ["安全渲染当前正文", "GET /api/tables/{tableId}/rows/{rowId}/document/render", "canRead"],
-        ["上传/读取图片", "POST /api/tables/{tableId}/rows/{rowId}/document/images；GET /api/tables/{tableId}/rows/{rowId}/document/images/{fileId}", "canUpload / canRead"],
-      ] },
-      { type: "p", text: "GraphQL 地址为 POST /api/graphql。以 getDocument(input: JSON!) 读取；createDocument、replaceDocument 和 uploadDocumentImage 等写命令使用 mutation。请求带 Authorization: Bearer tab_…；变更传 Idempotency-Key，并在 input 中提供同一个 idempotencyKey。普通 GraphQL 请求体上限 128 KiB；单独的 uploadDocumentImage mutation 可使用 8 MiB 请求体预算。" },
-      { type: "code", lang: "graphql", code: `query ReadBody($input: JSON!) {
-  getDocument(input: $input)
-}
-
-mutation ReplaceBody($input: JSON!) {
-  replaceDocument(input: $input)
-}` },
-      { type: "code", lang: "json", code: `{
-  "query": "query ReadBody($input: JSON!) { getDocument(input: $input) }",
-  "variables": { "input": { "tableId": "00000000-0000-4000-8000-000000000001", "rowId": "00000000-0000-4000-8000-000000000002" } }
-}` },
-      { type: "code", lang: "json", code: `{
-  "query": "mutation ReplaceBody($input: JSON!) { replaceDocument(input: $input) }",
-  "variables": { "input": {
-    "tableId": "00000000-0000-4000-8000-000000000001",
-    "rowId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 1,
-    "idempotencyKey": "replace-body-example-2",
-    "content": { "type": "doc", "content": [{ "type": "paragraph", "attrs": { "textAlign": "center" }, "content": [{ "type": "text", "text": "An updated draft.", "marks": [{ "type": "underline" }, { "type": "textStyle", "attrs": { "color": "#337ea9" } }, { "type": "highlight", "attrs": { "color": "#d3e5ef" } }] }] }] }
-  } }
-}` },
-      { type: "h2", text: "图片与内容预算" },
-      { type: "ul", items: [
-        "内容是 schemaVersion 1 的受限 JSON，不接收任意 HTML。支持段落、heading level 1–3、列表、引用、codeBlock、分隔线、换行和图片。段落与标题的 attrs 可包含 textAlign: left、center、right 或 justify（null 表示默认对齐）。支持 bold、italic、underline、strike、code、安全链接、textStyle 和 highlight 标记；textStyle.attrs.color 必须是六位十六进制颜色，例如 #337ea9；highlight.attrs.color 可为 null 或六位十六进制颜色。链接仅限完整 http、https、mailto URL；未知节点、属性和不正确结构会被拒绝。",
-        "完整序列化正文 JSON 最多 64 KiB，最多 4,000 个节点、12 层和 20 张被引用图片。单张图片最多 5 MiB；每篇正文最多上传 40 个图片文件、累计 50 MiB。",
-        "先调用 uploadDocumentImage，base64 不带 data URL 前缀，并提供当前 expectedVersion、文件名、PNG/JPEG/WebP/GIF MIME 类型和幂等键。响应中的 fileId 可放入图片节点 attrs.fileId，alt 文本放入 attrs.alt，再调用 replaceDocument 保存正文。图片属于该正文，不能跨记录引用。",
-        "getDocumentImage 只返回当前获权正文中的图片 base64。renderDocument 返回安全 HTML 和私有图片清单；其中相对图片路径不是公开下载链接。不要把私有文件 URL、Key 或 token 写进内容。",
-      ] },
-      { type: "h2", text: "MCP 工具与错误" },
-      { type: "p", text: "已连接 tabdo MCP 的客户端可使用 get_document、create_document、replace_document、render_document、upload_document_image 和 get_document_image。读取示例为 get_document({ tableId, rowId })；替换时提供 tableId、rowId、当前 expectedVersion、受限 JSON content 和 idempotencyKey。工具使用相同的表级正文权限和版本检查；仅提供所需工具与授权。" },
-      { type: "p", text: "常见错误：FORBIDDEN 表示缺少该操作权限；NOT_FOUND 表示正文/图片不存在或不在授权范围；VERSION_CONFLICT 表示正文已更新；IDEMPOTENCY_MISMATCH 表示同一重试键用于了不同输入；BAD_INPUT 或 ATTACHMENT_LIMIT 表示内容结构或图片预算不符合限制。发生版本冲突时先读取新版本并比较本地草稿。" },
-      { type: "cards", items: [
-        { title: "使用记录正文", description: "查看直接编辑、自动保存、冲突草稿和图片步骤。", href: "/docs/record-documents", badge: "指南" },
-        { title: "发布博客", description: "选择并显式发布记录正文快照。", href: "/docs/blogging", badge: "博客" },
-      ] },
+      { type: "cards", items: [{ title: "API 入门", description: "查看完整 REST 流程和权限说明。", href: "/docs/api-quickstart", badge: "指南" }, { title: "GraphQL", description: "查看 GraphQL Schema 与限制。", href: "/docs/graphql", badge: "GraphQL" }] },
     ],
   },
   {

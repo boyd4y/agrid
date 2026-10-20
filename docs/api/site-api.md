@@ -1,6 +1,6 @@
 # Table API and JavaScript SDK
 
-See [OpenAPI and Grok Bot](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and one-click bot key setup.
+See [OpenAPI and Connect Agents](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and generic MCP connection guidance.
 
 Manage all keys in **Settings → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
 
@@ -48,6 +48,10 @@ Permissions are independent. For example, a key can read a catalog, create leads
 
 POST `/api/graphql` with `Authorization: Bearer YOUR_API_KEY` and JSON `{ query, variables, operationName? }`. Standard authenticated introspection and GET queries are supported. Mutations require POST. The fixed schema uses a JSON `cells` map for user-defined columns.
 
+Records also have a built-in `body` field. Select `Row.body` explicitly in GraphQL; `rows` does not return full bodies by default. REST POST row accepts `body: { content }`; PATCH body writes require `body: { content, expectedVersion }`, independent of the optional row version. The first write to an empty body uses version 0. Body writes require an idempotency key and API Key receipts include versions, not body content. Reading a body requires Read; creating a row with a body requires Create; updating an existing body requires Update.
+
+Upload a body image through `POST /api/tables/:tableId/rows/:rowId/attachments` with `{ target: "body", expectedVersion, name, mimeType, base64, idempotencyKey }`. The response returns `fileId` and `bodyVersion`; reference that `fileId` in the body's image content. Upload requires Update, and `GET /api/tables/:tableId/rows/:rowId/attachments/:fileId` requires Read.
+
 ```graphql
 query Catalog($id: ID!, $options: RowsInput) {
   table(id: $id) {
@@ -84,8 +88,18 @@ Use the same Bearer key and permissions:
 | POST | `/api/tables/:tableId/rows` | Create with `{ cells }` |
 | PATCH | `/api/tables/:tableId/rows/:rowId` | Update with `{ cells, expectedVersion? }` |
 | DELETE | `/api/tables/:tableId/rows/:rowId` | Delete one record |
+| POST | `/api/tables/:tableId/rows/:rowId/attachments` | Upload a row attachment, including `target: "body"` |
+| GET | `/api/tables/:tableId/rows/:rowId/attachments/:fileId` | Read an authorized row attachment |
 
-`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, and `deleteRow` through the same services. Clients cannot supply internal organization/actor/automation options. Other commands require the authenticated workspace interface.
+`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, `deleteRow`, `uploadRowAttachment`, `getRowAttachment`, `createView`, `updateView`, `getView`, `listViews`, and `deleteView` for authorized API Keys. Clients cannot supply internal organization/actor/automation options.
+
+For body access, `GET /api/tables/:tableId/rows/:rowId?include=body&bodyFormat=json` includes `body: { content, version, schemaVersion, attachments, html? }`; `bodyFormat=html` requests safe rendered HTML. Row lists omit full body content. `POST` row accepts `body: { content }`; `PATCH` row accepts `body: { content, expectedVersion }`, with body `expectedVersion` required and checked independently from the optional row `expectedVersion`. Body writes require `idempotencyKey`. A write through an API Key returns a receipt and does not return the body. Unwritten bodies read as empty version 0; reading does not create body storage.
+
+Sites backed by table data are ordinary views. Create one with `createView({ tableId, type: "site", name, config, idempotencyKey })` and configure `template: "blog"`, `mapping: { title, slug?, summary?, author?, date?, cover?, category?, tags? }`, `authorName`, `description`, `language`, and `articles: [{ rowId, imageIds, coverFileId? }]`. All mapped fields and selected rows must belong to the source table. `getView` returns a regular view plus `site: { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }`; pass `site.publishedRevisionId` as `expectedPublishedRevisionId` when publishing, using `null` for the first publish. Update with `updateView({ viewId, name?, config?, expectedVersion, idempotencyKey, publication? })`; `publication` uses `action: "publish" | "unpublish" | "withdraw"`, and `rowId` when withdrawing one record. Saving settings or changing source rows does not publish. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing it requires both Read and Update on the table.
+
+The REST row and attachment resource paths return resource data directly. `POST /api/commands` wraps command results as `{ ok, command, result }`. For `getView` and `createView`, read the view ID from `result.id` and the current version and published pointer from `result.site.version` and `result.site.publishedRevisionId`. In GraphQL, read equivalent results under `data.getView` or `data.createView`.
+
+For the internal migration record, see [Unified record and site migration](../unified-record-site-migration.md).
 
 ## Fields and files
 

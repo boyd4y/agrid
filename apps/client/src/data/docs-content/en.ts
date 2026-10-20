@@ -120,60 +120,15 @@ export const docsPages: DocsPage[] = [
     slug: "mcp",
     sectionId: "agents",
     title: "Connect an AI client with MCP",
-    description: "Connect a remote MCP client to tabdo over HTTPS with a scoped API key.",
+    description: "Connect an external MCP client to tabdo from your workspace settings.",
     body: [
-      { type: "p", text: "Connect an MCP client to tabdo without installing or running a local service. The remote endpoint is https://tabdo.dev/mcp and uses Streamable HTTP. Every request must include an API key in the Authorization header." },
-      { type: "h2", text: "Create and protect an API key" },
-      { type: "ol", items: [
-        "In tabdo, open Settings → API Key and create a key with only the permissions your integration needs. A workspace owner or admin can manage keys.",
-        "Copy the key when it is shown and keep it in your MCP client's secure settings. The full key is shown once; do not put it in a shared file, browser code, or a public repository.",
-        "In your MCP client, add a remote HTTP server at https://tabdo.dev/mcp and set the Authorization header to Bearer followed by your key.",
+      { type: "p", text: "Open Settings → Connect agents, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
+      { type: "p", text: "If the client needs a data access key, create a standard key under Settings → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
+      { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing a site view requires both Read and Update. See Tables and the REST API reference for those shared data operations." },
+      { type: "cards", items: [
+        { title: "Tables and records", description: "Learn how table fields, record properties, and record bodies fit together.", href: "/docs/tables", badge: "Data" },
+        { title: "REST API", description: "Read the shared row, body, attachment, and site view API reference.", href: "/docs/rest", badge: "API" },
       ] },
-      { type: "h2", text: "Connect from Cursor" },
-      { type: "ol", items: [
-        "Create or open ~/.cursor/mcp.json for a personal server, or .cursor/mcp.json in a project for a project server. Keep a real key out of shared project files.",
-        "Add the following remote server entry, replacing the placeholder with your key, then save and restart Cursor.",
-        "In Customize → MCPs, confirm tabdo is enabled. In chat, check that tabdo tools appear in the tools list; Cursor's Output panel → MCP Logs can help diagnose connection failures.",
-      ] },
-      { type: "code", lang: "json", code: `{"mcpServers":{"tabdo":{"url":"https://tabdo.dev/mcp","headers":{"Authorization":"Bearer tab_replace_with_your_key"}}}}` },
-      { type: "p", text: "Cursor setup reference: https://prod.cursor.com/help/customization/mcp (MCP integrations)." },
-      { type: "h2", text: "Connect from Codex" },
-      { type: "ol", items: [
-        "Set TABDO_MCP_KEY in your shell environment to the API key, and keep it available in the environment used to launch Codex. Avoid placing the value in a shared repository file.",
-        "Run codex mcp add tabdo --url https://tabdo.dev/mcp --bearer-token-env-var TABDO_MCP_KEY.",
-        "Run codex mcp list, then open Codex and use /mcp to confirm the server is listed and its tools are available.",
-      ] },
-      { type: "code", lang: "bash", code: `export TABDO_MCP_KEY="tab_replace_with_your_key"\ncodex mcp add tabdo --url https://tabdo.dev/mcp --bearer-token-env-var TABDO_MCP_KEY` },
-      { type: "p", text: "Codex stores this connection in ~/.codex/config.toml by default. Setup reference: https://learn.chatgpt.com/docs/extend/mcp." },
-      { type: "h2", text: "Connect from Claude Code" },
-      { type: "ol", items: [
-        "In a terminal where Claude Code is available, run the command below and replace the placeholder with your API key. This adds the server to your local Claude Code configuration.",
-        "Run claude mcp list, then open Claude Code and run /mcp. Confirm tabdo is connected; a failed status may mean the URL or Bearer key needs attention.",
-      ] },
-      { type: "code", lang: "bash", code: `claude mcp add --transport http tabdo https://tabdo.dev/mcp \\\n  --header "Authorization: Bearer tab_replace_with_your_key"` },
-      { type: "p", text: "Claude Code setup reference: https://code.claude.com/docs/en/mcp." },
-      { type: "h2", text: "Connect from Claude web or Desktop" },
-      { type: "ol", items: [
-        "For Pro or Max, open Customize → Connectors → + Add → Add custom connector. For a Team or Enterprise organization, an owner or primary owner may need to add the connector under Organization settings → Connectors first.",
-        "Enter a name and https://tabdo.dev/mcp as the remote MCP server URL. Choose No sign in, then add the request header Authorization with value Bearer followed by your API key. Finish adding the connector, then enable it for the conversation from Connectors and confirm its tools are available.",
-        "No sign in means no OAuth flow; it does not make this endpoint anonymous. The static Bearer key is still required. Claude's connector availability and organization controls depend on your plan.",
-        "This is Claude's remote connector flow. Claude Desktop's local MCP configuration is a separate setup and is not needed for this HTTPS connection.",
-      ] },
-      { type: "p", text: "Claude remote connector reference: https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp." },
-      { type: "h2", text: "Connect Grok Bot" },
-      { type: "p", text: "Grok Bot can use connectors attached to a task. Where custom MCP connectors are available through your Grok account, use the connection details above: server URL https://tabdo.dev/mcp and Authorization header Bearer followed by your API key. Once the connector is available to Grok Bot, attach it to a task with @. Official documentation describes Bot connectors under Connect apps and custom MCP connectors in Grok Connectors; the exact options can depend on account availability. Do not use Grok Build instructions as Grok Bot setup." },
-      { type: "p", text: "Grok Bot connector reference: https://docs.x.ai/grok-bot/computer-and-apps. Custom MCP connector reference: https://docs.x.ai/grok/connectors." },
-      { type: "h2", text: "Choose a key that matches the work" },
-      { type: "p", text: "The connection exposes tools for table and record access, views, relations, automations, calendars, documents, and blogs. The available tool list does not mean every key can run every tool. A tab_ data key is limited by its configured resource grants; for example, it cannot manage workspace members or create tables and columns. Some member- or schema-level commands require an agt_ agent key and its workspace permissions. Grant only what the integration needs." },
-      { type: "p", text: "For legacy agt_ agent keys, an optional X-Workspace-Id header selects a workspace the agent can access. A tab_ key follows its existing resource grants across workspaces; if you send X-Workspace-Id, it must belong to the key's organization. Leave the header out unless your client needs a workspace selector." },
-      { type: "h2", text: "Troubleshoot a connection" },
-      { type: "table", headers: ["Result", "What to check"], rows: [
-        ["401 Unauthorized", "Add Authorization: Bearer <API key>; check that the key is current and has not been revoked."],
-        ["403 Forbidden", "The key lacks access to the requested resource, or the selected workspace is outside its organization."],
-        ["Tool returns an error", "Check the key's resource permissions and the inputs required by that tool."],
-        ["Client asks for OAuth", "OAuth is not provided by this endpoint. Use a client that supports remote HTTP MCP with a static Authorization header."],
-      ] },
-      { type: "callout", tone: "info", text: "The endpoint uses stateless Streamable HTTP. It does not require a local process or OAuth sign-in. Keep the key private and revoke it in Settings → API Key if it is exposed." },
     ],
   },
   {
@@ -302,13 +257,14 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
     slug: "tables",
     sectionId: "concepts",
     title: "Tables, columns & rows",
-    description: "Create columns, enter records, and use files, relations, rollups, and formulas.",
+    description: "Create tables and records, edit their properties and body, and use files, relations, rollups, and formulas.",
     body: [
       { type: "h2", text: "Create and edit" },
       { type: "ol", items: [
         "Create a table at /app/tables, or describe your goal in /app and ask a configured agent to create a table and its columns.",
         "In the table, use a column header menu to add a column, rename it, or edit its settings. Click a cell in a row to enter or update a record. Choose a column type and fill in the value it expects.",
         "For Select and Multi-select columns, add the options people can choose from. A person column selects a member of the current workspace.",
+        "Open a record to edit its title, properties, and body. Body is a built-in row field, not a custom column, and row lists omit its full content unless requested. Custom fields such as Content remain ordinary properties. Changes to properties and body are saved separately.",
       ] },
       {
         type: "table",
@@ -332,6 +288,11 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "Add a file column, click a file cell, and choose files to upload. When the upload finishes, the file name appears in the cell; click it to download.",
         "To allow only one file, open the column settings and turn off Multiple files; multiple files are allowed by default. File size and upload count are subject to the limits shown by your workspace. If an upload exceeds a limit, choose fewer or smaller files and try again.",
       ] },
+      { type: "h2", text: "Edit a record body" },
+      { type: "ul", items: [
+        "In a record, use the body editor to add formatted text and images. Body content is saved separately from the row's title and properties; check its save status before leaving the record.",
+        "If a save fails, keep the editor open and retry after checking your connection and access. If another edit has changed the body version, reload the record and reapply any unsaved changes before saving.",
+      ] },
       { type: "h2", text: "Relate records and calculate rollups" },
       { type: "ol", items: [
         "Add a Relation column, choose a target table, and set whether each record can link to one or many records. You can add an optional inverse column. Edit a cell to search for and select target records; click a relation label to open and edit that record.",
@@ -346,35 +307,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         text: "Files can be viewed and downloaded only by workspace members with access. To add a file through an API, upload it in tabdo first.",
       },
       { type: "cards", items: [
-        { title: "Use record bodies", description: "Edit a record title, properties, and current body directly.", href: "/docs/record-documents", badge: "Body" },
-        { title: "Document API", description: "Read and update bodies with REST, GraphQL, or MCP.", href: "/docs/document-api", badge: "API" },
         { title: "Table calendar views", description: "Display date records as all-day items and edit the original rows.", href: "/docs/table-calendar", badge: "View" },
-      ] },
-    ],
-  },
-  {
-    slug: "record-documents",
-    sectionId: "humans",
-    title: "Use record bodies",
-    description: "Edit a record title, properties, and current body, with save status and conflict drafts.",
-    body: [
-      { type: "p", text: "Opening a record shows a wide, centered editing window with its title, properties, and body on one page. Click the title, a property value, or the body to edit it directly. When there are three or fewer regular properties, all are shown. With more than three, the first three appear by default; choose “Show all properties (N more)” to expand the rest, or “Collapse properties” to return to the shorter view. The body is separate from table fields and is not loaded with the table row list. Custom fields such as Content and their values remain ordinary properties; tabdo does not move them into the body or overwrite them." },
-      { type: "ol", items: [
-        "Open a record from a table or board to edit its title, properties, and body. A body is created when you first save body content; opening a record alone does not create one.",
-        "Click the body to write. On wide desktop screens, the full toolbar appears in one row above the body. On narrow screens, common formatting controls stay visible, with structure, insert, and style actions grouped in separate menus. You can also type / at the start of a paragraph and use the keyboard to choose a command. The slash menu includes paragraphs, headings, lists, quotes, code, images, dividers, and alignment. Use the toolbar to add links or choose an image. Pasted external images are not uploaded automatically. The page shows the save status for the title, properties, and body.",
-        "Properties and body save separately, so one part can save while another fails. A failed save keeps the affected draft and offers a retry. When you close a record, switch records, return from a blog article to its list, or switch workspaces, tabdo waits for saves; if a save still fails, you can keep editing or leave while retaining the draft. Watch for the unsaved warning before refreshing or closing the browser tab.",
-        "If the body changed elsewhere, a save conflict keeps your draft in the current browser tab. View the current server content, return to your draft, or export the draft and load the current content before continuing. Conflict protection prevents newer content from being overwritten; it does not provide older body versions to browse or restore.",
-        "Authorized tabdo agents, MCP clients, and API callers can read, create, or replace the current body; image operations require the matching body permissions. For REST or GraphQL access, see Document API.",
-      ] },
-      { type: "h2", text: "Formatting, images, and limits" },
-      { type: "ul", items: [
-        "Supported formatting includes paragraphs and level 1–3 headings (with left, center, right, or justified alignment), bullet and numbered lists, quotes, code blocks, horizontal rules, line breaks, bold, italic, underline, strike, inline code, safe links, text color, highlights, and images. Links must be full http, https, or mailto URLs. The toolbar offers nine preset text and highlight colors.",
-        "A body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Supported image types are PNG, JPEG, WebP, and GIF. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
-        "Unsaved property and body drafts stay in the current browser tab. They are not a cross-device backup; confirm changes are saved before closing the tab, and export a draft you need to keep during a conflict.",
-      ] },
-      { type: "cards", items: [
-        { title: "Document API", description: "Review current body permissions, read/write examples, conflict checks, and image routes.", href: "/docs/document-api", badge: "API" },
-        { title: "Publish a blog", description: "Write in a blog, then select articles to preview and publish.", href: "/docs/blogging", badge: "Blog" },
       ] },
     ],
   },
@@ -399,13 +332,15 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
     slug: "views",
     sectionId: "concepts",
     title: "Views, filters & board",
-    description: "Create grid, board, and form views; filter, sort, and review records.",
+    description: "Create grid, board, form, and site views; filter, sort, publish, and review records.",
     body: [
       { type: "ol", items: [
         "Open a table from /app/tables and switch between its view tabs. Click the plus beside the view switcher and choose Grid, Board, or Form to add a view.",
         "In a grid view, click a column heading to sort. Open the filter control, choose a column, condition, and value, then add more conditions and choose whether all or any should match. Reopen the view to adjust its conditions.",
         "In a board view, open board settings and choose a select column for board lanes. Drag a card to another lane to update that record's status. You can filter records by their current lane.",
         "Use a view menu to rename it, make it the default, or delete it. Each table must keep at least one view. Views show the same records; they do not duplicate the data.",
+        "To publish table records as a website, add a Site view and choose the Blog template. Map the title and any public fields, then select the records and images to include. A site view is a presentation of the source table; it does not create a separate blog data store. Any table can use this template.",
+        "Saving a site view or editing its source records does not change the live site. Use the view’s publish action to publish the selected current content; unpublish the site or withdraw an individual published record when needed. Only publish information intended for public access.",
       ] },
       { type: "callout", tone: "info", text: "Relation columns can be filtered but not sorted; formulas and rollups are read-only calculated values. See Forms for form design and data entry steps." },
     ],
@@ -738,62 +673,25 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     slug: "sites",
     sectionId: "humans",
     title: "Sites",
-    description: "Edit HTML, CSS, and JavaScript files, preview changes, and publish a site version.",
+    description: "Publish a site view from any table, or edit site files, preview changes, and publish a site version.",
     body: [
       { type: "ol", items: [
-        "Open /app/sites and create a site. It starts with index.html, styles.css, app.js, and tabdo-config.js files.",
-        "Edit the website files in the site editor and use Preview to inspect your draft. You can add HTML, CSS, JS, MJS, JSON, SVG, TXT, or MD files. Save to create a new version.",
-        "Publish a saved version, then copy the public URL from the site details and open it to review. After edits, save and publish another version. Site history lets you inspect and restore an earlier version; you can unpublish the current version.",
+        "Open /app/sites to create a code site with starter files, or open any table and add a Site view to publish selected records using the Blog template.",
+        "For a code site, edit its website files and use Preview to inspect your draft. You can add HTML, CSS, JS, MJS, JSON, SVG, TXT, or MD files. Save to create a new version. For a table-backed site, configure the Blog template, map fields, and select records and images.",
+        "Publish the saved version for a code site, or explicitly publish a table-backed site view. Copy the public URL from the site details and open it to review. Source edits and view configuration changes do not publish automatically; publish again to update the live site. You can unpublish a site or withdraw a published record.",
         "To read or submit table data, choose Connect data in the editor and paste a separately created tab_ API key. Grant the site only the table and operations it needs, then verify the result in Preview.",
       ] },
       { type: "callout", tone: "warn", text: "The site editor lets you edit website files directly. Each site can contain up to 50 files, using the file types listed above. Publish a saved version. A tab_ key is delivered with the site front-end code, so do not put a high-privilege credential there; grant only the required per-table data access." },
       { type: "cards", items: [
-        { title: "Publish a blog", description: "Write in a blog, then select articles to preview and publish.", href: "/docs/blogging", badge: "Blog" },
         { title: "HTTP API and data access keys", description: "Learn about tab_ key permissions and access boundaries.", href: "/docs/api-quickstart", badge: "Security" },
       ] },
     ],
   },
   {
-    slug: "blogging",
-    sectionId: "humans",
-    title: "Publish a blog",
-    description: "Write directly in a blog, then select articles to preview, publish, and update.",
-    body: [
-      { type: "p", text: "A blog turns the articles you explicitly select into public content. Create a blog and write its titles and bodies on the blog page. Each build and publication is a fixed version. Saving a draft does not make it public; preview it first, then decide whether readers can access it." },
-      { type: "ol", items: [
-        "Open Sites in your workspace and create a blog by entering a name; a description is optional. tabdo prepares the blog content and fields needed for writing. To keep using an existing content table, expand Advanced: bind an existing content table and select its table and fields.",
-        "In the blog, choose New article to enter a title and edit its body on the same page. On wide desktop screens, the full toolbar appears in one row above the body. On narrow screens, common formatting controls stay visible, with structure, insert, and style actions grouped in separate menus. You can also type / at the start of a paragraph and use the keyboard to choose a command. The slash menu includes paragraphs, headings, lists, quotes, code, images, dividers, and alignment. Use the toolbar to add links or choose an image. Open an existing article there to continue writing. Its record window shows the same title, properties, and current body. Only the current body is available; older body versions cannot be browsed or restored.",
-        "An article URL slug is generated automatically; an existing non-empty slug stays as it is. You can adjust mappings or a slug in advanced settings. New articles and saved edits are not automatically added to the publication list. Select each article you want to publish, then explicitly choose its body images and cover. Unselected records, related records, and attachments are not added to the blog.",
-        "Save the settings and build the blog. Review the build and its preview link. Anyone with the link can open the preview for 10 minutes. Previews are excluded from search indexing; you can revoke all preview links earlier.",
-        "After reviewing the preview, publish that build. Copy the blog address from its details and share it with readers. Editing a document or blog setting does not automatically change the live articles. To update them, build again, review the new preview, and publish the new version.",
-        "To remove one article, choose and confirm its withdrawal. To stop the entire blog, unpublish it. You can also restore an earlier blog configuration as a new draft, then build and publish it again.",
-      ] },
-      { type: "h2", text: "Content and access" },
-      { type: "ul", items: [
-        "A document body is limited to 64 KiB of serialized JSON, 4,000 nodes, 12 levels, and 20 referenced images. Generated HTML across a blog has a separate 4 MiB total budget. A blog can include up to 20 selected articles and up to 60 image assets, each up to 5 MiB and 30 MiB total. Supported image types are PNG, JPEG, WebP, and GIF.",
-        "Public content includes the mapped fields, selected articles, their document bodies, and selected images. Author names are public; email addresses and internal member IDs are not included. Do not put secrets or private information in public fields, document content, or links.",
-        "A published blog is a snapshot. Changes to source records or documents do not update it. Before building again, confirm the selected records, images, and public fields are still correct.",
-        "Withdrawing an article blocks its old blog paths and images. Readers may still have copies they downloaded, copied, or cached elsewhere; those copies cannot be recalled remotely. Withdraw an article before deleting its source when needed.",
-        "Unpublish the whole blog before deleting it. Blog configuration history and staged uploads may remain until the site is deleted. A blog retains at most 100 revisions; create another blog to continue after reaching that limit.",
-      ] },
-      { type: "h2", text: "Permissions and troubleshooting" },
-      { type: "ul", items: [
-        "Workspace members need permission to read and edit the selected records and documents. For API access, a workspace owner or admin grants blog read, configure, build, publish, or restore permissions separately for the content table. Grant only what is needed.",
-        "If a title or body has not saved, check the page status and retry. When closing the article, returning to the blog article list, or switching workspaces, tabdo waits for saves and lets you keep editing or leave while retaining a draft if a save fails. On a body conflict, the current tab keeps the draft; view the current server content or export the draft and load the current content before continuing. If a build reports changed sources, reload the records, review them, and build again.",
-        "If a slug does not meet the blog requirements, adjust it in advanced settings; new articles receive a valid unique slug automatically. If publishing or previewing fails, check the key's permission, the build version, and pending changes. Create a new preview if the old link expired.",
-      ] },
-      { type: "cards", items: [
-        { title: "Blog API", description: "Read and manage blogs with REST, GraphQL, or available MCP tools.", href: "/docs/blog-api", badge: "API" },
-        { title: "Use record bodies", description: "Edit a record title, properties, and current body directly.", href: "/docs/record-documents", badge: "Body" },
-      ] },
-    ],
-  },
-
-  {
     slug: "rest",
     sectionId: "reference",
     title: "Data REST API",
-    description: "Table metadata, paginated reads, and record CRUD routes for tab_ keys.",
+    description: "Table and record routes, including optional record bodies, attachments, and site views for tab_ keys.",
     body: [
       {
         type: "table",
@@ -803,22 +701,92 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["GET /api/tables/:tableId", "Read table metadata and columns"],
           ["GET /api/tables/:tableId/rows?limit=&cursor=&includeTotal=", "Read a page; default 50, max 100; requires read grant"],
           ["POST /api/tables/:tableId/rows/query", "Query JSON filters, filterLogic, sort, cursor, limit; requires read grant"],
-          ["GET /api/tables/:tableId/rows/:rowId", "Read one record; requires read grant"],
-          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value } } create; requires create grant"],
-          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells, expectedVersion? } update; requires update grant"],
+          ["GET /api/tables/:tableId/rows/:rowId", "Read one record; add ?include=body&bodyFormat=json|html for its body; requires Read"],
+          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value }, body?: { content } } create; requires create grant"],
+          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells?, expectedVersion?, body?: { content, expectedVersion } } update; body expectedVersion is required; requires update grant"],
           ["DELETE /api/tables/:tableId/rows/:rowId", "Delete a record; requires delete grant"],
+          ["POST /api/tables/:tableId/rows/:rowId/attachments", "Upload with { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey }; requires Update"],
+          ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "Read an authorized body attachment; requires Read"],
+          ["POST /api/commands (getView/listViews/createView/updateView)", "Read views with Read; create, configure, or explicitly publish/unpublish/withdraw with Read+Update"],
         ],
       },
+      { type: "h2", text: "Record bodies and site views" },
+      { type: "p", text: "A record body is a built-in row field alongside ordinary cells. Row list endpoints omit its full content. GET one record with ?include=body&bodyFormat=json (or html) returns body content, version, schemaVersion, attachments, and optional rendered HTML. POST can create a row with body: { content }; PATCH can update it with body: { content, expectedVersion }, where expectedVersion is required and is independent of the row version. The first write to an empty body uses version 0. Body writes require idempotencyKey and return a version receipt, not body content." },
+      { type: "p", text: "To add an image, upload it to the row attachment endpoint with target=body, the current body expectedVersion, name, mimeType, base64, and idempotencyKey. The response includes fileId and bodyVersion; reference fileId in the body's image content. Upload requires Update permission. GET an attachment by fileId requires Read permission." },
+      { type: "code", lang: "json", code: `{
+  "target": "body",
+  "expectedVersion": 1,
+  "name": "cover.png",
+  "mimeType": "image/png",
+  "base64": "BASE64_ENCODED_IMAGE_CONTENT",
+  "idempotencyKey": "upload-cover-1"
+}` },
+      { type: "p", text: "POST /api/commands with this input to read a site view and its current publication state:" },
+      { type: "code", lang: "json", code: `{
+  "command": "getView",
+  "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
+}` },
+      { type: "p", text: "Create a site view with createView({ tableId, type: \"site\", name, config, idempotencyKey }) and configure its Blog template, source-table field mapping, and selected row IDs. getView returns the view plus site state { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }; use site.publishedRevisionId as expectedPublishedRevisionId when publishing. On first publish, use null. Use the current published revision ID to unpublish, or to withdraw a specific row include rowId. Saving source rows or view config does not publish. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing it requires both Read and Update on its table." },
+      { type: "code", lang: "json", code: `{
+  "cells": { "col_title": "Field notes" },
+  "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "A first draft." }] }] } },
+  "idempotencyKey": "create-row-with-body-1"
+}` },
+      { type: "code", lang: "json", code: `{
+  "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "An updated draft." }] }] }, "expectedVersion": 1 },
+  "idempotencyKey": "update-row-body-1"
+}` },
+      { type: "p", text: "POST /api/commands with this input to create a site view:" },
+      { type: "code", lang: "json", code: `{
+  "command": "createView",
+  "input": {
+    "tableId": "00000000-0000-4000-8000-000000000001",
+    "type": "site",
+    "name": "Field notes",
+    "config": {
+      "template": "blog",
+      "mapping": { "title": "00000000-0000-4000-8000-000000000011", "slug": "00000000-0000-4000-8000-000000000012" },
+      "authorName": "Tabdo Team",
+      "description": "Notes and updates",
+      "language": "en",
+      "articles": [{ "rowId": "00000000-0000-4000-8000-000000000021", "imageIds": [] }]
+    },
+    "idempotencyKey": "create-site-view-1"
+  }
+}` },
+      { type: "p", text: "After reviewing the saved view, publish it with the current view version. For the first publication, expectedPublishedRevisionId is null:" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 1,
+    "idempotencyKey": "publish-site-view-1",
+    "publication": { "action": "publish", "expectedPublishedRevisionId": null }
+  }
+}` },
+      { type: "p", text: "To unpublish, set expectedPublishedRevisionId to the current publishedRevisionId returned by getView:" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "unpublish-site-view-1",
+    "publication": { "action": "unpublish", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041" }
+  }
+}` },
+      { type: "p", text: "To withdraw one selected record from the published site, also provide its rowId:" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "withdraw-site-row-1",
+    "publication": { "action": "withdraw", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041", "rowId": "00000000-0000-4000-8000-000000000021" }
+  }
+}` },
       { type: "h2", text: "Requests and responses" },
-      { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. REST returns resource data directly, not an { ok, result } envelope." },
-      { type: "code", lang: "json", code: `// POST /api/tables/tbl_example/rows
-{ "cells": { "col_title": "New task", "col_status": "opt_todo" } }
-
-// PATCH /api/tables/tbl_example/rows/row_example
-{ "cells": { "col_title": "Updated task" }, "expectedVersion": 3 }
-
-// stale version: HTTP 409
-{ "error": "Record changed; reload before updating" }` },
+      { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. Row and attachment resource routes return resource data directly. POST /api/commands returns { ok, command, result }; for getView/createView, read the view ID from result.id and the current view version and publication pointer from result.site.version and result.site.publishedRevisionId. GraphQL command results use data.getView or data.createView." },
+      { type: "p", text: "POST row body: { \"cells\": { \"col_title\": \"New task\" } }. PATCH row body: { \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }. A stale version returns HTTP 409 with { error: \"Record changed; reload before updating\" }." },
       { type: "ul", items: [
         "cells accepts writable API types only: text, number, date, checkbox, select, and multi_select. Use options[].id from field metadata for select values, not the label. Deleting a row with linked records may also require update permission on the target table to remove inverse links.",
         "Request bodies are limited to 128 KiB. Each key defaults to 120 reads and 20 writes per minute. If you exceed the rate limit, wait before sending more requests. Requests may be temporarily rejected if the limit cannot be checked.",
@@ -854,7 +822,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "query": "query Browse($tableId: ID!, $limit: Int!, $cursor: String) { table(id: $tableId) { id name columns { id name type options { id label color } readable writable } rows(options: { limit: $limit, cursor: $cursor }) { rows { id version cells createdAt updatedAt } nextCursor hasMore totalMatched } } }",
   "variables": { "tableId": "tbl_example", "limit": 50, "cursor": null }
 }` },
-      { type: "p", text: "Query tables or table(id), columns, rows(options), and row(id). rows defaults to 50 records per page and caps at 100; pass the returned nextCursor as options.cursor for the next page. Data is returned in the standard { data } envelope." },
+      { type: "p", text: "Query tables or table(id), columns, rows(options), and row(id). rows defaults to 50 records per page and caps at 100; pass the returned nextCursor as options.cursor for the next page. Select Row.body explicitly to read it. createRow and updateRow accept body and an idempotency key; the body uses its own expectedVersion. Site views use the same createView/updateView operations as REST. Data is returned in the standard { data } envelope." },
       { type: "h2", text: "Record mutations" },
       { type: "code", lang: "graphql", code: `mutation UpdateTask($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int) {
   updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version) {
@@ -881,7 +849,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     title: "JavaScript / TypeScript SDK",
     description: "Access tab_ authorized data APIs with @tabdo/sdk.",
     body: [
-      { type: "p", text: "Install the public @tabdo/sdk package from npm and use createClient with your tabdo URL and a tab_ data access key. The published 0.1.1 release provides table data methods and does not use your signed-in browser session. Use client.graphql for the Document API, or use REST or an authorized MCP connection. Document key grants are separate from table permissions." },
+      { type: "p", text: "Install the public @tabdo/sdk package from npm and use createClient with your tabdo URL and a tab_ data access key. The published 0.1.1 release provides table data methods and does not use your signed-in browser session. Use REST, GraphQL, or an authorized MCP connection for record bodies and site views. They use the same table access grants as other record and view operations." },
       { type: "code", lang: "bash", code: `npm install @tabdo/sdk` },
       { type: "code", lang: "typescript", code: `import { createClient } from "@tabdo/sdk";
 
@@ -911,194 +879,7 @@ if (row) {
         "client.graphql<T>(query, variables, { operationName, signal }) runs GraphQL. Failures throw TabdoApiError with code, status, and errors; mutations are not retried automatically.",
       ] },
       { type: "callout", tone: "info", text: "Do not embed a high-privilege key in a public website; browser code exposes its key. Keep keys in environment variables for private integrations; for a public site, use a dedicated key with only the required table permissions." },
-      { type: "cards", items: [{ title: "API quickstart", description: "Follow the complete REST flow and permissions guide.", href: "/docs/api-quickstart", badge: "Guide" }, { title: "GraphQL", description: "Read the GraphQL schema and limits.", href: "/docs/graphql", badge: "GraphQL" }, { title: "Document API", description: "Read about current body access, permissions, and conflict checks.", href: "/docs/document-api", badge: "Body" }] },
-    ],
-  },
-  {
-    slug: "blog-api",
-    sectionId: "reference",
-    title: "Blog API",
-    description: "Manage blog snapshots with dedicated blog permissions using REST, GraphQL, or MCP.",
-    body: [
-      { type: "p", text: "Use blog commands through the REST command endpoint, GraphQL, or an authorized tabdo MCP connection. Blog permissions are granted separately for each content table; existing data or document permissions do not grant blog configuration, build, or publishing access. createBlog requires a signed-in member session and cannot use an API key. The published @tabdo/sdk 0.1.1 release does not include any blog commands; use REST, GraphQL, or MCP for API access." },
-      { type: "h2", text: "Create an access key" },
-      { type: "ol", items: [
-        "Ask a workspace owner or admin to open Settings → API Key and create a dedicated key. Add only the content table and blog permissions you need: canRead for sources and configuration, canConfigure to save settings, canBuild to build and preview, canPublish to authorize the key to publish or withdraw, and canRestore to restore a configuration revision.",
-        "Keep the full key in server-side secret storage or an environment variable. Do not place it in browser code, a public website, a blog document, or a URL. The full key is shown once; deleting it revokes future access.",
-        "Every blog write command requires a 1–200 character idempotency key. Send it in the Idempotency-Key header and reuse it when retrying the same request. A replay returns the saved result; reusing the key for a different request returns a conflict.",
-      ] },
-      { type: "h2", text: "REST command endpoint" },
-      { type: "p", text: "Send JSON to POST /api/commands with Authorization: Bearer tab_…. Each request contains command and input; include Idempotency-Key for writes. This read-only example uses fictional IDs and a placeholder key:" },
-      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
-export TABDO_API_KEY="tab_replace_with_your_key"
-
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"command":"getBlogSources","input":{"tableId":"00000000-0000-4000-8000-000000000001","limit":20}}'` },
-      { type: "h2", text: "Create a blog as a signed-in member" },
-      { type: "p", text: "For a new blog with tabdo-prepared content fields, send the following request body to POST /api/commands with your signed-in workspace session. This request uses the member session, not a tab_ API key; API keys cannot create a blog. The command creates the content table and default title/slug fields. A successful REST command returns { ok, command, result }; the BlogDetail site ID is result.id." },
-      { type: "code", lang: "json", code: `{
-  "command": "createBlog",
-  "input": {
-    "name": "Field Notes",
-    "description": "Notes and updates",
-    "language": "en",
-    "idempotencyKey": "create-blog-example-1"
-  }
-}` },
-      { type: "p", text: "To start an article in that blog, send the following request body to POST /api/commands with your signed-in workspace session, or call startBlogArticle with an API key through the REST or GraphQL API. Include its siteId, current expectedVersion, and title. The command creates or prepares a source record and generates a valid slug if needed; it does not create the body, select the article for publication, or publish it. The result contains tableId and rowId. Continue writing its body through the Document API. API-key callers need blog canConfigure and content-table canCreate for a new article, or canRead and canUpdate when preparing an existing record; body permissions remain separate." },
-      { type: "code", lang: "json", code: `{
-  "command": "startBlogArticle",
-  "input": {
-    "siteId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 1,
-    "title": "A first note",
-    "idempotencyKey": "start-article-example-1"
-  }
-}` },
-      { type: "p", text: "To keep using an existing content table, use saveBlog to configure that table and its mapped fields. This advanced configuration uses fictional UUIDs; replace the field, table, and record IDs with values from getBlogSources and the field metadata. After saveBlog, read its site ID from result.id in REST or data.saveBlog.id in GraphQL; after getBlog, use result.id or data.getBlog.id." },
-      { type: "code", lang: "json", code: `{
-  "command": "saveBlog",
-  "input": {
-    "name": "Field Notes",
-    "idempotencyKey": "save-blog-example-1",
-    "config": {
-      "tableId": "00000000-0000-4000-8000-000000000001",
-      "authorName": "Tabdo Team",
-      "description": "Notes and updates",
-      "language": "en",
-      "mapping": {
-        "title": "00000000-0000-4000-8000-000000000011",
-        "slug": "00000000-0000-4000-8000-000000000012"
-      },
-      "articles": [{
-        "rowId": "00000000-0000-4000-8000-000000000021",
-        "imageIds": []
-      }]
-    }
-  }
-}` },
-      { type: "p", text: "Use result.id from a successful saveBlog response (data.saveBlog.id in GraphQL) as siteId, and pass its version to buildBlog. After building, read siteId from result.id (data.buildBlog.id in GraphQL) and buildId from result.revisionId. Use expectedVersion and expectedPublishedRevisionId from that build result for publishBlog. For the first publication, expectedPublishedRevisionId is null; before updating a published blog, read and confirm its current publication state." },
-      { type: "code", lang: "json", code: `{
-  "command": "buildBlog",
-  "input": {
-    "siteId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 1,
-    "idempotencyKey": "build-blog-example-1"
-  }
-}` },
-      { type: "code", lang: "json", code: `{
-  "command": "publishBlog",
-  "input": {
-    "siteId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 2,
-    "expectedPublishedRevisionId": null,
-    "buildId": "00000000-0000-4000-8000-000000000003",
-    "idempotencyKey": "publish-blog-example-1"
-  }
-}` },
-      { type: "p", text: "createBlog prepares a new blog and default content table for a signed-in member; startBlogArticle creates or prepares an article record but does not select or publish it. getBlogSources returns selectable article fields, source document versions for change detection, and explicitly selectable images. Its limit is at most 50; use nextAfterId to continue. getBlog reads configuration, the current build, published articles, configuration revisions, and pendingChanges. saveBlog saves configuration and the explicit article list; buildBlog creates a fixed snapshot from current sources; createBlogPreview returns a 10-minute share link; publishBlog publishes a selected buildId; withdrawBlogArticle removes one article; unpublishBlog takes down the whole site; restoreBlogRevision restores an earlier configuration as a new draft. Blog REST request bodies are limited to 128 KiB. See the blog guide for content and image budgets." },
-      { type: "h2", text: "GraphQL" },
-      { type: "p", text: "The GraphQL endpoint is POST /api/graphql and uses the same Authorization: Bearer tab_… header and dedicated blog permissions. Pass each command's JSON input as an argument; use query for reads and mutation for writes. Use the same idempotency keys and version preconditions for REST and GraphQL writes." },
-      { type: "code", lang: "graphql", code: `query ReadBlog($input: JSON!) {
-  getBlog(input: $input)
-}` },
-      { type: "code", lang: "json", code: `{
-  "query": "query ReadBlog($input: JSON!) { getBlog(input: $input) }",
-  "variables": { "input": { "siteId": "00000000-0000-4000-8000-000000000002" } }
-}` },
-      { type: "p", text: "Use the Idempotency-Key header for writes. GraphQL request bodies are limited to 128 KiB and responses use the standard { data } or { errors } envelope. Common errors include FORBIDDEN (permission missing), NOT_FOUND (object missing or not visible), VERSION_CONFLICT (configuration or published version changed), SOURCE_CHANGED (source changed; build again), IDEMPOTENCY_MISMATCH (key reused for a different request), and LIMIT_EXCEEDED (blog budget exceeded). On a version conflict, call getBlog again and review the current state before continuing." },
-      { type: "h2", text: "MCP and public reading" },
-      { type: "p", text: "Clients connected to tabdo MCP can use create_blog, start_blog_article, get_blog_sources, get_blog, save_blog, build_blog, create_blog_preview, revoke_blog_previews, publish_blog, withdraw_blog_article, unpublish_blog, and restore_blog_revision. API-key calls to create_blog are not supported; start_blog_article uses the same content-table blog and table permissions described above. Only give publishing access to trusted integrations." },
-      { type: "p", text: "Published blogs can be read without a key. GET /s/{siteId}/ (the publicUrl returned by getBlog) opens the article list; articles, pagination, categories, and selected images use paths below that address. Draft content, withdrawn article paths, and unpublished blogs are not publicly readable. Anyone with a preview URL can access it until it expires; it is not a private, sign-in-only preview." },
-      { type: "callout", tone: "warn", text: "Do not give a publishing key to browser code or an untrusted automation. Saving, building, and publishing are separate actions; a new build does not automatically update live content. The published @tabdo/sdk 0.1.1 release does not include any blog commands; use REST, GraphQL, or an authorized MCP connection." },
-      { type: "cards", items: [
-        { title: "Publish a blog", description: "Follow the full workflow from document writing to publishing and withdrawal.", href: "/docs/blogging", badge: "Guide" },
-        { title: "Authentication", description: "Learn about API key creation, table grants, and access boundaries.", href: "/docs/auth", badge: "Permissions" },
-      ] },
-    ],
-  },
-  {
-    slug: "document-api",
-    sectionId: "reference",
-    title: "Document API",
-    description: "Read, create, replace, and render current record bodies with REST, GraphQL, or MCP.",
-    body: [
-      { type: "p", text: "Document endpoints read one record's current body on demand and do not include body content in table row queries. Each save keeps only the latest content; body history lists, older-version rendering, and restoration are unavailable. The old REST history paths have been removed and return 404; history GraphQL commands and MCP tools are also unavailable. API keys need separate document permissions; table CRUD grants, blog grants, and document grants are independent." },
-      { type: "h2", text: "Grant the minimum permissions" },
-      { type: "ol", items: [
-        "Ask a workspace owner or admin to configure document permissions for the content table under Settings → API Key: canRead reads the current body, images, and safe rendering; canCreate creates a body; canUpdate replaces a body; canUpload uploads images. Legacy canReadHistory and canRestore grants do not provide body history access or restore actions.",
-        "Grant only the operations a caller needs. canCreate does not include body reads. Document access does not grant table CRUD, blog configuration, or publishing permissions.",
-        "Send Authorization: Bearer tab_… and keep the key out of URLs and public websites. Every write command needs a 1–200 character idempotencyKey; it can also be sent in the Idempotency-Key header. Reuse the same value when retrying the same request.",
-      ] },
-      { type: "h2", text: "REST command examples" },
-      { type: "p", text: "POST /api/commands accepts { command, input } and returns { ok, command, result }. The example reads a body, then shows the shapes for create and replace. Substitute table and row UUIDs that the key is authorized to access. createDocument returns a version receipt only; it does not grant read access, so call getDocument separately if you need the content." },
-      { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
-export TABDO_API_KEY="tab_replace_with_your_key"
-
-# Read; result is null if this row has no body yet
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"command":"getDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002"}}'
-
-# Create on a row that does not have a body
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: create-body-example-1" \\
-  -d '{"command":"createDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","idempotencyKey":"create-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"A first draft."}]}]}}}'
-
-# Replace after reading the current version
-curl -s -X POST "$TABDO_API_URL/api/commands" \\
-  -H "Authorization: Bearer $TABDO_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: replace-body-example-1" \\
-  -d '{"command":"replaceDocument","input":{"tableId":"00000000-0000-4000-8000-000000000001","rowId":"00000000-0000-4000-8000-000000000002","expectedVersion":1,"idempotencyKey":"replace-body-example-1","content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"An updated draft."}]}]}}}'` },
-      { type: "p", text: "REST success data is in result. getDocument returns { id, tableId, rowId, version, content, updatedAt } or null. The version is a concurrency token that prevents overwriting newer content; it is not browsable or restorable body history. For replaceDocument, use the current version you just read as expectedVersion. An old version returns 409 VERSION_CONFLICT; read and compare the new version rather than overwriting it. Write idempotency keys must be 1–200 characters. Ordinary REST request bodies are limited to 128 KiB; a separate body image upload request can use an 8 MiB body budget." },
-      { type: "h2", text: "REST paths and GraphQL" },
-      { type: "table", headers: ["Operation", "REST path", "Minimum document grant"], rows: [
-        ["Read / create / replace", "GET/POST/PUT /api/tables/{tableId}/rows/{rowId}/document", "canRead / canCreate / canUpdate"],
-        ["Render current body", "GET /api/tables/{tableId}/rows/{rowId}/document/render", "canRead"],
-        ["Upload / read image", "POST /api/tables/{tableId}/rows/{rowId}/document/images; GET /api/tables/{tableId}/rows/{rowId}/document/images/{fileId}", "canUpload / canRead"],
-      ] },
-      { type: "p", text: "GraphQL is available at POST /api/graphql. Use getDocument(input: JSON!) to read. Use mutations for createDocument, replaceDocument, and uploadDocumentImage. Send Authorization: Bearer tab_…; for writes, send Idempotency-Key and the same idempotencyKey in input. Ordinary GraphQL request bodies are limited to 128 KiB; a single uploadDocumentImage mutation can use an 8 MiB body budget." },
-      { type: "code", lang: "graphql", code: `query ReadBody($input: JSON!) {
-  getDocument(input: $input)
-}
-
-mutation ReplaceBody($input: JSON!) {
-  replaceDocument(input: $input)
-}` },
-      { type: "code", lang: "json", code: `{
-  "query": "query ReadBody($input: JSON!) { getDocument(input: $input) }",
-  "variables": { "input": { "tableId": "00000000-0000-4000-8000-000000000001", "rowId": "00000000-0000-4000-8000-000000000002" } }
-}` },
-      { type: "code", lang: "json", code: `{
-  "query": "mutation ReplaceBody($input: JSON!) { replaceDocument(input: $input) }",
-  "variables": { "input": {
-    "tableId": "00000000-0000-4000-8000-000000000001",
-    "rowId": "00000000-0000-4000-8000-000000000002",
-    "expectedVersion": 1,
-    "idempotencyKey": "replace-body-example-2",
-    "content": { "type": "doc", "content": [{ "type": "paragraph", "attrs": { "textAlign": "center" }, "content": [{ "type": "text", "text": "An updated draft.", "marks": [{ "type": "underline" }, { "type": "textStyle", "attrs": { "color": "#337ea9" } }, { "type": "highlight", "attrs": { "color": "#d3e5ef" } }] }] }] }
-  } }
-}` },
-      { type: "h2", text: "Images and content limits" },
-      { type: "ul", items: [
-        "Content uses restricted schemaVersion 1 JSON, not arbitrary HTML. Supported nodes include paragraphs, level 1–3 headings, lists, quotes, code blocks, horizontal rules, line breaks, and images. Paragraph and heading attrs may include textAlign: left, center, right, or justify (or null for the default). Supported marks are bold, italic, underline, strike, code, safe links, textStyle, and highlight. textStyle requires attrs.color to be a six-digit hex color such as #337ea9; highlight accepts null or a six-digit hex color. Links must use a full http, https, or mailto URL. Unknown nodes, properties, or invalid structures are rejected.",
-        "The complete serialized body JSON is limited to 64 KiB, 4,000 nodes, 12 levels, and 20 referenced images. Each image can be up to 5 MiB; a body can have up to 40 uploaded image files and 50 MiB total.",
-        "Call uploadDocumentImage first with base64 data without a data URL prefix, the current expectedVersion, file name, PNG/JPEG/WebP/GIF MIME type, and an idempotency key. Put the returned fileId in an image node's attrs.fileId and its alt text in attrs.alt, then save with replaceDocument. Images belong to one body and cannot be referenced from another record.",
-        "getDocumentImage returns base64 only for an image in the authorized body. renderDocument returns safe HTML and a private asset list; relative image paths are not public download links. Do not place private file URLs, keys, or tokens in body content.",
-      ] },
-      { type: "h2", text: "MCP tools and errors" },
-      { type: "p", text: "Clients connected to tabdo MCP can use get_document, create_document, replace_document, render_document, upload_document_image, and get_document_image. For example, read with get_document({ tableId, rowId }); for a replacement, pass tableId, rowId, the current expectedVersion, restricted JSON content, and idempotencyKey. Tools use the same per-table document permissions and version checks; provide only the access a caller needs." },
-      { type: "p", text: "Common errors: FORBIDDEN means the operation is not granted; NOT_FOUND means the body or image is missing or outside the authorized scope; VERSION_CONFLICT means a newer body exists; IDEMPOTENCY_MISMATCH means a retry key was reused with different input; BAD_INPUT or ATTACHMENT_LIMIT means the content structure or image budget is invalid. On a version conflict, read the latest version and compare it with the local draft." },
-      { type: "cards", items: [
-        { title: "Use record bodies", description: "Review direct editing, autosave, conflict drafts, and images.", href: "/docs/record-documents", badge: "Guide" },
-        { title: "Publish a blog", description: "Select and explicitly publish a snapshot of record bodies.", href: "/docs/blogging", badge: "Blog" },
-      ] },
+      { type: "cards", items: [{ title: "API quickstart", description: "Follow the complete REST flow and permissions guide.", href: "/docs/api-quickstart", badge: "Guide" }, { title: "GraphQL", description: "Read the GraphQL schema and limits.", href: "/docs/graphql", badge: "GraphQL" }] },
     ],
   },
   {
