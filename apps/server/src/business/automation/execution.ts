@@ -1,3 +1,7 @@
+import { z } from "zod";
+import { resolveSiteKeyId } from "../data-api/keys.js";
+import { authorizeKeyRule, automationGrant } from "../data-api/automations.js";
+import * as keyData from "../data-api/data.js";
 import { ServiceError } from "../errors.js";
 import type { sendAgentMailMessage, replyAgentMailMessage } from "../integrations/agentmail.js";
 import { sendAgentMailMessageSchema, replyAgentMailMessageSchema, type MailAutomationAction } from "@tabdo/shared";
@@ -14,6 +18,8 @@ import { automationEvents, automationOutbox, automationRuns, automationStepRecei
   automationAgentActions, agentRuns, agentRuntimeSessions, chatMessages } from "../db/schema.js";
 import { loadTableColumns } from "../commands/formulas.js";
 import { eventConditionsMatch, eventBindingContext, type AnyEventSnapshot } from "./events.js";
+const zId = (value: unknown) => z.uuid().parse(value);
+
 export type AutomationExecutionDependencies = CommandDependencies & Readonly<{
   sendAgentMailMessage?: (input: Parameters<typeof sendAgentMailMessage>[1]) => ReturnType<typeof sendAgentMailMessage>;
   replyAgentMailMessage?: (input: Parameters<typeof replyAgentMailMessage>[1]) => ReturnType<typeof replyAgentMailMessage>;
@@ -184,6 +190,19 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
     if (!scope) return event.finishedAt ? "done" : "continue";
     if (hydrated) await tx.update(automationEvents).set({ snapshot: hydrated as unknown as Record<string, unknown> }).where(eq(automationEvents.id, id));
     if (!action) { await tx.update(automationRuns).set({ status: "completed", finishedAt: deps.now() }).where(eq(automationRuns.id, run.id));return "continue"; }
+    if (scope.currentRule.executionKeyId) {
+      try {
+        const principal = await resolveSiteKeyId(tx, scope.currentRule.executionKeyId, true);
+        if (principal.organizationId !== event.organizationId) throw new ServiceError(403, { message: "Automation key organization changed" });
+        const creation = principal.workspacePermissions?.get(run.workspaceId);
+        if (!(rule.source.kind === "schedule" ? creation?.canCreateSchedules : creation?.canCreateAutomations) && !automationGrant(principal, rule)?.canUpdate) throw new ServiceError(403, { message: "Automation execution is no longer granted" });
+        await authorizeKeyRule(tx, principal, { ...rule, actions: rule.actions.slice(run.nextStep) });
+      } catch (error) {
+        if (!(error instanceof ServiceError) && !(error instanceof z.ZodError)) throw error;
+        await tx.update(automationRuns).set({ status: "cancelled", error: error instanceof Error ? error.message : "Automation key permission was revoked", finishedAt: deps.now() }).where(eq(automationRuns.id, run.id));
+        return "continue";
+      }
+    }
     const steps = await stepsOf(deps, tx, run.id), context = eventBindingContext(snapshot);
     if (snapshot.protocol !== 1 && run.nextStep === 0 && !eventConditionsMatch(rule, context)) {
       await tx.update(automationRuns).set({ status: "skipped", finishedAt: deps.now(), detail: { ...run.detail, reason: "事件条件未满足" } }).where(eq(automationRuns.id, run.id));
@@ -196,7 +215,23 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
     }
     if (action.type === "send_email" || action.type === "reply_email")
       return { event, run, rule, action, actorId: scope.actorId, context, steps };
-    const result = await dataAction({ ...deps, workspaceId: run.workspaceId }, tx, event, action, context, steps, scope.actorId);
+    let result: Record<string, unknown>;
+    if (scope.currentRule.executionKeyId) {
+      const principal = await resolveSiteKeyId(tx, scope.currentRule.executionKeyId, true);
+      const keyContext = { principal, secret: "", executionKeyId: principal.id, baseUrl: "" };
+      const scoped = { ...deps, workspaceId: run.workspaceId };
+      const command = action.type === "update_field" ? "updateCells" : action.type === "command" ? action.command : "";
+      const input = action.type === "update_field" ? { rowId: event.rowId, cells: { [action.columnId]: action.value }, expectedVersion: event.expectedVersion } : action.type === "command" ? parseAutomationCommand(action.command, resolveAutomationBindings(action.input, { event: context, steps })) as unknown as Record<string, unknown> : {};
+      let output: unknown;
+      if (command === "addRow") output = await keyData.siteCreateRow(scoped, keyContext, zId(input.tableId), input.cells, {}, tx);
+      else {
+        const [row] = await tx.select({ tableId: rows.tableId }).from(rows).where(eq(rows.id, zId(input.rowId)));
+        if (!row) throw new PermanentError("Automation target record no longer exists");
+        if (command === "deleteRow") output = await keyData.siteDeleteRow(scoped, keyContext, row.tableId, zId(input.rowId), tx);
+        else output = await keyData.siteUpdateRow(scoped, keyContext, row.tableId, zId(input.rowId), command === "updateCell" ? { [zId(input.columnId)]: input.value } : input.cells, input.expectedVersion as number | undefined, {}, tx);
+      }
+      result = { type: action.type, command, result: output };
+    } else result = await dataAction({ ...deps, workspaceId: run.workspaceId }, tx, event, action, context, steps, scope.actorId);
     await completeStep(deps, tx, event, run, rule, result);return "continue";
   });
   if (typeof plan === "string") return plan;

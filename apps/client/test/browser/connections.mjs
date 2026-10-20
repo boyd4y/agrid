@@ -71,12 +71,12 @@ try {
       }
     }
   }
-  await guide.getByRole('link', { name: '管理 API Key', exact: true }).click();
+  await guide.getByRole('button', { name: '管理 API Key', exact: true }).click();
   await panel.waitFor();
   assert.equal(await panel.getByRole('button', { name: /启用 Grok Bot/ }).count(), 0);
   // Editing an old brand-named key retains its identity and independent preview grant.
   await panel.getByRole('button', { name: '编辑 Grok Bot', exact: true }).click();
-  assert.equal(await dialog.getByTestId(`table-access-${table.id}`).getByRole('checkbox').count(), 4);
+  assert.equal(await dialog.getByTestId(`resource-access-${table.id}`).getByRole('checkbox').count(), 4);
   assert.equal(await dialog.getByRole('checkbox', { name: /允许发布/ }).count(), 0);
   await dialog.getByRole('button', { name: '保存', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
@@ -105,13 +105,14 @@ try {
   await panel.getByRole('button', { name: '编辑 External client', exact: true }).click();
   assert.equal(await dialog.getByRole('textbox', { name: 'API Key', exact: true }).count(), 0);
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
-  await panel.getByRole('link', { name: '连接 Agent', exact: true }).click();
+  await page.getByRole('tab', { name: '接入指南', exact: true }).click();
   assert(!(await guide.innerText()).includes(secret));
   assert(!(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).includes(secret));
   assert(!page.url().includes(secret));
   await page.getByRole('tab', { name: '常规', exact: true }).click();
   await page.getByLabel('English', { exact: true }).click();
   await page.getByRole('tab', { name: 'Connect agents', exact: true }).click();
+  await page.getByRole('tab', { name: 'Connection guide', exact: true }).click();
   await selectClient('Claude web / Desktop');
   await guide.getByText('This guide does not check the connection.', { exact: true }).waitFor();
   await page.evaluate(() => Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: () => Promise.reject(new Error('fixture denied')) }));
@@ -121,7 +122,7 @@ try {
   await page.goto(frontend + '/docs/mcp?client=claude-remote');
   await guide.waitFor();
   assert.equal(await recipe.innerText(), workspaceRecipe, 'public and workspace use the same recipe');
-  assert.equal(await guide.getByRole('link', { name: 'Open workspace connections', exact: true }).getAttribute('href'), '/app/settings?tab=connections');
+  assert.equal(await guide.getByRole('link', { name: 'Open workspace connections', exact: true }).getAttribute('href'), '/app/settings?tab=connections&section=api-keys');
   assert(!(await guide.innerText()).includes(secret));
   await page.goto(frontend + '/app/settings?tab=api-keys');
   await panel.getByRole('button', { name: 'Delete External client', exact: true }).click();

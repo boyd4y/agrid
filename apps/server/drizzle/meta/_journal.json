@@ -295,6 +295,13 @@
       "when": 1792468800000,
       "tag": "0041_unified_record_site",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792487250565,
+      "tag": "0042_agent_access_permissions",
+      "breakpoints": true
     }
   ]
 }

@@ -45,8 +45,8 @@ try {
   const readKey = await createKey('Catalog website', { 'Site catalog': ['读取'], 'Site leads': ['新增'] });
   const createOnlyKey = await createKey('Landing page leads', { 'Site leads': ['新增', '更新', '删除'] });
   assert.equal(await page.getByRole('tab', { name: '站点 API', exact: true }).count(), 0);
-  assert.equal(await page.getByRole('tab').count(), 4);
-  await page.waitForURL(url => url.searchParams.get('tab') === 'api-keys');
+  assert.equal(await page.getByRole('tablist', { name: '设置分类', exact: true }).getByRole('tab').count(), 4);
+  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && url.searchParams.get('section') === 'api-keys');
   const rows = settings.locator('[data-slot=list-item]'); assert.equal(await rows.count(), 2);
   const background = await rows.first().evaluate(element => getComputedStyle(element).backgroundColor);
   await rows.first().hover(); await pause(180);

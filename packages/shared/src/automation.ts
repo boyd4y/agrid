@@ -117,6 +117,8 @@ export const AUTOMATION_ACTION_LABELS: Record<AutomationActionType, string> = {
 };
 
 export type CreateAutomationInput = {
+  /** Required by external API keys; session callers retain their selected workspace. */
+  workspaceId?: string;
   tableId?: string;
   source?: AutomationSource;
   eventConditions?: AutomationEventCondition[];

@@ -99,13 +99,12 @@ after(async () => {
   assert.equal(sessions, 0, "no Cookie or anonymous session fallback");
 });
 
-test("official HTTP client initializes and lists exactly the former tool directory and schemas", async () => {
+test("official HTTP client initializes and lists the shared tool directory and schemas", async () => {
   const client = await connect(secretA);
   const catalog = (await client.listTools()).tools;
-  // Captured using the official client against the pre-migration registry at
-  // 09bcc32c69fd80d53323ff14bca793e912646d0c; each hash covers the full tool definition.
+  // Official client snapshot of the shared registry, including explicit key creation workspaceId.
   const baseline = JSON.parse(await readFile(new URL("../fixtures/mcp/catalog.json", import.meta.url), "utf8"));
-  assert.equal(catalog.length, 103); assert.deepEqual(catalog.map(tool => ({ name: tool.name, sha256: createHash("sha256").update(JSON.stringify(tool)).digest("hex") })), baseline);
+  assert.equal(catalog.length, baseline.length); assert.deepEqual(catalog.map(tool => ({ name: tool.name, sha256: createHash("sha256").update(JSON.stringify(tool)).digest("hex") })), baseline);
   const response = await rpc(secretA, { jsonrpc: "2.0", method: "notifications/initialized" });
   assert.equal(response.status, 202); assert.equal(await response.text(), "");
   assert.equal(response.headers.get("mcp-session-id"), null);
@@ -154,11 +153,11 @@ test("real Redis gives remote MCP reads 120 calls and keeps the 20-write budget 
     const saved = await createSiteKey(deps, actor, { name: "MCP rate limits", permissions: [permission(tableA)] });
     const target = `http://127.0.0.1:${address.port}/mcp`;
     first = await connect(saved.secret, undefined, target); second = await connect(saved.secret, undefined, target);
-    // These use the real tool schemas and dispatcher. Missing document/blog/calendar
+    // These use the real tool schemas and dispatcher. Missing automation/calendar
     // grants still produce ordinary tool errors and must consume the read class.
     for (const [name, args] of [
       ["list_tables", {}], ["get_table", { tableId: tableA }], ["query_rows", { tableId: tableA, limit: 1 }], ["get_row", { rowId: fileRow }],
-      ["get_calendar", { calendarId: randomUUID() }], ["get_document", { tableId: tableA, rowId: fileRow }], ["get_blog_sources", { tableId: tableA }],
+      ["get_calendar", { calendarId: randomUUID() }], ["list_automations", {}], ["list_automation_runs", { automationId: randomUUID() }],
       ["query_calendar_view", { viewId: randomUUID(), rangeStart: "2030-01-01", rangeEnd: "2030-02-01" }],
     ] as const) {
       await first.callTool({ name, arguments: args });
@@ -245,7 +244,7 @@ test("deployed app mounts /mcp before SPA fallback even when AUTH_REQUIRED=false
     assert.equal((await deployed.request("/mcp/nested")).status, 404);
     assert.equal((await deployed.request("/mcp", { method: "GET", headers: { Authorization: `Bearer ${secretB}` } })).status, 405);
     const response = await deployed.request("/mcp", { method: "POST", headers: { Authorization: `Bearer ${secretB}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: JSON.stringify(listRequest) });
-    assert.equal(response.status, 200); assert.equal((await response.json()).result.tools.length, 103);
+    assert.equal(response.status, 200); assert.equal((await response.json()).result.tools.length, JSON.parse(await readFile(new URL("../fixtures/mcp/catalog.json", import.meta.url), "utf8")).length);
   } finally {
     if (previous === undefined) delete process.env.AUTH_REQUIRED; else process.env.AUTH_REQUIRED = previous;
     await rm(directory, { recursive: true, force: true });

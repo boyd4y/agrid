@@ -61,6 +61,7 @@ export function createMcpServer(callCommand: (command: CommandName, input: Recor
     });
   }
 
+  server.registerTool("list_workspaces", { description: "列出可访问的工作区；API Key 仅返回其已授权资源或创建权限所在的工作区，创建自动化时使用 workspaceId。", inputSchema: {} }, async () => textResult(await callCommand("listWorkspaces", {})));
   server.registerTool("get_workspace", { description: "获取当前工作区与执行成员身份", inputSchema: {} }, async () => textResult(await callCommand("getWorkspace", {})));
   server.registerTool("list_members", { description: "查询工作区成员和智能体；支持姓名/邮箱搜索、kind筛选和分页。负责人person填userId；智能体动作agentUserId用kind=agent的userId，不用成员id或姓名。", inputSchema: MEMBER_LIST_SCHEMA.shape }, async input => textResult(await callCommand("listMembers", input)));
 

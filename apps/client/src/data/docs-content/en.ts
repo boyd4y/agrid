@@ -22,7 +22,7 @@ export const docsPages: DocsPage[] = [
       {
         type: "callout",
         tone: "info",
-        text: "You do not need a separate API key to use agents in tabdo. To access table data from your own application, a workspace owner or admin can create a per-table data key under Settings → API Key.",
+        text: "You do not need a separate API key to use agents in tabdo. To access table data from your own application, a workspace owner or admin can create a per-table data key under Settings → Connect agents → API Key.",
       },
       { type: "h2", text: "Get started" },
       {
@@ -122,8 +122,8 @@ export const docsPages: DocsPage[] = [
     title: "Connect an AI client with MCP",
     description: "Connect an external MCP client to tabdo from your workspace settings.",
     body: [
-      { type: "p", text: "Open Settings → Connect agents, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
-      { type: "p", text: "If the client needs a data access key, create a standard key under Settings → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
+      { type: "p", text: "Open Settings → Connect agents → Connection guide, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
+      { type: "p", text: "If the client needs a data access key, create a standard key under Settings → Connect agents → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
       { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing a site view requires both Read and Update. See Tables and the REST API reference for those shared data operations." },
       { type: "cards", items: [
         { title: "Tables and records", description: "Learn how table fields, record properties, and record bodies fit together.", href: "/docs/tables", badge: "Data" },
@@ -184,7 +184,7 @@ curl -s "$TABDO_API_URL/api/tables" \\
       },
       {
         type: "p",
-        text: "Create tab_ keys under Settings → API Key; only workspace owners/admins can manage them. Choose read, create, update, and delete permissions independently for each table. A key can access records only in tables you authorize; new tables are not added automatically, and write permission does not imply read access. Changes take effect on the next request, and deleting a key revokes access. The full key is shown only once. Use it with table REST, GraphQL, or @tabdo/sdk. A data key cannot change table structure, manage the workspace, or run agents.",
+        text: "Create tab_ keys under Settings → Connect agents → API Key; only workspace owners/admins can manage them. Choose read, create, update, and delete permissions independently for each table. A key can access records only in tables you authorize; new tables are not added automatically, and write permission does not imply read access. Changes take effect on the next request, and deleting a key revokes access. The full key is shown only once. Use it with table REST, GraphQL, or @tabdo/sdk. A data key cannot change table structure, manage the organization, configure or publish sites, generate reports, or run agents. Use MCP list_workspaces or POST /api/commands with command listWorkspaces to get authorized workspace IDs; pass workspaceId when creating an automation. Keys apply across workspaces in the same organization; new resources are not granted automatically. Automations and scheduled tasks have separate read, update and delete grants; creation requires a workspace grant. Rule permissions do not grant access to source or target table data. External rules support table record actions; agent, mail and schema actions require a member. Existing schedule update grants continue to cover timing, name and enabled state only; deselect and reselect Update in the key editor to authorize definition changes. Rules with agent or mail actions can only be renamed or disabled through a key. A key stops working if its manager loses organization owner/admin access.",
       },
       { type: "h2", text: "Minimal data flow" },
       { type: "p", text: "Start with GET /api/tables or GET /api/tables/:tableId to discover tables and column metadata. Keep table.id, column.id, and options[].id for select fields. Use IDs, not column names or option labels, in write requests. Keys, IDs, and host names below are fictional placeholders." },
@@ -249,7 +249,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       },
       {
         type: "callout",
-        text: "To connect your own application, ask a workspace owner or admin to create a data key under Settings → API Key and grant only the operations needed for each table. The key does not inherit the creator’s other permissions and cannot change table structure or manage the workspace.",
+        text: "To connect your own application, ask a workspace owner or admin to create a data key under Settings → Connect agents → API Key and grant only the operations needed for each table. The key does not inherit the creator’s other permissions and cannot change table structure or manage the workspace.",
       },
     ],
   },
@@ -382,7 +382,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "Scheduled plans appear on the calendar by default, alongside events. Predicted times are previews and recorded points show runs; neither reserves event time. Select a plan point to review it, or open the scheduled plan to edit its rule. Plan visibility requires separate read access to each selected plan.",
       ] },
       { type: "h2", text: "Connect with the REST API" },
-      { type: "p", text: "A workspace owner/admin can create a key under Settings → API Key and grant access to each calendar separately. Event detail, create, update, cancel, calendar management, and triggering an agent reminder are separate grants. Create access does not include event detail. Reading the member directory requires at least one of calendar read, create, update, or manage access. Reminder setup requires both event update and trigger-agent access. Scheduled plan projections use separate per-plan read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
+      { type: "p", text: "A workspace owner/admin can create a key under Settings → Connect agents → API Key and grant access to each calendar separately. Event detail, create, update, cancel, calendar management, and triggering an agent reminder are separate grants. Create access does not include event detail. Reading the member directory requires at least one of calendar read, create, update, or manage access. Reminder setup requires both event update and trigger-agent access. Scheduled plan projections use separate per-plan read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
@@ -419,7 +419,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
         ["Set / read reminders (POST / GET)", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["Query scheduled task times (POST)", "/api/schedules/occurrences/query"],
       ] },
-      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → API Key. The people, working-hours, unavailable-time, and availability routes above remain available for legacy personId bookings; they are not a setup step for ordinary events." },
+      { type: "p", text: "API keys can list calendars they have been granted, but cannot create a calendar. A current workspace owner/admin must create it in the app first, then grant the key access under Settings → Connect agents → API Key. The people, working-hours, unavailable-time, and availability routes above remain available for legacy personId bookings; they are not a setup step for ordinary events." },
       { type: "p", text: "Use userId rather than personId when creating a new event. Event queries can filter by userId; personId remains available for legacy records. Legacy personId bookings keep their working-hours and time-off checks. All events still check for overlapping time across the workspace calendars. The batch route accepts 1–100 event create, update, or cancel operations and applies them together; if one operation fails validation or conflicts, the batch is rolled back." },
       { type: "code", lang: "bash", code: `# Update an event. Use the latest version you have read.
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
@@ -538,7 +538,7 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
       { type: "p", text: "Outbound event subscriptions send calendar changes from a granted calendar to your HTTPS receiver. The app shows calendar bookings as events, while existing subscription event types such as booking.created and person.updated retain their names for compatibility. Use subscriptions to let your own application know when something changes in tabdo. They are not two-way sync with Google, Outlook, or another calendar, and they do not send email or text messages." },
       { type: "h2", text: "Set up permissions and a receiver" },
       { type: "ol", items: [
-        "Create or edit an API key under Settings → API Key. An owner/admin grants subscription, delivery-read, and subscription-management permissions separately for the target calendar. Creating a subscription also requires read access to that calendar. New keys have none of these grants by default.",
+        "Create or edit an API key under Settings → Connect agents → API Key. An owner/admin grants subscription, delivery-read, and subscription-management permissions separately for the target calendar. Creating a subscription also requires read access to that calendar. New keys have none of these grants by default.",
         "Prepare a publicly reachable HTTPS receiver on the standard port 443. The URL cannot include a username, password, or fragment. Your receiver must retain the original request bytes to verify the signature.",
         "Create a subscription with POST /api/calendars/{calendarId}/subscriptions. Choose a name, receiver URL, and event types. The successful response displays a signing secret once; save it securely because its plaintext cannot be read again.",
       ] },
@@ -892,7 +892,7 @@ if (row) {
         type: "ul",
         items: [
           "Signed-in account: use your tabdo account for workspace features.",
-          "Data access key: a workspace owner/admin creates Authorization: Bearer tab_… under Settings → API Key. It grants only the selected read, create, update, and delete operations for each table.",
+          "Data access key: a workspace owner/admin creates Authorization: Bearer tab_… under Settings → Connect agents → API Key. It grants only the selected read, create, update, and delete operations for each table.",
           "tab_ keys cannot change table schemas, manage the workspace, or run agents; unsupported operations are rejected.",
         ],
       },

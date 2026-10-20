@@ -3,7 +3,9 @@ import type { CellValue, ColumnType, SelectOption } from "./types.js";
 import type { FilterCondition, FilterLogic } from "./filters.js";
 
 export type TablePermission = { tableId: string; canRead: boolean; canCreate: boolean; canUpdate: boolean; canDelete: boolean };
-export type ApiKeyInput = { name: string; permissions: TablePermission[]; calendarPermissions?: CalendarPermission[]; schedulePermissions?: import("./calendar.js").SchedulePermission[] };
+export type AutomationPermission = { automationId: string; canRead: boolean; canUpdate: boolean; canDelete?: boolean };
+export type ApiKeyWorkspacePermission = { workspaceId: string; canCreateAutomations: boolean; canCreateSchedules: boolean };
+export type ApiKeyInput = { name: string; permissions: TablePermission[]; automationPermissions?: AutomationPermission[]; workspacePermissions?: ApiKeyWorkspacePermission[]; calendarPermissions?: CalendarPermission[]; schedulePermissions?: import("./calendar.js").SchedulePermission[] };
 export type ApiKeyInfo = ApiKeyInput & { id: string; prefix: string; createdAt: string };
 export type SiteKeyInput = ApiKeyInput;
 export type SiteKeyInfo = ApiKeyInfo;

@@ -83,7 +83,7 @@ test("unified API keys enforce table CRUD while workspace administration stays s
     assert.equal((await request("/members/invite", bearer, { email: `denied-${randomUUID()}@local.test`, role: "member" })).status, 401);
     assert.equal((await request("/user/api-keys", { Cookie: cookie }, { name: "Member's own key" })).status, 403, "members cannot change workspace key grants");
     await db.delete(member).where(eq(member.id, ownerMembership));
-    assert.equal((await request("/tables", bearer)).status, 200, "workspace capabilities do not impersonate their creator");
+    assert.equal((await request("/tables", bearer)).status, 403, "capabilities stop when their manager loses organization access");
     await db.insert(member).values({ id: ownerMembership, userId: ownerId, organizationId: orgA, role: "owner" });
     await db.update(session).set({ activeOrganizationId: orgA }).where(eq(session.userId, ownerId));
     assert.equal((await request("/tables", bearer)).status, 200);

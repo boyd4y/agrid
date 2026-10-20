@@ -143,11 +143,11 @@ export const AUTOMATION_ACTION_SCHEMA = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run_agent"), agentUserId: z.string().min(1), prompt: z.string().trim().min(1).max(30000) }).strict(),
   z.object({ type: z.literal("command"), command: z.enum(AUTOMATION_DATA_COMMANDS), input: z.record(z.string(), z.unknown()) }).strict(),
 ]);
-export const AUTOMATION_CREATE_SCHEMA = z.object({ source: AUTOMATION_SOURCE_SCHEMA.optional(), tableId: uuid.optional(),
+export const AUTOMATION_CREATE_SCHEMA = z.object({ workspaceId: uuid.optional(), source: AUTOMATION_SOURCE_SCHEMA.optional(), tableId: uuid.optional(),
   name: z.string().trim().min(1).max(200), enabled: z.boolean().optional(), trigger: AUTOMATION_TRIGGER_SCHEMA,
   conditions: z.array(AUTOMATION_FILTER_SCHEMA).max(100).optional(), conditionLogic: z.enum(["and", "or"]).optional(),
   eventConditions: z.array(AUTOMATION_EVENT_CONDITION_SCHEMA).max(100).optional(), actions: z.array(AUTOMATION_ACTION_SCHEMA).min(1).max(100) }).strict();
-export const AUTOMATION_UPDATE_SCHEMA = AUTOMATION_CREATE_SCHEMA.omit({ tableId: true }).partial().extend({ expectedVersion: z.number().int().positive().optional() });
+export const AUTOMATION_UPDATE_SCHEMA = AUTOMATION_CREATE_SCHEMA.omit({ tableId: true, workspaceId: true }).partial().extend({ expectedVersion: z.number().int().positive().optional() });
 export const AUTOMATION_LIST_SCHEMA = z.object({ tableId: uuid.optional(), offset: z.number().int().min(0).max(1_000_000).optional(), limit: z.number().int().min(1).max(100).optional() }).strict();
 export const AUTOMATION_RUN_LIST_SCHEMA = z.object({ tableId: uuid.optional(), automationId: uuid.optional(), limit: z.number().int().min(1).max(200).optional() }).strict();
 
