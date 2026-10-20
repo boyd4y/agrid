@@ -15,6 +15,10 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
+      "^/mcp(?:[/?]|$)": {
+        target: process.env.TABDO_API_TARGET || "http://localhost:3001",
+        changeOrigin: true,
+      },
       "/api": {
         target: process.env.TABDO_API_TARGET || "http://localhost:3001",
         changeOrigin: true,

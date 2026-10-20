@@ -60,12 +60,22 @@ export function createOpenApiRoutes(publicOrigin?: string) {
   route.get("/plugins/grok-bot", c => {
     const origin = new URL(publicOrigin ?? c.req.url).origin;
     return c.json({
-      name: "Tabdo", description: "Query Tabdo tables with a restricted API key.",
+      name: "tabdo", description: "tabdo connection guide for remote MCP with a restricted API key. This JSON is not a Grok registration protocol.",
+      kind: "connection_guide",
+      mcp_url: `${origin}/mcp`,
+      transport: "streamable-http",
       openapi_url: `${origin}/api/openapi.json`,
       auth: { type: "http", scheme: "bearer", header: "Authorization", prefix: "Bearer", key_prefix: "tab_" },
       recommended_scopes: "Grant Read on tables the bot should query; add Create/Update only if the bot must write. Never grant Delete unless required.",
       docs_url: "/docs",
-      install: { steps: ["Copy the OpenAPI URL into your Grok Bot connector.", "Create an API key in Settings → API Key using Enable Grok Bot; save the secret shown once.", "Paste the key into the Grok Bot connector's Bearer authentication field. Use Authorization: Bearer tab_... when configuring a header manually."] },
+      install: { steps: [
+        "Create an API key in Settings → API Key using Enable Grok Bot; select tables and save the secret shown once.",
+        `Add a custom MCP server named tabdo in Grok Bot with type Remote HTTPS (Streamable HTTP) and server URL ${origin}/mcp.`,
+        "Under HTTP headers, set key Authorization and value Bearer <API key>, replacing <API key> with your saved key. Leave OAuth Client ID and Client Secret empty. Never put secrets in chat or URLs.",
+        "Add the server, then find tabdo in Connect apps and install it if prompted. Attach it with @ and ask it to list your authorized tables.",
+        "If your version only offers OAuth without a secure HTTP headers form, this API key connection is unavailable. Use a client that supports Bearer headers.",
+        "The server must be reachable over public HTTPS. For local development, use a public tunnel and keep /mcp at the end of the URL.",
+      ] },
     });
   });
   return route;

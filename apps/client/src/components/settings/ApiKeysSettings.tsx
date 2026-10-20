@@ -177,12 +177,15 @@ export function ApiKeysSettings() {
         {grok && <div className="flex min-w-0 flex-col gap-4">
           <p className="break-words text-sm">{grok.key.name} · {grok.key.prefix}… · {new Date(grok.key.createdAt).toLocaleString()} · {text("tableCount", { count: grok.key.permissions.length })}</p>
           <FieldGroup>
-            {[...(grok.secret ? [{ label: text("grok.secret"), value: grok.secret }] : []), { label: text("grok.openapi"), value: `${window.location.origin}/api/openapi.json` }, { label: text("grok.manifest"), value: `${window.location.origin}/api/plugins/grok-bot` }].map((item, index) => <Field key={item.label}>
+            {[...(grok.secret ? [{ label: text("grok.secret"), value: grok.secret }] : []), { label: text("grok.mcpUrl"), value: `${window.location.origin}/mcp` }, { label: text("grok.headerName"), value: "Authorization" }, { label: text("grok.headerValue"), value: `Bearer ${grok.secret ?? text("grok.keyPlaceholder")}` }].map((item, index) => <Field key={item.label}>
               <FieldLabel htmlFor={`${id}-grok-${index}`}>{item.label}</FieldLabel>
               <div className="flex min-w-0 gap-2"><Input id={`${id}-grok-${index}`} readOnly value={item.value} autoComplete="off" spellCheck={false} /><Button variant="outline" size="icon" aria-label={text("grok.copy", { label: item.label })} onClick={() => void copy(item.value)}><Copy data-icon="inline-start" /></Button></div>
             </Field>)}
           </FieldGroup>
+          <p className="text-sm text-muted-foreground">{text("grok.authentication")}</p>
           <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">{["step1", "step2", "step3"].map(step => <li key={step}>{text(`grok.${step}`)}</li>)}</ol>
+          <p className="text-sm text-muted-foreground">{text("grok.compatibility")}</p>
+          <p className="text-sm text-muted-foreground">{text("grok.reachability")}</p>
           <p className="text-sm text-muted-foreground">{text("grok.permissions")}</p>
           <Button variant="outline" onClick={() => { const key = grok.key; setGrok(null); edit(key); }}>{text("edit")}</Button>
         </div>}
