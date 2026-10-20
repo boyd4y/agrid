@@ -117,14 +117,20 @@ export async function executeKeyAutomation(deps: CommandDependencies, secret: st
     const input = AUTOMATION_UPDATE_SCHEMA.parse(wire);
     if (!input.expectedVersion) throw new ServiceError(400, { message: "expectedVersion is required" });
     const merged = { ...mapRule(rule), ...input };
+    // Controlling an already approved schedule does not authorize or replace its actions.
+    // Preserve the original execution identity/binding for both legacy and current grants.
+    const scheduleControl = rule.source.kind === "schedule"
+      && Object.keys(input).every(key => ["name", "expectedVersion", "enabled", "source"].includes(key))
+      && (!input.source || input.source.kind === "schedule");
     const harmless = Object.keys(input).every(key => ["name", "expectedVersion", "enabled"].includes(key)) && input.enabled !== true;
-    if (!harmless) {
+    const changesDefinition = !scheduleControl && !harmless;
+    if (changesDefinition) {
       // Legacy schedule update grants retain their timing-only semantics; no implicit action editing.
       if (rule.source.kind === "schedule" && (principal.schedulePermissions?.get(rule.id)?.grantVersion ?? 1) < 2 && (input.actions || input.trigger || input.conditions || input.eventConditions || input.conditionLogic)) forbidden("This schedule grant only allows timing, name and enabled changes");
       await authorizeKeyRule(tx, principal, merged);
     }
     const result = await updateAutomation(scoped, { ...input, automationId, organizationId: principal.organizationId, actorId: principal.userId ?? undefined }, tx);
-    if (!harmless) await tx.update(automations).set({ executionKeyId: principal.id }).where(eq(automations.id, automationId));
+    if (changesDefinition) await tx.update(automations).set({ executionKeyId: principal.id }).where(eq(automations.id, automationId));
     return { automationId: result.id, version: result.version, name: result.name, enabled: result.enabled, source: result.source };
   });
 }
