@@ -124,7 +124,7 @@ export const docsPages: DocsPage[] = [
     body: [
       { type: "p", text: "Open Settings → Connect agents, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
       { type: "p", text: "If the client needs a data access key, create a standard key under Settings → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
-      { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments; Read and Update govern site views and explicit publication. See Tables and the REST API reference for those shared data operations." },
+      { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments; site view reading, configuration, and publication require both Read and Update. See Tables and the REST API reference for those shared data operations." },
       { type: "cards", items: [
         { title: "Tables and records", description: "Learn how table fields, record properties, and record bodies fit together.", href: "/docs/tables", badge: "Data" },
         { title: "REST API", description: "Read the shared row, body, attachment, and site view API reference.", href: "/docs/rest", badge: "API" },
@@ -287,6 +287,11 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "ol", items: [
         "Add a file column, click a file cell, and choose files to upload. When the upload finishes, the file name appears in the cell; click it to download.",
         "To allow only one file, open the column settings and turn off Multiple files; multiple files are allowed by default. File size and upload count are subject to the limits shown by your workspace. If an upload exceeds a limit, choose fewer or smaller files and try again.",
+      ] },
+      { type: "h2", text: "Edit a record body" },
+      { type: "ul", items: [
+        "In a record, use the body editor to add formatted text and images. Body content is saved separately from the row's title and properties; check its save status before leaving the record.",
+        "If a save fails, keep the editor open and retry after checking your connection and access. If another edit has changed the body version, reload the record and reapply any unsaved changes before saving.",
       ] },
       { type: "h2", text: "Relate records and calculate rollups" },
       { type: "ol", items: [
@@ -696,31 +701,43 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["GET /api/tables/:tableId", "Read table metadata and columns"],
           ["GET /api/tables/:tableId/rows?limit=&cursor=&includeTotal=", "Read a page; default 50, max 100; requires read grant"],
           ["POST /api/tables/:tableId/rows/query", "Query JSON filters, filterLogic, sort, cursor, limit; requires read grant"],
-          ["GET /api/tables/:tableId/rows/:rowId", "Read one record; add ?include=body to include its body; requires read grant"],
-          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value } } create; requires create grant"],
-          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells, expectedVersion? } update; requires update grant"],
+          ["GET /api/tables/:tableId/rows/:rowId", "Read one record; add ?include=body&bodyFormat=json|html for its body; requires Read"],
+          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value }, body?: { content } } create; requires create grant"],
+          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells?, expectedVersion?, body?: { content, expectedVersion } } update; body expectedVersion is required; requires update grant"],
           ["DELETE /api/tables/:tableId/rows/:rowId", "Delete a record; requires delete grant"],
-          ["POST/GET /api/tables/:tableId/rows/:rowId/attachments[/fileId]", "Upload/read attachments owned by a record body; requires table create/update/read"],
+          ["POST /api/tables/:tableId/rows/:rowId/attachments", "Upload with { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey }; requires Update"],
+          ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "Read an authorized body attachment; requires Read"],
           ["POST /api/commands (createView/updateView)", "Create or update a site view; explicitly publish/unpublish through updateView"],
         ],
       },
       { type: "h2", text: "Record bodies and site views" },
-      { type: "p", text: "A record body is a built-in row field alongside ordinary cells. Row list endpoints omit full body content. Read one record with ?include=body&bodyFormat=json (or html); write it through POST/PATCH using body: { content, expectedVersion? } and an idempotencyKey. Body version checks are independent of the row expectedVersion. A successful API Key write returns a version receipt, not body content. Upload a body attachment with target=body and its current expectedVersion. Existing table read/create/update/delete grants govern the body and its attachments." },
-      { type: "p", text: "Site publishing uses the ordinary view commands. Create a view with type=site and a config containing template=blog, source-table field mapping, and selected row IDs. Update the view’s publication explicitly to publish or unpublish; source edits and config saves alone do not publish. Reading and configuring/publishing views use the table’s existing read and update grants." },
-      { type: "code", lang: "json", code: `// POST /api/tables/tbl_example/rows
-{
+      { type: "p", text: "A record body is a built-in row field alongside ordinary cells. Row list endpoints omit its full content. GET one record with ?include=body&bodyFormat=json (or html) returns body content, version, schemaVersion, attachments, and optional rendered HTML. POST can create a row with body: { content }; PATCH can update it with body: { content, expectedVersion }, where expectedVersion is required and is independent of the row version. The first write to an empty body uses version 0. Body writes require idempotencyKey and return a version receipt, not body content." },
+      { type: "p", text: "To add an image, upload it to the row attachment endpoint with target=body, the current body expectedVersion, name, mimeType, base64, and idempotencyKey. The response includes fileId and bodyVersion; reference fileId in the body's image content. Upload requires Update permission. GET an attachment by fileId requires Read permission." },
+      { type: "code", lang: "json", code: `{
+  "target": "body",
+  "expectedVersion": 1,
+  "name": "cover.png",
+  "mimeType": "image/png",
+  "base64": "BASE64_ENCODED_IMAGE_CONTENT",
+  "idempotencyKey": "upload-cover-1"
+}` },
+      { type: "p", text: "POST /api/commands with this input to read a site view and its current publication state:" },
+      { type: "code", lang: "json", code: `{
+  "command": "getView",
+  "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
+}` },
+      { type: "p", text: "Create a site view with createView({ tableId, type: \"site\", name, config, idempotencyKey }) and configure its Blog template, source-table field mapping, and selected row IDs. getView returns the view plus site state { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }; use site.publishedRevisionId as expectedPublishedRevisionId when publishing. On first publish, use null. Use the current published revision ID to unpublish, or to withdraw a specific row include rowId. Saving source rows or view config does not publish. Reading, configuring, and publishing a site view requires both Read and Update on its table." },
+      { type: "code", lang: "json", code: `{
   "cells": { "col_title": "Field notes" },
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "A first draft." }] }] } },
   "idempotencyKey": "create-row-with-body-1"
-}
-
-// PATCH /api/tables/tbl_example/rows/row_example
-{
+}` },
+      { type: "code", lang: "json", code: `{
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "An updated draft." }] }] }, "expectedVersion": 1 },
   "idempotencyKey": "update-row-body-1"
 }` },
-      { type: "code", lang: "json", code: `// POST /api/commands: create a site view from any table
-{
+      { type: "p", text: "POST /api/commands with this input to create a site view:" },
+      { type: "code", lang: "json", code: `{
   "command": "createView",
   "input": {
     "tableId": "00000000-0000-4000-8000-000000000001",
@@ -736,10 +753,9 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     },
     "idempotencyKey": "create-site-view-1"
   }
-}
-
-// Explicitly publish after reviewing the saved view. Use the returned viewId/version.
-{
+}` },
+      { type: "p", text: "After reviewing the saved view, publish it with the current view version. For the first publication, expectedPublishedRevisionId is null:" },
+      { type: "code", lang: "json", code: `{
   "command": "updateView",
   "input": {
     "viewId": "00000000-0000-4000-8000-000000000031",
@@ -748,16 +764,29 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     "publication": { "action": "publish", "expectedPublishedRevisionId": null }
   }
 }` },
+      { type: "p", text: "To unpublish, set expectedPublishedRevisionId to the current publishedRevisionId returned by getView:" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "unpublish-site-view-1",
+    "publication": { "action": "unpublish", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041" }
+  }
+}` },
+      { type: "p", text: "To withdraw one selected record from the published site, also provide its rowId:" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "withdraw-site-row-1",
+    "publication": { "action": "withdraw", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041", "rowId": "00000000-0000-4000-8000-000000000021" }
+  }
+}` },
       { type: "h2", text: "Requests and responses" },
       { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. REST returns resource data directly, not an { ok, result } envelope." },
-      { type: "code", lang: "json", code: `// POST /api/tables/tbl_example/rows
-{ "cells": { "col_title": "New task", "col_status": "opt_todo" } }
-
-// PATCH /api/tables/tbl_example/rows/row_example
-{ "cells": { "col_title": "Updated task" }, "expectedVersion": 3 }
-
-// stale version: HTTP 409
-{ "error": "Record changed; reload before updating" }` },
+      { type: "p", text: "POST row body: { \"cells\": { \"col_title\": \"New task\" } }. PATCH row body: { \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }. A stale version returns HTTP 409 with { error: \"Record changed; reload before updating\" }." },
       { type: "ul", items: [
         "cells accepts writable API types only: text, number, date, checkbox, select, and multi_select. Use options[].id from field metadata for select values, not the label. Deleting a row with linked records may also require update permission on the target table to remove inverse links.",
         "Request bodies are limited to 128 KiB. Each key defaults to 120 reads and 20 writes per minute. If you exceed the rate limit, wait before sending more requests. Requests may be temporarily rejected if the limit cannot be checked.",
@@ -850,7 +879,8 @@ if (row) {
         "client.graphql<T>(query, variables, { operationName, signal }) runs GraphQL. Failures throw TabdoApiError with code, status, and errors; mutations are not retried automatically.",
       ] },
       { type: "callout", tone: "info", text: "Do not embed a high-privilege key in a public website; browser code exposes its key. Keep keys in environment variables for private integrations; for a public site, use a dedicated key with only the required table permissions." },
-      { type: "cards", items: [{ title: "API quickstart", description: "Follow the complete REST flow and permissions guide.", href: "/docs/api-quickstart", badge: "Guide" }, { title: "GraphQL", description: "Read the GraphQL schema and limits.", href: "/docs/graphql", badge: "GraphQL" },     ],
+      { type: "cards", items: [{ title: "API quickstart", description: "Follow the complete REST flow and permissions guide.", href: "/docs/api-quickstart", badge: "Guide" }, { title: "GraphQL", description: "Read the GraphQL schema and limits.", href: "/docs/graphql", badge: "GraphQL" }] },
+    ],
   },
   {
     slug: "auth",

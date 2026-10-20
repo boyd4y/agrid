@@ -124,7 +124,7 @@ export const docsPages: DocsPage[] = [
     body: [
       { type: "p", text: "打开「设置 → 连接智能体」，选择你的客户端，并按页面显示的连接指南操作。指南会提供当前工作区的 MCP 地址和客户端对应步骤，也会说明凭证设置与常见连接问题。" },
       { type: "p", text: "如果客户端需要数据访问 Key，请在「设置 → API Key」创建标准 Key，并只授予所需表格操作。没有单独的 Bot Key 或自动创建的智能体专用 Key。请将 Key 保存在客户端的安全凭证设置中。" },
-      { type: "p", text: "MCP 工具与 REST、GraphQL 使用同一套记录、正文、附件和视图操作。表级读取/新增/更新/删除权限覆盖记录正文及附件；站点视图读取使用读取权限，配置和显式发布使用更新权限。具体数据操作见「表格」和 REST API 参考。" },
+      { type: "p", text: "MCP 工具与 REST、GraphQL 使用同一套记录、正文、附件和视图操作。表级读取/新增/更新/删除权限覆盖记录正文及附件；读取、配置和发布站点视图都需要 Read 与 Update。具体数据操作见「表格」和 REST API 参考。" },
       { type: "cards", items: [
         { title: "表格与记录", description: "了解字段、记录属性和记录正文的关系。", href: "/docs/tables", badge: "数据" },
         { title: "REST API", description: "查看记录、正文、附件和站点视图的统一 API 参考。", href: "/docs/rest", badge: "API" },
@@ -291,6 +291,11 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       { type: "ol", items: [
         "添加 file 字段后，点击记录中的附件单元格并选择上传；上传完成后文件名会显示在单元格中，点击文件名可下载。",
         "要限制为一个文件，打开列设置并关闭‘多个文件’；默认允许多个。文件大小和上传数量受工作区限制；超出限制时减少文件数量或选择较小文件后重试。",
+      ] },
+      { type: "h2", text: "编辑记录正文" },
+      { type: "ul", items: [
+        "在记录中使用正文编辑器添加格式文本和图片。正文与记录标题、属性分别保存；离开记录前请确认正文已保存。",
+        "如果保存失败，请保持编辑器打开，检查网络和访问权限后重试。如果其他编辑已更新正文版本，请重新载入记录，并在保存前重新应用未保存的修改。",
       ] },
       { type: "h2", text: "关联记录与汇总" },
       { type: "ol", items: [
@@ -709,31 +714,43 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["GET /api/tables/:tableId", "读取表元数据与字段"],
           ["GET /api/tables/:tableId/rows?limit=&cursor=&includeTotal=", "读取一页记录；默认 50、最大 100，需 read grant"],
           ["POST /api/tables/:tableId/rows/query", "按 JSON filters、filterLogic、sort、cursor、limit 查询；需 read grant"],
-          ["GET /api/tables/:tableId/rows/:rowId", "读取单条记录；添加 ?include=body 可包含正文；需 read grant"],
-          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value } } 新增；需 create grant"],
-          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells, expectedVersion? } 更新；需 update grant"],
+          ["GET /api/tables/:tableId/rows/:rowId", "读取单条记录；添加 ?include=body&bodyFormat=json|html 返回正文；需 Read"],
+          ["POST /api/tables/:tableId/rows", "{ cells: { columnId: value }, body?: { content } } 新增；需 create grant"],
+          ["PATCH /api/tables/:tableId/rows/:rowId", "{ cells?, expectedVersion?, body?: { content, expectedVersion } } 更新；正文 expectedVersion 必填；需 update grant"],
           ["DELETE /api/tables/:tableId/rows/:rowId", "删除记录；需 delete grant"],
-          ["POST/GET /api/tables/:tableId/rows/:rowId/attachments[/fileId]", "上传/读取记录正文附件；需表级 create/update/read 权限"],
+          ["POST /api/tables/:tableId/rows/:rowId/attachments", "使用 { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey } 上传；需 Update"],
+          ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "读取已授权的正文附件；需 Read"],
           ["POST /api/commands (createView/updateView)", "创建或更新站点视图；通过 updateView 明确发布/撤下"],
         ],
       },
       { type: "h2", text: "记录正文与站点视图" },
-      { type: "p", text: "正文是记录的内置行字段。行列表不返回完整正文；读取单条记录时使用 ?include=body&bodyFormat=json（或 html）。通过 POST/PATCH 中的 body: { content, expectedVersion? } 写入，并提供 idempotencyKey。正文版本与行 expectedVersion 分开检查。API Key 写操作只返回版本回执，不返回正文内容。上传正文附件时使用 target=body 和当前 expectedVersion。正文和附件沿用表级 read/create/update/delete 权限。" },
-      { type: "p", text: "站点发布使用通用视图命令。创建 type=site 的视图，并在 config 中设置 template=blog、来源表字段映射和选中的记录 ID。通过 updateView 显式发布或撤下；仅保存来源记录或配置不会发布。读取视图以及配置/发布视图分别沿用表级 read 和 update 权限。" },
-      { type: "code", lang: "json", code: `// POST /api/tables/tbl_example/rows
-{
+      { type: "p", text: "正文是记录的内置行字段，行列表不返回完整正文。读取单条记录时使用 ?include=body&bodyFormat=json（或 html），返回的 body 含 content、version、schemaVersion、attachments，以及可选的渲染 HTML。POST 新建记录时可传 body: { content }；PATCH 更新正文时传 body: { content, expectedVersion }，其中 expectedVersion 必填，且与行版本分开检查。首次写入空正文时使用版本 0。正文写入必须带 idempotencyKey；API Key 写操作只返回版本回执，不返回正文内容。" },
+      { type: "p", text: "添加图片时，向记录附件路径上传 target=body、当前正文 expectedVersion、name、mimeType、base64 和 idempotencyKey。响应包含 fileId 与 bodyVersion；在正文图片内容中引用 fileId。上传需要 Update 权限；通过 fileId 获取附件需要 Read 权限。" },
+      { type: "code", lang: "json", code: `{
+  "target": "body",
+  "expectedVersion": 1,
+  "name": "cover.png",
+  "mimeType": "image/png",
+  "base64": "BASE64_ENCODED_IMAGE_CONTENT",
+  "idempotencyKey": "upload-cover-1"
+}` },
+      { type: "p", text: "使用此请求体 POST /api/commands 读取视图及当前发布状态：" },
+      { type: "code", lang: "json", code: `{
+  "command": "getView",
+  "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
+}` },
+      { type: "p", text: "使用 createView({ tableId, type: \"site\", name, config, idempotencyKey }) 创建站点视图，并设置博客模板、来源表字段映射和所选记录 ID。getView 除视图信息外还返回 site 状态 { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }；发布时将 site.publishedRevisionId 用作 expectedPublishedRevisionId。首次发布使用 null。撤下时使用当前已发布修订 ID；撤回某条记录时另传 rowId。保存来源记录或视图配置不会发布。读取、配置和发布站点视图都需要该表的 Read 与 Update 权限。" },
+      { type: "code", lang: "json", code: `{
   "cells": { "col_title": "旅行手记" },
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "第一篇记录。" }] }] } },
   "idempotencyKey": "create-row-with-body-1"
-}
-
-// PATCH /api/tables/tbl_example/rows/row_example
-{
+}` },
+      { type: "code", lang: "json", code: `{
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "更新后的记录。" }] }] }, "expectedVersion": 1 },
   "idempotencyKey": "update-row-body-1"
 }` },
-      { type: "code", lang: "json", code: `// POST /api/commands：从任意表创建站点视图
-{
+      { type: "p", text: "使用此请求体 POST /api/commands 创建站点视图：" },
+      { type: "code", lang: "json", code: `{
   "command": "createView",
   "input": {
     "tableId": "00000000-0000-4000-8000-000000000001",
@@ -749,10 +766,9 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     },
     "idempotencyKey": "create-site-view-1"
   }
-}
-
-// 检查并保存视图后再显式发布；使用返回的 viewId 和 version。
-{
+}` },
+      { type: "p", text: "检查并保存视图后，用当前视图版本显式发布。首次发布时 expectedPublishedRevisionId 为 null：" },
+      { type: "code", lang: "json", code: `{
   "command": "updateView",
   "input": {
     "viewId": "00000000-0000-4000-8000-000000000031",
@@ -761,16 +777,29 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
     "publication": { "action": "publish", "expectedPublishedRevisionId": null }
   }
 }` },
+      { type: "p", text: "撤下站点时，将 expectedPublishedRevisionId 设为 getView 返回的当前 publishedRevisionId：" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "unpublish-site-view-1",
+    "publication": { "action": "unpublish", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041" }
+  }
+}` },
+      { type: "p", text: "从已发布站点撤回一条记录时，另传 rowId：" },
+      { type: "code", lang: "json", code: `{
+  "command": "updateView",
+  "input": {
+    "viewId": "00000000-0000-4000-8000-000000000031",
+    "expectedVersion": 2,
+    "idempotencyKey": "withdraw-site-row-1",
+    "publication": { "action": "withdraw", "expectedPublishedRevisionId": "00000000-0000-4000-8000-000000000041", "rowId": "00000000-0000-4000-8000-000000000021" }
+  }
+}` },
       { type: "h2", text: "请求与响应" },
       { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。REST 成功直接返回资源数据，不包在 { ok, result } 中。" },
-      { type: "code", lang: "json", code: `// POST /api/tables/tbl_example/rows
-{ "cells": { "col_title": "New task", "col_status": "opt_todo" } }
-
-// PATCH /api/tables/tbl_example/rows/row_example
-{ "cells": { "col_title": "Updated task" }, "expectedVersion": 3 }
-
-// stale version: HTTP 409
-{ "error": "Record changed; reload before updating" }` },
+      { type: "p", text: "POST 新增行：{ \"cells\": { \"col_title\": \"New task\" } }。PATCH 更新行：{ \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }。版本过期时返回 HTTP 409，错误体为 { error: \"Record changed; reload before updating\" }。" },
       { type: "ul", items: [
         "cells 只接受 API 可写字段：text、number、date、checkbox、select、multi_select。select 值使用字段元数据的 options[].id，不使用标签。删除带有关联记录的行时，可能还需要目标表的 update 权限以移除反向关联。",
         "请求体上限 128 KiB；每个 Key 默认每分钟最多 120 次读取、20 次写入。限流依赖服务可用，不可用时拒绝请求。",
@@ -863,7 +892,8 @@ if (row) {
         "client.graphql<T>(query, variables, { operationName, signal }) 可执行 GraphQL。请求失败抛出 TabdoApiError，包含 code、status 与 errors；SDK 不会自动重试变更。",
       ] },
       { type: "callout", tone: "info", text: "不要把高权限 Key 嵌入公开网页；浏览器代码会暴露 Key。私密集成请将 Key 保存在环境变量中；公开站点应使用仅具所需逐表权限的专用 Key。" },
-      { type: "cards", items: [{ title: "API 入门", description: "查看完整 REST 流程和权限说明。", href: "/docs/api-quickstart", badge: "指南" }, { title: "GraphQL", description: "查看 GraphQL Schema 与限制。", href: "/docs/graphql", badge: "GraphQL" },     ],
+      { type: "cards", items: [{ title: "API 入门", description: "查看完整 REST 流程和权限说明。", href: "/docs/api-quickstart", badge: "指南" }, { title: "GraphQL", description: "查看 GraphQL Schema 与限制。", href: "/docs/graphql", badge: "GraphQL" }] },
+    ],
   },
   {
     slug: "auth",

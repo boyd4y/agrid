@@ -25,9 +25,9 @@ const receipt = await tabdo.table(config.submissionsTableId).create({
 
 `table.columns()` 返回字段元数据；`get(rowId)`、`update(rowId, cells, { expectedVersion })`、`delete(rowId)` 分别受读取、更新、删除权限约束。`list()` 默认 50 行、最多 100 行，使用 nextCursor/hasMore 分页。查询总数需 includeTotal；不要一次下载所有记录。
 
-记录正文是行的内置 `body` 字段，不是自定义文本列。需要正文时显式用 `table.get(rowId, { includeBody: true })` 读取；新建和更新可随行操作传入正文内容及 `idempotencyKey`，正文 `expectedVersion` 独立于行版本。写入回执不返回正文。正文附件通过记录附件操作传 `target: "body"`。正文和附件沿用表的 Read/Create/Update/Delete 授权。
+记录正文是行的内置 `body` 字段，不是自定义文本列。需要正文时显式用 `table.get(rowId, { includeBody: true })` 读取；新建记录的正文输入为 `{ content }`，更新现有正文为 `{ content, expectedVersion }`，其中正文 expectedVersion 必填且独立于行版本。正文写入需提供 `idempotencyKey`，写入回执不返回正文。正文附件通过记录附件操作传 `target: "body"`。读取正文需要 Read；随新行创建正文需要 Create；更新现有正文或上传正文附件需要 Update；读取附件需要 Read。
 
-网站可由任意表创建 `site` 视图并选择 `blog` 展示模板。配置映射来源表字段和要公开的 rowId、图片；保存视图设置或源记录不会发布内容。通过通用视图更新明确发布、撤下或撤回单条已发布记录。表 Read 权限用于读取视图，Update 权限用于配置和显式发布。
+网站可由任意表创建 `site` 视图并选择 `blog` 展示模板。配置映射来源表字段和要公开的 rowId、图片；保存视图设置或源记录不会发布内容。通过通用视图更新明确发布、撤下或撤回单条已发布记录。读取、配置和发布视图都需要来源表的 Read 与 Update 权限。
 
 ## 直接使用 GraphQL
 

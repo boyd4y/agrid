@@ -21,4 +21,4 @@ Connection examples use placeholders such as `<workspace MCP URL>` and `<your AP
 
 Data API calls use a restricted `tab_` key via `Authorization: Bearer <your API key>` or the supported `X-Tabdo-Key` header. Permissions are enforced per table and operation. Key management requires a signed-in owner/admin session.
 
-Record bodies and attachments use the same table Read/Create/Update/Delete grants as other row operations. Site views use Read to inspect and Update to configure and explicitly publish. See [API key management](../user-api-keys.md) and [the data API guide](site-api.md).
+Record body reads use table Read; creating a row with a body uses Create; updating an existing body or uploading a body attachment uses Update. Downloading an attachment requires Read. Site view read, configuration, and publication require both Read and Update on the source table. See [API key management](../user-api-keys.md) and [the data API guide](site-api.md).

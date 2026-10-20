@@ -18,4 +18,4 @@ Internal migration reference for the unified record body and table-backed site v
 
 ## Authorization migration
 
-Table Read/Create/Update/Delete grants are canonical for row properties, body, and attachments. Read allows reading views; Update allows configuring and explicitly publishing site views. Existing table grants remain authoritative. Historical Document/Blog-only grants do not confer table access; keys with only those grants must receive the required table grants from a workspace owner/admin. Preserve key identity/hash and calendar/schedule grants as defined by the unified contract.
+Table Read/Create/Update/Delete grants are canonical for row properties, body, and attachments. Site view reads, configuration, and publication require both Read and Update. Existing table grants remain authoritative. Historical Document/Blog-only grants do not confer table access; keys with only those grants must receive the required table grants from a workspace owner/admin. Preserve key identity/hash and calendar/schedule grants as defined by the unified contract.

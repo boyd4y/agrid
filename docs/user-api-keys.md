@@ -23,7 +23,7 @@ Key 属于当前工作区，不冒充创建用户；修改权限或删除后，�
 
 每条 `permissions` 包含 `tableId` 和独立的 `canRead`、`canCreate`、`canUpdate`、`canDelete` 布尔值。不允许跨工作区授权；每张已选表格至少有一项权限。
 
-表级 CRUD 是记录、正文、附件和表视图的唯一授权来源。正文读取/写入沿用 Read/Create/Update；站点视图读取沿用 Read，配置和显式发布沿用 Update，不另设正文或博客权限。
+表级 CRUD 是记录、正文、附件和表视图的唯一授权来源。读取正文需要 Read；新增记录时写入正文需要 Create；更新现有正文和上传正文图片需要 Update；下载附件需要 Read。读取、配置和发布站点视图都需要 Read 与 Update，不另设正文或博客权限。
 
 Key 的身份标识、哈希、日历与日程授权沿用原有契约。完整用法见 [表格 API 与 SDK](api/site-api.md)；迁移影响见[内部迁移记录](unified-record-site-migration.md)。
 
