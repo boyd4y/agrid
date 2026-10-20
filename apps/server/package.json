@@ -44,6 +44,7 @@
     "@better-auth/drizzle-adapter": "^1.7.7",
     "@hono/node-server": "^1.14.1",
     "@js-temporal/polyfill": "0.5.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@tabdo/agent-runtime": "workspace:*",
     "@tabdo/auth": "workspace:*",
     "@tabdo/core": "workspace:*",

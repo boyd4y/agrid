@@ -1,3 +1,6 @@
+import { createMcpRoute } from "./mcp/route.js";
+import { acquireRequestScope } from "./services/http-scope.js";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { sitesRoute, siteAssetsRoute } from "./routes/sites.js";
 import { siteApiRoute, siteKeysRoute } from "./routes/site-api.js";
 import { Hono } from "hono";
@@ -30,7 +33,14 @@ export function createApp(options: { appUrl: string; resources: PlatformResource
 
   app.use("*", (_c, next) => withPlatformResources(resources, next));
 
-  app.use("*", logger());
+  // MCP never logs request URLs, which may contain mistakenly supplied secrets.
+  const requestLogger = logger();
+  app.use("*", (c, next) => c.req.path === "/mcp" || c.req.path.startsWith("/mcp/") ? next() : requestLogger(c, next));
+  app.route("/mcp", createMcpRoute(acquireRequestScope, {
+    publicOrigin: appUrl,
+    allowedOrigins: [new URL(appUrl).origin],
+    clientIp(c) { try { return getConnInfo(c).remote.address ?? "unknown"; } catch { return "unknown"; } },
+  }));
   app.use("/api/chat", async (c, next) => {
     if (nativeDrainStarted()) return c.json({ error: "服务正在保存当前执行，请稍后重试" }, 503);
     // Cover admission/metadata/lease waits before the detached stream takes ownership.

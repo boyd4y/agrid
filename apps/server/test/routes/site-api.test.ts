@@ -160,6 +160,11 @@ test("image URLs reauthorize the key, table, row and exact file reference on eve
   assert((await proxied.json()).data.table.row.files[0].url.startsWith("https://fixture.test/"), "proxy HTTP must not create mixed-content URLs");
   const image = await app.request(url); assert.equal(image.status, 200); assert.match(image.headers.get("Content-Disposition")!, /^inline/); assert.equal((await image.arrayBuffer()).byteLength, 4);
   assert.equal(image.headers.get("Access-Control-Allow-Origin"), "*"); assert.match(image.headers.get("Cache-Control")!, /no-store/);
+  const bearerUrl = new URL(url); bearerUrl.search = "";
+  const bearerImage = await app.request(bearerUrl.href, { headers: { Authorization: `Bearer ${readKey}` } });
+  assert.equal(bearerImage.status, 200); assert.equal((await bearerImage.arrayBuffer()).byteLength, 4);
+  assert.equal((await app.request(bearerUrl.href)).status, 401);
+  assert.equal((await app.request(bearerUrl.href, { headers: { Authorization: `Bearer ${createKey}` } })).status, 403);
   const forged = new URL(url); forged.pathname = forged.pathname.replace(rowId, randomUUID()); assert.equal((await app.request(forged.href)).status, 404);
   const noRead = new URL(url); noRead.searchParams.set("key", createKey); assert.equal((await app.request(noRead.href)).status, 403);
   await updateCells(deps, { rowId, organizationId: org, cells: { [fileColumnId]: [] } });

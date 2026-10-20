@@ -223,7 +223,7 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
     let scope: RequestScope | undefined;
     try {
       scope = await acquire(c.req.raw);
-      const secret = c.req.query("key") ?? "";
+      const secret = keys.requestApiKey(c.req.raw) || c.req.query("key") || "";
       const principal = await keys.resolveSiteKey(scope.commands.database, secret);
       const { tableId, rowId, columnId, fileId } = c.req.param();
       if (!scope.files || !scope.siteRateLimit) throw new ServiceError(503, { message: "File access is unavailable" });

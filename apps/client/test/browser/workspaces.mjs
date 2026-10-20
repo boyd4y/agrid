@@ -119,16 +119,15 @@ try {
   const history = (await scoped(a.id, '/threads')).value.threads;
   assert.equal(history.length, 1);
   await assertEventually(async () => JSON.stringify((await scoped(a.id, '/threads/' + history[0].id + '/messages')).value).includes('A secret stream result'));
-  // Start the real stdio MCP with a fixed B selector and a supported legacy agent credential.
+  // Start the real HTTP MCP with a fixed B selector and a supported legacy agent credential.
   const db = postgres(databaseUrl);
   const secret = 'agt_' + crypto.randomUUID();
   try { await db`update agent_profile set api_key_hash=${createHash('sha256').update(secret).digest('hex')} where user_id=${agent.userId}`; } finally { await db.end(); }
-  const requireMcp = createRequire(join(workspace, 'apps/mcp/package.json'));
+  const requireMcp = createRequire(join(workspace, 'apps/server/package.json'));
   const { Client } = await import(pathToFileURL(requireMcp.resolve('@modelcontextprotocol/sdk/client/index.js')).href);
-  const { StdioClientTransport } = await import(pathToFileURL(requireMcp.resolve('@modelcontextprotocol/sdk/client/stdio.js')).href);
+  const { StreamableHTTPClientTransport } = await import(pathToFileURL(requireMcp.resolve('@modelcontextprotocol/sdk/client/streamableHttp.js')).href);
   const mcp = new Client({ name: 'workspace-regression', version: '1' });
-  const transport = new StdioClientTransport({ command: process.execPath, args: [requireMcp.resolve('tsx/cli'), join(workspace, 'apps/mcp/src/index.ts')],
-    env: { ...Object.fromEntries(Object.entries(process.env).filter(([,value]) => typeof value === 'string')), TABDO_API_URL: base, TABDO_API_KEY: secret, TABDO_WORKSPACE_ID: b }, stderr: 'pipe' });
+  const transport = new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${secret}`, 'X-Workspace-Id': b } } });
   try {
     await mcp.connect(transport);
     const result = await mcp.callTool({ name: 'get_workspace', arguments: {} });

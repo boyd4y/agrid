@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 const input = JSON.parse(process.env.CALENDAR_VIEW_MCP_CASE);
 const client = new Client({ name: 'calendar-view-regression', version: '1' });
 try {
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [process.env.CALENDAR_VIEW_MCP_TSX, fileURLToPath(new URL('../src/index.ts', import.meta.url))], env: { ...process.env } }));
+  await client.connect(new StreamableHTTPClientTransport(new URL(process.env.MCP_TEST_URL), { requestInit: { headers: { Authorization: `Bearer ${process.env.MCP_TEST_KEY}`, ...(process.env.MCP_TEST_WORKSPACE ? { 'X-Workspace-Id': process.env.MCP_TEST_WORKSPACE } : {}) } } }));
   const catalog = await client.listTools();
   for (const name of ['create_calendar_view', 'update_calendar_view', 'query_calendar_view', 'get_document', 'get_blog_sources', 'get_calendar', 'get_calendar_subscription', 'list_calendar_subscriptions', 'list_calendar_deliveries']) assert(catalog.tools.some(tool => tool.name === name));
   const result = await client.callTool({ name: 'query_calendar_view', arguments: { viewId: input.viewId, rangeStart: '2030-03-01', rangeEnd: '2030-04-01' } });

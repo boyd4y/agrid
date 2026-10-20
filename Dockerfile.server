@@ -14,7 +14,6 @@ COPY packages/storage/package.json packages/storage/package.json
 COPY packages/agent-runtime/package.json packages/agent-runtime/package.json
 COPY apps/server/package.json apps/server/package.json
 COPY apps/client/package.json apps/client/package.json
-COPY apps/mcp/package.json apps/mcp/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build

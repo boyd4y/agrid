@@ -103,9 +103,9 @@ try {
   const schedulePermissions = [{ automationId: plan.id, canRead: true, canUpdate: false }];
   const rangeStart = new Date(), rangeEnd = new Date(rangeStart.getTime() + 3 * 86400000);
   const occurrenceInput = { automationIds: [plan.id], rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString() };
-  // MCP stdio uses the public capability API; read permission cannot publish.
+  // MCP HTTP uses the public capability API; read permission cannot publish.
   const key = await api('/user/api-keys', { name: 'Blog MCP', calendarPermissions, schedulePermissions, permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], documentPermissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }], blogPermissions: [{ tableId: table.id, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }] });
-  const require = createRequire(new URL('../../../mcp/package.json', import.meta.url)), { Client } = await import(require.resolve('@modelcontextprotocol/sdk/client/index.js')), { StdioClientTransport } = await import(require.resolve('@modelcontextprotocol/sdk/client/stdio.js'));
+  const require = createRequire(new URL('../../../server/package.json', import.meta.url)), { Client } = await import(require.resolve('@modelcontextprotocol/sdk/client/index.js')), { StreamableHTTPClientTransport } = await import(require.resolve('@modelcontextprotocol/sdk/client/streamableHttp.js'));
   const { createClient } = await import(new URL('../../../../packages/sdk/dist/index.js', import.meta.url));
   const sdk = createClient({ url: base, key: key.secret });
   assert.equal((await sdk.blogs.getBlog({ siteId })).id, siteId);
@@ -115,7 +115,7 @@ try {
   assert((await sdk.calendar.queryScheduledOccurrences(occurrenceInput)).items.length);
   const client = new Client({ name: 'blog-smoke', version: '1' });
   try {
-    await client.connect(new StdioClientTransport({ command: 'pnpm', args: ['--filter', '@tabdo/mcp', 'exec', 'tsx', 'src/index.ts'], cwd: new URL('../../../../', import.meta.url).pathname, env: { PATH: process.env.PATH, TABDO_API_URL: base, TABDO_API_KEY: key.secret } }));
+    await client.connect(new StreamableHTTPClientTransport(new URL(base + '/mcp'), { requestInit: { headers: { Authorization: `Bearer ${key.secret}` } } }));
     const catalog = (await client.listTools()).tools;
     for (const name of ['publish_blog', 'get_document', 'get_calendar', 'query_scheduled_occurrences', 'set_booking_reminders']) assert(catalog.some(t => t.name === name));
     for (const [name, args] of [['get_document', { tableId: table.id, rowId: remaining.rowId }], ['get_calendar', { calendarId: calendar.id }], ['query_scheduled_occurrences', occurrenceInput]]) assert(!(await client.callTool({ name, arguments: args })).isError, name);

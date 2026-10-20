@@ -1,6 +1,6 @@
+import { createMcpRoute } from "../../src/mcp/route.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { createTableTools } from "../../src/business/agent/tools/index.js";
@@ -40,7 +40,7 @@ const call = <K extends CalendarCommand>(command: K, input: CalendarCommands[K])
 const range = { rangeStart: "2030-03-09T00:00:00Z", rangeEnd: "2030-03-12T00:00:00Z" };
 const reminder = { kind: "before_start" as const, offsetMinutes: 30, agentUserId: aid, prompt: "Check {{event.booking.title}}", maxLatenessMinutes: 60 };
 const grants = () => [{ calendarId, canRead: true, canReadAvailability: false, canCreate: true, canUpdate: true, canCancel: true, canManage: false, canTriggerAgent: true, canSubscribe: false, canReadDeliveries: false, canManageSubscriptions: false }];
-const app = new Hono().route("/api", createSiteApiRoutes(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => null }, siteRateLimit: async () => {}, close: async () => {} })))
+const app = new Hono().route("/mcp", createMcpRoute(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => null }, siteRateLimit: async () => {}, close: async () => {} }), { publicOrigin: "http://fixture.test", allowedOrigins: [] })).route("/api", createSiteApiRoutes(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => null }, siteRateLimit: async () => {}, close: async () => {} })))
   .route("/api/commands", createCommandsRoute(async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async () => ({ user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } }) }, close: async () => {} })));
 const sdk = (secret: string) => createClient({ url: "http://fixture.test", key: secret, fetch: async (url, options) => app.request(String(url), options) });
 const booking = async (date: string, hour = "10") => call("createBooking", { calendarId, personId, title: "Private customer", time: { start: `${date}T${hour}:00:00Z`, end: `${date}T${hour}:30:00Z`, timeZone: "UTC" }, idempotencyKey: key() });
@@ -213,7 +213,7 @@ test("actual native and MCP operations configure/query reminders and read/update
       { name: "list_booking_reminders", input: { calendarId, bookingId: b.id }, expect: { "reminders.length": 2, "intents.length": 3 } },
       { name: "update_automation", input: { automationId: rule.id, expectedVersion: 2, enabled: false }, expect: { version: 3, enabled: false } },
     ];
-    const output = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: { ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: saved.secret, CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls }) } });
+    const output = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../fixtures/mcp/calendar-client.mjs", import.meta.url))], { env: { ...process.env, MCP_TEST_URL: `http://127.0.0.1:${address.port}/mcp`, MCP_TEST_KEY: saved.secret, CALENDAR_MCP_CASE: JSON.stringify({ calls }) } });
     assert.equal(JSON.parse(output.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
@@ -371,14 +371,11 @@ test("native, member command, SDK GraphQL and actual MCP reminder reads share di
   const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve)); const address = server.address(); assert(address && typeof address !== "string");
   try {
-    for (const secret of ["", saved.secret]) {
-      const output: { stdout: string; stderr: string } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: {
-        ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: secret, TABLE_API_KEY: "", TABDO_WORKSPACE_ID: deps.workspaceId!,
-        CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls: [{ name: "list_booking_reminders", input: f.input,
-          ...(secret ? { absent: [f.diagnostic, f.threadId] } : { includes: [f.diagnostic] }) }] }),
-      } });
-      assert.equal(JSON.parse(output.stdout).mcp, "PASS");
-    }
+    const output: { stdout: string; stderr: string } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../fixtures/mcp/calendar-client.mjs", import.meta.url))], { env: {
+      ...process.env, MCP_TEST_URL: `http://127.0.0.1:${address.port}/mcp`, MCP_TEST_KEY: saved.secret, MCP_TEST_WORKSPACE: deps.workspaceId!,
+      CALENDAR_MCP_CASE: JSON.stringify({ calls: [{ name: "list_booking_reminders", input: f.input, absent: [f.diagnostic, f.threadId] }] }),
+    } });
+    assert.equal(JSON.parse(output.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
 

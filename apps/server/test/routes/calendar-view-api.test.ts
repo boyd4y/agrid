@@ -1,8 +1,8 @@
+import { createMcpRoute } from "../../src/mcp/route.js";
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { randomUUID } from "node:crypto";
@@ -28,7 +28,7 @@ const org = randomUUID(), uid = randomUUID(), mid = randomUUID(), scope = { orga
 const deps: CommandDependencies = { database: resource.db, now: () => new Date(), uuid: randomUUID, automationQueueName: "unused", calendarOutbound: { encryptionKey: "11".repeat(32), send: async () => { throw new Error("Read matrix must never send HTTP"); } } };
 const actor: Actor = { organizationId: org, userId: uid, memberId: mid, kind: "human", role: "owner", name: "Date API owner", email: `${uid}@local.test` };
 const acquire: RequestScopeResolver = async () => ({ commands: deps, identity: { database: resource.db, resolveSession: async headers => headers.get("Cookie") === "dates=owner" ? { user: { id: uid, name: actor.name, email: actor.email }, session: { activeOrganizationId: org } } : null }, siteRateLimit: async () => {}, close: async () => {} });
-const app = new Hono().route("/api", createSiteApiRoutes(acquire)).route("/api/commands", createCommandsRoute(acquire));
+const app = new Hono().route("/mcp", createMcpRoute(acquire, { publicOrigin: "http://fixture.test", allowedOrigins: [] })).route("/api", createSiteApiRoutes(acquire)).route("/api/commands", createCommandsRoute(acquire));
 let tableId: string, startId: string, titleId: string, viewId: string, rowId: string, secret: string, denied: string, updateKey: string;
 const range = { rangeStart: "2030-03-01", rangeEnd: "2030-04-01" };
 const post = (command: string, input: unknown, key = secret) => app.request("http://fixture.test/api/commands", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ command, input }) });
@@ -71,7 +71,7 @@ test("calendar view tools are registered and disableable without booking semanti
   }
 });
 
-test("native configuration/query and real MCP stdio use the same scoped record projection", { timeout: 30000 }, async () => {
+test("native configuration/query and real MCP HTTP use the same scoped record projection", { timeout: 30000 }, async () => {
   await resource.db.update(columns).set({ config: {} }).where(eq(columns.id, titleId));
   const tools = createTableTools(deps, tableId, org, uid);
   const invoke = (name: string, input: unknown) => tools[name].execute(input, { toolCallId: randomUUID(), messages: [] });
@@ -100,12 +100,12 @@ test("native configuration/query and real MCP stdio use the same scoped record p
   assert((await sdk.calendar.listCalendarSubscriptions({ calendarId: calendar.id })).items.some(item => item.id === subscription.subscription.id));
   assert.deepEqual((await sdk.calendar.listCalendarDeliveries({ calendarId: calendar.id, subscriptionId: subscription.subscription.id })).items, []);
 
-  const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? "127.0.0.1", port: Number(process.env.HERDR_TEAM_PORT ?? 0) });
+  const server = serve({ fetch: app.fetch, hostname: process.env.HOST ?? "127.0.0.1", port: 0 });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
   const address = server.address(); assert(address && typeof address !== "string");
   try {
-    const runner = fileURLToPath(new URL("../../../mcp/test/calendar-view-client.mjs", import.meta.url));
-    const response = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, TABDO_API_URL: `http://${process.env.BROWSER_API_HOST ?? "127.0.0.1"}:${address.port}`, TABDO_API_KEY: mixed.secret, CALENDAR_VIEW_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_VIEW_MCP_CASE: JSON.stringify({ viewId, rowId, startId, tableId, calendarId: calendar.id, subscriptionId: subscription.subscription.id }) } });
+    const runner = fileURLToPath(new URL("../fixtures/mcp/calendar-view-client.mjs", import.meta.url));
+    const response = await promisify(execFile)(process.execPath, [runner], { env: { ...process.env, MCP_TEST_URL: `http://${process.env.BROWSER_API_HOST ?? "127.0.0.1"}:${address.port}/mcp`, MCP_TEST_KEY: mixed.secret, CALENDAR_VIEW_MCP_CASE: JSON.stringify({ viewId, rowId, startId, tableId, calendarId: calendar.id, subscriptionId: subscription.subscription.id }) } });
     assert.equal(JSON.parse(response.stdout).mcp, "PASS");
   } finally { if ("closeAllConnections" in server) server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
