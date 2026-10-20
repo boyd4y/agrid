@@ -11,7 +11,7 @@ import type { CommandDependencies } from "../../src/business/dependencies.js";
 import type { Actor } from "../../src/business/auth/actor.js";
 import { createDatabase } from "../../src/business/db/factory.js";
 import { organization, user, member, workspaces, automations, automationSchedules, automationEvents, automationOccurrences, automationRuns, automationStepReceipts, rows } from "../../src/business/db/schema.js";
-import { createTable, addRow, getTable } from "../../src/business/commands/index.js";
+import { createTable, addRow, addColumn, getTable } from "../../src/business/commands/index.js";
 import { createSiteKey, updateSiteKey, deleteSiteKey, listSiteKeys, resolveSiteKey } from "../../src/business/data-api/keys.js";
 import { createSiteApiRoutes } from "../../src/business/http/site-api.js";
 import { executeCalendar } from "../../src/business/calendar/service.js";
@@ -118,6 +118,46 @@ test("one key spans workspaces, partitions rule types and cannot cross tenant or
   await successful(saved.secret, "deleteAutomation", { automationId: planA.id });
   assert.equal((await call(saved.secret, "updateAutomation", { automationId: planA.id, expectedVersion: 1, name: "Gone" })).status, 404);
   await assert.rejects(updateSiteKey(deps, actor, narrow.key.id, { name: "Wrong category", permissions: [], schedulePermissions: [ruleGrant(ordinary.id)] }), /scheduled rules/);
+});
+
+test("key-bound update_field preserves typed step values and row versions for the next actual write", async () => {
+  const scoped = { ...deps, workspaceId: a };
+  const sourceTable = await createTable(scoped, { organizationId: org, name: "Key step source" });
+  const sourceTitle = (await getTable(scoped, { organizationId: org, tableId: sourceTable.id })).columns[0].id;
+  const target = await createTable(scoped, { organizationId: org, name: "Key step destination" });
+  const targetTitle = (await getTable(scoped, { organizationId: org, tableId: target.id })).columns[0].id;
+  const targetVersion = (await addColumn(scoped, { organizationId: org, tableId: target.id, name: "Source version", type: "number" })).id;
+  const key = await createSiteKey(deps, actor, { name: "Typed key steps", permissions: [
+    { tableId: sourceTable.id, canRead: true, canCreate: false, canUpdate: true, canDelete: false },
+    { tableId: target.id, canRead: false, canCreate: true, canUpdate: false, canDelete: false },
+  ], workspacePermissions: [{ workspaceId: a, canCreateAutomations: true, canCreateSchedules: false }] });
+  const actions = [
+    { type: "update_field", columnId: sourceTitle, value: "Expected step value" },
+    { type: "command", command: "addRow", input: { tableId: target.id, cells: {
+      [targetTitle]: { $step: { index: 0, path: "value" } }, [targetVersion]: { $step: { index: 0, path: "rowVersion" } },
+    } } },
+  ];
+  const rule = await successful(key.secret, "createAutomation", { workspaceId: a, tableId: sourceTable.id, name: "Typed key step receipts", trigger: { type: "row_created" }, actions });
+  // The same result contract is required when an existing rule is bound by a Key definition edit.
+  const rebound = await createSiteKey(deps, actor, { name: "Definition editor", permissions: key.key.permissions,
+    automationPermissions: [ruleGrant(rule.id)] });
+  await successful(rebound.secret, "updateAutomation", { automationId: rule.id, expectedVersion: 1, actions });
+  assert.equal((await db.select().from(automations).where(eq(automations.id, rule.id)))[0].executionKeyId, rebound.key.id);
+  const source = await addRow(scoped, { organizationId: org, actorId: uid, tableId: sourceTable.id });
+  const [event] = await db.select().from(automationEvents).where(eq(automationEvents.rowId, source.id)); assert(event);
+  await drain(event.id);
+  const [run] = await db.select().from(automationRuns).where(eq(automationRuns.eventId, event.id));
+  assert.equal(run.status, "completed"); assert.equal(run.nextStep, 2);
+  const receipts = await db.select().from(automationStepReceipts).where(eq(automationStepReceipts.runId, run.id));
+  assert.deepEqual(receipts.find(receipt => receipt.step === 0)!.result,
+    { type: "update_field", columnId: sourceTitle, value: "Expected step value", rowVersion: 2 });
+  const writes = await db.select().from(rows).where(eq(rows.tableId, target.id));
+  assert.equal(writes.length, 1); assert.equal(writes[0].cells[targetTitle], "Expected step value"); assert.equal(writes[0].cells[targetVersion], 2);
+  assert.equal((await db.select().from(rows).where(eq(rows.id, source.id)))[0].version, 2);
+  assert.equal((await call(rebound.secret, "queryRows", { tableId: target.id })).status, 403, "step results do not grant reads on the destination");
+  const [finished] = await db.select().from(automationEvents).where(eq(automationEvents.id, event.id));
+  assert.equal(await executeNext(execution, event.id, finished.fence), "done");
+  assert.equal((await db.select().from(rows).where(eq(rows.tableId, target.id))).length, 1);
 });
 
 test("scheduled execution rechecks grants and commits its receipt with the data write", async () => {

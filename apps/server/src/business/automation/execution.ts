@@ -220,17 +220,24 @@ export async function executeNext(deps: AutomationExecutionDependencies, id: str
       const principal = await resolveSiteKeyId(tx, scope.currentRule.executionKeyId, true);
       const keyContext = { principal, secret: "", executionKeyId: principal.id, baseUrl: "" };
       const scoped = { ...deps, workspaceId: run.workspaceId };
-      const command = action.type === "update_field" ? "updateCells" : action.type === "command" ? action.command : "";
-      const input = action.type === "update_field" ? { rowId: event.rowId, cells: { [action.columnId]: action.value }, expectedVersion: event.expectedVersion } : action.type === "command" ? parseAutomationCommand(action.command, resolveAutomationBindings(action.input, { event: context, steps })) as unknown as Record<string, unknown> : {};
-      let output: unknown;
-      if (command === "addRow") output = await keyData.siteCreateRow(scoped, keyContext, zId(input.tableId), input.cells, {}, tx);
-      else {
-        const [row] = await tx.select({ tableId: rows.tableId }).from(rows).where(eq(rows.id, zId(input.rowId)));
-        if (!row) throw new PermanentError("Automation target record no longer exists");
-        if (command === "deleteRow") output = await keyData.siteDeleteRow(scoped, keyContext, row.tableId, zId(input.rowId), tx);
-        else output = await keyData.siteUpdateRow(scoped, keyContext, row.tableId, zId(input.rowId), command === "updateCell" ? { [zId(input.columnId)]: input.value } : input.cells, input.expectedVersion as number | undefined, {}, tx);
+      if (action.type === "update_field") {
+        if (!event.tableId || !event.rowId || event.expectedVersion === null) throw new PermanentError("更新字段需要有效的触发记录");
+        const updated = await keyData.siteUpdateRow(scoped, keyContext, event.tableId, event.rowId,
+          { [action.columnId]: action.value }, event.expectedVersion, {}, tx);
+        result = { type: action.type, columnId: action.columnId, value: action.value, rowVersion: updated.version };
+      } else {
+        const command = action.command;
+        const input = parseAutomationCommand(command, resolveAutomationBindings(action.input, { event: context, steps })) as unknown as Record<string, unknown>;
+        let output: unknown;
+        if (command === "addRow") output = await keyData.siteCreateRow(scoped, keyContext, zId(input.tableId), input.cells, {}, tx);
+        else {
+          const [row] = await tx.select({ tableId: rows.tableId }).from(rows).where(eq(rows.id, zId(input.rowId)));
+          if (!row) throw new PermanentError("Automation target record no longer exists");
+          if (command === "deleteRow") output = await keyData.siteDeleteRow(scoped, keyContext, row.tableId, zId(input.rowId), tx);
+          else output = await keyData.siteUpdateRow(scoped, keyContext, row.tableId, zId(input.rowId), command === "updateCell" ? { [zId(input.columnId)]: input.value } : input.cells, input.expectedVersion as number | undefined, {}, tx);
+        }
+        result = { type: action.type, command, result: output };
       }
-      result = { type: action.type, command, result: output };
     } else result = await dataAction({ ...deps, workspaceId: run.workspaceId }, tx, event, action, context, steps, scope.actorId);
     await completeStep(deps, tx, event, run, rule, result);return "continue";
   });
