@@ -31,3 +31,17 @@ test('unknown client values use a known recipe without incorporating query conte
   for (const value of [null, '', 'tab_secret', '<script>']) assert.equal(connectionClient(value), 'claude-code');
   for (const client of connectionClients) assert.equal(connectionClient(client), client);
 });
+
+test('newly created secrets round-trip through shell arguments, JSON and fields', () => {
+  const secret = `tab_inert_'"$HOME\n\\; $(printf injected)`;
+  const origin = 'https://deploy.example.test';
+  const claude = connectionRecipe('claude-code', origin, secret).code;
+  const parsed = JSON.parse(execFileSync('/bin/sh', ['-c', 'claude() { python3 -c \'import json,sys; print(json.dumps(sys.argv[1:]))\' "$@"; }; ' + claude], { encoding: 'utf8' }));
+  assert.equal(parsed.at(-1), `Authorization: Bearer ${secret}`);
+  const codex = connectionRecipe('codex', origin, secret).code;
+  const exported = execFileSync('/bin/sh', ['-c', 'codex() { printf "%s" "$TABDO_MCP_KEY"; }; ' + codex], { encoding: 'utf8' });
+  assert.equal(exported, secret);
+  assert.equal(JSON.parse(connectionRecipe('cursor', origin, secret).code).mcpServers.tabdo.headers.Authorization, `Bearer ${secret}`);
+  for (const client of ['claude-remote', 'grok-bot']) assert.equal(connectionRecipe(client, origin, secret).fields.find(field => field.label === 'headerValue').value, `Bearer ${secret}`);
+  for (const client of connectionClients) assert(!JSON.stringify(connectionRecipe(client, origin)).includes(secret), 'subsequent default calls never retain a secret');
+});

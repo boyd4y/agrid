@@ -41,6 +41,29 @@ export function setTableAccess(input: ApiKeyInput, tableId: string, access: Tabl
 export function authorizedTableIds(input: ApiKeyInput) { return input.permissions.filter(grant => operations.some(op => grant[op])).map(grant => grant.tableId); }
 
 export type PermissionResource = { id: string; name: string; workspaceId: string; workspaceName: string };
+
+/** Count all granted families and their workspaces, including workspace creation grants. */
+export function summarizeKeyPermissions(key: ApiKeyInput, tables: readonly ApiKeyTable[], calendars: readonly PermissionResource[], schedules: readonly PermissionResource[], automations: readonly PermissionResource[]) {
+  const workspaceIds = new Set<string>();
+  let unavailableCount = 0;
+  function count(ids: readonly string[], resources: readonly PermissionResource[]) {
+    const byId = new Map(resources.map(resource => [resource.id, resource]));
+    for (const id of new Set(ids)) {
+      const resource = byId.get(id);
+      if (resource) workspaceIds.add(resource.workspaceId);
+      else unavailableCount++;
+    }
+    return new Set(ids).size;
+  }
+  const tableCount = count(authorizedTableIds(key), tables);
+  const calendarCount = count((key.calendarPermissions ?? []).filter(p => Object.entries(p).some(([name, value]) => name.startsWith("can") && value === true)).map(p => p.calendarId), calendars);
+  const automationCount = count((key.automationPermissions ?? []).filter(p => p.canRead || p.canUpdate || p.canDelete).map(p => p.automationId), automations);
+  const scheduleCount = count((key.schedulePermissions ?? []).filter(p => p.canRead || p.canUpdate || p.canDelete).map(p => p.automationId), schedules);
+  const creationWorkspaces = new Set((key.workspacePermissions ?? []).filter(p => p.canCreateAutomations || p.canCreateSchedules).map(p => p.workspaceId));
+  for (const id of creationWorkspaces) workspaceIds.add(id);
+  return { workspaceCount: workspaceIds.size, tableCount, calendarCount, automationCount, scheduleCount, creationCount: creationWorkspaces.size, unavailableCount };
+}
+
 export function groupPermissionResources(tables: readonly ApiKeyTable[], calendars: readonly PermissionResource[], schedules: readonly PermissionResource[], automations: readonly PermissionResource[] = [], workspaces: readonly { id: string; name: string }[] = []) {
   const groups = new Map(workspaces.map(workspace => [workspace.id, { workspaceId: workspace.id, name: workspace.name, tables: [] as ApiKeyTable[], calendars: [] as PermissionResource[], schedules: [] as PermissionResource[], automations: [] as PermissionResource[] }]));
   for (const [kind, resources] of [["tables", tables], ["calendars", calendars], ["schedules", schedules], ["automations", automations]] as const) {

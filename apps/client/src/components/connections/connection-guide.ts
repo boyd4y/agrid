@@ -1,4 +1,4 @@
-export const connectionClients = ["claude-code", "claude-remote", "codex", "cursor", "grok-bot"] as const;
+export const connectionClients = ["claude-code", "codex", "cursor", "claude-remote", "grok-bot"] as const;
 export type ConnectionClient = typeof connectionClients[number];
 export const apiKeyPlaceholder = "tab_replace_with_your_key";
 export const connectionSources: Record<ConnectionClient, string> = {
@@ -15,14 +15,13 @@ export function connectionClient(value: string | null): ConnectionClient {
 
 const shellQuote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
 
-// All examples deliberately use a placeholder. Credentials never enter app state,
-// URLs, browser storage, or the public documentation component.
-export function connectionRecipe(client: ConnectionClient, origin: string) {
+// Omitting the transient, newly created secret always produces a public template.
+export function connectionRecipe(client: ConnectionClient, origin: string, secret = apiKeyPlaceholder) {
   const endpoint = `${new URL(origin).origin}/mcp`;
-  const authorization = `Bearer ${apiKeyPlaceholder}`;
+  const authorization = `Bearer ${secret}`;
   switch (client) {
     case "claude-code": return { code: `claude mcp add --transport http tabdo ${shellQuote(endpoint)} \\\n  --header ${shellQuote(`Authorization: ${authorization}`)}`, fields: [] };
-    case "codex": return { code: `export TABDO_MCP_KEY=${shellQuote(apiKeyPlaceholder)}\ncodex mcp add tabdo --url ${shellQuote(endpoint)} \\\n  --bearer-token-env-var TABDO_MCP_KEY`, fields: [] };
+    case "codex": return { code: `export TABDO_MCP_KEY=${shellQuote(secret)}\ncodex mcp add tabdo --url ${shellQuote(endpoint)} \\\n  --bearer-token-env-var TABDO_MCP_KEY`, fields: [] };
     case "cursor": return { code: JSON.stringify({ mcpServers: { tabdo: { url: endpoint, headers: { Authorization: authorization } } } }, null, 2), fields: [] };
     default: return { code: null, fields: [
       { label: "serverName", value: "tabdo" },

@@ -22,7 +22,7 @@ export const docsPages: DocsPage[] = [
       {
         type: "callout",
         tone: "info",
-        text: "在 tabdo 中使用智能体无需单独配置 API Key。需要从自己的应用访问表格数据时，工作区 owner/admin 可在「设置 → 连接 Agent → API Key」创建按表授权的数据 Key。",
+        text: "在 tabdo 中使用智能体无需单独配置 API Key。需要从自己的应用访问表格数据时，工作区 owner/admin 可在「设置 → 连接 Agent」创建按表授权的数据 Key。",
       },
       { type: "h2", text: "开始使用" },
       {
@@ -122,8 +122,8 @@ export const docsPages: DocsPage[] = [
     title: "通过 MCP 连接 AI 客户端",
     description: "在工作区设置中连接外部 MCP 客户端。",
     body: [
-      { type: "p", text: "打开「设置 → 连接 Agent → 接入指南」，选择你的客户端，并按页面显示的连接指南操作。指南会提供当前工作区的 MCP 地址和客户端对应步骤，也会说明凭证设置与常见连接问题。" },
-      { type: "p", text: "如果客户端需要数据访问 Key，请在「设置 → 连接 Agent → API Key」创建标准 Key，并只授予所需表格操作。没有单独的 Bot Key 或自动创建的智能体专用 Key。请将 Key 保存在客户端的安全凭证设置中。" },
+      { type: "p", text: "打开「设置 → 连接 Agent」，选择客户端。点击「创建接入配置」，选择允许访问的资源与操作，再复制同页生成的完整配置，按该客户端的步骤使用。" },
+      { type: "p", text: "新配置包含本次创建的密钥，请在离开页面前复制保存，之后无法回读完整密钥。已有密钥可填入模板；切换客户端会复用本次新密钥，权限保持不变。请将配置保存在客户端的安全凭证设置中。" },
       { type: "p", text: "MCP 工具与 REST、GraphQL 遵循相同权限。表级读取/新增/更新/删除权限覆盖记录、正文和附件。API Key 不开放站点配置读取、配置、发布或报告能力；请在登录后的应用中管理站点。可用数据操作见「表格」和 REST API 参考。" },
       { type: "cards", items: [
         { title: "表格与记录", description: "了解字段、记录属性和记录正文的关系。", href: "/docs/tables", badge: "数据" },
@@ -184,7 +184,7 @@ curl -s "$TABDO_API_URL/api/tables" \\
       },
       {
         type: "p",
-        text: "在「设置 → 连接 Agent → API Key」创建数据 Key；仅工作区 owner/admin 可管理。按表分别授予读取、新增、更新和删除权限。授权适用于该表中的全部记录；新表默认未授权，写权限也不包含读取。更改权限或删除 Key 会影响后续请求。可用 MCP list_workspaces 或 POST /api/commands（command 为 listWorkspaces）获取已授权工作区 ID，创建自动化时传入 workspaceId。Key 可跨本企业内的工作区使用，新资源不会自动获权。自动化、定时任务分别授权读取、更新和删除；创建需要工作区授权，规则权限不会授予来源表或目标表的数据权限。外部规则支持表格记录动作；智能体、邮件及表结构动作需由成员操作。旧定时任务更新授权继续限于时间、名称和启停；在 Key 编辑器中取消后重新勾选更新，才会授权修改规则配置。既有定时任务可调整时间、名称和启停，同时保留已批准的动作及执行身份，包括运行智能体的任务；新增或修改智能体、邮件动作仍需由成员操作。Key 不开放站点配置/发布或报告能力；管理者失去企业 owner/admin 权限后，Key 停止访问。完整 Key 只显示一次，请妥善保存。",
+        text: "在「设置 → 连接 Agent」创建数据 Key；仅工作区 owner/admin 可管理。按表分别授予读取、新增、更新和删除权限。授权适用于该表中的全部记录；新表默认未授权，写权限也不包含读取。更改权限或删除 Key 会影响后续请求。可用 MCP list_workspaces 或 POST /api/commands（command 为 listWorkspaces）获取已授权工作区 ID，创建自动化时传入 workspaceId。Key 可跨本企业内的工作区使用，新资源不会自动获权。自动化、定时任务分别授权读取、更新和删除；创建需要工作区授权，规则权限不会授予来源表或目标表的数据权限。外部规则支持表格记录动作；智能体、邮件及表结构动作需由成员操作。旧定时任务更新授权继续限于时间、名称和启停；在 Key 编辑器中取消后重新勾选更新，才会授权修改规则配置。既有定时任务可调整时间、名称和启停，同时保留已批准的动作及执行身份，包括运行智能体的任务；新增或修改智能体、邮件动作仍需由成员操作。Key 不开放站点配置/发布或报告能力；管理者失去企业 owner/admin 权限后，Key 停止访问。完整 Key 只显示一次，请妥善保存。",
       },
       { type: "h2", text: "最小数据流程" },
       { type: "p", text: "先读取 GET /api/tables 或 GET /api/tables/:tableId 返回的表和字段元数据，保存 table.id、column.id 与 select 字段 options[].id。不要把字段名称或选项标签当作写入标识。以下示例中的 Key、ID 和 URL 均为虚构占位值。" },
@@ -249,7 +249,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
       },
       {
         type: "callout",
-        text: "如果要从自己的应用读取或修改表格数据，请让工作区 owner/admin 在「设置 → 连接 Agent → API Key」创建数据 Key，并为每张表单独选择操作权限。API Key 只访问已授权的表格和记录，不会继承创建者的其他权限，也不能修改表结构或管理工作区。",
+        text: "如果要从自己的应用读取或修改表格数据，请让工作区 owner/admin 在「设置 → 连接 Agent」创建数据 Key，并为每张表单独选择操作权限。API Key 只访问已授权的表格和记录，不会继承创建者的其他权限，也不能修改表结构或管理工作区。",
       },
       { type: "cards", items: [
         { title: "工作区成员", description: "了解角色权限和邀请方式。", href: "/docs/members", badge: "成员" },
@@ -397,7 +397,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "定时计划默认显示在日历中，与事件同时查看。预计时间是预览，已记录的时间点表示运行记录；两者都不会占用事件时段。选择计划时间点可查看详情；要修改计划规则，请打开对应定时计划。查看计划还需单独获得所选计划的读取权限。",
       ] },
       { type: "h2", text: "通过 REST API 接入" },
-      { type: "p", text: "工作区 owner/admin 可在「设置 → 连接 Agent → API Key」创建 Key，并为每个日历单独授权。事件详情、新建、更新、取消、日历管理和触发智能体提醒是不同权限；新建权限不包含事件详情读取。读取成员目录需要日历读取、新建、更新或管理权限中的至少一项。设置提醒还需要事件更新权和触发智能体权。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
+      { type: "p", text: "工作区 owner/admin 可在「设置 → 连接 Agent」创建 Key，并为每个日历单独授权。事件详情、新建、更新、取消、日历管理和触发智能体提醒是不同权限；新建权限不包含事件详情读取。读取成员目录需要日历读取、新建、更新或管理权限中的至少一项。设置提醒还需要事件更新权和触发智能体权。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
@@ -433,7 +433,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings" \\
         ["设置 / 读取提醒（POST / GET）", "/api/calendars/:calendarId/bookings/:bookingId/reminders"],
         ["查询定时任务时间（POST）", "/api/schedules/occurrences/query"],
       ] },
-      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → 连接 Agent → API Key」为 Key 授权。上表中的人员、工作时间、不可用时间和空档路由继续供旧 personId 预约使用，不是普通事件的配置前置。" },
+      { type: "p", text: "API Key 可列出已授权的日历，但不能新建日历。请由当前工作区 owner/admin 先在应用中创建日历，再到「设置 → 连接 Agent」为 Key 授权。上表中的人员、工作时间、不可用时间和空档路由继续供旧 personId 预约使用，不是普通事件的配置前置。" },
       { type: "p", text: "新建事件时使用 userId，而不是 personId；事件查询也可按 userId 筛选，personId 仍可用于查询旧记录。旧 personId 预约继续遵守工作时间和临时休息规则；所有事件仍会检查同一工作区各日历间的重叠。批量路径接受 1–100 项事件创建、更新或取消，并作为一个整体应用；任一项校验失败或冲突，整批都会回滚。" },
       { type: "code", lang: "bash", code: `# 更新事件：expectedVersion 取自最近读取的事件
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reschedule" \\
@@ -551,7 +551,7 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
       { type: "p", text: "出站事件订阅会把获权日历的变更发送到你的 HTTPS 接收地址。应用界面将日历 booking 显示为事件，但现有订阅事件类型（例如 booking.created、person.updated）为兼容而保留原名称。它适合让自己的应用及时获知 tabdo 中发生的变化；不是 Google、Outlook 或其他日历的双向同步，也不会发送邮件或短信。" },
       { type: "h2", text: "准备权限和接收地址" },
       { type: "ol", items: [
-        "在「设置 → 连接 Agent → API Key」创建或编辑 Key，由 owner/admin 为目标日历分别授予订阅、投递记录读取和订阅管理权限。创建订阅还需要该日历的读取权限。新 Key 默认没有这些授权。",
+        "在「设置 → 连接 Agent」创建或编辑 Key，由 owner/admin 为目标日历分别授予订阅、投递记录读取和订阅管理权限。创建订阅还需要该日历的读取权限。新 Key 默认没有这些授权。",
         "准备一个公开可访问的 HTTPS 接收地址，使用标准 443 端口。地址不能带用户名、密码或 URL 片段；接收服务应在处理请求时保留原始请求字节，以便验证签名。",
         "使用 POST /api/calendars/{calendarId}/subscriptions 创建订阅。选择名称、接收地址和要监听的事件。成功响应会显示签名密钥；立即安全保存，因为之后无法再次读取明文。",
       ] },
@@ -857,7 +857,7 @@ if (row) {
         type: "ul",
         items: [
           "登录账号：使用 tabdo 账号访问工作区功能。",
-          "数据访问 Key：工作区 owner/admin 在「设置 → 连接 Agent → API Key」创建 Authorization: Bearer tab_…；只对逐表勾选的记录读取、新增、更新、删除权限生效。",
+          "数据访问 Key：工作区 owner/admin 在「设置 → 连接 Agent」创建 Authorization: Bearer tab_…；只对逐表勾选的记录读取、新增、更新、删除权限生效。",
           "tab_ Key 不授予修改表结构、管理工作区或运行智能体的权限；不支持的操作会被拒绝。",
         ],
       },
