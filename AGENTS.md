@@ -46,3 +46,13 @@ PR descriptions should explain the problem, resulting behavior, related issues, 
 ## Configuration & Architecture
 
 Start with `.env.example`; keep credentials out of Git. Business operations belong in the server command layer and shared contracts so client, MCP, and agent tools remain aligned. Let each harness provide its native runtime capabilities.
+
+## Development and Production Release Boundary
+
+Read [the release guide](docs/releases.md) before preparing or executing any release. It defines the human confirmation point, version tags, required configuration, automated steps, and recovery procedure.
+
+Keep local development, test resources, and production operations separate. Ordinary development work must not require production backups, migrations, deployments, or production credentials. Keep necessary local checks and isolated CI tests.
+
+Production changes require explicit human release confirmation. A normal commit, push, PR merge, or passing CI is not release approval. Do not create or push a production release tag, change production platform settings, stop production services, or run production migrations without that confirmation. An explicitly approved version tag may serve as the release confirmation once the release workflow is configured; do not infer approval from ordinary code-delivery instructions.
+
+The target is a dedicated tag-triggered production pipeline that automates backup, migration, deployment, and verification after human confirmation. Until it exists, do not treat the current Railway master autodeploy as satisfying that requirement.
