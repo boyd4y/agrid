@@ -124,7 +124,7 @@ export const docsPages: DocsPage[] = [
     body: [
       { type: "p", text: "打开「设置 → 连接智能体」，选择你的客户端，并按页面显示的连接指南操作。指南会提供当前工作区的 MCP 地址和客户端对应步骤，也会说明凭证设置与常见连接问题。" },
       { type: "p", text: "如果客户端需要数据访问 Key，请在「设置 → API Key」创建标准 Key，并只授予所需表格操作。没有单独的 Bot Key 或自动创建的智能体专用 Key。请将 Key 保存在客户端的安全凭证设置中。" },
-      { type: "p", text: "MCP 工具与 REST、GraphQL 使用同一套记录、正文、附件和视图操作。表级读取/新增/更新/删除权限覆盖记录正文及附件；读取、配置和发布站点视图都需要 Read 与 Update。具体数据操作见「表格」和 REST API 参考。" },
+      { type: "p", text: "MCP 工具与 REST、GraphQL 使用同一套记录、正文、附件和视图操作。表级读取/新增/更新/删除权限覆盖记录正文及附件。读取站点视图需要 Read；创建、配置和显式发布、撤下或撤回站点视图需要 Read 与 Update。具体数据操作见「表格」和 REST API 参考。" },
       { type: "cards", items: [
         { title: "表格与记录", description: "了解字段、记录属性和记录正文的关系。", href: "/docs/tables", badge: "数据" },
         { title: "REST API", description: "查看记录、正文、附件和站点视图的统一 API 参考。", href: "/docs/rest", badge: "API" },
@@ -720,7 +720,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["DELETE /api/tables/:tableId/rows/:rowId", "删除记录；需 delete grant"],
           ["POST /api/tables/:tableId/rows/:rowId/attachments", "使用 { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey } 上传；需 Update"],
           ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "读取已授权的正文附件；需 Read"],
-          ["POST /api/commands (createView/updateView)", "创建或更新站点视图；通过 updateView 明确发布/撤下"],
+          ["POST /api/commands (getView/listViews/createView/updateView)", "Read 可读取视图；Read+Update 可创建、配置并显式发布/撤下/撤回"],
         ],
       },
       { type: "h2", text: "记录正文与站点视图" },
@@ -739,7 +739,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "command": "getView",
   "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
 }` },
-      { type: "p", text: "使用 createView({ tableId, type: \"site\", name, config, idempotencyKey }) 创建站点视图，并设置博客模板、来源表字段映射和所选记录 ID。getView 除视图信息外还返回 site 状态 { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }；发布时将 site.publishedRevisionId 用作 expectedPublishedRevisionId。首次发布使用 null。撤下时使用当前已发布修订 ID；撤回某条记录时另传 rowId。保存来源记录或视图配置不会发布。读取、配置和发布站点视图都需要该表的 Read 与 Update 权限。" },
+      { type: "p", text: "使用 createView({ tableId, type: \"site\", name, config, idempotencyKey }) 创建站点视图，并设置博客模板、来源表字段映射和所选记录 ID。getView 除视图信息外还返回 site 状态 { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }；发布时将 site.publishedRevisionId 用作 expectedPublishedRevisionId。首次发布使用 null。撤下时使用当前已发布修订 ID；撤回某条记录时另传 rowId。保存来源记录或视图配置不会发布。读取站点视图需要 Read；创建、配置和显式发布、撤下或撤回站点视图需要该表的 Read 与 Update。" },
       { type: "code", lang: "json", code: `{
   "cells": { "col_title": "旅行手记" },
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "第一篇记录。" }] }] } },
@@ -798,7 +798,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   }
 }` },
       { type: "h2", text: "请求与响应" },
-      { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。REST 成功直接返回资源数据，不包在 { ok, result } 中。" },
+      { type: "p", text: "所有数据路由使用 Authorization: Bearer tab_…，JSON 写请求需 Content-Type: application/json。读页面响应包含 rows、nextCursor、hasMore、totalMatched 和 limit；未请求 includeTotal=true 时 totalMatched 为 null。行和附件资源路径直接返回资源数据；POST /api/commands 返回 { ok, command, result }。对 getView/createView，从 result.id 读取视图 ID，从 result.site.version 和 result.site.publishedRevisionId 读取当前视图版本与发布指针。GraphQL 命令结果位于 data.getView 或 data.createView。" },
       { type: "p", text: "POST 新增行：{ \"cells\": { \"col_title\": \"New task\" } }。PATCH 更新行：{ \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }。版本过期时返回 HTTP 409，错误体为 { error: \"Record changed; reload before updating\" }。" },
       { type: "ul", items: [
         "cells 只接受 API 可写字段：text、number、date、checkbox、select、multi_select。select 值使用字段元数据的 options[].id，不使用标签。删除带有关联记录的行时，可能还需要目标表的 update 权限以移除反向关联。",

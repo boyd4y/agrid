@@ -124,7 +124,7 @@ export const docsPages: DocsPage[] = [
     body: [
       { type: "p", text: "Open Settings → Connect agents, choose your client, and follow the connection guide shown there. It provides the workspace MCP address and the client-specific steps. The shared guide covers credentials and common connection issues." },
       { type: "p", text: "If the client needs a data access key, create a standard key under Settings → API Key and grant only the table operations it needs. There is no separate bot key or automatic agent-specific key. Keep the key in the client's secure credential settings." },
-      { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments; site view reading, configuration, and publication require both Read and Update. See Tables and the REST API reference for those shared data operations." },
+      { type: "p", text: "MCP tools use the same record, body, attachment, and view contracts as the REST and GraphQL APIs. Table Read/Create/Update/Delete permissions govern record bodies and attachments. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing a site view requires both Read and Update. See Tables and the REST API reference for those shared data operations." },
       { type: "cards", items: [
         { title: "Tables and records", description: "Learn how table fields, record properties, and record bodies fit together.", href: "/docs/tables", badge: "Data" },
         { title: "REST API", description: "Read the shared row, body, attachment, and site view API reference.", href: "/docs/rest", badge: "API" },
@@ -707,7 +707,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
           ["DELETE /api/tables/:tableId/rows/:rowId", "Delete a record; requires delete grant"],
           ["POST /api/tables/:tableId/rows/:rowId/attachments", "Upload with { target: \"body\", expectedVersion, name, mimeType, base64, idempotencyKey }; requires Update"],
           ["GET /api/tables/:tableId/rows/:rowId/attachments/:fileId?target=body", "Read an authorized body attachment; requires Read"],
-          ["POST /api/commands (createView/updateView)", "Create or update a site view; explicitly publish/unpublish through updateView"],
+          ["POST /api/commands (getView/listViews/createView/updateView)", "Read views with Read; create, configure, or explicitly publish/unpublish/withdraw with Read+Update"],
         ],
       },
       { type: "h2", text: "Record bodies and site views" },
@@ -726,7 +726,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   "command": "getView",
   "input": { "viewId": "00000000-0000-4000-8000-000000000031" }
 }` },
-      { type: "p", text: "Create a site view with createView({ tableId, type: \"site\", name, config, idempotencyKey }) and configure its Blog template, source-table field mapping, and selected row IDs. getView returns the view plus site state { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }; use site.publishedRevisionId as expectedPublishedRevisionId when publishing. On first publish, use null. Use the current published revision ID to unpublish, or to withdraw a specific row include rowId. Saving source rows or view config does not publish. Reading, configuring, and publishing a site view requires both Read and Update on its table." },
+      { type: "p", text: "Create a site view with createView({ tableId, type: \"site\", name, config, idempotencyKey }) and configure its Blog template, source-table field mapping, and selected row IDs. getView returns the view plus site state { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }; use site.publishedRevisionId as expectedPublishedRevisionId when publishing. On first publish, use null. Use the current published revision ID to unpublish, or to withdraw a specific row include rowId. Saving source rows or view config does not publish. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing it requires both Read and Update on its table." },
       { type: "code", lang: "json", code: `{
   "cells": { "col_title": "Field notes" },
   "body": { "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "A first draft." }] }] } },
@@ -785,7 +785,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   }
 }` },
       { type: "h2", text: "Requests and responses" },
-      { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. REST returns resource data directly, not an { ok, result } envelope." },
+      { type: "p", text: "All data routes use Authorization: Bearer tab_…. JSON writes require Content-Type: application/json. A page response contains rows, nextCursor, hasMore, totalMatched, and limit; totalMatched is null unless includeTotal=true. Row and attachment resource routes return resource data directly. POST /api/commands returns { ok, command, result }; for getView/createView, read the view ID from result.id and the current view version and publication pointer from result.site.version and result.site.publishedRevisionId. GraphQL command results use data.getView or data.createView." },
       { type: "p", text: "POST row body: { \"cells\": { \"col_title\": \"New task\" } }. PATCH row body: { \"cells\": { \"col_title\": \"Updated task\" }, \"expectedVersion\": 3 }. A stale version returns HTTP 409 with { error: \"Record changed; reload before updating\" }." },
       { type: "ul", items: [
         "cells accepts writable API types only: text, number, date, checkbox, select, and multi_select. Use options[].id from field metadata for select values, not the label. Deleting a row with linked records may also require update permission on the target table to remove inverse links.",
