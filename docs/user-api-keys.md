@@ -1,6 +1,6 @@
 # API Key
 
-For read-only bot setup, see [OpenAPI and Grok Bot](api/openapi-and-plugins.md).
+For external agent connections, see [OpenAPI and Connect Agents](api/openapi-and-plugins.md).
 
 统一入口为「设置 → API Key」。工作区所有者或管理员可以创建、编辑和删除 Key；每张表格一行，分别勾选**读取、新增、更新、删除**。未勾选的操作一律拒绝，新增表格不会自动加入。权限覆盖表内全部记录，不再区分“个人 Key”和“站点 Key”。
 
@@ -23,6 +23,8 @@ Key 属于当前工作区，不冒充创建用户；修改权限或删除后，�
 
 每条 `permissions` 包含 `tableId` 和独立的 `canRead`、`canCreate`、`canUpdate`、`canDelete` 布尔值。不允许跨工作区授权；每张已选表格至少有一项权限。
 
-迁移 `0030_unified_api_keys` 保留已有 Key 值及 ID：原个人 Key 获得工作区当前各表的 CRUD 权限，原站点 Key 只保留原有表格的读取/新增权限。旧前缀、附件链接和接入请求头继续兼容。完整用法见 [表格 API 与 SDK](api/site-api.md)。
+表级 CRUD 是记录、正文、附件和表视图的唯一授权来源。正文读取/写入沿用 Read/Create/Update；站点视图读取沿用 Read，配置和显式发布沿用 Update，不另设正文或博客权限。
+
+Key 的身份标识、哈希、日历与日程授权沿用原有契约。完整用法见 [表格 API 与 SDK](api/site-api.md)；迁移影响见[内部迁移记录](unified-record-site-migration.md)。
 
 回归覆盖真实登录、权限独立性、跨组织拒绝、Key 不回读、即时编辑/删除、关联记录删除保护、SDK CRUD、REST/命令一致性和旧 Key 迁移。浏览器验证统一 Tab、逐表勾选、编辑持久化、窄屏/明暗主题以及 HTML 接入。

@@ -1,6 +1,6 @@
 # Table API and JavaScript SDK
 
-See [OpenAPI and Grok Bot](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and one-click bot key setup.
+See [OpenAPI and Connect Agents](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and generic MCP connection guidance.
 
 Manage all keys in **Settings → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
 
@@ -48,6 +48,8 @@ Permissions are independent. For example, a key can read a catalog, create leads
 
 POST `/api/graphql` with `Authorization: Bearer YOUR_API_KEY` and JSON `{ query, variables, operationName? }`. Standard authenticated introspection and GET queries are supported. Mutations require POST. The fixed schema uses a JSON `cells` map for user-defined columns.
 
+Records also have a built-in `body` field. Select `Row.body` explicitly in GraphQL; `rows` does not return full bodies by default. `createRow` and `updateRow` accept `body` and an idempotency key; body writes use their own expected version, independent of the row version. API Key write receipts include versions, not body content. Body attachments use the row attachment operations with `target: "body"`. Existing table Read/Create/Update/Delete grants govern bodies and their attachments.
+
 ```graphql
 query Catalog($id: ID!, $options: RowsInput) {
   table(id: $id) {
@@ -84,8 +86,16 @@ Use the same Bearer key and permissions:
 | POST | `/api/tables/:tableId/rows` | Create with `{ cells }` |
 | PATCH | `/api/tables/:tableId/rows/:rowId` | Update with `{ cells, expectedVersion? }` |
 | DELETE | `/api/tables/:tableId/rows/:rowId` | Delete one record |
+| POST | `/api/tables/:tableId/rows/:rowId/attachments` | Upload a row attachment, including `target: "body"` |
+| GET | `/api/tables/:tableId/rows/:rowId/attachments/:fileId` | Read an authorized row attachment |
 
-`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, and `deleteRow` through the same services. Clients cannot supply internal organization/actor/automation options. Other commands require the authenticated workspace interface.
+`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, `deleteRow`, `uploadRowAttachment`, `getRowAttachment`, `createView`, `updateView`, `getView`, `listViews`, and `deleteView` for authorized API Keys. Clients cannot supply internal organization/actor/automation options.
+
+For body access, `GET /api/tables/:tableId/rows/:rowId?include=body&bodyFormat=json` includes the current body; `bodyFormat=html` requests safe rendered HTML. Row lists omit full body content. Row create/update requests can include `body: { content, expectedVersion? }`; body writes require `idempotencyKey`, and body `expectedVersion` is checked separately from the row `expectedVersion`. A write through an API Key returns a receipt and does not return the body. Unwritten bodies read as empty version 0; reading does not create body storage.
+
+Sites backed by table data are ordinary views. Create one with `createView({ tableId, type: "site", name, config, idempotencyKey })` and configure `template: "blog"`, `mapping: { title, slug?, summary?, author?, date?, cover?, category?, tags? }`, `authorName`, `description`, `language`, and `articles: [{ rowId, imageIds, coverFileId? }]`. All mapped fields and selected rows must belong to the source table. Update with `updateView({ viewId, name?, config?, expectedVersion, idempotencyKey, publication? })`; `publication` uses `action: "publish" | "unpublish" | "withdraw"` and `expectedPublishedRevisionId`, plus `rowId` when withdrawing one record. Saving settings or changing source rows does not publish. Table Read permission allows reading views; Update permission allows configuring and explicitly publishing them.
+
+For the internal migration record, see [Unified record and site migration](../unified-record-site-migration.md).
 
 ## Fields and files
 
