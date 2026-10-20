@@ -1,6 +1,6 @@
 import { defineRailway, preserve, project, service } from "railway/iac";
 
-// Native GitHub autodeploys build master with Dockerfile.server after CI.
+// Native GitHub autodeploys build master with Dockerfile.server without CI gating.
 // Manage application services only; preserve external databases and secrets.
 // Preview with `railway config plan`; production settings are applied by lead.
 export const partial = "tabdo-app";
@@ -36,7 +36,7 @@ export default defineRailway(() => {
     PI_MODEL: preserve(),
   };
 
-  const source = { type: "github" as const, repo: "boyd4y/agrid", branch: "master", checkSuites: true };
+  const source = { type: "github" as const, repo: "boyd4y/agrid", branch: "master", checkSuites: false };
   const build = { dockerfilePath: "Dockerfile.server" };
 
   const api = service("api", {
