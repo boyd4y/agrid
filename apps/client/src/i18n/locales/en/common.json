@@ -16,6 +16,7 @@
   "disabled": "Disabled",
   "user": "User",
   "language": "Language",
+  "languageCurrent": "Change language, current: {{label}}",
   "languageZh": "中文",
   "languageEn": "English",
   "modKey": "⌘",
