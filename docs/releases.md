@@ -6,63 +6,29 @@
 
 生产发布以人工确认的正式版本 tag 为准，格式为 `vX.Y.Z`，例如 `v1.2.3`。确认该版本并创建、推送 tag，即表示批准发布这个版本。无需再为同一次发布默认执行第二次 GitHub 环境审批；管理员可以按团队需要另外启用 GitHub Environment 审批，作为额外保护。
 
-建议按 `feature branch → pull request → master → version tag` 发布。工作流 [`release.yml`](../.github/workflows/release.yml) 只监听 `v*` tag push，并拒绝非新建、被强推、格式不符或不在 `master` 祖先上的 tag，也会固定 tag 原始对象，拒绝重绑。新流程启用后，普通分支 push、pull request、master 合并或 CI 通过只运行日常 CI，不触发 tag 发布。在管理员关闭 API 和 worker 上现有的 Railway `master` 自动部署之前，master 更新仍可能直接触发生产部署；完成关闭前不要认为生产入口已经安全切换。
+建议按 `feature branch → pull request → master → version tag` 发布。工作流 [`release.yml`](../.github/workflows/release.yml) 只监听 `v*` tag push，并拒绝非新建、被强推、格式不符或不在 `master` 祖先上的 tag，也会固定 tag 原始对象，拒绝重绑。普通分支 push、pull request、master 合并或 CI 通过只运行日常 CI，不触发 tag 发布。Railway API 和 worker 的 `master` 自动部署已断开。
 
-在发布入口尚未启用前，不要创建或推送生产 tag。当前仓库的发布配置与自动化正在准备中，远端尚未完成一次性启用，不能把 tag 推送当作现成的生产发布通道。
+在发布入口尚未启用前，不要创建或推送生产 tag。当前一次性配置仍未全部完成；只有 `RELEASE_BOOTSTRAP_READY=true` 且以下启用条件均通过后，tag 才是可用的生产发布通道。
 
 ## 首次启用（管理员一次性操作）
 
-发布流程准备好后，由仓库/平台管理员完成下列配置。配置完成后，日常发布者只需确认版本并发布 tag，不需要手工备份数据库、运行迁移或执行 Railway 命令。
+由仓库/平台管理员完成并核验下列一次性配置。全部就绪后，日常发布者只需确认版本并发布 tag，不需要手工备份数据库、运行迁移或执行 Railway 命令。
 
 1. 在 GitHub 的 `tabdo / production` Environment 中设置 secrets：`RAILWAY_API_TOKEN`、`NEON_API_KEY`、`RELEASE_DATABASE_URL`。`RAILWAY_API_TOKEN` 必须是目标 Railway 项目的目标 environment 级 Project token；发布脚本使用 `Project-Access-Token`，并查询 token 作用域。不要提供 account/workspace token 或扩大到账号级权限。`NEON_API_KEY` 应限于目标 Neon project 可用的管理权限。`RELEASE_DATABASE_URL` 必须是该 Neon 生产分支的 PostgreSQL 直连地址（不是 `-pooler`），使用 `sslmode=require`，并能读迁移 ledger/schema 和执行项目 migrator 所需 DDL。不要将这些值放入 repository variables、日志或提交内容。
 
    同一 Environment 的 **Deployment branches and tags** 也必须限制来源：进入 GitHub 仓库 **Settings → Environments → `tabdo / production`**，选择 **Selected branches and tags**，只添加 **Ref type: Tag、Name pattern: `v*`** 规则，删除全部 Branch 规则和其它允许模式。不要选择 **No restriction** 或 **Protected branches only**。这样普通分支和 pull request workflow 不能使用此 Environment 的 secrets。tag ruleset 不替代这项 Environment 限制；此处无需配置 Required reviewers 或增加第二次 Approve，人工确认并推送正式版本 tag 仍是发布授权。可参阅 [GitHub Environment 部署来源限制](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)。
 2. 在同一 Environment 中设置项目变量：`RAILWAY_PROJECT_ID`、`RAILWAY_ENVIRONMENT_ID`、`RAILWAY_API_SERVICE_ID`、`RAILWAY_WORKER_SERVICE_ID`、`NEON_PROJECT_ID`、`NEON_BRANCH_ID`、`RELEASE_PUBLIC_URL`。这些 ID 和 URL 必须指向预期的生产资源；公开地址必须是无路径、query、凭证的 HTTPS origin。管理员应核对两个 Railway 服务的 `DATABASE_URL` / `DATABASE_URL_UNPOOLED` 指向与 `RELEASE_DATABASE_URL` 相同的数据库，并确认 API `APP_URL` / `BETTER_AUTH_URL` 与 `RELEASE_PUBLIC_URL` 一致，`NODE_ENV=production`、`TABDO_ENV=production`、`AUTH_REQUIRED=true`、`QUEUE_PREFIX=tabdo-production`。ID 不能依赖开发者本机 Railway CLI 的 link 状态。
-3. 确认 GitHub Container Registry 中的 `ghcr.io/boyd4y/agrid` 包存在且设为公开。目前包是否存在、是否公开尚未核实。若包不存在，管理员可从已经确认的源码提交一次性构建并推送镜像；首次 push 会创建 GHCR 包。这个初始化只准备镜像，不会部署服务；在完成其余配置和验证前，`RELEASE_BOOTSTRAP_READY` 必须保持 `false`，不要创建生产版本 tag。
+3. 确认 GitHub Container Registry 中的 `ghcr.io/boyd4y/agrid` 包存在且可匿名拉取。若包尚不存在，在 `.github/workflows/ghcr-bootstrap.yml` 合入 `master` 后，管理员可从 GitHub 仓库 **Actions → GHCR image bootstrap → Run workflow** 启动一次性镜像初始化：选择 `master`，输入已审核且已合入 `master` 的完整 commit SHA。工作流会验证输入提交属于 `master`，使用该 job 的 `GITHUB_TOKEN`（仅授予 `packages:write`）构建 linux/amd64 镜像，并推送 `bootstrap-sha-<完整 SHA>` tag；已有同名 tag 会被拒绝，不会覆盖。完成后从 workflow summary 记录镜像 digest。
 
-   在项目根目录的 Bash/Zsh 中执行以下命令。先把 `SOURCE_COMMIT` 替换为已确认、已合入 master 的完整 commit SHA。脚本以 `set -Eeuo pipefail` 遇错即停，在临时全新 clone 中核对 SHA、master 祖先关系和干净状态；任一检查、登录或 builder 创建失败都会在 push 前终止。Docker 凭证也写入临时隔离目录并在退出时清除。使用仅具备 `write:packages` 权限的 GitHub token；从密码管理器注入环境变量，不要把 token 写入命令行参数或 shell 历史。`bootstrap-sha-...` tag 专用于初始化，正常发布 workflow 使用另一个 `sha-...` tag；生产部署使用构建输出的 digest，不使用可变 tag。
-
-   ```sh
-   set -Eeuo pipefail
-   BUILD_ROOT=$(mktemp -d "$PWD/.ghcr-bootstrap.XXXXXX")
-   BUILD_DIR="$BUILD_ROOT/source"
-   DOCKER_CONFIG="$BUILD_ROOT/docker"
-   export DOCKER_CONFIG
-   export BUILD_ROOT
-   cleanup() {
-     release_exit_code=$?
-     trap - EXIT
-     docker logout ghcr.io >/dev/null 2>&1 || true
-     python3 -c 'import os, shutil; shutil.rmtree(os.environ["BUILD_ROOT"], ignore_errors=True)' || true
-     exit "$release_exit_code"
-   }
-   trap cleanup EXIT
-   git clone https://github.com/boyd4y/agrid.git "$BUILD_DIR"
-   cd "$BUILD_DIR"
-   git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
-   SOURCE_COMMIT=replace-with-confirmed-commit-sha
-   [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-   git merge-base --is-ancestor "$SOURCE_COMMIT" refs/remotes/origin/master
-   git switch --detach "$SOURCE_COMMIT"
-   test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
-   test -z "$(git status --porcelain --untracked-files=all)"
-   SOURCE_SHA=$(git rev-parse HEAD)
-   printf '%s' "$GHCR_WRITE_PACKAGES_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-   docker buildx create --use
-   docker buildx build --platform linux/amd64 --provenance=false \
-     --label "org.opencontainers.image.revision=$SOURCE_SHA" \
-     --label "org.opencontainers.image.source=https://github.com/boyd4y/agrid" \
-     --tag "ghcr.io/boyd4y/agrid:bootstrap-sha-${SOURCE_SHA}" \
-     --file Dockerfile.server --push .
-   ```
-
-   推送后，在 GitHub 仓库的 Packages 中打开 `agrid` 包设置，将可见性设为 **Public**。在没有 GHCR 登录凭证的干净环境中，执行 `docker pull ghcr.io/boyd4y/agrid:bootstrap-sha-<完整源码 SHA>` 验证该 tag 可匿名拉取。只对已确认且预期发布的源码执行这一次性初始化；不要把生产环境变量或 secret 注入构建。若包已存在，则先核实其所有者、内容和可见性，不要覆盖已有 tag。新 package 默认可能为 private；仓库公开不代表 package 公开。
-4. 在 Railway 中一次性停用 API 与 worker 服务对 `master` 的 GitHub 自动部署和 image auto updates，清空 API 旧 `preDeploy` 迁移 hook，避免绕开 tag 发布流程或重复运行迁移。确认环境没有指向这两个服务的 GitHub deployment triggers，两个 service source 均不再包含 GitHub repo；API 与 worker 各自只有一个 `SUCCESS` active deployment，且它与 latest deployment 相同，没有 queued/pending deployment。确认 API start 为 `node dist/index.js`、healthcheck 为 `/api/health`，worker start 为 `node dist/queue/main.js`。这些是 workflow 的上线前置条件。发布后由工作流将同一个不可变镜像 digest 部署到两个服务。
-5. 为 `v*` 创建并启用 GitHub tag ruleset。创建规则与不可变规则分开设置：创建规则启用 **Restrict creations**，绕过名单只加入指定版本发布者；不可变规则启用 **Restrict updates** 和 **Restrict deletions**，不添加绕过者，使已发布版本 tag 不能被重绑或删除。若确有紧急修正，需要管理员临时变更规则并保留审计记录，完成后恢复保护。上述 ruleset 需由管理员实际创建并设为 Active；本轮未配置。可参考 [GitHub ruleset 规则说明](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)。
+   这个 workflow 只创建并推送镜像，不会创建 token、设置 package 可见性、访问 Railway/Neon 或部署服务。管理员需在 GitHub 仓库 **Packages → agrid → Package settings** 将包设为 **Public**，再在没有 GHCR 登录凭证的环境中按 workflow summary 的 digest 执行匿名拉取验证，例如 `docker pull ghcr.io/boyd4y/agrid@sha256:<digest>`。不要向个人 GitHub token 增加 `packages` 权限或改用手工 Docker 构建。首次创建并验证公开 package 后，这项初始化不必重复；不要把生产环境变量或 secret 注入镜像构建。
+4. Railway API 与 worker 对 `master` 的 GitHub 自动部署已停用，旧 API `preDeploy` 迁移 hook 已清空。管理员仍需核验环境没有指向这两个服务的 GitHub deployment triggers，两个 service source 均不再包含 GitHub repo；API 与 worker 各自只有一个 `SUCCESS` active deployment，且与 latest deployment 相同，没有 queued/pending deployment。确认 API start 为 `node dist/index.js`、healthcheck 为 `/api/health`，worker start 为 `node dist/queue/main.js`。这些是 workflow 的上线前置条件。发布后由工作流将同一个不可变镜像 digest 部署到两个服务。
+5. `v*` tag rulesets 已创建并启用：创建规则仅允许指定版本发布者；独立的更新/删除规则没有绕过者，防止已发布版本 tag 被重绑或删除。若确有紧急修正，需要管理员临时变更规则并保留审计记录，完成后恢复保护。可参考 [GitHub ruleset 规则说明](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)。
 6. 核对 Neon snapshot 配额和保留策略，确保按 7 天保留期及预计发布频次有足够空间。此前已遇到原生 snapshot 配额限制；工作流在 quota 不足、snapshot 创建或读回校验失败时会在迁移与部署之前停止。它不会删除其他 snapshot，也不会删掉最后恢复点来腾空间。由管理员处理配额后，再决定何时继续。
 7. 按仓库中的发布配置完成预检，并在上述设置全部验证通过后（包括 `tabdo / production` Environment 只允许 `v*` tag 来源），将仓库变量 `RELEASE_BOOTSTRAP_READY` 设为 `true`。未设置或不是 `true` 时，发布必须停止。此开关只表示一次性启用检查已完成，不代替版本 tag 确认。
 
-0097 的冻结记录显示 Environment secrets 尚未设置，GitHub repository 与 Environment 当前没有 secrets，也没有已配置 rulesets；发布 bootstrap 尚未完成。当前 GHCR package 是否存在、是否公开也尚未核实。本轮不会设置远端 secrets/variables、创建 tag ruleset、修改 Railway 设置、初始化 GHCR 包或执行真实生产操作。不要仅因仓库中有 workflow 或配置名，就推断发布入口已启用。
+### 当前启用状态
+
+截至 2026-10-20，Railway API/worker 的 `master` 自动部署已断开，API 旧迁移 hook 已清空；GitHub `tabdo / production` Environment 仅接受 `v*` tag，7 项非密钥变量和三项 Environment secrets 已配置，Railway token 的真实只读预检通过，`v*` tag rulesets 已启用。GHCR 的 `agrid` package 尚未初始化，公开 digest 拉取和 snapshot 配额仍待验证；`RELEASE_BOOTSTRAP_READY` 为 `false`。因此发布入口尚未启用，不要创建或推送生产版本 tag。GHCR bootstrap workflow 只能初始化镜像，不能替代上述待完成事项。
 
 ## 一次正常发布
 

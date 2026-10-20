@@ -19,24 +19,30 @@ also serves the built React app. PostgreSQL and private S3 storage remain on Neo
 
 Production application deployments are owned by the confirmed-version-tag release
 workflow. Do not deploy application source with `railway up`, apply this source
-configuration to production, or rely on a GitHub `master` autodeploy. An
-administrator must disable the existing `master` autodeploy for both application
-services and image auto updates once, clear their old migration pre-deploy hook,
-configure the GitHub `tabdo / production` Environment, verify the Neon and
-Railway targets, and enable the repository bootstrap guard only after those
-checks pass. Applying `.railway/railway.ts` does not perform these remote changes.
+configuration to production, or rely on a GitHub `master` autodeploy. The `master`
+autodeploys for both application services have been disconnected and the API's
+old migration pre-deploy hook has been cleared. Administrators must still verify
+image auto updates and service targets, complete the GitHub `tabdo / production`
+Environment, and enable the repository bootstrap guard only after every check
+passes. Applying `.railway/railway.ts` does not perform these remote changes.
 See [the release guide](../docs/releases.md) for the exact
-secrets, variables and confirmation flow. The remote release path is not active
-until that setup is completed.
+secrets, variables and confirmation flow. Production credentials and targets
+passed the real read-only preflight. The release path is currently inactive:
+the `agrid` GHCR package has not been initialized, anonymous digest pull and
+snapshot quota remain unverified, and `RELEASE_BOOTSTRAP_READY=false`.
 
 The administrator must verify that `ghcr.io/boyd4y/agrid` exists and is publicly
-pullable on the current Railway Hobby plan. Its existence and visibility have not
-been verified. If it does not exist, create it with a one-time image push from a
-confirmed source commit as described in [the release guide](../docs/releases.md);
-keep `RELEASE_BOOTSTRAP_READY=false` and do not create a release tag during this
-initialization. The release workflow checks anonymous digest access before
-changing service image sources. API and worker must receive the same immutable
-image digest. Do not put secrets or production configuration in the image.
+pullable on the current Railway Hobby plan. If the package does not exist, use the
+one-time `GHCR image bootstrap` workflow after `.github/workflows/ghcr-bootstrap.yml`
+is merged to `master`: dispatch it from `master` with a reviewed, merged full commit
+SHA. The workflow uses its job-scoped `GITHUB_TOKEN` with `packages:write` to build
+and push only `bootstrap-sha-<SHA>`; it does not set package visibility or deploy
+services. Set the package to Public in GitHub Packages, then verify anonymous pull
+by digest as described in [the release guide](../docs/releases.md). Keep
+`RELEASE_BOOTSTRAP_READY=false` until all setup and verification is complete. The
+release workflow checks anonymous digest access before changing service image
+sources. API and worker must receive the same immutable image digest. Do not put
+secrets or production configuration in the image.
 
 Create active GitHub tag rulesets for `v*`: allow only designated release
 maintainers to create tags, and configure a separate update/deletion rule with no
