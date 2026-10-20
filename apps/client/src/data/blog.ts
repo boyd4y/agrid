@@ -130,7 +130,7 @@ export const blogPosts: BlogPost[] = [
     body: [
       "In tabdo, open Settings → API Key and create a key with the access your integration needs. Copy it when it is shown and keep it private.",
       "In an MCP client that supports remote HTTP servers and custom headers, add https://tabdo.dev/mcp and set Authorization to Bearer followed by the key. No local process is needed.",
-      "Ask the agent: list tables → get_table → query_rows → set_status. That is the whole happy path.",
+      "With read and update access to a table, ask the agent to list tables, inspect one table, find a record, then use update_cell with the status column ID and the option ID for the desired status.",
     ],
   },
 ];
