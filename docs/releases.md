@@ -28,11 +28,11 @@
    export DOCKER_CONFIG
    export BUILD_ROOT
    cleanup() {
-     status=$?
+     release_exit_code=$?
      trap - EXIT
      docker logout ghcr.io >/dev/null 2>&1 || true
      python3 -c 'import os, shutil; shutil.rmtree(os.environ["BUILD_ROOT"], ignore_errors=True)' || true
-     exit "$status"
+     exit "$release_exit_code"
    }
    trap cleanup EXIT
    git clone https://github.com/boyd4y/agrid.git "$BUILD_DIR"
