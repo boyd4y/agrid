@@ -189,12 +189,12 @@ export function createSiteApiRoutes(acquire: RequestScopeResolver, options: { gr
       updateAutomation: safe(async (_root: unknown, args: { input: unknown }, ctx: GraphContext) => { charge(ctx, 0); await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" }); return updateScheduledAutomation(ctx.scope.commands, ctx.secret, args.input); }), ...Object.fromEntries(calendarMutations.map(name => [name, calendarResolver(name)])), createRow: safe(async (_root: unknown, args: { tableId: string; cells: unknown; body?: import("@tabdo/shared").RowBodyCreate; idempotencyKey?: string }, ctx: GraphContext) => {
       keys.requireSiteTable(ctx.principal, args.tableId, "create");
       await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
-      return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells, args);
+      return data.siteCreateRow(ctx.scope.commands, ctx, args.tableId, args.cells, { body: args.body, idempotencyKey: args.idempotencyKey });
     }),
       updateRow: safe(async (_root: unknown, args: { tableId: string; rowId: string; cells: unknown; expectedVersion?: number; body?: import("@tabdo/shared").RowBodyWrite; idempotencyKey?: string }, ctx: GraphContext) => {
         keys.requireSiteTable(ctx.principal, args.tableId, "update");
         await ctx.scope.siteRateLimit!({ keyId: ctx.principal.id, ip: ctx.ip, kind: "create" });
-        return data.siteUpdateRow(ctx.scope.commands, ctx, args.tableId, args.rowId, args.cells, args.expectedVersion, args);
+        return data.siteUpdateRow(ctx.scope.commands, ctx, args.tableId, args.rowId, args.cells, args.expectedVersion, { body: args.body, idempotencyKey: args.idempotencyKey });
       }),
       deleteRow: safe(async (_root: unknown, args: { tableId: string; rowId: string }, ctx: GraphContext) => {
         keys.requireSiteTable(ctx.principal, args.tableId, "delete");

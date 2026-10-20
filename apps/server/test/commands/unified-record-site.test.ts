@@ -12,6 +12,7 @@ import { organization, user, member, workspaces, tables, rows, columns, recordDo
 import * as commands from "../../src/business/commands/index.js";
 import { createSiteKey, updateSiteKey, deleteSiteKey, resolveSiteKey, siteKeyInput } from "../../src/business/data-api/keys.js";
 import { dispatchKeyCommand } from "../../src/business/data-api/commands.js";
+import { siteCreateRow, siteUpdateRow } from "../../src/business/data-api/data.js";
 import { createSiteApiRoutes, siteSchemaSDL } from "../../src/business/http/site-api.js";
 import { createSiteAssetsRoute } from "../../src/business/http/sites.js";
 import { createTableTools } from "../../src/business/agent/tools/index.js";
@@ -139,6 +140,49 @@ test("original CRUD alone controls body/attachment/view operations; receipts nev
   await assert.rejects(call(legacy.secret, "getRow", { rowId: blank.id, includeBody: true }));
   await assert.rejects(call(legacy.secret, "updateCells", write));
   await assert.rejects(call(legacy.secret, "listViews", { tableId }));
+});
+
+test("HTTP Key writes cannot smuggle unvalidated cells; create/update options cannot override scoped inputs", async () => {
+  const relation = await commands.addColumn(deps, { tableId, name: "Private link", type: "relation", config: { relation: { targetTableId: otherTable, inverseName: "Backlink" } }, ...identity });
+  const inverse = (await commands.getTable(deps, { tableId: otherTable, ...identity })).columns.find(col => col.type === "relation")!;
+  const a = await commands.addRow(deps, { tableId, ...identity });
+  const b = await commands.addRow(deps, { tableId: otherTable, ...identity });
+  const writer = await key({ canUpdate: true });
+  const context = { principal: await resolveSiteKey(deps.database, writer.secret), secret: writer.secret, baseUrl: "http://fixture.test" };
+  assert.equal(context.principal.permissions.get(tableId)!.canRead, false);
+  assert(!context.principal.tableIds.has(otherTable));
+  const http = (command: string, input: Record<string, unknown>) => app.request("/api/commands", { method: "POST", headers: { Authorization: `Bearer ${writer.secret}`, "Content-Type": "application/json" }, body: JSON.stringify({ command, input }) });
+  assert.equal((await http("updateCells", { rowId: a.id, cells: { [relation.id]: [b.id] } })).status, 400);
+  const response = await http("updateCell", { rowId: a.id, columnId: titleId, value: "Validated text", cells: { [relation.id]: [b.id] } });
+  assert.equal(response.status, 200);
+  assert(!("cells" in (await response.json()).result));
+  const source = await commands.getRow(deps, { rowId: a.id, ...identity });
+  assert.equal(source.cells[titleId], "Validated text"); assert.deepEqual(source.cells[relation.id], []);
+
+  // Defense at the data boundary too: no transport/caller can override validated cells or ownership.
+  const creator = await key({ canCreate: true });
+  const createContext = { ...context, secret: creator.secret, principal: await resolveSiteKey(deps.database, creator.secret) };
+  const injected = { tableId: otherTable, rowId: b.id, cells: { [relation.id]: [b.id] }, expectedVersion: 999, actorId: uid, skipAutomation: true };
+  const createInput = { ...injected, body: { content: content("Allowed create body") }, idempotencyKey: id() };
+  const created = await siteCreateRow(deps, createContext, tableId, { [titleId]: "Allowed create cells" }, createInput);
+  assert.deepEqual(await siteCreateRow(deps, createContext, tableId, { [titleId]: "Allowed create cells" }, createInput), created);
+  const loaded = await commands.getRow(deps, { rowId: created.id, includeBody: true, ...identity });
+  assert.equal(loaded.tableId, tableId); assert.equal(loaded.cells[titleId], "Allowed create cells");
+  assert.deepEqual(loaded.cells[relation.id], []); assert.equal(loaded.body!.version, 1);
+  const updateInput = { ...injected, body: { content: content("Allowed update body"), expectedVersion: 1 }, idempotencyKey: id() };
+  const changed = await siteUpdateRow(deps, context, tableId, created.id, { [titleId]: "Allowed update cells" }, loaded.version, updateInput);
+  assert.deepEqual(await siteUpdateRow(deps, context, tableId, created.id, { [titleId]: "Allowed update cells" }, loaded.version, updateInput), changed);
+  const updated = await commands.getRow(deps, { rowId: created.id, includeBody: true, ...identity });
+  assert.equal(updated.cells[titleId], "Allowed update cells"); assert.equal(updated.body!.version, 2);
+  assert.deepEqual(updated.cells[relation.id], []);
+  const privateRow = await commands.getRow(deps, { rowId: b.id, ...identity });
+  assert.equal(privateRow.version, b.version); assert.deepEqual(privateRow.cells[inverse.id], []);
+  assert.equal(privateRow.cells[otherTitle] ?? null, null);
+  // The whitelist also validates its allowed fields at the HTTP boundary, before any write.
+  assert.equal((await http("addRow", { tableId, cells: {}, body: { content: content("invalid") }, idempotencyKey: 123 })).status, 400);
+  assert.equal((await http("updateCells", { rowId: a.id, cells: {}, body: { content: content("invalid"), expectedVersion: "0" }, idempotencyKey: id() })).status, 400);
+  const unchanged = await commands.getRow(deps, { rowId: a.id, includeBody: true, ...identity });
+  assert.equal(unchanged.version, source.version); assert.equal(unchanged.body!.version, 0);
 });
 
 test("row-owned images lazily allocate body under Update, reject foreign references and clean failed uploads", async () => {

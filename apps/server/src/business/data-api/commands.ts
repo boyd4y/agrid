@@ -73,8 +73,8 @@ export async function dispatchKeyCommand(deps: CommandDependencies, context: dat
       case "getTable": result = await data.siteTable(deps, context, tableId); break;
       case "queryRows": { const { tableId: _, ...options } = args; result = await data.siteRows(deps, context, tableId, options); break; }
       case "getRow": result = await data.siteRow(deps, context, tableId, z.uuid().parse(args.rowId), { includeBody: args.includeBody === true, bodyFormat: args.bodyFormat as "json" | "html" }); break;
-      case "addRow": result = await data.siteCreateRow(deps, context, tableId, args.cells, args); break;
-      case "updateCell": case "updateCells": result = await data.siteUpdateRow(deps, context, tableId, z.uuid().parse(args.rowId), command === "updateCell" ? { [z.uuid().parse(args.columnId)]: args.value } : args.cells, args.expectedVersion as number | undefined, args); break;
+      case "addRow": result = await data.siteCreateRow(deps, context, tableId, args.cells, { body: args.body, idempotencyKey: args.idempotencyKey }); break;
+      case "updateCell": case "updateCells": result = await data.siteUpdateRow(deps, context, tableId, z.uuid().parse(args.rowId), command === "updateCell" ? { [z.uuid().parse(args.columnId)]: args.value } : args.cells, args.expectedVersion as number | undefined, { body: args.body, idempotencyKey: args.idempotencyKey }); break;
       case "deleteRow": result = await data.siteDeleteRow(deps, context, tableId, z.uuid().parse(args.rowId)); break;
       default: throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
     }
