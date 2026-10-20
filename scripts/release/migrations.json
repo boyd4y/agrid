@@ -1,1 +1,7 @@
-{}
+{
+  "0042_agent_access_permissions": {
+    "sha256": "5cdd193f20be19e263d7665aeb453e794aa6d62b21bab1a3a1c62493bd62c68d",
+    "compatibility": "backward-compatible",
+    "requiresWriterDrain": false
+  }
+}
