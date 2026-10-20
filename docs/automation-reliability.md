@@ -108,7 +108,7 @@ Redis 行租约和租户并发限制跨实例共享；DB fencing 和版本检查
 ```bash
 docker compose up -d redis
 pnpm db:migrate
-pnpm dev                 # 自动启动 API + 一个 automation 后台进程，另有 client/MCP
+pnpm dev                 # 自动启动 API + 一个 automation 后台进程与 client
 # 已有独立 API 进程时，只补启后台进程：
 pnpm dev:queue
 pnpm --filter @tabdo/server queue:status
