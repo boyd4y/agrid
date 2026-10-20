@@ -17,6 +17,7 @@ export function releaseEvent(event, env) {
   requireRelease(event.created === true && !event.deleted && !event.forced, "new_unmodified_tag_required");
   requireRelease(shaPattern.test(env.GITHUB_SHA) && shaPattern.test(event.after), "invalid_commit");
   requireRelease(env.GITHUB_REPOSITORY === "boyd4y/agrid", "repository_mismatch");
+  // These are event object IDs until verifyGit resolves/pins the commit and tag.
   return { version, sha: env.GITHUB_SHA, tagOid: event.after };
 }
 

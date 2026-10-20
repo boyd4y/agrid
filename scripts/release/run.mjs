@@ -12,15 +12,15 @@ export async function runRelease({ env, event, ports, save = () => {} }) {
   let changedProduction = false;
   const record = stage => { result.stage = stage; save(result); };
   try {
-    const release = releaseEvent(event, env);
+    let release = releaseEvent(event, env);
     requireRelease(shaPattern.test(env.RELEASE_TAG_OID), "authorization_tag_pin_required");
     release.tagOid = env.RELEASE_TAG_OID;
-    Object.assign(result, release);
     const config = productionConfig(env);
     requireRelease(digestPattern.test(env.RELEASE_IMAGE_DIGEST), "invalid_image_digest");
     const image = `ghcr.io/boyd4y/agrid@${env.RELEASE_IMAGE_DIGEST}`;
     result.image = image;
-    await ports.verifyGit(release);
+    release = await ports.verifyGit(release);
+    Object.assign(result, release);
     record("anonymous_image_preflight");
     await ports.anonymousImage(image, release.sha);
     record("production_target_preflight");

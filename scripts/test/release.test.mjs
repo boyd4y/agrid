@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { releaseEvent, productionConfig, ReleaseError, checkRuntimeVariables } from "../release/guards.mjs";
 import { verifyGit } from "../release/git.mjs";
 import { pendingMigrations } from "../release/database.mjs";
@@ -30,12 +35,21 @@ test("git verification rejects tag rebinding, checkout drift and commits off mas
   const run = args => args[0] === "ls-remote" ? `${sha}\trefs/tags/v1.2.3` : args[0] === "rev-parse" ? sha : "";
   verifyGit(release, run);
   assert.throws(() => verifyGit(release, args => args[0] === "ls-remote" ? `${"c".repeat(40)}\trefs/tags/v1.2.3` : run(args)), /tag_rebound/);
-  assert.throws(() => verifyGit(release, args => args[0] === "rev-parse" ? "c".repeat(40) : run(args)), /checkout_sha/);
+  assert.throws(() => verifyGit(release, args => args[0] === "rev-parse" && args[1] === "HEAD" ? "c".repeat(40) : run(args)), /checkout_sha/);
   assert.throws(() => verifyGit(release, args => { if (args[0] === "merge-base") throw new Error("not ancestor"); return run(args); }), /commit_not_on_master/);
   const oid = "d".repeat(40);
   verifyGit({ ...release, tagOid: oid }, args => args[0] === "ls-remote" ? `${oid}\trefs/tags/v1.2.3\n${sha}\trefs/tags/v1.2.3^{}` : run(args));
   const annotated = args => args[0] === "ls-remote" ? `${oid}\trefs/tags/v1.2.3\n${sha}\trefs/tags/v1.2.3^{}` : run(args);
-  assert.equal(verifyGit(release, annotated, { allowPeeledEvent: true }), oid);
+  assert.equal(verifyGit(release, annotated, { allowPeeledEvent: true }).tagOid, oid);
+  for (const eventOid of [sha, oid]) {
+    for (const after of [sha, oid]) {
+      const input = releaseEvent({ ...event, after }, { ...env, GITHUB_SHA: eventOid });
+      const authorized = verifyGit(input, annotated, { allowPeeledEvent: true });
+      assert.equal(authorized.sha, sha);
+      assert.equal(authorized.tagOid, oid);
+      assert.deepEqual(verifyGit({ ...input, tagOid: authorized.tagOid }, annotated), authorized);
+    }
+  }
   assert.throws(() => verifyGit(release, annotated), /tag_rebound/, "production rejects even a rebind to the same commit");
 });
 
@@ -79,7 +93,7 @@ function fixture({ fail, pending = ["0034_safe"] } = {}) {
     return typeof value === "function" ? value(...args) : value;
   };
   const ports = {
-    verifyGit: call("git"), anonymousImage: call("image"), preflight: call("preflight", [{ serviceId: "api", deploymentId: "old-api" }, { serviceId: "worker", deploymentId: "old-worker" }]),
+    verifyGit: call("git", release => release), anonymousImage: call("image"), preflight: call("preflight", [{ serviceId: "api", deploymentId: "old-api" }, { serviceId: "worker", deploymentId: "old-worker" }]),
     migrationPlan: call("plan", () => plans++ === 0 ? pending : []), snapshot: call("snapshot", "snap-1"), migrate: call("migrate"),
     deploy: call("deploy", id => `new-${id}`), wait: call("wait"), smoke: call("smoke"),
   };
@@ -134,10 +148,75 @@ test("second-service failures and final drift never report success", async () =>
     const f = fixture();
     if (failure === "second-deploy") f.ports.deploy = async id => { if (id === "worker") throw new ReleaseError("worker_failed"); return "new-api"; };
     if (failure === "final-api") { let waits = 0; f.ports.wait = async () => { if (++waits === 3) throw new ReleaseError("late_api_failure"); }; }
-    if (failure === "final-tag") { let checks = 0; f.ports.verifyGit = async () => { if (++checks === 3) throw new ReleaseError("tag_rebound"); }; }
+    if (failure === "final-tag") { let checks = 0; f.ports.verifyGit = async release => { if (++checks === 3) throw new ReleaseError("tag_rebound"); return release; }; }
     if (failure === "deployed-health") { let smokes = 0; f.ports.smoke = async () => { if (++smokes === 2) throw new ReleaseError("health_schema_failed"); }; }
     const result = await f.execute();
     assert.equal(result.status, "manual_recovery_required");
     assert.equal(result.previous[0].deploymentId, "old-api");
   }
+});
+
+test("isolated Git origin accepts raw/peeled annotated events through authorize CLI and production, retaining both pins", async t => {
+  const directory = mkdtempSync(join(tmpdir(), "tabdo-release-git-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const work = join(directory, "work"), origin = join(directory, "origin.git");
+  mkdirSync(work);
+  const gitEnv = {
+    PATH: process.env.PATH, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0",
+    GIT_AUTHOR_NAME: "Release fixture", GIT_AUTHOR_EMAIL: "release@example.invalid",
+    GIT_COMMITTER_NAME: "Release fixture", GIT_COMMITTER_EMAIL: "release@example.invalid",
+  };
+  const git = args => execFileSync("git", ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", "-c", "tag.gpgSign=false", ...args], { cwd: work, env: gitEnv, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30000 }).trim();
+  git(["init", "--bare", origin]);
+  git(["init", "-b", "master"]);
+  writeFileSync(join(work, "fixture.txt"), "isolated release fixture\n");
+  git(["add", "fixture.txt"]); git(["commit", "-m", "fixture"]);
+  git(["remote", "add", "origin", origin]); git(["push", "origin", "master"]);
+  const commit = git(["rev-parse", "HEAD"]);
+  git(["tag", "-a", "v1.2.3", "-m", "annotated fixture"]);
+  git(["tag", "v1.2.4"]);
+  git(["push", "origin", "refs/tags/v1.2.3", "refs/tags/v1.2.4"]);
+  const annotatedOid = git(["rev-parse", "refs/tags/v1.2.3"]);
+  assert.notEqual(annotatedOid, commit);
+  const script = fileURLToPath(new URL("../release/git.mjs", import.meta.url));
+  for (const version of ["v1.2.3", "v1.2.4"]) {
+    const raw = git(["rev-parse", `refs/tags/${version}`]);
+    git(["checkout", "--detach", `refs/tags/${version}`]);
+    assert.equal(git(["rev-parse", "HEAD"]), commit);
+    for (const eventOid of new Set([commit, raw])) {
+      for (const after of new Set([commit, raw])) {
+        const payload = { ...event, after };
+        const inputs = { ...env, GITHUB_REF: `refs/tags/${version}`, GITHUB_SHA: eventOid };
+        const eventPath = join(directory, "event.json"), outputPath = join(directory, "output.txt");
+        writeFileSync(eventPath, JSON.stringify(payload)); writeFileSync(outputPath, "");
+        // Execute the actual authorize entry point with no platform credentials.
+        const stdout = execFileSync(process.execPath, [script], { cwd: work, env: {
+          ...gitEnv, GITHUB_EVENT_NAME: inputs.GITHUB_EVENT_NAME, GITHUB_REF_TYPE: inputs.GITHUB_REF_TYPE,
+          GITHUB_REF: inputs.GITHUB_REF, GITHUB_SHA: eventOid, GITHUB_REPOSITORY: inputs.GITHUB_REPOSITORY,
+          GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath,
+        }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30000 });
+        const authorized = JSON.parse(stdout);
+        assert.deepEqual(authorized, { version, sha: commit, tagOid: raw });
+        assert.match(readFileSync(outputPath, "utf8"), new RegExp(`sha=${commit}\\n`));
+        const f = fixture({ pending: [] });
+        f.ports.verifyGit = release => verifyGit(release, git);
+        const result = await runRelease({ env: { ...inputs, RELEASE_TAG_OID: authorized.tagOid }, event: payload, ports: f.ports });
+        assert.equal(result.status, "success");
+        assert.equal(result.sha, commit);
+        assert.equal(result.tagOid, raw);
+        assert.equal(f.calls.find(call => call[0] === "image")[2], commit, "image revision uses the commit, never the tag object");
+      }
+    }
+  }
+  const input = { version: "v1.2.3", sha: annotatedOid, tagOid: annotatedOid };
+  assert.throws(() => verifyGit({ ...input, tagOid: "c".repeat(40) }, git), /tag_rebound/);
+  git(["commit", "--allow-empty", "-m", "unreviewed detached fixture"]);
+  const offMaster = git(["rev-parse", "HEAD"]);
+  assert.throws(() => verifyGit(input, git), /checkout_sha_mismatch/);
+  git(["tag", "v1.2.5"]); git(["push", "origin", "refs/tags/v1.2.5"]);
+  assert.throws(() => verifyGit({ version: "v1.2.5", sha: offMaster, tagOid: offMaster }, git), /commit_not_on_master/);
+  git(["checkout", "--detach", commit]);
+  git(["tag", "-f", "-a", "v1.2.3", "-m", "rebound fixture"]);
+  git(["push", "--force", "origin", "refs/tags/v1.2.3"]);
+  assert.throws(() => verifyGit({ ...input, sha: commit }, git), /tag_rebound/, "production still rejects raw tag rebinding to the same commit");
 });
