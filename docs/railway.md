@@ -1,10 +1,10 @@
 # Railway 部署
 
-生产 API 与 worker 由 Railway 的 GitHub 集成部署。服务连接 `boyd4y/agrid` 的 `master` 分支，启用自动部署和 Wait for CI/checkSuites，并用仓库根目录的 `Dockerfile.server` 构建。Railway 环境变量和生产秘密保存在 Railway；本地开发使用 `.env.development` 和隔离资源。
+生产 API 与 worker 由 Railway 的 GitHub 集成部署。服务连接 `boyd4y/agrid` 的 `master` 分支，启用自动部署、关闭 Wait for CI/checkSuites（`checkSuites=false`），并用仓库根目录的 `Dockerfile.server` 构建。Railway 环境变量和生产秘密保存在 Railway；本地开发使用 `.env.development` 和隔离资源。
 
 ## 分支与发布
 
-`feature` 分支合并到 `develop` 后运行日常 CI，不触发生产部署。人工确认发布后，将 `develop` 中准备好的更改合并到 `master`；GitHub Actions 对 `master` 运行 CI，Railway 在关联检查通过后拉取分支、构建并自动部署。普通开发代理不得直接推送 `master`，发布确认由人工完成。无需版本 tag、手工部署命令、源码上传或自定义部署 API 编排。详见[生产发布指南](releases.md)。
+`feature` 分支完成必要的本地检查和独立 review 后合并到 `develop`，进行日常集成，不触发生产部署。人工确认发布后，将 `develop` 中准备好的更改合并到 `master`；Railway 原生 GitHub 集成收到更新后直接拉取分支、构建并自动部署，不等待 GitHub Actions 或 CI/check suites。普通开发代理不得直接推送 `master`，发布确认由人工完成。无需版本 tag、手工部署命令、源码上传或自定义部署 API 编排。详见[生产发布指南](releases.md)。
 
 ## 服务
 
@@ -15,7 +15,7 @@
 | Redis | Railway Redis | BullMQ 与队列唤醒；启用持久化并配置 `noeviction` |
 | PostgreSQL | Neon | 业务、认证、消息、Run 和执行租约数据 |
 
-API 与 worker 是独立 Railway 服务。GitHub push 会分别触发部署，不承诺 API 先于 worker 完成；不能通过服务间的变量引用来保证排序。worker 的只读 `preDeploy` 等待检查负责在数据库迁移完成前阻止新 worker 启动。API `preDeploy` 命令为 `node /app/scripts/release/predeploy.mjs`，worker 只读等待命令为 `node /app/scripts/release/predeploy.mjs --wait`；超时设置均为 1200 秒，worker 最多等待约 18 分钟。配置见 `.railway/railway.ts`。
+API 与 worker 是独立 Railway 服务。master 更新会分别触发部署，不承诺 API 先于 worker 完成；不能通过服务间的变量引用来保证排序。worker 的只读 `preDeploy` 等待检查负责在数据库迁移完成前阻止新 worker 启动。API `preDeploy` 命令为 `node /app/scripts/release/predeploy.mjs`，worker 只读等待命令为 `node /app/scripts/release/predeploy.mjs --wait`；超时设置均为 1200 秒，worker 最多等待约 18 分钟。配置见 `.railway/railway.ts`。
 
 ## 数据库迁移
 
@@ -27,7 +27,7 @@ worker 的 `preDeploy` 仅仅读取 migration 状态并在有待迁移内容时�
 
 API 与 worker 使用一致的运行时配置：`DATABASE_URL`、`DATABASE_URL_UNPOOLED`、`REDIS_URL`、`QUEUE_PREFIX`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、`APP_URL` 和集成密钥。`BETTER_AUTH_URL`、`APP_URL` 指向公开 API 域名。Railway 注入 `PORT`，应用监听 `0.0.0.0`。生产运行环境设置 `NODE_ENV=production`、`TABDO_ENV=production`、`AUTH_REQUIRED=true` 与 `QUEUE_PREFIX=tabdo-production`。
 
-生产 API 需要创建 Neon snapshot 时，`NEON_API_KEY`、`NEON_PROJECT_ID`、`NEON_BRANCH_ID` 以及 `RELEASE_RAILWAY_PROJECT_ID`、`RELEASE_RAILWAY_ENVIRONMENT_ID`、`RELEASE_RAILWAY_API_SERVICE_ID` 仅存放于 Railway API 服务变量中；worker 无需 Neon 管理密钥，GitHub Actions 不接收生产 Railway、数据库或 Neon 管理凭证。
+生产 API 需要创建 Neon snapshot 时，`NEON_API_KEY`、`NEON_PROJECT_ID`、`NEON_BRANCH_ID` 以及 `RELEASE_RAILWAY_PROJECT_ID`、`RELEASE_RAILWAY_ENVIRONMENT_ID`、`RELEASE_RAILWAY_API_SERVICE_ID` 仅存放于 Railway API 服务变量中；worker 无需 Neon 管理密钥。生产凭证不写入仓库或本地开发配置。
 
 上传文件使用 S3 兼容 bucket：设置 `FILE_STORAGE_DRIVER=s3` 及 `.env.example` 中的 endpoint、region、bucket 和凭证。API/worker 共用 bucket；不能假定 Railway 服务共享本地磁盘。AgentMail 使用相同的 `INTEGRATION_ENCRYPTION_KEY`。
 
