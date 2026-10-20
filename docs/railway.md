@@ -1,25 +1,37 @@
 # Railway 部署
 
-部署使用 Node 24、PostgreSQL、Redis/BullMQ 和官方 Vercel Harness SDK，与本地共用业务代码及聊天协议。
+生产 API 与 worker 由 Railway 的 GitHub 集成部署。服务连接 `boyd4y/agrid` 的 `master` 分支，启用自动部署和 Wait for CI/checkSuites，并用仓库根目录的 `Dockerfile.server` 构建。Railway 环境变量和生产秘密保存在 Railway；本地开发使用 `.env.development` 和隔离资源。
+
+## 分支与发布
+
+`feature` 分支合并到 `develop` 后运行日常 CI，不触发生产部署。人工确认发布后，将 `develop` 中准备好的更改合并到 `master`；GitHub Actions 对 `master` 运行 CI，Railway 在关联检查通过后拉取分支、构建并自动部署。普通开发代理不得直接推送 `master`，发布确认由人工完成。无需版本 tag、手工部署命令、源码上传或自定义部署 API 编排。详见[生产发布指南](releases.md)。
 
 ## 服务
 
-| 服务 | 配置 | 职责 |
+| 服务 | 启动命令 | 用途 |
 |---|---|---|
-| api | `.railway/railway.ts` 中的 `api` | 同源前端、Hono API 和聊天；由发布工作流在应用部署前运行允许的数据库迁移 |
-| worker | `.railway/railway.ts` 中的 `worker` | outbox relay、BullMQ 消费、定时任务和后台 Agent |
-| PostgreSQL | Railway 或已有实例 | 业务、认证、消息、Run、执行租约与原生恢复信息 |
-| Redis | Railway 或已有实例 | BullMQ；启用持久化并配置 `noeviction` |
+| API | `node dist/index.js` | 同源前端、Hono API 和聊天；在 `preDeploy` 检查并按需执行数据库迁移 |
+| worker | `node dist/queue/main.js` | outbox relay、BullMQ 消费、定时任务和后台 Agent；在 `preDeploy` 只读等待数据库迁移完成 |
+| Redis | Railway Redis | BullMQ 与队列唤醒；启用持久化并配置 `noeviction` |
+| PostgreSQL | Neon | 业务、认证、消息、Run 和执行租约数据 |
 
-生产发布以人工确认并推送的 `vX.Y.Z` 版本 tag 为入口，由专用发布工作流构建一个镜像并将相同的不可变 digest 部署给 API 和 worker。普通 `master` push、合并和 CI 不会触发该工作流；Railway API 和 worker 的 `master` 自动部署也已断开。发布入口目前尚未启用：生产凭证与目标的真实只读预检已通过，GHCR bootstrap run `39384775644` 已启动但结果尚未记录，package 可见性、匿名 digest 拉取和 snapshot 配额仍待验证，`RELEASE_BOOTSTRAP_READY=false`。完成全部前置配置前不要推送生产 tag。首次配置和失败恢复说明见[生产发布指南](releases.md)。
+API 与 worker 是独立 Railway 服务。GitHub push 会分别触发部署，不承诺 API 先于 worker 完成；不能通过服务间的变量引用来保证排序。worker 的只读 `preDeploy` 等待检查负责在数据库迁移完成前阻止新 worker 启动。API `preDeploy` 命令为 `node /app/scripts/release/predeploy.mjs`，worker 只读等待命令为 `node /app/scripts/release/predeploy.mjs --wait`；超时设置均为 1200 秒，worker 最多等待约 18 分钟。配置见 `.railway/railway.ts`。
 
-正式工作流在发现 pending migration 时，先建立并验证 Neon snapshot，再用目标镜像运行一次数据库迁移；没有 pending migration 时不创建 snapshot，也不运行 migrator。只有在 [`migrations.json`](../scripts/release/migrations.json) 中登记真实 SQL SHA-256、向后兼容且不需 writer drain 的迁移才可自动执行；其它迁移须单独规划。生产不执行 seed。`.railway/railway.ts` 不管理镜像 source/build，且将 `preDeploy` 留空；这不会自动改变 Railway 现有服务设置。Railway 的 master 触发已停用，API 旧 preDeploy hook 已清空；image auto updates 和其余服务目标仍须按[生产发布指南](releases.md)核验。根目录的 `railway.api.json`、`railway.worker.json` 保留作旧配置参考。工作目录由镜像设置为 `/app/apps/server`。
+## 数据库迁移
 
-## 共同环境变量
+API `preDeploy` 使用现有 migration plan 校验待执行项。没有 pending migration 时，不创建 snapshot，也不运行 migrator。有 pending migration 时，必须先通过兼容性审批和 SQL hash 校验，再创建 Neon snapshot 并确认恢复点可读；随后调用项目现有 migrator，并复查 migration ledger。任何审批、备份、迁移或读回失败都应使 API 部署失败。流程不会自动回滚数据库，也不会删除旧 snapshot 腾出配额。
 
-两个服务配置相同的 `DATABASE_URL`、`REDIS_URL`、`QUEUE_PREFIX`、`BETTER_AUTH_SECRET`（随机 32+ 字符）、`BETTER_AUTH_URL`、`APP_URL`。URL 指向公开 API 域名，镜像同时提供 SPA。Railway 注入 `PORT`，镜像监听 `0.0.0.0`。API 直接执行聊天，worker 执行自动化与定时任务，两者使用同一官方 Harness 实现。
+worker 的 `preDeploy` 仅仅读取 migration 状态并在有待迁移内容时等待 API 完成，不具备备份或迁移权限，不应配置 Neon 管理密钥。迁移必须兼容旧 writer，因为 API/worker 的现有实例可能仍在运行。
 
-上传文件使用标准 S3 兼容 bucket：设置 `FILE_STORAGE_DRIVER=s3` 和 `.env.example` 中的 endpoint、region、bucket、凭证。API/worker 共用 bucket，不能假定两个 Railway 服务共享本地磁盘。AgentMail 使用相同的 `INTEGRATION_ENCRYPTION_KEY`。
+## 环境变量与存储
+
+API 与 worker 使用一致的运行时配置：`DATABASE_URL`、`DATABASE_URL_UNPOOLED`、`REDIS_URL`、`QUEUE_PREFIX`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、`APP_URL` 和集成密钥。`BETTER_AUTH_URL`、`APP_URL` 指向公开 API 域名。Railway 注入 `PORT`，应用监听 `0.0.0.0`。生产运行环境设置 `NODE_ENV=production`、`TABDO_ENV=production`、`AUTH_REQUIRED=true` 与 `QUEUE_PREFIX=tabdo-production`。
+
+生产 API 需要创建 Neon snapshot 时，`NEON_API_KEY`、`NEON_PROJECT_ID`、`NEON_BRANCH_ID` 以及 `RELEASE_RAILWAY_PROJECT_ID`、`RELEASE_RAILWAY_ENVIRONMENT_ID`、`RELEASE_RAILWAY_API_SERVICE_ID` 仅存放于 Railway API 服务变量中；worker 无需 Neon 管理密钥，GitHub Actions 不接收生产 Railway、数据库或 Neon 管理凭证。
+
+上传文件使用 S3 兼容 bucket：设置 `FILE_STORAGE_DRIVER=s3` 及 `.env.example` 中的 endpoint、region、bucket 和凭证。API/worker 共用 bucket；不能假定 Railway 服务共享本地磁盘。AgentMail 使用相同的 `INTEGRATION_ENCRYPTION_KEY`。
+
+本地开发使用 `.env.development`。开发和测试不得连接生产数据库；集成测试使用隔离的 `_agent_test` / `_queue_test` 数据库与专用 Redis。
 
 ## 智能体
 
@@ -31,19 +43,19 @@ PI_BASE_URL=https://api.deepseek.com/v1
 PI_MODEL=deepseek-flash
 ```
 
-API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运行环境无需 Docker socket、自定义 Agent 镜像或单独 MCP 服务。镜像内提供 bash、Python 和 Git，原生工作区及日志通过既有快照和 opaque resume state 恢复。
+API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；运行环境无需 Docker socket、自定义 Agent 镜像或单独 MCP 服务。镜像内提供 bash、Python 和 Git，原生工作区及日志通过既有快照和 opaque resume state 恢复。
 
 使用 Claude/Codex 或 Pi 远程工作区时，配置 `VERCEL_TOKEN`、`VERCEL_TEAM_ID`、`VERCEL_PROJECT_ID`（或官方支持的 OIDC），并给对应原生提供商配置模型密钥。官方 Sandbox adapter 完成创建、bootstrap 模板及 resume lookup；无需自行发布 Agent Docker 镜像。Claude/Codex 的原生 runtime 在 Sandbox 内；Pi 的 agent loop 仍在 Node host。
 
 ## 后台唤醒与 Neon
 
-正常事件在 PostgreSQL 事务提交后通过 Redis 唤醒 worker；定时任务及 outbox 重试使用 Redis 延迟消息，不再每 500ms 扫描数据库。保持 worker 常驻以消费消息。
+正常事件在 PostgreSQL 事务提交后通过 Redis 唤醒 worker；定时任务及 outbox 重试使用 Redis 延迟消息。保持 worker 常驻以消费消息。
 
 `AUTOMATION_RECOVERY_INTERVAL_MS=900000` 控制启动后的兜底扫描间隔，默认 15 分钟；旧 `AUTOMATION_RELAY_POLL_MS` 不再生效。更短的兜底间隔会减少故障补偿延迟，但可能阻止 Neon 闲置休眠。事务提交后进程崩溃或 Redis 通知丢失时，启动恢复/下一次补偿扫描仍会处理已持久化事件。频繁的业务任务、多个副本及其他客户端仍会消耗数据库计算额度。
 
 ## 验收
 
-检查 `/api/health`、登录、文件上传下载、推理和工具流、连续对话、显式取消、数据自动化和定时历史。集成测试仅使用隔离 `_agent_test` / `_queue_test` 数据库及专用 Redis；不指向线上数据。线上冒烟仅使用自身新建的临时资源并在结束后清理；一次发布检查不能代替真实模型或远程 Sandbox 专项验收。
+检查 `/api/health`、登录、文件上传下载、推理和工具流、连续对话、显式取消、数据自动化和定时历史。集成测试仅使用隔离 `_agent_test` / `_queue_test` 数据库及专用 Redis；不指向线上数据。生产端到端部署和迁移流程仍待实测；实测完成前不得将其描述为已通过验收。
 
 ## 表格 API
 
@@ -53,6 +65,6 @@ API 和 worker 配置一致。Pi 的 agent loop 在各自 Node host；本地运�
 
 迁移 `0031_sites` 增加站点、不可变版本和短期预览。前端入口为 `/app/sites`；公开内容通过 `/s/:id/` 访问，发布资产写入上述 S3 bucket。保存版本不会直接发布。预览和公开文档带浏览器隔离策略，不可读取后台身份或存储。无需额外的站点进程或容器；可选 `SITE_PUBLIC_ORIGIN` 应实际路由到同一 API 服务，未配置时沿用 `BETTER_AUTH_URL` 的源。操作与边界见 [Site 工作流](site-workflow.md)。
 
-API和worker配置相同的 `SITE_SDK_URL`，作为这套部署唯一的浏览器SDK来源。海外默认使用固定版本jsDelivr地址；国内另部署一套时配置其CDN地址，无需用户切换。先独立发布对应npm版本并确认链接可用，再启用引用该版本的站点；应用部署不会自动执行npm发布。历史站点文件保留已保存的引用。
+API和worker配置相同的 `SITE_SDK_URL`，作为这套部署唯一的浏览器SDK来源。海外默认使用固定版本jsDelivr地址；国内另部署一套时配置其CDN地址，无需用户切换。先独立发布对应npm版本并确认链接可用，再启用引用该版本的站点；应用部署不会自动执行npm发布。
 
-参考：[Railway 配置](https://docs.railway.com/config-as-code)、[Dockerfile](https://docs.railway.com/builds/dockerfiles)、[官方 Harness 会话](https://ai-sdk.dev/docs/ai-sdk-harnesses/harness-agent)。
+参考：[Railway GitHub 自动部署](https://docs.railway.com/deployments/github-autodeploys)、[Railway Dockerfile 构建](https://docs.railway.com/builds/dockerfiles)、[Railway 配置](https://docs.railway.com/config-as-code)、[Dockerfile](https://docs.railway.com/builds/dockerfiles)。
