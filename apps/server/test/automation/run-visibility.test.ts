@@ -1,15 +1,16 @@
+import { hashApiKey } from "../../src/business/auth/actor.js";
+import { createMcpRoute } from "../../src/mcp/route.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { before, after, test } from "node:test";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { and, eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../../src/business/db/factory.js";
-import { organization, user, member, workspaces, tables, automations, automationRuns, automationAgentActions, chatThreads } from "../../src/business/db/schema.js";
+import { organization, user, member, agentProfile, workspaces, tables, automations, automationRuns, automationAgentActions, chatThreads } from "../../src/business/db/schema.js";
 import { listAutomationRuns, listRuleRuns, mapRule } from "../../src/business/automation/crud.js";
 import { listScheduledRuns } from "../../src/business/automation/scheduled-runs.js";
 import { createAutomationsRoute } from "../../src/business/http/automations.js";
@@ -34,7 +35,7 @@ const actor = (id: string): Actor => ({ kind: "human", userId: id, memberId: id,
   role: id === owner ? "owner" : id === admin ? "admin" : "member", name: id, email: `${id}@local.test` });
 const scope = async () => ({ commands: deps, identity: { database: db,
   resolveSession: async () => ({ user: { id: viewer, name: viewer, email: `${viewer}@local.test` }, session: { activeOrganizationId: org } }) }, close: async () => {} });
-const app = new Hono().route("/api", createAutomationsRoute(scope)).route("/api/commands", createCommandsRoute(scope));
+const app = new Hono().route("/mcp", createMcpRoute(scope, { publicOrigin: "http://fixture.test", allowedOrigins: [] })).route("/api", createAutomationsRoute(scope)).route("/api/commands", createCommandsRoute(scope));
 const input = (id?: string) => ({ organizationId: org, actorId: id, automationId: ruleId });
 const containsPrivate = (value: unknown) => [answer, privateThread].some(secret => JSON.stringify(value).includes(secret));
 async function rule(schedule = false) {
@@ -102,16 +103,18 @@ test("registered native, command and both REST histories use the trusted viewer;
   viewer = peer;
   assert.equal((await app.request("/api/commands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: "listAutomationRuns", input: { automationId: ruleId, actorId: owner } }) })).status, 400);
 });
-test("actual MCP stdio run history preserves owned content and never exposes another member's turn", { timeout: 30000 }, async () => {
+test("actual MCP HTTP run history preserves owned content and never exposes another member's turn", { timeout: 30000 }, async () => {
   const server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
   if (!server.listening) await new Promise(resolve => server.once("listening", resolve));
   const address = server.address(); assert(address && typeof address !== "string");
   try {
     for (const id of [peer, owner]) {
+      const secret = `agt_${randomUUID()}`;
+      await db.insert(agentProfile).values({ id: randomUUID(), userId: id, memberId: id, organizationId: org, displayName: id, apiKeyHash: await hashApiKey(secret) }).onConflictDoUpdate({ target: agentProfile.userId, set: { apiKeyHash: await hashApiKey(secret) } });
       viewer = id;
-      const output: { stdout: string; stderr: string } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../../../mcp/test/calendar-client.mjs", import.meta.url))], { env: {
-        ...process.env, TABDO_API_URL: `http://127.0.0.1:${address.port}`, TABDO_API_KEY: "", TABLE_API_KEY: "", TABDO_WORKSPACE_ID: deps.workspaceId!,
-        CALENDAR_MCP_TSX: createRequire(import.meta.url).resolve("tsx/cli"), CALENDAR_MCP_CASE: JSON.stringify({ calls: [{ name: "list_automation_runs", input: { limit: 200 },
+      const output: { stdout: string; stderr: string } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL("../fixtures/mcp/calendar-client.mjs", import.meta.url))], { env: {
+        ...process.env, MCP_TEST_URL: `http://127.0.0.1:${address.port}/mcp`, MCP_TEST_KEY: secret, MCP_TEST_WORKSPACE: deps.workspaceId!,
+        CALENDAR_MCP_CASE: JSON.stringify({ calls: [{ name: "list_automation_runs", input: { limit: 200 },
           ...(id === owner ? { includes: [answer, privateThread] } : { absent: [answer, privateThread] }) }] }),
       } });
       assert.equal(JSON.parse(output.stdout).mcp, "PASS");

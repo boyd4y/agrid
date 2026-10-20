@@ -10,14 +10,14 @@ export function mountClientAssets(app: Hono, directory: string) {
   // The Node static adapter requires a cwd-relative path.
   const root = relative(process.cwd(), absolute) || ".";
   app.on(["GET", "HEAD"], "*", async (c, next) => {
-    if (c.req.path === "/api" || c.req.path.startsWith("/api/")) return next();
+    if (c.req.path === "/mcp" || c.req.path.startsWith("/mcp/") || c.req.path === "/api" || c.req.path.startsWith("/api/")) return next();
     const response = await serveStatic({ root })(c, next);
     if (response instanceof Response && response.headers.get("Content-Type")?.startsWith("text/html")) response.headers.set("Cache-Control", "no-cache");
     return response;
   });
   app.on(["GET", "HEAD"], "*", async (c, next) => {
     const path = c.req.path;
-    if (path === "/api" || path.startsWith("/api/") || path.startsWith("/assets/") || path.split("/").pop()?.includes(".")) return next();
+    if (path === "/mcp" || path.startsWith("/mcp/") || path === "/api" || path.startsWith("/api/") || path.startsWith("/assets/") || path.split("/").pop()?.includes(".")) return next();
     c.header("Cache-Control", "no-cache");
     return serveStatic({ root, path: "index.html" })(c, next);
   });

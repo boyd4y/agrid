@@ -9,7 +9,7 @@ import { readRow } from "../commands/relation-reads.js";
 import { ServiceError } from "../errors.js";
 import { requireSiteTable, resolveSiteKey, canAccess, type Operation, type SitePrincipal } from "./keys.js";
 
-export type SiteContext = { principal: SitePrincipal; secret: string; baseUrl: string };
+export type SiteContext = { principal: SitePrincipal; secret: string; baseUrl: string; fileAuth?: "bearer" };
 export const cellSchema = z.union([z.string().max(64000), z.number().finite(), z.boolean(), z.array(z.string().max(64000)).max(100), z.null()]);
 export const rowsOptions = z.object({ cursor: z.string().max(4000).nullable().optional(), limit: z.number().int().min(1).max(100).default(50),
   filters: z.array(z.object({ id: z.string().optional(), columnId: z.uuid(), op: z.enum(FILTER_OPS), value: cellSchema.optional() })).max(30).optional(),
@@ -64,7 +64,8 @@ async function serializeRows(deps: CommandDependencies, context: SiteContext, ta
     cells: Object.fromEntries(cols.map(col => [col.id, visible.includes(col) ? row.cells[col.id] ?? null : null])),
     files: fileCols.flatMap(col => (Array.isArray(row.cells[col.id]) ? row.cells[col.id] as string[] : []).flatMap(id => {
       const file = byId.get(id); if (!file || file.columnId !== col.id) return [];
-      const url = new URL(`/api/site-files/${tableId}/${row.id}/${col.id}/${id}`, context.baseUrl); url.searchParams.set("key", context.secret);
+      const url = new URL(`/api/site-files/${tableId}/${row.id}/${col.id}/${id}`, context.baseUrl);
+      if (context.fileAuth !== "bearer") url.searchParams.set("key", context.secret);
       return [{ id, columnId: col.id, name: file.name, size: file.size, mimeType: file.mimeType, url: url.href } satisfies SiteFile];
     })), createdAt: new Date(row.createdAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString(),
   }));

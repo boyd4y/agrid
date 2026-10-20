@@ -1,6 +1,5 @@
+import { dispatchKeyCommand } from "../data-api/commands.js";
 import { siteQueryCalendarView } from "../data-api/calendar-views.js";
-import { isBlogCommand, blogTransportInput } from "../blogs/transport.js";
-import { executeBlog } from "../blogs/service.js";
 import { BlogError } from "../blogs/errors.js";
 import { updateScheduledAutomation } from "../calendar/schedules.js";
 import { CALENDAR_READ_COMMANDS } from "@tabdo/shared";
@@ -15,9 +14,7 @@ import { Hono, type Context, type Next } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
 import type { RequestScope, RequestScopeResolver } from "./request.js";
-import { rows, tables } from "../db/schema.js";
 import { ServiceError } from "../errors.js";
 import * as keys from "../data-api/keys.js";
 import * as data from "../data-api/data.js";
@@ -58,12 +55,6 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       return c.json({ error: "Request could not be completed" }, 500);
     } finally { try { await scope?.close(); } catch { /* Committed responses survive cleanup failures. */ } }
   };
-  const locate = async ({ scope, context }: Input, rowId: unknown) => {
-    const id = z.uuid().parse(rowId);
-    const [found] = await scope.commands.database.select({ tableId: rows.tableId }).from(rows).innerJoin(tables, eq(tables.id, rows.tableId))
-      .where(and(eq(rows.id, id), eq(tables.organizationId, context.principal.organizationId)));
-    if (!found) throw new ServiceError(404, { message: "Record not found" }); return found.tableId;
-  };
   route.post("/views/:id/calendar/query", handle(false, ({ scope, context, c, body }) => siteQueryCalendarView(scope.commands, context, { ...body, viewId: c.req.param("id") })));
   route.get("/tables", handle(false, ({ scope, context }) => data.siteTables(scope.commands, context)));
   route.get("/tables/:id", handle(false, ({ scope, context, c }) => data.siteTable(scope.commands, context, c.req.param("id")!)));
@@ -76,30 +67,7 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.patch("/tables/:id/rows/:rowId", handle(true, ({ scope, context, c, body }) => data.siteUpdateRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!, body.cells, body.expectedVersion as number | undefined)));
   route.delete("/tables/:id/rows/:rowId", handle(true, ({ scope, context, c }) => data.siteDeleteRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!)));
   route.post("/commands", handle(true, async input => {
-    const { scope, context, body } = input, command = z.string().parse(body.command), args = z.record(z.string(), z.unknown()).parse(body.input ?? {});
-    if (["workspaceId", "organizationId", "actorId", "skipAutomation"].some(key => Object.hasOwn(args, key))) throw new ServiceError(400, { message: "Internal execution options cannot be supplied" });
-    const deps = scope.commands;
-    if (command === "queryCalendarView") return { ok: true, command, result: await siteQueryCalendarView(deps, context, args) };
-    if (isBlogCommand(command)) return { ok: true, command, result: await executeBlog(deps, { kind: "key", secret: context.secret }, command, blogTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
-    if (command === "updateAutomation") return { ok: true, command, result: await updateScheduledAutomation(deps, context.secret, args) };
-    if (isDocumentCommand(command)) return { ok: true, command, result: await executeDocument(deps, { kind: "key", secret: context.secret }, command, documentTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
-    if (isCalendarCommand(command)) return { ok: true, command, result: await executeCalendar(deps, { kind: "key", secret: context.secret }, command, calendarTransportInput(command, args, input.c.req.header("Idempotency-Key"))) };
-    if (!["listTables", "getTable", "queryRows", "getRow", "addRow", "updateCell", "updateCells", "deleteRow"].includes(command)) throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
-    let result: unknown;
-    if (command === "listTables") result = await data.siteTables(deps, context);
-    else {
-      const tableId = args.tableId === undefined ? await locate(input, args.rowId) : z.uuid().parse(args.tableId);
-      switch (command) {
-        case "getTable": result = await data.siteTable(deps, context, tableId); break;
-        case "queryRows": { const { tableId: _, ...options } = args; result = await data.siteRows(deps, context, tableId, options); break; }
-        case "getRow": result = await data.siteRow(deps, context, tableId, z.uuid().parse(args.rowId)); break;
-        case "addRow": result = await data.siteCreateRow(deps, context, tableId, args.cells); break;
-        case "updateCell": case "updateCells": result = await data.siteUpdateRow(deps, context, tableId, z.uuid().parse(args.rowId), command === "updateCell" ? { [z.uuid().parse(args.columnId)]: args.value } : args.cells, args.expectedVersion as number | undefined); break;
-        case "deleteRow": result = await data.siteDeleteRow(deps, context, tableId, z.uuid().parse(args.rowId)); break;
-        default: throw new ServiceError(403, { message: "API keys only authorize table record CRUD" });
-      }
-    }
-    return { ok: true, command, result };
+    return dispatchKeyCommand(input.scope.commands, input.context, input.body, input.c.req.header("Idempotency-Key"));
   }));
   const calendar = (command: import("@tabdo/shared").CalendarCommand, argumentsFor: (input: Input) => Record<string, unknown>) => handle(!CALENDAR_READ_COMMANDS.includes(command), input => executeCalendar(input.scope.commands, { kind: "key", secret: input.context.secret }, command, calendarTransportInput(command, argumentsFor(input), input.c.req.header("Idempotency-Key"))));
   route.post("/schedules/occurrences/query", calendar("queryScheduledOccurrences", ({ body }) => body));

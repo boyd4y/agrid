@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 const input = JSON.parse(process.env.CALENDAR_MCP_CASE);
 const client = new Client({ name: 'calendar-regression', version: '1' });
-const transport = new StdioClientTransport({ command: process.execPath, args: [process.env.CALENDAR_MCP_TSX, fileURLToPath(new URL('../src/index.ts', import.meta.url))], env: { ...process.env } });
+const transport = new StreamableHTTPClientTransport(new URL(process.env.MCP_TEST_URL), { requestInit: { headers: { Authorization: `Bearer ${process.env.MCP_TEST_KEY}`, ...(process.env.MCP_TEST_WORKSPACE ? { 'X-Workspace-Id': process.env.MCP_TEST_WORKSPACE } : {}) } } });
 try {
   await client.connect(transport);
   const catalog = await client.listTools();
