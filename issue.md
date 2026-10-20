@@ -1,44 +1,36 @@
 # 开发与生产发布流程问题
 
-按用户 2026-10-20 的反馈修订。前版过多讨论备份命令、等待和重试，没有抓住根因：日常开发交付与生产运维没有通过独立发布流程分开。原始操作复盘保留在本机 .herdr/reports/0095-unified-record-site-closeout/retrospective-original.md。
+按用户 2026-10-20 的反馈维护。根因是日常开发交付与生产运维没有通过独立发布流程分开，而不是备份命令、等待或重试本身。原始操作复盘保留在本机 `.herdr/reports/0095-unified-record-site-closeout/retrospective-original.md`。
 
 ## 用户要求
 
-- 本地开发与生产环境隔离。
-- 本地开发不承担生产备份、生产发布审批和线上验收流程；仍需正常的本地构建与必要测试。
-- 普通提交、push 和合并不构成生产发布授权。
-- 生产需要明确的人工确认；确认之后，备份、迁移、部署、验证由自动化完成，用户无需手工执行运维命令。
-- 支持用版本 tag 触发发布流程。具体人工确认入口在方案确定时明确，不能由 agent 自行解释普通提交为放行。
+- 本地开发与生产环境隔离；本地开发不承担生产备份、发布审批和线上验收，但仍做正常本地构建与必要测试。
+- 普通提交、push、合并和 CI 不构成生产发布授权。
+- 生产需要明确的人工确认；确认后，自动化负责备份、迁移、部署和验证，用户不必手工执行运维命令。
+- 用正式版本 tag 触发生产流程，明确人工确认入口，不能把普通提交解释为上线许可。
 
-## 准备开始前核实的现状
+## 问题根因
 
-| 项目 | 当前状态 | 问题 |
-| --- | --- | --- |
-| 本地运行 | development 模式只加载对应环境文件，检查本地数据库、Redis 和文件存储 | 这一层已经有隔离，不能笼统说所有环境完全混用 |
-| 普通 CI | .github/workflows/ci.yml 对 master、feat 分支 push 和 master PR 做构建、类型与测试 | CI 本身应保留，但通过不应自动代表生产发布获批 |
-| Railway 来源 | API、worker 均配置监听 master，开启 checkSuites | 普通 master 更新与生产部署耦合；等待 CI 不提供人工发布确认 |
-| 发布流水线 | 当前仅有 ci.yml，没有独立 tag 发布 workflow | 缺少版本发布入口，以及统一的自动化备份、迁移、部署和验收编排 |
-| 本次操作 | 由开发会话直接协调生产备份、停止服务、迁移和部署 | 运维步骤侵入日常开发，增加耗时，并在新制品就绪前停止生产服务 |
+1. **开发完成与上线混为同一个完成条件。** 日常任务应结束于本地验证、review 和代码交付；生产上线由单独、明确触发的流程负责。
+2. **人工确认与机器执行边界不清。** 人确认发布哪个版本；机器执行该版本的发布流程。不能要求用户手工逐条跑运维命令，也不能让 agent 自行推进生产。
+3. **生产发布依赖临时操作。** 备份、迁移、部署和状态核验需要形成可重复流程。
+4. **环境隔离之外，发布权限和触发器也要隔离。** 生产凭证应只供生产发布任务使用；普通开发和 PR CI 不应得到生产凭证。测试数据库、Redis 命名空间和文件存储也应保持独立。
 
-## 应当解决的根因
+## 当前进展（2026-10-20）
 
-1. **开发完成与上线混为同一个完成条件。** 日常任务应结束于本地验证、review 和代码交付；生产上线由另一个明确触发的流程负责。
-2. **缺少人工确认与机器执行之间的清晰边界。** 人确认发布哪个版本；机器执行已确认版本的整套流程。不能让用户手动逐条跑命令，也不能让 agent 随意推进生产。
-3. **生产发布靠临时操作，而不是可重复的流水线。** 备份失败重试、迁移顺序和状态轮询不应每次临场安排。
-4. **环境变量隔离之外，发布权限和触发器也需要隔离。** 生产凭证应由生产发布任务使用；普通开发和 PR CI 不应得到生产凭证。测试数据、Redis 命名空间和文件存储也应各自独立。
+- [x] 普通 CI 与正式 tag 发布分开；`.github/workflows/release.yml` 只监听 `v*` tag，推送普通分支不会触发该发布工作流。
+- [x] Railway API、worker 的 `master` 自动部署已断开；API 旧迁移 `preDeploy` hook 已清空。两服务 active/latest deployment 均为 `SUCCESS`，公开 `/api/health` 和 schema 检查通过。
+- [x] GitHub `tabdo / production` Environment 来源限制为 `v*` tag；7 项必要目标变量及 `RAILWAY_API_TOKEN`、`NEON_API_KEY`、`RELEASE_DATABASE_URL` 三项 secrets 已配置，真实生产只读预检通过。
+- [x] `v*` tag 创建 ruleset 和禁止更新/删除 ruleset 已启用。
+- [x] 已实测普通 push 只运行 CI：run `39383174686` 成功，Railway 两个服务 deployment 未变化。
+- [x] release workflow 已实现版本与提交校验、单次镜像构建、按需 snapshot、兼容迁移、API/worker 部署验证和脱敏失败结果；迁移清单只允许经 SHA 审核的向后兼容迁移。
+- [ ] 0099 的 `ghcr-bootstrap.yml` 已通过 test/review 并合入 `master`（`6a9a7af`）；bootstrap run `39384775644` 已 dispatch，源码 SHA 为 `9b6213dc65d0931713fffdc272f55d758fc4ca45`。激活记录尚未给出该 run 的完成结果，不能据此认定镜像已推送。该 workflow 使用 job 的 `GITHUB_TOKEN`，不需要个人 `packages` PAT；后续仍需确认 package 已设为 Public 并验证匿名 digest 拉取。
+- [ ] `RELEASE_BOOTSTRAP_READY=false`，不能创建或推送生产版本 tag，不能称发布入口已经启用。
+- [ ] snapshot 配额尚待核验。当前没有 pending migration，因此尚未真实演练 snapshot 创建与迁移；也未做真实生产 tag 发布、生产镜像部署或发布后冒烟。
 
-## 准备进展（2026-10-20）
+细节与证据见 `.herdr/reports/0099-release-activation/progress.md`、`github-settings.json`、`ordinary-push-proof.json`、`project-token-status.json`。状态以这些记录中最新的实际结果为准。完整操作指南见 [`docs/releases.md`](docs/releases.md)。
 
-已本地合入经过独立 test/review 的发布实现与指南：
-
-- `.github/workflows/release.yml`：正式 tag 触发，复用无生产凭证的 CI，构建一次镜像并固定 digest。
-- `scripts/release/`：版本与提交校验、生产目标预检、按需 snapshot、兼容迁移、API/worker 部署验证及脱敏失败结果。
-- `docs/releases.md`：人工确认、一次性配置、日常发布和恢复说明；`AGENTS.md` 已引用。
-- 发布测试 27 项、环境测试 16 项通过；另有独立 tag 组合验证及 Bash/Zsh 文档命令验证，workflow 语法与定向类型检查通过。
-
-这只代表准备完成。本次未 push master、未创建发布 tag、未修改远端配置、未发布镜像或生产应用。生产凭证、GitHub Environment/tag 保护、GHCR 可见性和旧 Railway 自动部署停用仍属后续平台启用工作；不能把本地代码合入当成已经启用。
-
-## 目标流程（本地实现已准备，远端尚未启用）
+## 目标流程
 
 日常开发：
 
@@ -46,32 +38,21 @@ feature 分支 → 本地验证 → PR review / CI → 合并 master；全程不
 
 生产发布：
 
-人工确认版本 → 发布受保护的 vX.Y.Z tag → 对 tag 对应的确切提交校验并构建制品 → 自动生产备份（涉及数据库迁移时）→ 执行兼容迁移 → 部署同一版本的 API 与 worker → 健康检查和冒烟验证 → 记录发布结果。
+人工确认版本 → 推送受保护的 `vX.Y.Z` tag → 校验 tag 对应提交并构建制品 → 如需迁移则创建并验证 Neon snapshot → 执行兼容迁移 → 把同一镜像 digest 部署到 API 与 worker → 健康检查和只读冒烟 → 记录结果。
 
-本轮采用 tag 作为发布确认，额外审批为可选增强：
+版本 tag 是对该版本的发布授权，GitHub Environment 的额外审批可选，不应默认要求重复批准。agent 不得自行创建或推送生产 tag。启用前的配置、一次性 GHCR 初始化、失败恢复和 tag 示例以[生产发布指南](docs/releases.md)为准。
 
-- **tag 就是确认**：由人工发布，或人工明确授权发布指定 tag；之后全自动，不增加重复审批。agent 不自行创建或推送生产 tag。
-- **可选的 tag 后审批**：如果将来需要额外平台审批，tag 自动启动校验和构建，再由 GitHub production Environment 的人工 Approve 放行生产任务；本轮不默认增加这一步。
+## 剩余启用条件
 
-两种方式都不是让用户手工备份、SSH、迁移或操作 Railway。tag 只是触发与版本标识，不会天然提供人工审批；必须同时配置权限或审批规则。
+- [x] 关闭 Railway 普通 `master` push 的应用自动部署，并确认 IaC 不会重新启用该触发器。
+- [x] 保留普通 CI，生产 workflow 仅接受正式版本 tag。
+- [x] 配置人工确认边界、Environment tag 来源限制和 `v*` tag 创建/不可变规则。
+- [x] 配齐生产凭证与目标变量，并通过 Railway/Neon 生产目标真实只读预检。
+- [x] 发布 workflow 校验 tag 和提交来源，构建一次制品，并让 API 与 worker 使用同一镜像 digest。
+- [x] 实现按需 snapshot、允许迁移校验、应用部署和失败状态报告；真实迁移发布演练尚未完成。
+- [x] 普通 push 未触发 Railway 发布的远端证据已取得。
+- [ ] 完成 GHCR bootstrap、切换 package 为 Public 并验证匿名 digest 拉取。
+- [ ] 完成 GHCR 初始化、Public 设置和匿名 digest 拉取；核对 snapshot 配额及保留策略，待所有前置配置和验证通过后才将 `RELEASE_BOOTSTRAP_READY` 设为 `true`。
+- [ ] 获得具体版本、SHA 与变更清单的人工确认后，才进行首次生产 tag 发布。
 
-## 启用前验收标准（包含远端配置，尚未整体完成）
-
-- [ ] 关闭 Railway 对普通 master push 的生产自动部署，同时更新 IaC，防止后续配置应用重新启用。
-- [ ] 保留普通 CI；增加独立、只接受正式版本 tag 的生产发布 workflow，禁止任意分支提交绕过发布校验。
-- [ ] 明确人工确认规则，并在 GitHub 配置 tag 限制或 production Environment 审批；没有确认不得访问生产步骤。
-- [ ] 生产凭证与开发、PR CI 分开；生产 workflow 明确指定项目、环境、服务和对应提交，不能依赖 CLI 当前链接状态。
-- [ ] 自动化校验版本与提交来源；构建完成后再进入生产操作，API 与 worker 使用同一版本制品。
-- [ ] 迁移前自动确认恢复点可用；失败则停止后续步骤，不默认先停止线上服务。
-- [ ] 自动执行兼容迁移、部署、健康和必要冒烟检查，输出版本、提交、部署 ID 与检查结果；发布串行执行，不能中途取消正在进行的迁移。
-- [ ] 失败时明确报告状态并提供受控的应用回退路径；数据库恢复单独处理，不能把镜像回退等同于数据回滚。
-- [ ] 验证普通开发 push 不会发布；通过测试版本验证 tag 流程，不未经授权发布生产。
-
-准备阶段已完成本地实现、指南和独立验收；没有修改 GitHub/Railway 平台设置，也没有创建、推送生产 tag 或触发生产发布。后续启用以 [发布指南](docs/releases.md) 为准。
-
-## 官方能力依据
-
-- [GitHub Actions 的分支和 tag 触发器](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
-- [GitHub Environment 与人工审批](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
-- [Railway GitHub 自动部署及关闭方式](https://docs.railway.com/deployments/github-autodeploys)
-- [Railway CLI 自动部署与环境范围 token](https://docs.railway.com/cli/deploying)
+在尚未完成的远端条件关闭前，保持 `RELEASE_BOOTSTRAP_READY=false`。不得用测试环境或个人 PAT 代替正式生产凭证，也不得删除最后一个可恢复 snapshot 腾空间。
