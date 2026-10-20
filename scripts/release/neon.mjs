@@ -33,7 +33,8 @@ export function createNeon(env, config, fetcher = fetch, pollOptions = {}) {
       requireRelease(endpoints?.some(endpoint => endpoint.branch_id === config.neonBranchId && endpoint.host === new URL(config.databaseUrl).hostname && endpoint.type === "read_write"), "neon_endpoint_mismatch");
     },
     async snapshot(deploymentId, onCreated = () => {}) {
-      const params = new URLSearchParams({ name: `tabdo-${deploymentId}-${Date.now()}`, expires_at: new Date(Date.now() + 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, "Z") });
+      const name = `tabdo-${deploymentId}-${Date.now()}`;
+      const params = new URLSearchParams({ name, expires_at: new Date(Date.now() + 7 * 86400000).toISOString().replace(/\.\d{3}Z$/, "Z") });
       const created = await neon(`/branches/${config.neonBranchId}/snapshot?${params}`, "POST");
       const id = created.snapshot?.id;
       requireRelease(typeof id === "string" && /^[a-z0-9-]{1,80}$/.test(id), "snapshot_id_missing");
@@ -50,7 +51,9 @@ export function createNeon(env, config, fetcher = fetch, pollOptions = {}) {
       }));
       await poll(async () => (await neon("/snapshots")).snapshots?.find(value => value.id === id), value => {
         if (!value) return false;
-        requireRelease(value.source_branch_id === config.neonBranchId && value.lsn && value.timestamp && Date.parse(value.expires_at) > Date.now(), "snapshot_readback_mismatch");
+        requireRelease(value.source_branch_id === config.neonBranchId && value.name === name
+          && typeof value.created_at === "string" && Number.isFinite(Date.parse(value.created_at))
+          && typeof value.expires_at === "string" && Date.parse(value.expires_at) > Date.now(), "snapshot_readback_mismatch");
         return true;
       }, pollOptions);
       return id;

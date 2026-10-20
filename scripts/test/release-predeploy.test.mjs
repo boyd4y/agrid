@@ -108,9 +108,22 @@ test("built migrator runs once with bounded lifetime and no management credentia
   }
 });
 
-test("Neon verifies direct endpoint and reads back snapshot operations and restore point without mutation retry", async () => {
-  for (const failure of [undefined, "endpoint", "backup", "operation", "readback"]) {
-    let mutations = 0, savedId;
+test("Neon verifies snapshot identity and dates without optional restore fields or mutation retry", async t => {
+  const readbackFailures = {
+    id: { id: "snapshot-other" },
+    branch: { source_branch_id: "wrong" },
+    name: { name: "tabdo-another-deployment" },
+    missingName: { name: undefined },
+    missingCreatedAt: { created_at: undefined },
+    nullCreatedAt: { created_at: null },
+    numericCreatedAt: { created_at: 1 },
+    invalidCreatedAt: { created_at: "not-a-date" },
+    missingExpiry: { expires_at: undefined },
+    invalidExpiry: { expires_at: "not-a-date" },
+    expired: { expires_at: "2000-01-01T00:00:00Z" },
+  };
+  for (const failure of [undefined, "endpoint", "backup", "operation", ...Object.keys(readbackFailures)]) await t.test(failure ?? "valid snapshot without lsn or timestamp", async () => {
+    let mutations = 0, migrations = 0, operationReads = 0, snapshotReads = 0, savedId, snapshotName;
     const json = value => new Response(JSON.stringify(value));
     const fetcher = async (url, options) => {
       assert.equal(options.headers.Authorization, "Bearer private-neon");
@@ -119,16 +132,36 @@ test("Neon verifies direct endpoint and reads back snapshot operations and resto
       if (url.endsWith("/endpoints")) return json({ endpoints: [{ branch_id: "branch", host: failure === "endpoint" ? "wrong" : new URL(databaseUrl).hostname, type: "read_write" }] });
       if (options.method === "POST") {
         mutations++;
+        snapshotName = new URL(url).searchParams.get("name");
+        assert.match(snapshotName, /^tabdo-deployment-1-\d+$/);
         if (failure === "backup") throw new Error("private-neon");
         return json({ snapshot: { id: "snapshot-1" }, operations: [{ id: "op-1" }] });
       }
-      if (url.includes("/operations/")) return json({ operation: { status: failure === "operation" ? "failed" : "finished" } });
-      return json({ snapshots: [{ id: "snapshot-1", source_branch_id: failure === "readback" ? "wrong" : "branch", lsn: "0/1234", timestamp: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString() }] });
+      if (url.includes("/operations/")) return json({ operation: { status: failure === "operation" ? "failed" : ++operationReads === 1 ? "running" : "finished" } });
+      assert.equal(new URL(url).pathname, "/api/v2/projects/neon/snapshots");
+      assert.equal(operationReads, 2);
+      if (++snapshotReads === 1) return json({ snapshots: [] });
+      return json({ snapshots: [{
+        id: "snapshot-1", name: snapshotName, source_branch_id: "branch",
+        created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString(),
+        manual: true, full_size: 1234, ...readbackFailures[failure],
+      }] });
     };
     const ports = createNeon(env, predeployConfig(env), fetcher, { attempts: 2, intervalMs: 0 });
-    const operation = async () => { await ports.verifyTarget(); return ports.snapshot("deployment-1", id => { savedId = id; }); };
-    if (failure) await assert.rejects(operation);
-    else { assert.equal(await operation(), "snapshot-1"); assert.equal(savedId, "snapshot-1"); }
+    const result = await runPredeploy({ env, ports: {
+      ...ports,
+      snapshot: (deploymentId, save) => ports.snapshot(deploymentId, id => { savedId = id; save(id); }),
+      migrationPlan: async () => migrations ? [] : ["0034_safe"],
+      migrate: async () => { migrations++; },
+    } });
+    assert.equal(result.status, failure ? "failed" : "success");
+    assert.equal(migrations, failure ? 0 : 1);
+    if (readbackFailures[failure]) assert.equal(result.error, failure === "id" ? "platform_wait_timeout_outcome_unknown" : "snapshot_readback_mismatch");
+    if (!failure) {
+      assert.equal(result.backupId, "snapshot-1");
+      assert.equal(savedId, "snapshot-1");
+      assert.equal(snapshotReads, 2);
+    }
     assert.equal(mutations, failure === "endpoint" ? 0 : 1);
-  }
+  });
 });
