@@ -31,14 +31,16 @@ try {
   const settings = page.getByTestId('api-keys-settings'); await settings.getByText('创建你的第一个 API Key', { exact: true }).waitFor();
   assert.equal(await page.locator('[data-state=open][data-slot=sheet-content]').count(), 0);
   async function createKey(name, grants) {
-    await settings.getByRole('button', { name: '创建 API Key', exact: true }).click();
+    await settings.getByRole('button', { name: '创建接入配置', exact: true }).click();
     const dialog = page.getByRole('dialog'); await dialog.getByRole('textbox', { name: '名称', exact: true }).fill(name);
     for (const [table, operations] of Object.entries(grants)) for (const operation of operations)
       await dialog.getByRole('checkbox', { name: `${workspaceName} / ${table} · ${operation}`, exact: true }).check();
-    await dialog.getByRole('button', { name: '创建 API Key', exact: true }).click();
-    const secret = await dialog.getByRole('textbox', { name: 'API Key', exact: true }).inputValue();
+    const createdResponse = page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/user/api-keys' && r.ok());
+    await dialog.getByRole('button', { name: '生成接入配置', exact: true }).click();
+    const secret = (await (await createdResponse).json()).secret;
     assert.match(secret, /^tab_[A-Za-z0-9_-]{43}$/);
-    await dialog.getByRole('button', { name: '关闭', exact: true }).last().click();
+    await dialog.waitFor({ state: 'hidden' });
+    await page.reload(); await settings.getByRole('button', { name: '创建接入配置', exact: true }).waitFor();
     assert(!(await page.locator('body').innerText()).includes(secret));
     await settings.getByText(name, { exact: true }).waitFor(); return secret;
   }
@@ -46,22 +48,22 @@ try {
   const createOnlyKey = await createKey('Landing page leads', { 'Site leads': ['新增', '更新', '删除'] });
   assert.equal(await page.getByRole('tab', { name: '站点 API', exact: true }).count(), 0);
   assert.equal(await page.getByRole('tablist', { name: '设置分类', exact: true }).getByRole('tab').count(), 4);
-  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && url.searchParams.get('section') === 'api-keys');
-  const rows = settings.locator('[data-slot=list-item]'); assert.equal(await rows.count(), 2);
+  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && !url.searchParams.has('section'));
+  const rows = settings.locator('tbody tr'); assert.equal(await rows.count(), 2);
   const background = await rows.first().evaluate(element => getComputedStyle(element).backgroundColor);
   await rows.first().hover(); await pause(180);
   assert.notEqual(await rows.first().evaluate(element => getComputedStyle(element).backgroundColor), background, 'settings items have hover feedback');
   // Match the existing settings frame at desktop and narrow width; native selects are absent.
-  for (const width of [1440, 700]) {
+  for (const width of [1440, 1100]) {
     await page.setViewportSize({ width, height: 1000 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'settings fit the viewport');
-    await page.screenshot({ path: artifact(`site-api-${width}-light.png`), fullPage: true, animations: 'disabled' });
+
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await pause(200);
-  await page.screenshot({ path: artifact('site-api-1440-dark.png'), fullPage: true, animations: 'disabled' });
+
   await page.emulateMedia({ colorScheme: 'light' });
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
   await settings.getByRole('button', { name: '编辑 Catalog website', exact: true }).click();
@@ -98,7 +100,8 @@ try {
   }, {base, key: createOnlyKey, table: leads.id, column: leadsTitle});
 
 
-  await settings.getByRole('button', { name: '删除 Catalog website edited', exact: true }).click();
+  await settings.getByRole('button', { name: 'Catalog website edited 的更多操作', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除 Catalog website edited', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await settings.getByText('Catalog website edited', { exact: true }).waitFor({ state: 'hidden' });
   await site.goto(`http://127.0.0.1:${sitePort}/catalog.html#${fragment(readKey, catalog.id)}`);

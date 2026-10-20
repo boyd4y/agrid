@@ -89,27 +89,34 @@ try {
   const resized = await command('getBooking', { calendarId: calendar.id, bookingId: a.id }); assert.match(resized.end, /T13:00:00/); assert.equal(resized.version, 3);
   // Add calendar grants while preserving the older per-table matrix.
   const table = await api('/tables', { name: '旧表授权' });
+  const workspace = (await command('getWorkspace')).workspace;
+  const calendarLabel = `${workspace.name} / 交互预约日历`;
   await page.goto(frontend + '/app/settings?tab=api-keys');
   const settings = page.getByTestId('api-keys-settings');
-  await settings.getByRole('button', { name: '创建 API Key', exact: true }).click();
+  await settings.getByRole('button', { name: '创建接入配置', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('名称', { exact: true }).fill('日历授权测试');
-  await dialog.getByRole('checkbox', { name: '交互预约日历 · 空档', exact: true }).check();
-  const tableRead = dialog.getByRole('checkbox', { name: /旧表授权 · 读取$/ }); await tableRead.check();
-  await dialog.getByRole('button', { name: '创建 API Key', exact: true }).click();
-  await dialog.getByRole('textbox', { name: 'API Key', exact: true }).waitFor();
-  await dialog.getByRole('button', { name: '关闭', exact: true }).last().click();
+  const tableRead = dialog.getByRole('checkbox', { name: `${workspace.name} / 旧表授权 · 读取`, exact: true }); await tableRead.check();
+  const tabs = dialog.getByRole('tablist', { name: '资源权限', exact: true });
+  await tabs.getByRole('tab', { name: '日历', exact: true }).click();
+  await dialog.getByRole('checkbox', { name: `${calendarLabel} · 空档`, exact: true }).check();
+  await dialog.getByRole('button', { name: '生成接入配置', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制完整配置', exact: true }).waitFor();
+  await page.reload();
+  await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制模板', exact: true }).waitFor();
   await settings.getByRole('button', { name: '编辑 日历授权测试', exact: true }).click();
-  assert(await dialog.getByRole('checkbox', { name: '交互预约日历 · 空档', exact: true }).isChecked());
   assert(await tableRead.isChecked());
-  await dialog.getByRole('checkbox', { name: '交互预约日历 · 创建', exact: true }).check();
+  await tabs.getByRole('tab', { name: '日历', exact: true }).click();
+  assert(await dialog.getByRole('checkbox', { name: `${calendarLabel} · 空档`, exact: true }).isChecked());
+  await dialog.getByRole('checkbox', { name: `${calendarLabel} · 创建`, exact: true }).check();
   await dialog.getByRole('button', { name: '保存', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
   const saved = (await api('/user/api-keys')).keys[0];
   assert.equal(saved.permissions[0].tableId, table.id); assert(saved.permissions[0].canRead);
   assert(saved.calendarPermissions[0].canReadAvailability && saved.calendarPermissions[0].canCreate); assert.equal(saved.calendarPermissions[0].canRead, false);
   assert.deepEqual(fixture.errors, []);
   console.log('PASS: real pointer drag conflict rollback with preserved form, pending feedback, successful drag/resize through versioned commands, calendar grants UI persists without dropping table grants.');
-} catch (error) { await page.screenshot({ path: fixture.artifact('calendar-interactions-failure.png'), fullPage: true }); throw error; }
+} catch (error) { await page.screenshot({ path: fixture.artifact('calendar-interactions-failure.png'), fullPage: true, mask: [page.getByTestId('connection-recipe')] }); throw error; }
 finally {
   releasePending();
   try { await writeFile(fixture.artifact('calendar-pointer-geometry.json'), JSON.stringify(pointerGeometry, null, 2)); }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authorizedTableIds, getTableAccess, groupPermissionResources, groupPermissionTables, setTableAccess, summarizePermissions } from '../src/components/settings/api-key-permissions.ts';
+import { authorizedTableIds, getTableAccess, groupPermissionResources, groupPermissionTables, setTableAccess, summarizeKeyPermissions, summarizePermissions } from '../src/components/settings/api-key-permissions.ts';
 
 const tables = [
   { id: 'a', name: 'Contacts', workspaceId: 'workspace-a', workspaceName: 'Team' },
@@ -52,4 +52,14 @@ test('four resource groups include empty workspaces and retain stable identities
   const groups = groupPermissionResources(tables, [], [], [{ id: 'rule', name: 'Rule', workspaceId: 'workspace-b', workspaceName: 'Team' }], [{ id: 'empty', name: 'Empty' }, { id: 'workspace-a', name: 'Team' }, { id: 'workspace-b', name: 'Team' }]);
   assert.equal(groups[0].workspaceId, 'empty'); assert.equal(groups[0].tables.length, 0); assert.equal(groups[0].automations.length, 0);
   assert.equal(groups[2].automations[0].id, 'rule'); assert.equal(groups[1].name, 'Team (workspace-a)');
+});
+
+
+test('scope summary includes every family, creation-only workspaces and unavailable resources', () => {
+  const resource = (id, workspaceId) => ({ id, workspaceId, name: id, workspaceName: workspaceId });
+  const input = { ...empty(), permissions: [grant('a'), grant('gone'), grant('off', false)],
+    calendarPermissions: [{ calendarId: 'cal', canSubscribe: true }, { calendarId: 'off', canRead: false }],
+    automationPermissions: [{ automationId: 'rule', canUpdate: true }], schedulePermissions: [{ automationId: 'plan', canDelete: true }],
+    workspacePermissions: [{ workspaceId: 'empty', canCreateSchedules: true }, { workspaceId: 'off', canCreateSchedules: false }] };
+  assert.deepEqual(summarizeKeyPermissions(input, tables, [resource('cal', 'workspace-b')], [resource('plan', 'workspace-b')], [resource('rule', 'workspace-a')]), { workspaceCount: 3, tableCount: 2, calendarCount: 1, automationCount: 1, scheduleCount: 1, creationCount: 1, unavailableCount: 1 });
 });

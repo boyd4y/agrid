@@ -10,9 +10,9 @@ It describes the public table API, including row CRUD, optional record bodies an
 
 ## Connect an external agent through MCP
 
-1. In tabdo, open **Settings → Connect agents → Connection guide** and choose the client you want to connect.
-2. Follow the selected client’s instructions. Use the workspace MCP URL shown in the connection guide and the requested authentication method.
-3. If the client requires a data access key, create a generic key under **Settings → Connect agents → API Key**. Grant only the table operations needed for the task; there is no separate bot enablement or automatic special key creation.
+1. In tabdo, open **Settings → Connect agents** and choose the client you want to connect.
+2. Select **Create configuration**, name the key and choose the resources and operations the client needs.
+3. Copy the full configuration generated on the same page and follow the client’s setup instructions. The new key is cleared when you leave the page. If you already saved a key, fill it into the template instead.
 4. Keep credentials in the client’s secure credential field. Do not put them in a chat message, URL, public website, or source control.
 
 Connection examples use placeholders such as `<workspace MCP URL>` and `<your API key>`; replace them with the values displayed in your workspace. MCP uses the workspace MCP endpoint and does not import the OpenAPI document. The OpenAPI document is for clients that call the REST API directly.

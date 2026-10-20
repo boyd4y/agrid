@@ -22,10 +22,10 @@ try {
   await page.goto(frontend + '/app/settings?tab=api-keys&client=codex');
   const settings = page.getByTestId('api-keys-settings');
   await settings.getByText('创建你的第一个 API Key', { exact: true }).waitFor();
-  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && url.searchParams.get('section') === 'api-keys');
+  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && !url.searchParams.has('section'));
   assert.equal(new URL(page.url()).searchParams.get('client'), 'codex');
   assert.deepEqual(await page.getByRole('tablist', { name: '设置分类', exact: true }).getByRole('tab').allTextContents(), ['常规', '连接 Agent', 'AgentMail', 'Webhook']);
-  await settings.getByRole('button', { name: '创建 API Key', exact: true }).click();
+  await settings.getByRole('button', { name: '创建接入配置', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('textbox', { name: '名称', exact: true }).fill('Cross workspace');
   const tabs = dialog.getByRole('tablist', { name: '资源权限', exact: true });
@@ -37,7 +37,7 @@ try {
   await dialog.getByRole('group', { name: 'Empty workspace', exact: true }).getByText('此工作区暂无资源', { exact: true }).waitFor();
   const scroller = dialog.getByTestId('permissions-tables');
   assert(await scroller.evaluate(el => el.scrollHeight > el.clientHeight));
-  const footer = dialog.getByRole('button', { name: '创建 API Key', exact: true });
+  const footer = dialog.getByRole('button', { name: '生成接入配置', exact: true });
   const bounded = async () => {
     const bounds = await dialog.boundingBox(), button = await footer.boundingBox();
     assert(bounds.y >= 0 && bounds.y + bounds.height <= 1000, JSON.stringify(bounds));
@@ -66,15 +66,19 @@ try {
   await tabs.getByRole('tab', { name: '表格', exact: true }).click();
   assert(await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).isChecked());
   assert(await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).isChecked());
+  const createdResponse = page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/user/api-keys' && r.ok());
   await footer.click();
-  const secret = await dialog.getByRole('textbox', { name: 'API Key', exact: true }).inputValue();
+  const secret = (await (await createdResponse).json()).secret;
   assert.match(secret, /^tab_[A-Za-z0-9_-]{43}$/);
-  await dialog.getByRole('button', { name: '关闭', exact: true }).last().click();
+  await dialog.waitFor({ state: 'hidden' });
   const saved = (await api('/user/api-keys')).keys[0];
   assert.equal(saved.permissions.length, 2); assert.equal(saved.automationPermissions[0].automationId, rule.id);
   assert.equal(saved.schedulePermissions[0].automationId, plan.id); assert.equal(saved.schedulePermissions[0].canDelete, true); assert.equal(saved.schedulePermissions[0].grantVersion, 2);
   assert.equal(saved.calendarPermissions[0].calendarId, calendar.id); assert.equal(saved.workspacePermissions[0].workspaceId, empty.id);
   assert(!JSON.stringify(saved).includes(secret));
+  const scope = await settings.getByTestId(`api-key-${saved.id}`).innerText();
+  for (const text of ['3 个工作区', '2 张表', '1 个自动化', '1 个日历', '1 个定时任务']) assert(scope.includes(text), text);
+  assert(!scope.includes('0 张表') && !scope.includes('0 个日历'));
   await settings.getByRole('button', { name: '编辑 Cross workspace', exact: true }).click();
   assert.equal(await dialog.getByRole('textbox', { name: 'API Key', exact: true }).count(), 0);
   const failSave = route => route.fulfill({ status: 503, json: { message: 'Fixture save failure' } });
@@ -84,13 +88,11 @@ try {
   assert(await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).isChecked());
   await page.unroute('**/api/user/api-keys/*', failSave);
   await dialog.getByRole('button', { name: '保存', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
-  await page.getByRole('tab', { name: '接入指南', exact: true }).click();
   const guide = page.getByTestId('agent-connection-guide'); await guide.waitFor();
   assert.equal(new URL(page.url()).searchParams.get('client'), 'codex');
-  assert(!(await guide.innerText()).includes(secret));
-  await guide.getByRole('button', { name: '管理 API Key', exact: true }).click(); await settings.waitFor();
+  assert((await guide.innerText()).includes(secret), 'editing preserves the current generated configuration');
   await page.goto(frontend + '/app/settings?tab=site-api&client=cursor'); await settings.waitFor();
-  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && url.searchParams.get('section') === 'api-keys');
+  await page.waitForURL(url => url.searchParams.get('tab') === 'connections' && !url.searchParams.has('section'));
   await page.goto(frontend + '/app/settings?tab=connections&client=claude-code'); await guide.waitFor();
   assert(!(await guide.innerText()).includes(secret));
   // Current workspace selection changes the surrounding app, not the key's grant universe.
@@ -99,7 +101,8 @@ try {
   assert(await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).isChecked());
   assert(await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).isChecked());
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
-  await settings.getByRole('button', { name: '删除 Cross workspace', exact: true }).click();
+  await settings.getByRole('button', { name: 'Cross workspace 的更多操作', exact: true }).click();
+  await page.getByRole('menuitem', { name: '删除 Cross workspace', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await settings.getByText('创建你的第一个 API Key', { exact: true }).waitFor();
   const revoked = await ctx.request.get(base + '/api/tables', { headers: { Authorization: `Bearer ${secret}` } }); assert.equal(revoked.status(), 401);

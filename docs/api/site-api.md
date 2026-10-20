@@ -2,7 +2,7 @@
 
 See [OpenAPI and Connect Agents](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and generic MCP connection guidance.
 
-Manage all keys in **Settings → Connect agents → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
+Manage all keys in **Settings → Connect agents**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
 
 ## Setup
 

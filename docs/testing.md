@@ -141,7 +141,7 @@ DATABASE_URL=postgresql://tableapp:tableapp@localhost:5432/tabdo_agent_test \
 
 ## 设置标签页与个人密钥
 
-`api-keys` browser suite 验证个人密钥创建/真实删除及失败重试，删除后GET列表为空且旧Bearer立即401，并核对设置框架、垂直标签、深链、刷新、浏览器返回、旧集成地址跳转和未知标签归一化。两个suite直接检查选中菜单伪元素不显示、整行高亮、列表四边边框与间距、真实hover/focus反馈及统一删除颜色。320px验证先收起现有AppShell侧栏，局部tabpanel核对scrollWidth/clientWidth，不用全局隐藏溢出冒充通过；它不代表全站侧栏已实现手机自动收起。常规只保留外观/语言，没有布局开关。
+`api-keys` browser suite 验证连接 Agent 页的四类资源权限、企业内跨工作区授权、空工作区、权限弹窗内部滚动与固定操作区、保存失败重试、旧链接兼容和删除后旧 Bearer 立即 401。`connections` 验证同页创建后复制完整配置、五客户端切换复用同一密钥、模板/剪贴板失败、删除失败重试、刷新/离开/组织切换/登出后清理、公开指南、分页、加载失败重试、成员及 agent 无管理权限、键盘和中英文；截图覆盖 1440/1100 桌面深浅色，生成态截图只使用故意无效的 fixture secret。常规只保留外观/语言，没有布局开关。
 
 `automation-sources` 验证内联来源卡片的固定高度和底部间距、表格/邮件/邮箱空状态、菜单图标一致性、窄屏与深浅模式；定时任务使用专门单页表单，保存真正的 `run_agent` 智能体与任务描述、时间/时区，失败保留输入，列表与旧链接独立路由。`native-controls.test.mjs` 扫描应用和 UI 包，禁止原生 picker、datalist、单选/滑条和 details 表面；共享组件以 Storybook 展示。浏览器文件选择仅保留隐藏的系统文件选择入口，不在产品中渲染原生文件控件。
 

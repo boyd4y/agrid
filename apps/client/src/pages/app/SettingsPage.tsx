@@ -1,4 +1,3 @@
-import { AgentConnectionGuide } from "@/components/connections/AgentConnectionGuide";
 import { WebhookSettings } from "@/components/settings/WebhookSettings";
 import { workspaceCacheKey } from "@/lib/workspace-scope";
 import { useEffect } from "react";
@@ -36,7 +35,7 @@ export function SettingsPage() {
     setSearchParams(current => {
       const next = new URLSearchParams(current);
       next.set("tab", activeTab);
-      if (["api-keys", "site-api"].includes(requestedTab)) next.set("section", "api-keys");
+      if (["api-keys", "site-api"].includes(requestedTab)) next.delete("section");
       if (requestedTab === "calendar-events") next.set("direction", "outbound");
       return next;
     }, { replace: true });
@@ -45,7 +44,7 @@ export function SettingsPage() {
     const next = new URLSearchParams(current);
     next.set("tab", value);
     next.delete("direction");
-    if (value === "connections") next.set("section", "api-keys");
+    next.delete("section");
     return next;
   });
   const locale = (i18n.language?.startsWith("en") ? "en" : "zh-CN") as AppLocale;
@@ -88,14 +87,7 @@ export function SettingsPage() {
           </FieldSet>
         </TabsContent>
         <TabsContent value="connections" className={paneClass}>
-          <Tabs value={user?.kind === "agent" ? "guide" : ["api-keys", "site-api"].includes(requestedTab) || searchParams.get("section") === "api-keys" ? "api-keys" : "guide"} onValueChange={value => setSearchParams(current => { const next = new URLSearchParams(current); next.set("tab", "connections"); next.set("section", value); return next; })}>
-            <TabsList aria-label={t("settings.tabs.connections")}>
-              {user && user.kind !== "agent" && <TabsTrigger value="api-keys">{t("settings.tabs.apiKeys")}</TabsTrigger>}
-              <TabsTrigger value="guide">{t("settings.connections.guideTitle")}</TabsTrigger>
-            </TabsList>
-            {user && user.kind !== "agent" && <TabsContent value="api-keys"><ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} /></TabsContent>}
-            <TabsContent value="guide"><AgentConnectionGuide canManageKeys={user?.kind !== "agent"} /></TabsContent>
-          </Tabs>
+          {!isPending && user && <ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} canManageKeys={user.kind !== "agent"} />}
         </TabsContent>
         <TabsContent value="agentmail" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:agentmail`} kind="agentmail" /></TabsContent>
         <TabsContent value="webhook" className={paneClass}><WebhookSettings key={workspaceCacheKey()} direction={requestedTab === "calendar-events" ? "outbound" : searchParams.get("direction") === "outbound" ? "outbound" : "inbound"} onDirectionChange={direction => setSearchParams(current => {

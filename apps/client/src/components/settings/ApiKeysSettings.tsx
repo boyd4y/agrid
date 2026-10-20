@@ -1,29 +1,29 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Copy, LoaderCircle, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { LoaderCircle, MoreHorizontal, Trash2 } from "lucide-react";
 import type { ApiKeyInfo, ApiKeyInput, CalendarPermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { Button } from "@tabdo/ui/components/button";
-import { DataRefreshButton } from "@/components/controls/data-refresh-button";
+import { AgentConnectionGuide } from "@/components/connections/AgentConnectionGuide";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@tabdo/ui/components/dropdown-menu";
+import { Separator } from "@tabdo/ui/components/separator";
+import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { Input } from "@tabdo/ui/components/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tabdo/ui/components/tabs";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
-import { CardDescription, CardTitle } from "@tabdo/ui/components/card";
-import { ListItem } from "@tabdo/ui/components/list-item";
 import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
 import { ListPagination } from "@/components/controls/list-pagination";
 import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
-import { authorizedTableIds, getTableAccess, groupPermissionResources, setTableAccess, summarizePermissions, tableOperations, type ApiKeyTable, type PermissionResource } from "@/components/settings/api-key-permissions";
+import { getTableAccess, groupPermissionResources, setTableAccess, summarizeKeyPermissions, tableOperations, type ApiKeyTable, type PermissionResource } from "@/components/settings/api-key-permissions";
 
 const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], schedulePermissions: [], automationPermissions: [], workspacePermissions: [] });
 
-export function ApiKeysSettings() {
+export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: boolean }) {
   const { t } = useTranslation(["app", "common"]);
   const text = (key: string, values?: Record<string, string | number>) => t(`settings.apiKeys.${key}`, values);
   const id = useId();
@@ -35,34 +35,43 @@ export function ApiKeysSettings() {
   const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage", "canTriggerAgent", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"] as const;
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
-  const [secret, setSecret] = useState(""), [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
+  const [credential, setCredential] = useState<{ keyId: string; secret: string } | null>(null);
+  const [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<ApiKeyInfo | null>(null);
   const busy = useRef(false);
+  const credentialGeneration = useRef(0);
   const pagination = useArrayPagination(keys);
+  useEffect(() => {
+    const clear = () => { credentialGeneration.current++; setCredential(null); };
+    window.addEventListener("pagehide", clear);
+    return () => { credentialGeneration.current++; window.removeEventListener("pagehide", clear); };
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true); setError(false);
     void (async () => {
+      if (!canManageKeys) return;
       const members = await api.listMembers();
       const allowed = ["owner", "admin"].includes(members.actor?.role ?? "");
       if (controller.signal.aborted) return;
       setCanManage(allowed);
       if (!allowed) return;
       const saved = await api.listApiKeys(controller.signal);
-      if (!controller.signal.aborted) { setKeys(saved.keys); setTables(saved.tables); setCalendars(saved.calendars); setSchedules(saved.schedules ?? []); setAutomations(saved.automations); setWorkspaces(saved.workspaces); }
+      if (!controller.signal.aborted) { setKeys(saved.keys); setCredential(current => current && saved.keys.some(key => key.id === current.keyId) ? current : null); setTables(saved.tables); setCalendars(saved.calendars); setSchedules(saved.schedules ?? []); setAutomations(saved.automations); setWorkspaces(saved.workspaces); }
     })().catch(() => { if (!controller.signal.aborted) setError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [revision]);
+  }, [revision, canManageKeys]);
 
-  function edit(key?: ApiKeyInfo) {
-    setInput(key ? { automationPermissions: (key.automationPermissions ?? []).map(p => ({ ...p })), workspacePermissions: (key.workspacePermissions ?? []).map(p => ({ ...p })), schedulePermissions: (key.schedulePermissions ?? []).map(p => ({ ...p })), name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })) } : blank());
-    setSecret(""); setFormError(""); setEditor({ key });
+  function edit(key?: ApiKeyInfo, name = "") {
+    setInput(key ? { automationPermissions: (key.automationPermissions ?? []).map(p => ({ ...p })), workspacePermissions: (key.workspacePermissions ?? []).map(p => ({ ...p })), schedulePermissions: (key.schedulePermissions ?? []).map(p => ({ ...p })), name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })) } : { ...blank(), name });
+    setFormError(""); setEditor({ key });
   }
-  function close() { if (busy.current) return; setEditor(null); setSecret(""); setFormError(""); }
+  function close() { if (busy.current) return; setEditor(null); setFormError(""); }
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (busy.current) return;
     busy.current = true; setSaving(true); setFormError("");
+    const generation = credentialGeneration.current;
     try {
       if (editor?.key) {
         const saved = await api.updateApiKey(editor.key.id, input);
@@ -70,14 +79,13 @@ export function ApiKeysSettings() {
         setEditor(null);
       } else {
         const saved = await api.createApiKey(input);
-        setKeys(current => [saved.key, ...current]); setSecret(saved.secret); pagination.resetPage();
+        setKeys(current => [saved.key, ...current]);
+        // A delayed create response must not restore credentials after document leave.
+        if (generation === credentialGeneration.current) setCredential({ keyId: saved.key.id, secret: saved.secret });
+        setEditor(null); pagination.resetPage();
       }
     } catch (cause) { setFormError(cause instanceof Error ? cause.message : text("saveFailed")); }
     finally { busy.current = false; setSaving(false); }
-  }
-  async function copy(value: string) {
-    try { await navigator.clipboard.writeText(value); toast.success(text("copied")); }
-    catch { toast.error(text("copyFailed")); }
   }
   function toggleCalendar(calendarId: string, operation: typeof calendarOperations[number], checked: boolean) {
     setInput(current => {
@@ -130,48 +138,39 @@ export function ApiKeysSettings() {
       </FieldSet>)}
     </div>;
   }
-  const create = canManage && <Button size="sm" disabled={!workspaces.length} onClick={() => edit()}><Plus className="hidden sm:block" data-icon="inline-start" />{text("create")}</Button>;
-  return <section className="flex min-w-0 flex-col gap-6" data-testid="api-keys-settings">
-    <header className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-col gap-2"><CardTitle>{text("title")}</CardTitle><CardDescription>{text("description")}</CardDescription></div>
-      <div className="flex flex-wrap items-center gap-2"><DataRefreshButton label={t("common:refresh")} disabled={loading} onRefresh={() => setRevision(value => value + 1)} />{!loading && !error && keys.length > 0 && create}</div>
-    </header>
-    {loading ? <p role="status" className="py-5 text-sm text-muted-foreground">{t("common:loading")}</p>
-      : error ? <ListErrorState title={text("loadFailed")} onRetry={() => setRevision(value => value + 1)} />
-      : !canManage ? <p className="py-5 text-sm text-muted-foreground">{text("adminOnly")}</p>
-      : !keys.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("emptyTitle")} description={text(workspaces.length ? "emptyDescription" : "noTables")} action={create} />
-      : <><ul className="border-y border-border" aria-label={text("title")}>
-        {pagination.items.map(key => {
-          const scope = summarizePermissions(authorizedTableIds(key).map(tableId => ({ tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false })), tables);
-          return <ListItem key={key.id} className="flex items-center gap-0 rounded-none border-x-0 border-t-0 p-0 last:border-b-0 sm:gap-2">
-            <button type="button" className="flex min-w-0 flex-1 items-center gap-3 rounded-sm py-3 text-left sm:px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset" aria-label={text("editNamed", { name: key.name })} onClick={() => edit(key)}>
-              <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="truncate pr-8 text-sm font-medium sm:pr-0" title={key.name}>{key.name}</span>
-                  <code className="text-xs text-muted-foreground">{key.prefix}…</code>
-                </span>
-                <span className="flex shrink-0 flex-col gap-1 text-xs text-muted-foreground">
-                  <span>{scope.tableCount ? text("scopeSummary", { workspaces: text("workspaceCount", { count: scope.workspaceCount }), tables: text("tableCount", { count: scope.tableCount }) }) : text("noAuthorizedTables")}</span>
-                  {!!key.automationPermissions?.length && <span>{text("automationCount", { count: key.automationPermissions.length })}</span>}
-                  {!!key.workspacePermissions?.length && <span>{text("creationCount", { count: key.workspacePermissions.length })}</span>}
-                  {!!key.schedulePermissions?.length && <span>{t("calendar:plans.scope", { count: key.schedulePermissions.length })}</span>}
-                  {!!key.calendarPermissions?.length && <span>{t("calendar:calendarScope", { count: key.calendarPermissions.length })}</span>}
-                  {scope.unavailableCount > 0 && <span>{text("unavailableSummary", { count: scope.unavailableCount })}</span>}
-                </span>
-              </span>
-              <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" aria-hidden />
-            </button>
-            <Button className="absolute right-0 top-2 sm:static" variant="destructive-ghost" size="icon" aria-label={text("deleteNamed", { name: key.name })} onClick={() => setDeleting(key)}><Trash2 data-icon="inline-start" /></Button>
-          </ListItem>;
-        })}
-      </ul>{pagination.totalPages > 1 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}</>}
+  return <section className="flex min-w-0 flex-col gap-5" data-testid="api-keys-settings">
+    <AgentConnectionGuide canManageKeys={canManageKeys && canManage} secret={credential?.secret} onCreate={name => edit(undefined, name)} createDisabled={loading || error || !workspaces.length} firstKey={!loading && !error && canManage && !keys.length} />
+    <Separator />
+    <section className="flex min-w-0 flex-col gap-3" aria-labelledby={`${id}-keys`}>
+      <h3 id={`${id}-keys`} className="text-base font-semibold">{text("title")}</h3>
+      {loading ? <div role="status" aria-label={t("common:loading")} className="flex flex-col gap-3"><Skeleton className="h-9 w-full" /><Skeleton className="h-12 w-full" /></div>
+        : error ? <ListErrorState title={text("loadFailed")} onRetry={() => setRevision(value => value + 1)} />
+        : !canManage ? <p className="py-3 text-sm text-muted-foreground">{text("adminOnly")}</p>
+        : !keys.length ? <AppEmptyState density="compact" illustration={NOTIOLY.fastInternet} title={text("emptyTitle")} description={t(`settings.connections.${workspaces.length ? "emptyKeys" : "noWorkspaces"}`)} />
+        : <><div className="overflow-x-auto rounded-md border">
+          <table className="w-full text-left text-sm" aria-label={text("title")}>
+            <thead className="border-b bg-muted/40 text-xs text-muted-foreground"><tr><th scope="col" className="w-1/4 px-3 py-2 font-medium">{text("name")}</th><th scope="col" className="px-3 py-2 font-medium">{text("scope")}</th><th scope="col" className="w-40 px-3 py-2 font-medium">{text("actions")}</th></tr></thead>
+            <tbody className="divide-y">{pagination.items.map(key => {
+              const scope = summarizeKeyPermissions(key, tables, calendars, schedules, automations);
+              const summary = [scope.workspaceCount && text("workspaceCount", { count: scope.workspaceCount }), scope.tableCount && text("tableCount", { count: scope.tableCount }), scope.automationCount && text("automationCount", { count: scope.automationCount }), scope.calendarCount && t("calendar:calendarScope", { count: scope.calendarCount }), scope.scheduleCount && text("scheduleCount", { count: scope.scheduleCount }), scope.creationCount && text("creationCount", { count: scope.creationCount }), scope.unavailableCount && text("unavailableResources", { count: scope.unavailableCount })].filter(Boolean).join(" · ") || text("noGrants");
+              return <tr key={key.id} className="hover:bg-muted/40" data-testid={`api-key-${key.id}`}>
+                <th scope="row" className="max-w-56 truncate px-3 py-2 font-medium" title={key.name}>{key.name}</th>
+                <td className="px-3 py-2 text-xs leading-relaxed text-muted-foreground">{summary}</td>
+                <td className="px-3 py-2"><div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" aria-label={text("editNamed", { name: key.name })} onClick={() => edit(key)}>{text("editPermissions")}</Button>
+                  <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={text("moreNamed", { name: key.name })}><MoreHorizontal data-icon="inline-start" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end"><DropdownMenuGroup><DropdownMenuItem variant="destructive" onSelect={() => setDeleting(key)}><Trash2 aria-hidden />{text("deleteNamed", { name: key.name })}</DropdownMenuItem></DropdownMenuGroup></DropdownMenuContent>
+                  </DropdownMenu>
+                </div></td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>{pagination.totalPages > 1 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}</>}
+    </section>
     <Dialog open={editor !== null} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent closeLabel={t("common:close")} className="flex max-h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:max-w-[min(1180px,calc(100vw-4rem))]">
-        <DialogHeader><DialogTitle>{text(secret ? "createdTitle" : editor?.key ? "edit" : "create")}</DialogTitle><DialogDescription>{text(secret ? "once" : "grantDescription")}</DialogDescription></DialogHeader>
-        {secret ? <div className="flex flex-col gap-5">
-          <Field><FieldLabel htmlFor={`${id}-secret`}>{text("key")}</FieldLabel><div className="flex gap-2"><Input id={`${id}-secret`} readOnly value={secret} autoComplete="off" spellCheck={false} className="min-w-0 font-mono" onFocus={event => event.currentTarget.select()} /><Button variant="outline" size="icon" aria-label={text("copyKey")} onClick={() => void copy(secret)}><Copy data-icon="inline-start" /></Button></div></Field>
-          <div className="flex justify-end"><Button onClick={close}>{t("common:close")}</Button></div>
-        </div> : <form noValidate onSubmit={save} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        <DialogHeader><DialogTitle>{text(editor?.key ? "edit" : "create")}</DialogTitle><DialogDescription>{text("grantDescription")}</DialogDescription></DialogHeader>
+        <form noValidate onSubmit={save} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <FieldGroup className="shrink-0">
             <Field><FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel><Input id={`${id}-name`} value={input.name} maxLength={100} autoComplete="off" disabled={saving} required onChange={event => setInput(current => ({ ...current, name: event.target.value }))} /></Field>
             <FieldDescription>{text("tablesHint")}</FieldDescription>
@@ -184,14 +183,15 @@ export function ApiKeysSettings() {
           </Tabs>
           <div className="flex shrink-0 flex-col gap-3 border-t pt-4">
             {formError && <FieldError role="alert">{formError}</FieldError>}
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length && !input.automationPermissions?.length && !input.workspacePermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length && !input.automationPermissions?.length && !input.workspacePermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : t("settings.connections.generateConfiguration")}</Button></div>
           </div>
-        </form>}
+        </form>
       </DialogContent>
     </Dialog>
     <DeleteConfirmation open={!!deleting} onOpenChange={open => { if (!open) setDeleting(null); }} title={text("deleteTitle")} description={text("deleteDescription", { name: deleting?.name ?? "" })} onConfirm={async () => {
       if (!deleting) return;
       const result = await api.deleteApiKey(deleting.id); setKeys(current => current.filter(key => key.id !== result.id));
+      setCredential(current => current?.keyId === result.id ? null : current);
     }} />
   </section>;
 }
