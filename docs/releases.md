@@ -15,6 +15,8 @@
 发布流程准备好后，由仓库/平台管理员完成下列配置。配置完成后，日常发布者只需确认版本并发布 tag，不需要手工备份数据库、运行迁移或执行 Railway 命令。
 
 1. 在 GitHub 的 `tabdo / production` Environment 中设置 secrets：`RAILWAY_API_TOKEN`、`NEON_API_KEY`、`RELEASE_DATABASE_URL`。`RAILWAY_API_TOKEN` 必须是目标 Railway 项目的目标 environment 级 Project token；发布脚本使用 `Project-Access-Token`，并查询 token 作用域。不要提供 account/workspace token 或扩大到账号级权限。`NEON_API_KEY` 应限于目标 Neon project 可用的管理权限。`RELEASE_DATABASE_URL` 必须是该 Neon 生产分支的 PostgreSQL 直连地址（不是 `-pooler`），使用 `sslmode=require`，并能读迁移 ledger/schema 和执行项目 migrator 所需 DDL。不要将这些值放入 repository variables、日志或提交内容。
+
+   同一 Environment 的 **Deployment branches and tags** 也必须限制来源：进入 GitHub 仓库 **Settings → Environments → `tabdo / production`**，选择 **Selected branches and tags**，只添加 **Ref type: Tag、Name pattern: `v*`** 规则，删除全部 Branch 规则和其它允许模式。不要选择 **No restriction** 或 **Protected branches only**。这样普通分支和 pull request workflow 不能使用此 Environment 的 secrets。tag ruleset 不替代这项 Environment 限制；此处无需配置 Required reviewers 或增加第二次 Approve，人工确认并推送正式版本 tag 仍是发布授权。可参阅 [GitHub Environment 部署来源限制](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments#deployment-branches-and-tags)。
 2. 在同一 Environment 中设置项目变量：`RAILWAY_PROJECT_ID`、`RAILWAY_ENVIRONMENT_ID`、`RAILWAY_API_SERVICE_ID`、`RAILWAY_WORKER_SERVICE_ID`、`NEON_PROJECT_ID`、`NEON_BRANCH_ID`、`RELEASE_PUBLIC_URL`。这些 ID 和 URL 必须指向预期的生产资源；公开地址必须是无路径、query、凭证的 HTTPS origin。管理员应核对两个 Railway 服务的 `DATABASE_URL` / `DATABASE_URL_UNPOOLED` 指向与 `RELEASE_DATABASE_URL` 相同的数据库，并确认 API `APP_URL` / `BETTER_AUTH_URL` 与 `RELEASE_PUBLIC_URL` 一致，`NODE_ENV=production`、`TABDO_ENV=production`、`AUTH_REQUIRED=true`、`QUEUE_PREFIX=tabdo-production`。ID 不能依赖开发者本机 Railway CLI 的 link 状态。
 3. 确认 GitHub Container Registry 中的 `ghcr.io/boyd4y/agrid` 包存在且设为公开。目前包是否存在、是否公开尚未核实。若包不存在，管理员可从已经确认的源码提交一次性构建并推送镜像；首次 push 会创建 GHCR 包。这个初始化只准备镜像，不会部署服务；在完成其余配置和验证前，`RELEASE_BOOTSTRAP_READY` 必须保持 `false`，不要创建生产版本 tag。
 
@@ -58,7 +60,7 @@
 4. 在 Railway 中一次性停用 API 与 worker 服务对 `master` 的 GitHub 自动部署和 image auto updates，清空 API 旧 `preDeploy` 迁移 hook，避免绕开 tag 发布流程或重复运行迁移。确认环境没有指向这两个服务的 GitHub deployment triggers，两个 service source 均不再包含 GitHub repo；API 与 worker 各自只有一个 `SUCCESS` active deployment，且它与 latest deployment 相同，没有 queued/pending deployment。确认 API start 为 `node dist/index.js`、healthcheck 为 `/api/health`，worker start 为 `node dist/queue/main.js`。这些是 workflow 的上线前置条件。发布后由工作流将同一个不可变镜像 digest 部署到两个服务。
 5. 为 `v*` 创建并启用 GitHub tag ruleset。创建规则与不可变规则分开设置：创建规则启用 **Restrict creations**，绕过名单只加入指定版本发布者；不可变规则启用 **Restrict updates** 和 **Restrict deletions**，不添加绕过者，使已发布版本 tag 不能被重绑或删除。若确有紧急修正，需要管理员临时变更规则并保留审计记录，完成后恢复保护。上述 ruleset 需由管理员实际创建并设为 Active；本轮未配置。可参考 [GitHub ruleset 规则说明](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)。
 6. 核对 Neon snapshot 配额和保留策略，确保按 7 天保留期及预计发布频次有足够空间。此前已遇到原生 snapshot 配额限制；工作流在 quota 不足、snapshot 创建或读回校验失败时会在迁移与部署之前停止。它不会删除其他 snapshot，也不会删掉最后恢复点来腾空间。由管理员处理配额后，再决定何时继续。
-7. 按仓库中的发布配置完成预检，并在上述设置全部验证通过后，将仓库变量 `RELEASE_BOOTSTRAP_READY` 设为 `true`。未设置或不是 `true` 时，发布必须停止。此开关只表示一次性启用检查已完成，不代替版本 tag 确认。
+7. 按仓库中的发布配置完成预检，并在上述设置全部验证通过后（包括 `tabdo / production` Environment 只允许 `v*` tag 来源），将仓库变量 `RELEASE_BOOTSTRAP_READY` 设为 `true`。未设置或不是 `true` 时，发布必须停止。此开关只表示一次性启用检查已完成，不代替版本 tag 确认。
 
 0097 的冻结记录显示 Environment secrets 尚未设置，GitHub repository 与 Environment 当前没有 secrets，也没有已配置 rulesets；发布 bootstrap 尚未完成。当前 GHCR package 是否存在、是否公开也尚未核实。本轮不会设置远端 secrets/variables、创建 tag ruleset、修改 Railway 设置、初始化 GHCR 包或执行真实生产操作。不要仅因仓库中有 workflow 或配置名，就推断发布入口已启用。
 
