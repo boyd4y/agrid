@@ -57,6 +57,7 @@ export function TableDetailPage() {
   const { t } = useTranslation("table");
   const { tableId } = useParams<{ tableId: string }>();
   const [viewParams] = useSearchParams();
+  const requestedViewId = viewParams.get("view");
   const { setTables, getTableRefreshToken, notifyTableMutated, updateTableMetadata } =
     useOutletContext<AppOutletContext>();
   const tableRefreshToken = getTableRefreshToken(tableId);
@@ -67,7 +68,7 @@ export function TableDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [views, setViews] = useState<TableView[]>([]);
   const [siteCreate, setSiteCreate] = useState(false);
-  const [activeViewId, setActiveViewId] = useState<string | null>(viewParams.get("view"));
+  const [activeViewId, setActiveViewId] = useState<string | null>(requestedViewId);
   const [formView, setFormView] = useState<ResolvedFormView | null>(null);
   const [viewsLoading, setViewsLoading] = useState(false);
   const [addingCalendar, setAddingCalendar] = useState(false);
@@ -110,10 +111,6 @@ export function TableDetailPage() {
       }
       if (version !== viewsRequest.current) return;
       setViews(list);
-      setActiveViewId((prev) => {
-        if (prev && list.some((v) => v.id === prev)) return prev;
-        return list.find((v) => v.isDefault)?.id ?? list[0]?.id ?? null;
-      });
     } catch (e) {
       if (version === viewsRequest.current) setError(e instanceof Error ? e.message : t("loadViewsFailed"));
     } finally {
@@ -122,8 +119,18 @@ export function TableDetailPage() {
   }, [tableId]);
 
   useEffect(() => {
+    setActiveViewId(requestedViewId);
+  }, [tableId, requestedViewId]);
+
+  useEffect(() => {
+    if (!views.length || views[0].tableId !== tableId) return;
+    // Validate route selection after loading; refreshes retain a valid manual choice.
+    setActiveViewId(current => current && views.some(view => view.id === current)
+      ? current : views.find(view => view.isDefault)?.id ?? views[0].id);
+  }, [views, activeViewId, tableId]);
+
+  useEffect(() => {
     setLoading(true);
-    setActiveViewId(null);
     setViews([]);
     setMenuViewId(null);
     setActiveTableId(tableId ?? null);
