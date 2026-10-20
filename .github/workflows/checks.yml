@@ -45,7 +45,7 @@ jobs:
       - name: Check test types
         run: pnpm typecheck:test
 
-      - name: Test release orchestration without production resources
+      - name: Test deployment guards without production resources
         run: pnpm test:release
 
       # Initial scope: these complete suites need no database, Redis, browser,

@@ -1,13 +1,8 @@
 import { defineRailway, preserve, project, service } from "railway/iac";
 
-// Railway infrastructure as code. Replaces the deprecated railway.api.json /
-// railway.worker.json Config as Code files, which new services can no longer opt
-// into and which stop being read on 2026-12-01.
-//
-// Release builds one monorepo image (Dockerfile.server); API and worker share one
-// environment contract. Postgres lives on Neon; Railway owns only Redis.
-// Preview with `railway config plan`. Do not `config apply` without review.
-// Manage only Tabdo application services; existing data services remain untouched.
+// Native GitHub autodeploys build master with Dockerfile.server after CI.
+// Manage application services only; preserve external databases and secrets.
+// Preview with `railway config plan`; production settings are applied by lead.
 export const partial = "tabdo-app";
 
 export default defineRailway(() => {
@@ -41,22 +36,34 @@ export default defineRailway(() => {
     PI_MODEL: preserve(),
   };
 
-  // Release owns immutable image sources. Omitting source leaves it unmanaged
-  // by IaC; it does NOT disconnect existing master autodeploys on the platform.
-  // Admin bootstrap must disconnect them and remove old pre-deploy migrations.
+  const source = { type: "github" as const, repo: "boyd4y/agrid", branch: "master", checkSuites: true };
+  const build = { dockerfilePath: "Dockerfile.server" };
+
   const api = service("api", {
+    source, build,
     replicas: { "asia-southeast1-eqsg3a": 1 },
-    deploy: { preDeployCommand: [], restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 5 },
+    deploy: { preDeployCommand: ["node /app/scripts/release/predeploy.mjs"], preDeployTimeoutSeconds: 1200, restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 5 },
     start: "node dist/index.js",
     healthcheck: "/api/health",
     healthcheckTimeout: 120,
-    env: sharedEnv,
+    env: {
+      ...sharedEnv,
+      NEON_API_KEY: preserve(),
+      NEON_PROJECT_ID: preserve(),
+      NEON_BRANCH_ID: preserve(),
+      RELEASE_RAILWAY_PROJECT_ID: preserve(),
+      RELEASE_RAILWAY_ENVIRONMENT_ID: preserve(),
+      RELEASE_RAILWAY_API_SERVICE_ID: preserve(),
+    },
   });
 
+  // GitHub push deploys have no cross-service order. This read-only hook
+  // waits for the API migration ledger before the new worker can start.
   const worker = service("worker", {
+    source, build,
     replicas: { "asia-southeast1-eqsg3a": 1 },
     start: "node dist/queue/main.js",
-    deploy: { preDeployCommand: [], restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 5 },
+    deploy: { preDeployCommand: ["node /app/scripts/release/predeploy.mjs --wait"], preDeployTimeoutSeconds: 1200, restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 5 },
     env: sharedEnv,
   });
 
