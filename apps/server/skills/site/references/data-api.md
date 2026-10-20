@@ -27,7 +27,7 @@ const receipt = await tabdo.table(config.submissionsTableId).create({
 
 记录正文是行的内置 `body` 字段，不是自定义文本列。需要正文时显式用 `table.get(rowId, { includeBody: true })` 读取；新建记录的正文输入为 `{ content }`，更新现有正文为 `{ content, expectedVersion }`，其中正文 expectedVersion 必填且独立于行版本。正文写入需提供 `idempotencyKey`，写入回执不返回正文。正文附件通过记录附件操作传 `target: "body"`。读取正文需要 Read；随新行创建正文需要 Create；更新现有正文或上传正文附件需要 Update；读取附件需要 Read。
 
-网站可由任意表创建 `site` 视图并选择 `blog` 展示模板。配置映射来源表字段和要公开的 rowId、图片；保存视图设置或源记录不会发布内容。通过通用视图更新明确发布、撤下或撤回单条已发布记录。读取视图需要来源表 Read 权限；创建、配置和显式发布、撤下或撤回需要 Read 与 Update。
+网站可由任意表创建 `site` 视图并选择 `blog` 展示模板。配置映射来源表字段和要公开的 rowId、图片；保存视图设置或源记录不会发布内容。通过通用视图更新明确发布、撤下或撤回单条已发布记录。站点配置与发布使用应用内成员身份；API Key 不开放站点配置读取、创建、配置、发布、撤下或撤回，表格 Read 与 Update 不授权这些操作。Key 仅用于站点读取或提交已授权的记录数据。
 
 ## 直接使用 GraphQL
 

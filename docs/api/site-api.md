@@ -2,7 +2,7 @@
 
 See [OpenAPI and Connect Agents](openapi-and-plugins.md) for the public OpenAPI 3.1 specification and generic MCP connection guidance.
 
-Manage all keys in **Settings → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
+Manage all keys in **Settings → Connect agents → API Key**. Each table has four independent permissions: **Read, Create, Update, Delete**. Unchecked operations are denied; permissions cover every record in that table. New tables are not added automatically.
 
 ## Setup
 
@@ -91,13 +91,13 @@ Use the same Bearer key and permissions:
 | POST | `/api/tables/:tableId/rows/:rowId/attachments` | Upload a row attachment, including `target: "body"` |
 | GET | `/api/tables/:tableId/rows/:rowId/attachments/:fileId` | Read an authorized row attachment |
 
-`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, `deleteRow`, `uploadRowAttachment`, `getRowAttachment`, `createView`, `updateView`, `getView`, `listViews`, and `deleteView` for authorized API Keys. Clients cannot supply internal organization/actor/automation options.
+`POST /api/commands` supports `listTables`, `getTable`, `queryRows`, `getRow`, `addRow`, `updateCell`, `updateCells`, `deleteRow`, `uploadRowAttachment`, `getRowAttachment`, `getView`, `listViews`, and `deleteView` for authorized API Keys. Clients cannot supply internal organization/actor/automation options.
 
 For body access, `GET /api/tables/:tableId/rows/:rowId?include=body&bodyFormat=json` includes `body: { content, version, schemaVersion, attachments, html? }`; `bodyFormat=html` requests safe rendered HTML. Row lists omit full body content. `POST` row accepts `body: { content }`; `PATCH` row accepts `body: { content, expectedVersion }`, with body `expectedVersion` required and checked independently from the optional row `expectedVersion`. Body writes require `idempotencyKey`. A write through an API Key returns a receipt and does not return the body. Unwritten bodies read as empty version 0; reading does not create body storage.
 
-Sites backed by table data are ordinary views. Create one with `createView({ tableId, type: "site", name, config, idempotencyKey })` and configure `template: "blog"`, `mapping: { title, slug?, summary?, author?, date?, cover?, category?, tags? }`, `authorName`, `description`, `language`, and `articles: [{ rowId, imageIds, coverFileId? }]`. All mapped fields and selected rows must belong to the source table. `getView` returns a regular view plus `site: { id, version, revisionId, publishedRevisionId, publicUrl, pendingChanges, publishedRows }`; pass `site.publishedRevisionId` as `expectedPublishedRevisionId` when publishing, using `null` for the first publish. Update with `updateView({ viewId, name?, config?, expectedVersion, idempotencyKey, publication? })`; `publication` uses `action: "publish" | "unpublish" | "withdraw"`, and `rowId` when withdrawing one record. Saving settings or changing source rows does not publish. Reading a site view requires Read; creating, configuring, and explicitly publishing, unpublishing, or withdrawing it requires both Read and Update on the table.
+API keys cannot read, create, configure, publish, unpublish, withdraw or delete site views, even with table Read and Update grants. Site configuration requests return 403, and `listViews` omits site views. Report operations are also unavailable to API keys. Manage sites in the signed-in app; table record bodies and attachments remain covered by their table grants.
 
-The REST row and attachment resource paths return resource data directly. `POST /api/commands` wraps command results as `{ ok, command, result }`. For `getView` and `createView`, read the view ID from `result.id` and the current version and published pointer from `result.site.version` and `result.site.publishedRevisionId`. In GraphQL, read equivalent results under `data.getView` or `data.createView`.
+The REST row and attachment resource paths return resource data directly. `POST /api/commands` wraps command results as `{ ok, command, result }`. Read a non-site view from `result` for `getView`; GraphQL returns command results under the standard `data` envelope.
 
 For the internal migration record, see [Unified record and site migration](../unified-record-site-migration.md).
 
