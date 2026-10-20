@@ -35,3 +35,5 @@ data/files/
 
 # Herdr agent team: local identity and team coordination
 .herdr/
+# Sanitized local release results belong to the workflow artifact, not Git.
+.release/
