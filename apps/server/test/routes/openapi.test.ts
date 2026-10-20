@@ -23,13 +23,22 @@ test("public OpenAPI includes table REST operations with deployment-relative pat
 for (const publicOrigin of [undefined, "https://api.example.test/base"]) {
   test(`public Grok manifest uses ${publicOrigin ? "configured" : "request"} origin`, async () => {
     const app = new Hono().route("/api", createOpenApiRoutes(publicOrigin));
-    const response = await app.request("https://local.example.test/api/plugins/grok-bot", { headers: { origin: "https://connector.example.test" } });
+    const response = await app.request("https://local.example.test/api/plugins/grok-bot", { headers: { origin: "https://connector.example.test", Authorization: "Bearer tab_private_fixture" } });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("access-control-allow-origin"), "*");
     const manifest = await response.json();
     assert.equal(manifest.openapi_url, `${publicOrigin ? "https://api.example.test" : "https://local.example.test"}/api/openapi.json`);
     assert.deepEqual(manifest.auth, { type: "http", scheme: "bearer", header: "Authorization", prefix: "Bearer", key_prefix: "tab_" });
-    assert(manifest.install.steps.length >= 3);
+    assert.equal(manifest.kind, "connection_guide");
+    assert.equal(manifest.mcp_url, `${publicOrigin ? "https://api.example.test" : "https://local.example.test"}/mcp`);
+    assert.equal(manifest.transport, "streamable-http");
+    const instructions = manifest.install.steps.join(" ");
+    assert(instructions.includes(manifest.mcp_url));
+    assert.match(instructions, /HTTP headers.*Authorization.*Bearer <API key>/);
+    assert.match(instructions, /OAuth Client ID and Client Secret empty/);
+    assert.match(instructions, /only offers OAuth without a secure HTTP headers form/);
+    assert(!instructions.includes("OpenAPI"));
+    assert(!JSON.stringify(manifest).includes("tab_private_fixture"), "public guide must never expose a request credential");
     assert.equal(manifest.docs_url, "/docs");
   });
 }
