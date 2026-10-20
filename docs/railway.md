@@ -11,7 +11,9 @@
 | PostgreSQL | Railway 或已有实例 | 业务、认证、消息、Run、执行租约与原生恢复信息 |
 | Redis | Railway 或已有实例 | BullMQ；启用持久化并配置 `noeviction` |
 
-API 和 worker 都从仓库根目录构建 `Dockerfile.server`，GitHub `master` 更新会触发部署。现有应用服务由 `.railway/railway.ts` 管理；根目录的 `railway.api.json`、`railway.worker.json` 保留作旧配置参考。工作目录由镜像设置为 `/app/apps/server`。API 的发布前命令是 `node dist/db/migrate.js`；生产不执行 seed。发布涉及 worker 所需的新表时，先完成兼容性迁移，再更新两个服务。
+生产发布以人工确认并推送的 `vX.Y.Z` 版本 tag 为入口，由专用发布工作流构建一个镜像并将相同的不可变 digest 部署给 API 和 worker。新流程启用后，普通 `master` push、合并和 CI 不会触发该工作流的生产部署；但在管理员一次性停用 Railway 现有的 `master` 自动部署前，master 更新仍可能直接触发生产部署。远端启用完成前不要推送生产 tag。首次配置和失败恢复说明见[生产发布指南](releases.md)。
+
+正式工作流在发现 pending migration 时，先建立并验证 Neon snapshot，再用目标镜像运行一次数据库迁移；没有 pending migration 时不创建 snapshot，也不运行 migrator。只有在 [`migrations.json`](../scripts/release/migrations.json) 中登记真实 SQL SHA-256、向后兼容且不需 writer drain 的迁移才可自动执行；其它迁移须单独规划。生产不执行 seed。`.railway/railway.ts` 不管理镜像 source/build，且将 `preDeploy` 留空；这不会自动改变 Railway 现有服务设置，管理员仍需按[生产发布指南](releases.md)一次性停用 master 触发、image auto updates，并清理旧 preDeploy hook。根目录的 `railway.api.json`、`railway.worker.json` 保留作旧配置参考。工作目录由镜像设置为 `/app/apps/server`。
 
 ## 共同环境变量
 
