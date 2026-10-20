@@ -28,14 +28,14 @@ passes. Applying `.railway/railway.ts` does not perform these remote changes.
 See [the release guide](../docs/releases.md) for the exact
 secrets, variables and confirmation flow. Production credentials and targets
 passed the real read-only preflight. The release path is currently inactive:
-the `agrid` GHCR package has not been initialized, anonymous digest pull and
-snapshot quota remain unverified, and `RELEASE_BOOTSTRAP_READY=false`.
+GHCR bootstrap run `39384775644` was dispatched, but its outcome is not recorded;
+package visibility, anonymous digest pull and snapshot quota remain unverified,
+and `RELEASE_BOOTSTRAP_READY=false`.
 
 The administrator must verify that `ghcr.io/boyd4y/agrid` exists and is publicly
 pullable on the current Railway Hobby plan. If the package does not exist, use the
-one-time `GHCR image bootstrap` workflow after `.github/workflows/ghcr-bootstrap.yml`
-is merged to `master`: dispatch it from `master` with a reviewed, merged full commit
-SHA. The workflow uses its job-scoped `GITHUB_TOKEN` with `packages:write` to build
+one-time `GHCR image bootstrap` workflow from `master` with a reviewed, merged full
+commit SHA. The workflow uses its job-scoped `GITHUB_TOKEN` with `packages:write` to build
 and push only `bootstrap-sha-<SHA>`; it does not set package visibility or deploy
 services. Set the package to Public in GitHub Packages, then verify anonymous pull
 by digest as described in [the release guide](../docs/releases.md). Keep

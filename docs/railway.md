@@ -11,7 +11,7 @@
 | PostgreSQL | Railway 或已有实例 | 业务、认证、消息、Run、执行租约与原生恢复信息 |
 | Redis | Railway 或已有实例 | BullMQ；启用持久化并配置 `noeviction` |
 
-生产发布以人工确认并推送的 `vX.Y.Z` 版本 tag 为入口，由专用发布工作流构建一个镜像并将相同的不可变 digest 部署给 API 和 worker。普通 `master` push、合并和 CI 不会触发该工作流；Railway API 和 worker 的 `master` 自动部署也已断开。发布入口目前尚未启用：生产凭证与目标的真实只读预检已通过，但 GHCR package 尚未初始化，公开 digest 拉取和 snapshot 配额仍待验证，`RELEASE_BOOTSTRAP_READY=false`。完成全部前置配置前不要推送生产 tag。首次配置和失败恢复说明见[生产发布指南](releases.md)。
+生产发布以人工确认并推送的 `vX.Y.Z` 版本 tag 为入口，由专用发布工作流构建一个镜像并将相同的不可变 digest 部署给 API 和 worker。普通 `master` push、合并和 CI 不会触发该工作流；Railway API 和 worker 的 `master` 自动部署也已断开。发布入口目前尚未启用：生产凭证与目标的真实只读预检已通过，GHCR bootstrap run `39384775644` 已启动但结果尚未记录，package 可见性、匿名 digest 拉取和 snapshot 配额仍待验证，`RELEASE_BOOTSTRAP_READY=false`。完成全部前置配置前不要推送生产 tag。首次配置和失败恢复说明见[生产发布指南](releases.md)。
 
 正式工作流在发现 pending migration 时，先建立并验证 Neon snapshot，再用目标镜像运行一次数据库迁移；没有 pending migration 时不创建 snapshot，也不运行 migrator。只有在 [`migrations.json`](../scripts/release/migrations.json) 中登记真实 SQL SHA-256、向后兼容且不需 writer drain 的迁移才可自动执行；其它迁移须单独规划。生产不执行 seed。`.railway/railway.ts` 不管理镜像 source/build，且将 `preDeploy` 留空；这不会自动改变 Railway 现有服务设置。Railway 的 master 触发已停用，API 旧 preDeploy hook 已清空；image auto updates 和其余服务目标仍须按[生产发布指南](releases.md)核验。根目录的 `railway.api.json`、`railway.worker.json` 保留作旧配置参考。工作目录由镜像设置为 `/app/apps/server`。
 

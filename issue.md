@@ -24,7 +24,7 @@
 - [x] `v*` tag 创建 ruleset 和禁止更新/删除 ruleset 已启用。
 - [x] 已实测普通 push 只运行 CI：run `39383174686` 成功，Railway 两个服务 deployment 未变化。
 - [x] release workflow 已实现版本与提交校验、单次镜像构建、按需 snapshot、兼容迁移、API/worker 部署验证和脱敏失败结果；迁移清单只允许经 SHA 审核的向后兼容迁移。
-- [ ] GHCR 的 `agrid` package 尚未初始化，也未完成匿名拉取验证。普通匿名 registry 请求返回 403；0099 的 `ghcr-bootstrap.yml` 实现当前处于 review，尚待审查并合入 `master`。它使用 job 的 `GITHUB_TOKEN` 初始化镜像，不需要个人 `packages` PAT；之后仍需管理员手动将 GHCR package 设为 Public 并验证匿名拉取。
+- [ ] 0099 的 `ghcr-bootstrap.yml` 已通过 test/review 并合入 `master`（`6a9a7af`）；bootstrap run `39384775644` 已 dispatch，源码 SHA 为 `9b6213dc65d0931713fffdc272f55d758fc4ca45`。激活记录尚未给出该 run 的完成结果，不能据此认定镜像已推送。该 workflow 使用 job 的 `GITHUB_TOKEN`，不需要个人 `packages` PAT；后续仍需确认 package 已设为 Public 并验证匿名 digest 拉取。
 - [ ] `RELEASE_BOOTSTRAP_READY=false`，不能创建或推送生产版本 tag，不能称发布入口已经启用。
 - [ ] snapshot 配额尚待核验。当前没有 pending migration，因此尚未真实演练 snapshot 创建与迁移；也未做真实生产 tag 发布、生产镜像部署或发布后冒烟。
 
