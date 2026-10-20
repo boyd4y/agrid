@@ -1,8 +1,6 @@
-import type { BlogCommand, BlogCommands, BlogResults } from "@tabdo/shared";
-import type { DocumentCommand, DocumentCommands, DocumentResults } from "@tabdo/shared";
 import type { CalendarCommand, CalendarCommands, CalendarResults } from "@tabdo/shared";
 import type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteCreateReceipt } from "@tabdo/shared";
-export type { DocumentContent, DocumentNode, DocumentMark, DocumentCommands, DocumentResults } from "@tabdo/shared";
+export type { DocumentContent, DocumentNode, DocumentMark, RowBody, RowBodyCreate, RowBodyWrite, RowAttachmentCommands, RowAttachmentResults, CreateViewInput, UpdateViewInput, TableView } from "@tabdo/shared";
 export type { CellValue, SiteColumn, SiteTable, SiteRow, SiteRowsOptions, SiteRowsPage, SiteFile, SiteCreateReceipt } from "@tabdo/shared";
 
 export class TabdoApiError extends Error {
@@ -53,38 +51,10 @@ export function createClient(options: ClientOptions) {
     const result = await graphql<Record<K, CalendarResults[K]>>(`${read ? "query" : "mutation"} CalendarCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
     return result[command];
   }
-  async function blogCommand<K extends BlogCommand>(command: K, input: BlogCommands[K], request?: RequestOptions): Promise<BlogResults[K]> {
-    const read = ["getBlog", "getBlogSources"].includes(command);
-    const result = await graphql<Record<K, BlogResults[K]>>(`${read ? "query" : "mutation"} BlogCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
-    return result[command];
+  async function viewCommand<K extends "createView" | "updateView" | "getView" | "listViews" | "deleteView" | "uploadRowAttachment" | "getRowAttachment">(command: K, input: import("@tabdo/shared").CommandInputMap[K], request?: RequestOptions): Promise<import("@tabdo/shared").CommandResultMap[K]> {
+    const read = ["getView", "listViews", "getRowAttachment"].includes(command);
+    return (await graphql<Record<K, import("@tabdo/shared").CommandResultMap[K]>>(`${read ? "query" : "mutation"} ViewCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request))[command];
   }
-  const blogApi = {
-    createBlog: (input: BlogCommands["createBlog"], request?: RequestOptions) => blogCommand("createBlog", input, request),
-    startBlogArticle: (input: BlogCommands["startBlogArticle"], request?: RequestOptions) => blogCommand("startBlogArticle", input, request),
-    getBlogSources: (input: BlogCommands["getBlogSources"], request?: RequestOptions) => blogCommand("getBlogSources", input, request),
-    getBlog: (input: BlogCommands["getBlog"], request?: RequestOptions) => blogCommand("getBlog", input, request),
-    saveBlog: (input: BlogCommands["saveBlog"], request?: RequestOptions) => blogCommand("saveBlog", input, request),
-    buildBlog: (input: BlogCommands["buildBlog"], request?: RequestOptions) => blogCommand("buildBlog", input, request),
-    publishBlog: (input: BlogCommands["publishBlog"], request?: RequestOptions) => blogCommand("publishBlog", input, request),
-    withdrawBlogArticle: (input: BlogCommands["withdrawBlogArticle"], request?: RequestOptions) => blogCommand("withdrawBlogArticle", input, request),
-    unpublishBlog: (input: BlogCommands["unpublishBlog"], request?: RequestOptions) => blogCommand("unpublishBlog", input, request),
-    restoreBlogRevision: (input: BlogCommands["restoreBlogRevision"], request?: RequestOptions) => blogCommand("restoreBlogRevision", input, request),
-    createBlogPreview: (input: BlogCommands["createBlogPreview"], request?: RequestOptions) => blogCommand("createBlogPreview", input, request),
-    revokeBlogPreviews: (input: BlogCommands["revokeBlogPreviews"], request?: RequestOptions) => blogCommand("revokeBlogPreviews", input, request),
-  };
-  async function documentCommand<K extends DocumentCommand>(command: K, input: DocumentCommands[K], request?: RequestOptions): Promise<DocumentResults[K]> {
-    const read = ["getDocument", "renderDocument", "getDocumentImage"].includes(command);
-    const result = await graphql<Record<K, DocumentResults[K]>>(`${read ? "query" : "mutation"} DocumentCommand($input: JSON!) { ${command}(input: $input) }`, { input }, request);
-    return result[command];
-  }
-  const documentApi = {
-    getDocument: (input: DocumentCommands["getDocument"], request?: RequestOptions) => documentCommand("getDocument", input, request),
-    createDocument: (input: DocumentCommands["createDocument"], request?: RequestOptions) => documentCommand("createDocument", input, request),
-    replaceDocument: (input: DocumentCommands["replaceDocument"], request?: RequestOptions) => documentCommand("replaceDocument", input, request),
-    renderDocument: (input: DocumentCommands["renderDocument"], request?: RequestOptions) => documentCommand("renderDocument", input, request),
-    uploadDocumentImage: (input: DocumentCommands["uploadDocumentImage"], request?: RequestOptions) => documentCommand("uploadDocumentImage", input, request),
-    getDocumentImage: (input: DocumentCommands["getDocumentImage"], request?: RequestOptions) => documentCommand("getDocumentImage", input, request),
-  };
   const calendarApi = {
     listCalendarSubscriptions: (input: CalendarCommands["listCalendarSubscriptions"], request?: RequestOptions) => calendarCommand("listCalendarSubscriptions", input, request),
     getCalendarSubscription: (input: CalendarCommands["getCalendarSubscription"], request?: RequestOptions) => calendarCommand("getCalendarSubscription", input, request),
@@ -126,6 +96,15 @@ export function createClient(options: ClientOptions) {
   };
   function table(tableId: string) {
     return {
+      createView: (input: Omit<import("@tabdo/shared").CreateViewInput, "tableId">, request?: RequestOptions) => viewCommand("createView", { ...input, tableId }, request),
+      listViews: (request?: RequestOptions) => viewCommand("listViews", { tableId }, request),
+      view: (viewId: string) => ({
+        get: (request?: RequestOptions) => viewCommand("getView", { viewId }, request),
+        update: (input: Omit<import("@tabdo/shared").UpdateViewInput, "viewId">, request?: RequestOptions) => viewCommand("updateView", { ...input, viewId }, request),
+        delete: (request?: RequestOptions) => viewCommand("deleteView", { viewId }, request),
+      }),
+      uploadAttachment: (rowId: string, input: Omit<import("@tabdo/shared").RowAttachmentCommands["uploadRowAttachment"], "tableId" | "rowId">, request?: RequestOptions) => viewCommand("uploadRowAttachment", { ...input, tableId, rowId }, request),
+      getAttachment: (rowId: string, fileId: string, request?: RequestOptions) => viewCommand("getRowAttachment", { tableId, rowId, fileId, target: "body" }, request),
       async columns(request?: RequestOptions): Promise<SiteColumn[]> {
         const result = await graphql<{ table: SiteTable }>(`query TableColumns($id: ID!) { table(id: $id) { columns { ${columnFields} } } }`, { id: tableId }, request);
         return result.table.columns;
@@ -134,24 +113,24 @@ export function createClient(options: ClientOptions) {
         const result = await graphql<{ table: { rows: SiteRowsPage } }>(`query TableRows($id: ID!, $options: RowsInput) { table(id: $id) { rows(options: $options) { rows { ${rowFields} } nextCursor hasMore totalMatched limit } } }`, { id: tableId, options: input }, request);
         return result.table.rows;
       },
-      async get(rowId: string, request?: RequestOptions): Promise<SiteRow | null> {
-        const result = await graphql<{ table: { row: SiteRow | null } }>(`query TableRow($id: ID!, $rowId: ID!) { table(id: $id) { row(id: $rowId) { ${rowFields} } } }`, { id: tableId, rowId }, request);
+      async get(rowId: string, request?: RequestOptions & { includeBody?: boolean }): Promise<SiteRow | null> {
+        const result = await graphql<{ table: { row: SiteRow | null } }>(`query TableRow($id: ID!, $rowId: ID!) { table(id: $id) { row(id: $rowId) { ${rowFields} ${request?.includeBody ? "body" : ""} } } }`, { id: tableId, rowId }, request);
         return result.table.row;
       },
-      async update(rowId: string, cells: Record<string, CellValue>, request?: RequestOptions & { expectedVersion?: number }): Promise<{ id: string; updatedAt: string; version: number }> {
-        const result = await graphql<{ updateRow: { id: string; updatedAt: string; version: number } }>("mutation UpdateRow($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int) { updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version) { id updatedAt version } }", { tableId, rowId, cells, version: request?.expectedVersion }, request);
+      async update(rowId: string, cells: Record<string, CellValue>, request?: RequestOptions & { expectedVersion?: number; body?: import("@tabdo/shared").RowBodyWrite; idempotencyKey?: string }): Promise<{ id: string; updatedAt: string; version: number; bodyVersion?: number }> {
+        const result = await graphql<{ updateRow: { id: string; updatedAt: string; version: number; bodyVersion?: number } }>("mutation UpdateRow($tableId: ID!, $rowId: ID!, $cells: JSON!, $version: Int, $body: JSON, $key: String) { updateRow(tableId: $tableId, rowId: $rowId, cells: $cells, expectedVersion: $version, body: $body, idempotencyKey: $key) { id updatedAt version bodyVersion } }", { tableId, rowId, cells, version: request?.expectedVersion, body: request?.body, key: request?.idempotencyKey }, request);
         return result.updateRow;
       },
       async delete(rowId: string, request?: RequestOptions): Promise<{ id: string }> {
         return (await graphql<{ deleteRow: { id: string } }>("mutation DeleteRow($tableId: ID!, $rowId: ID!) { deleteRow(tableId: $tableId, rowId: $rowId) { id } }", { tableId, rowId }, request)).deleteRow;
       },
-      async create(cells: Record<string, CellValue>, request?: RequestOptions): Promise<SiteCreateReceipt> {
-        const result = await graphql<{ createRow: SiteCreateReceipt }>("mutation CreateRow($tableId: ID!, $cells: JSON!) { createRow(tableId: $tableId, cells: $cells) { id createdAt } }", { tableId, cells }, request);
+      async create(cells: Record<string, CellValue> = {}, request?: RequestOptions & { body?: import("@tabdo/shared").RowBodyCreate; idempotencyKey?: string }): Promise<SiteCreateReceipt> {
+        const result = await graphql<{ createRow: SiteCreateReceipt }>("mutation CreateRow($tableId: ID!,  $cells: JSON!, $body: JSON, $key: String) { createRow(tableId: $tableId, cells: $cells, body: $body, idempotencyKey: $key) { id createdAt bodyVersion } }", { tableId, cells, body: request?.body, key: request?.idempotencyKey }, request);
         return result.createRow;
       },
     };
   }
-  return { graphql, table, blogs: blogApi, calendar: calendarApi, documents: documentApi,
+  return { graphql, table, calendar: calendarApi,
     queryCalendarView: (input: import("@tabdo/shared").QueryCalendarViewInput, request?: RequestOptions) => graphql<{ queryCalendarView: import("@tabdo/shared").CalendarViewResult }>("query CalendarView($input: JSON!) { queryCalendarView(input: $input) }", { input }, request).then(value => value.queryCalendarView),
     updateAutomation: (input: import("@tabdo/shared").UpdateAutomationInput & { expectedVersion: number }, request?: RequestOptions) => graphql<{ updateAutomation: Pick<import("@tabdo/shared").AutomationRule, "name" | "enabled" | "source" | "version"> & { automationId: string } }>("mutation UpdateAutomation($input: JSON!) { updateAutomation(input: $input) }", { input }, request).then(value => value.updateAutomation), async tables(request?: RequestOptions): Promise<SiteTable[]> {
     return (await graphql<{ tables: SiteTable[] }>(`query Tables { tables { id name description columns { ${columnFields} } } }`, {}, request)).tables;

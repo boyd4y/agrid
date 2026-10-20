@@ -139,36 +139,14 @@
     "tabs": {
       "label": "Settings sections",
       "general": "General",
-      "apiKeys": "API Key"
+      "apiKeys": "API Key",
+      "connections": "Connect agents"
     },
     "appearance": "Appearance",
     "appearanceAria": "Workspace appearance",
     "language": "Language",
     "languageAria": "Interface language",
     "apiKeys": {
-      "grok": {
-        "none": "None",
-        "selected": "Selected tables: {{tables}}",
-        "selectTables": "Select at least one table to grant Read access.",
-        "enable": "Enable Grok Bot",
-        "description": "Connect through remote MCP with Read access to the tables you select.",
-        "noTables": "Create at least one table before enabling Grok Bot.",
-        "title": "Connect Grok Bot",
-        "existing": "A Grok Bot key already exists. Its secret cannot be shown again. Use your saved secret, or revoke this key and enable again.",
-        "secret": "API key (shown once)",
-        "copy": "Copy {{label}}",
-        "step1": "In Grok Bot, add a custom MCP server named tabdo with the MCP server URL above and type Remote HTTPS.",
-        "step2": "Set the Authorization header to Bearer followed by a space and your API key. Enter secrets only in the connection form, never in a chat message or URL.",
-        "step3": "Add the server, then find tabdo in Connect apps and install it if prompted. Attach it with @ in a conversation and ask it to list your authorized tables.",
-        "permissions": "New keys allow Read on selected tables only. Edit the key later to expand access. Future tables are not granted automatically.",
-        "mcpUrl": "MCP server URL",
-        "headerName": "HTTP header key",
-        "headerValue": "HTTP header value",
-        "keyPlaceholder": "<your saved API key>",
-        "authentication": "Transport: Streamable HTTP. Leave OAuth Client ID and Client Secret empty. When reusing a key, replace the placeholder with your saved API key.",
-        "compatibility": "If your Grok Bot version only offers OAuth and has no secure HTTP headers form, this API key connection is unavailable in that version. Use a client that supports Bearer headers.",
-        "reachability": "Grok Bot needs a public HTTPS URL. For local development, use a public tunnel to this app and keep /mcp at the end of the URL."
-      },
       "title": "API Key",
       "description": "Select a key to view or edit its table permissions.",
       "create": "Create API key",
@@ -181,8 +159,8 @@
       "name": "Name",
       "permissions": "Permissions",
       "tables": "Table",
-      "tablesHint": "Choose tables and actions by workspace. Create can add a body; update can edit bodies and images. Allow publishing makes content public.",
-      "grantDescription": "Grant only the resources and actions needed. Enable publishing separately.",
+      "tablesHint": "Read includes bodies and owned attachments. Create adds rows; Update edits rows. Read + Update also configures and explicitly publishes site views. Saving source data does not publish it.",
+      "grantDescription": "Grant only the resources and data actions needed.",
       "createdTitle": "API key created",
       "once": "Copy the key now. It will not be displayed again.",
       "key": "API key",
@@ -210,26 +188,74 @@
         "canRead": "Read",
         "canCreate": "Create",
         "canUpdate": "Update",
-        "canDelete": "Delete",
-        "canPublish": "Allow publishing"
+        "canDelete": "Delete"
       },
-      "legacyPreserved": "Original access preserved: this table has permissions that differ from the unified options.",
-      "legacyConversion": "Modifying replaces this table’s original access with the selected actions: create can add a first body; update can edit bodies and upload images. Other resources stay unchanged.",
-      "modifyTable": "Modify table access",
-      "modifyTableNamed": "Modify table access: {{name}}",
-      "recordFields": "Titles and properties",
-      "recordBody": "Bodies and images",
-      "publication": "Content publishing",
-      "otherLegacyGrants": "Additional original permissions are preserved",
-      "notGranted": "No access",
       "granted": "Granted",
       "otherResources": "Calendars and schedules · {{count}} granted",
       "otherResourcesNamed": "{{name}}: calendars and schedules",
       "calendarResource": "Calendar: {{name}}",
-      "scheduleResource": "Schedule: {{name}}",
-      "publishDescription": "Allows publishing, sharing previews, and withdrawing published content."
+      "scheduleResource": "Schedule: {{name}}"
     },
-    "generalDescription": "Adjust appearance and language."
+    "generalDescription": "Adjust appearance and language.",
+    "connections": {
+      "description": "Connect an external AI client to this workspace through MCP. Choose a client to see its setup steps.",
+      "clientLabel": "AI client",
+      "prepareTitle": "Prepare an API key",
+      "prepare": "In Settings → API Key, create a key with only the resources and actions you need, or use a key you already saved. Copy new keys when shown: the full secret is displayed only once. Return here using Connect agents.",
+      "openWorkspace": "Open workspace connections",
+      "manageKeys": "Manage API keys",
+      "configuration": "~/.cursor/mcp.json",
+      "command": "Terminal command",
+      "copyExample": "Copy example",
+      "copyField": "Copy {{field}}",
+      "copied": "Copied",
+      "copyFailed": "Could not copy. Select the text and copy it manually.",
+      "serverName": "Server name",
+      "transport": "Transport",
+      "endpoint": "MCP server URL",
+      "headerName": "HTTP header name",
+      "headerValue": "HTTP header value",
+      "verifyTitle": "Check in your client",
+      "notChecked": "This guide does not check the connection.",
+      "reference": "Official setup guide",
+      "clients": {
+        "claude-code": {
+          "name": "Claude Code",
+          "setupTitle": "Add the HTTP server",
+          "setup": "Replace tab_replace_with_your_key with your saved key, then run this command in a terminal with Claude Code installed.",
+          "note": "This adds a local Claude Code connection. Keep the key out of shared project files and repositories.",
+          "verify": "Run claude mcp list, then open Claude Code and use /mcp to inspect tabdo. Ask it to list the tables your key can read."
+        },
+        "claude-remote": {
+          "name": "Claude web / Desktop",
+          "setupTitle": "Add a remote connector",
+          "setup": "In Claude, open Customize → Connectors → Add custom connector. Enter the server name and URL below. Choose No sign in under Authentication, then add the Authorization value under Request headers.",
+          "note": "No sign in skips OAuth; the Bearer key is still required. Use a public HTTPS endpoint. Team or Enterprise users may need an owner to add the connector in organization settings. If Request headers is unavailable, use a client that supports Bearer headers.",
+          "verify": "Finish adding the connector, enable tabdo for the conversation through Connectors, then ask it to list your authorized tables."
+        },
+        "codex": {
+          "name": "Codex",
+          "setupTitle": "Set the key and add the server",
+          "setup": "Replace the placeholder with your saved key. Keep TABDO_MCP_KEY available in the environment that launches Codex. Run the command in your terminal.",
+          "note": "The server configuration refers to the environment variable. Keep its value private and out of shared files and shell history.",
+          "verify": "Run codex mcp list, then open Codex and use /mcp to inspect tabdo. Ask it to list the tables your key can read."
+        },
+        "cursor": {
+          "name": "Cursor",
+          "setupTitle": "Save the remote server configuration",
+          "setup": "Add this entry to your personal ~/.cursor/mcp.json. Replace the placeholder with your saved key, save the file, then restart Cursor. Merge with existing servers if needed.",
+          "note": "Keep real keys out of shared .cursor/mcp.json files and repositories. This connection uses Streamable HTTP with a Bearer header.",
+          "verify": "In Customize → MCPs, enable tabdo and check that its tools appear in chat. Ask it to list your authorized tables. Use MCP Logs in the Output panel to investigate failures."
+        },
+        "grok-bot": {
+          "name": "Grok Bot",
+          "setupTitle": "Configure a custom MCP connector",
+          "setup": "Where your Grok account offers custom MCP servers, add tabdo with the URL below and type Remote HTTPS (Streamable HTTP). In the secure HTTP headers form, enter Authorization and its Bearer value. Leave OAuth Client ID and Client Secret empty.",
+          "note": "If your version only offers OAuth and has no secure HTTP headers form, this connection is unavailable. Use a client that supports Bearer headers. Grok Bot needs a public HTTPS URL; never paste the key into chat or a URL.",
+          "verify": "Open Connect apps and add the connector if prompted. Attach tabdo to a task with @, then ask it to list your authorized tables."
+        }
+      }
+    }
   },
   "directory": {
     "loadingLabel": "Loading {{label}}",

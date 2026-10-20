@@ -1,9 +1,0 @@
-import * as implementation from "../business/commands/documents.js";
-import { commandDependencies, businessCall } from "../services/dependencies.js";
-type Args<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown, ...infer Rest] ? Rest : never;
-export const getDocument = (...args: Args<typeof implementation.getDocument>) => businessCall(() => implementation.getDocument(commandDependencies(), ...args));
-export const createDocument = (...args: Args<typeof implementation.createDocument>) => businessCall(() => implementation.createDocument(commandDependencies(), ...args));
-export const replaceDocument = (...args: Args<typeof implementation.replaceDocument>) => businessCall(() => implementation.replaceDocument(commandDependencies(), ...args));
-export const renderDocument = (...args: Args<typeof implementation.renderDocument>) => businessCall(() => implementation.renderDocument(commandDependencies(), ...args));
-export const uploadDocumentImage = (...args: Args<typeof implementation.uploadDocumentImage>) => businessCall(() => implementation.uploadDocumentImage(commandDependencies(), ...args));
-export const getDocumentImage = (...args: Args<typeof implementation.getDocumentImage>) => businessCall(() => implementation.getDocumentImage(commandDependencies(), ...args));

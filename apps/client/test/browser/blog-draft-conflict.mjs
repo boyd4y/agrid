@@ -1,3 +1,4 @@
+import { createSiteViewFixture } from "./helpers/site-fixture.mjs";
 import assert from 'node:assert/strict';
 import { createBrowserFixture } from './fixture.mjs';
 
@@ -7,14 +8,14 @@ page.setDefaultTimeout(15000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
 const open = siteId => page.evaluate(siteId => window.dispatchEvent(new CustomEvent('tabdo:open-preview', { detail: { kind: 'site', siteId } })), siteId);
 const editor = page.getByTestId('blog-editor');
-const saveResponse = () => page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'saveBlog');
+const saveResponse = () => page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'updateView');
 const labels = {
-  'zh-CN': { settings: '配置', description: '博客简介', save: '保存配置', back: '返回站点', leave: '保留草稿并离开', reload: '读取最新配置', title: '丢弃配置草稿？', cancel: '取消', copy: '复制配置草稿', discard: '丢弃并重新读取', conflict: /博客版本或线上版本已变化/ },
-  en: { settings: 'Settings', description: 'Blog description', save: 'Save configuration', back: 'Back to sites', leave: 'Keep draft and leave', reload: 'Load latest configuration', title: 'Discard configuration draft?', cancel: 'Cancel', copy: 'Copy configuration draft', discard: 'Discard and reload', conflict: /draft or published version changed/ },
+  'zh-CN': { settings: '设置', description: '站点描述', save: '保存配置', back: '返回站点', leave: '保留草稿并离开', reload: '读取最新配置', title: '丢弃配置草稿？', cancel: '取消', copy: '复制配置草稿', discard: '丢弃并重新读取', conflict: /博客版本或线上版本已变化/ },
+  en: { settings: 'Settings', description: 'Site description', save: 'Save configuration', back: 'Back to sites', leave: 'Keep draft and leave', reload: 'Load latest configuration', title: 'Discard configuration draft?', cancel: 'Cancel', copy: 'Copy configuration draft', discard: 'Discard and reload', conflict: /draft or published version changed/ },
 };
 try {
   for (const [mode, language] of [['embedded', 'zh-CN'], ['standalone', 'en']]) {
-    const l = labels[language], blog = await command('createBlog', { name: `冲突恢复 ${mode}`, idempotencyKey: crypto.randomUUID() });
+    const l = labels[language], blog = await createSiteViewFixture(api, command, `冲突恢复 ${mode}`);
     await page.goto(frontend + '/app'); await page.getByTestId('workspace-home-split').waitFor();
     await page.evaluate(language => localStorage.setItem('tabdo.locale', language), language);
     if (mode === 'standalone') await page.goto(frontend + `/app/sites/${blog.id}`);
@@ -26,9 +27,9 @@ try {
     else await editor.getByRole('link', { name: l.back, exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: l.leave, exact: true }).click();
     await editor.waitFor({ state: 'hidden' });
-    const latest = await command('getBlog', { siteId: blog.id });
-    assert.equal(latest.version, 1);
-    await command('saveBlog', { siteId: blog.id, expectedVersion: latest.version, name: latest.name, config: { ...latest.config, description: serverText }, idempotencyKey: crypto.randomUUID() });
+    const latest = await command('getView', { viewId: blog.viewId });
+    assert.equal(latest.site.version, 1);
+    await command('updateView', { viewId: blog.viewId, expectedVersion: latest.site.version, name: latest.name, config: { ...latest.config, description: serverText }, idempotencyKey: crypto.randomUUID() });
     if (mode === 'embedded') await open(blog.id);
     else await page.goto(frontend + `/app/sites/${blog.id}`);
     await editor.getByRole('tab', { name: l.settings, exact: true }).click();
@@ -46,7 +47,7 @@ try {
     assert.equal(rejected.status(), 409);
     assert.equal(rejected.request().postDataJSON().input.expectedVersion, 1, 'restored drafts keep their original CAS version');
     await editor.getByRole('alert').filter({ hasText: l.conflict }).waitFor();
-    assert.equal((await command('getBlog', { siteId: blog.id })).config.description, serverText);
+    assert.equal((await command('getView', { viewId: blog.viewId })).config.description, serverText);
     await editor.getByRole('button', { name: l.reload, exact: true }).click();
     const dialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: l.title, exact: true }) });
     await dialog.getByRole('button', { name: l.copy, exact: true }).click();
@@ -56,10 +57,10 @@ try {
     assert.equal(await editor.getByLabel(l.description, { exact: true }).inputValue(), draftText);
     assert.equal(await page.evaluate(key => sessionStorage.getItem(key), draft.key), draft.value);
     await editor.getByRole('button', { name: l.reload, exact: true }).click();
-    const failRead = async route => route.request().postDataJSON()?.command === 'getBlog'
+    const failRead = async route => route.request().postDataJSON()?.command === 'getView'
       ? route.fulfill({ status: 503, json: { code: 'REQUEST_FAILED' } }) : route.fallback();
     await page.route('**/api/commands', failRead);
-    const failedRead = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'getBlog');
+    const failedRead = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/commands') && response.request().postDataJSON()?.command === 'getView');
     await dialog.getByRole('button', { name: l.discard, exact: true }).click();
     assert.equal((await failedRead).status(), 503);
     await dialog.getByRole('alert').waitFor();
@@ -71,22 +72,22 @@ try {
     assert.equal(await editor.getByLabel(l.description, { exact: true }).inputValue(), serverText);
     assert.equal(await page.evaluate(key => sessionStorage.getItem(key), draft.key), null);
     assert.equal(await page.evaluate(() => sessionStorage.getItem('tabdo.blog-draft:other-workspace:other-site')), 'untouched');
-    assert.equal((await command('getBlog', { siteId: blog.id })).version, 2, 'discard and reload never writes to the server');
+    assert.equal((await command('getView', { viewId: blog.viewId })).site.version, 2, 'discard and reload never writes to the server');
     const continued = `${mode} continued after explicit recovery`;
     await editor.getByLabel(l.description, { exact: true }).fill(continued);
     const saved = saveResponse(); await editor.getByRole('button', { name: l.save, exact: true }).click();
     const accepted = await saved; assert.equal(accepted.status(), 200); assert.equal(accepted.request().postDataJSON().input.expectedVersion, 2);
-    assert.equal((await command('getBlog', { siteId: blog.id })).config.description, continued);
+    assert.equal((await command('getView', { viewId: blog.viewId })).config.description, continued);
     console.log(`PASS ${mode}/${language}: real v1→v2 conflict, expectedVersion=1 rejected; copy/cancel/failing read preserve draft; explicit discard reads v2, only this key cleared; next save expectedVersion=2 succeeds.`);
     if (!process.env.BROWSER_SKIP_VISUALS) {
-      await page.setViewportSize({ width: 390, height: 844 });
+      await page.setViewportSize({ width: 1100, height: 844 });
       await editor.getByLabel(l.description, { exact: true }).fill('Pending configuration for recovery confirmation');
       const pending = saveResponse();
-      const server = await command('getBlog', { siteId: blog.id });
-      await command('saveBlog', { siteId: blog.id, expectedVersion: server.version, name: server.name, config: { ...server.config, description: 'New saved configuration' }, idempotencyKey: crypto.randomUUID() });
+      const server = await command('getView', { viewId: blog.viewId });
+      await command('updateView', { viewId: blog.viewId, expectedVersion: server.site.version, name: server.name, config: { ...server.config, description: 'New saved configuration' }, idempotencyKey: crypto.randomUUID() });
       await editor.getByRole('button', { name: l.save, exact: true }).click(); await pending;
       await editor.getByRole('button', { name: l.reload, exact: true }).click();
-      for (const [width, theme] of [[390, 'light'], [320, 'dark']]) {
+      for (const [width, theme] of [[1440, 'light'], [1100, 'dark']]) {
         await page.setViewportSize({ width, height: 844 }); await page.emulateMedia({ colorScheme: theme });
         await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, theme);
         assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1));

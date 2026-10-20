@@ -1,3 +1,6 @@
+import { deleteSite } from "../sites/service.js";
+import { siteViewDetail, executeSiteView } from "./site-views.js";
+import { sites } from "../db/schema.js";
 import type { CommandDependencies } from "../dependencies.js";
 import { and, asc, eq } from "drizzle-orm";
 
@@ -34,7 +37,7 @@ import type {
 } from "@tabdo/shared";
 import { FORM_LAYOUT_MODES, FORM_THEME_PRESETS, BOARD_VIEW_CONFIG_SCHEMA, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, VIEW_NAME_SCHEMA } from "@tabdo/shared";
 
-export type OrgScoped = { organizationId?: string };
+export type OrgScoped = { organizationId?: string; actorId?: string };
 
 function asFormConfig(raw: unknown): FormViewConfig {
   const c = (raw ?? {}) as FormViewConfigJson;
@@ -140,6 +143,10 @@ async function validateBoardConfig(deps: CommandDependencies, tableId: string, c
 export async function renameView(deps: CommandDependencies, { organizationId, ...input }: RenameViewInput & OrgScoped, transaction?: Transaction): Promise<TableView> {
   const { viewId, name } = RENAME_VIEW_SCHEMA.parse({ viewId: input.viewId, name: input.name });
   const view = await requireViewInOrg(deps, viewId, organizationId, transaction);
+  if (view.type === "site" && input.actorId && organizationId) {
+    const current = await siteViewDetail(deps, { kind: "member", organizationId, actorId: input.actorId }, view, transaction);
+    return executeSiteView(deps, { kind: "member", organizationId, actorId: input.actorId }, "updateView", { viewId, name, expectedVersion: current.site!.version, idempotencyKey: deps.uuid() }, transaction);
+  }
   const [row] = await (transaction ?? deps.database).update(tableViews).set({ name, updatedAt: deps.now() }).where(and(eq(tableViews.id, viewId), eq(tableViews.tableId, view.tableId))).returning();
   if (!row) throw new Error("视图已被删除");
   return toTableView(row);
@@ -223,8 +230,10 @@ export async function listViews(deps: CommandDependencies, {
 export async function getView(deps: CommandDependencies, {
   viewId,
   organizationId,
+  actorId,
 }: GetViewInput & OrgScoped, transaction?: Transaction): Promise<TableView | ResolvedFormView> {
   const view = await requireViewInOrg(deps, viewId, organizationId, transaction);
+  if (view.type === "site" && actorId && organizationId) return siteViewDetail(deps, { kind: "member", organizationId, actorId }, view, transaction);
   if (view.type === "form") return resolveFormView(deps, view, transaction);
   return toTableView(view);
 }
@@ -240,7 +249,12 @@ export async function deleteView(deps: CommandDependencies, {
     const current = siblings.find((candidate) => candidate.id === viewId);
     if (!current) throw new Error("视图已被删除");
     if (siblings.length <= 1) throw new Error("至少保留一个视图");
+    if (current.siteId) {
+      const [artifact] = await tx.select().from(sites).where(eq(sites.id, current.siteId)).for("update");
+      if (artifact?.publishedRevisionId) throw new Error("Unpublish the site view before deleting it");
+    }
     await tx.delete(tableViews).where(eq(tableViews.id, viewId));
+    if (current.siteId) await deleteSite(deps, { siteId: current.siteId, organizationId }, tx);
     if (current.isDefault) await tx.update(tableViews).set({ isDefault: true, updatedAt: deps.now() }).where(eq(tableViews.id, siblings.find((candidate) => candidate.id !== viewId)!.id));
     return { ok: true };
   });

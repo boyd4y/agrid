@@ -1,4 +1,4 @@
-import type { ApiKeyInput, BlogPermission, DocumentPermission, TableMeta, TablePermission } from "@tabdo/shared";
+import type { ApiKeyInput, TableMeta, TablePermission } from "@tabdo/shared";
 
 export type ApiKeyTable = TableMeta & { workspaceName: string };
 export const operations = ["canRead", "canCreate", "canUpdate", "canDelete"] as const;
@@ -29,47 +29,16 @@ export function groupPermissionTables(tables: readonly ApiKeyTable[]) {
   }));
 }
 
-export type TableAccess = Record<typeof operations[number], boolean> & { canPublish: boolean };
-export const tableOperations = [...operations, "canPublish"] as const;
-
-// Build also permits link-based public previews in the existing API. Keep both
-// capabilities behind the explicit publication choice, without changing old keys.
-export function tableAccessGrants(tableId: string, access: TableAccess) {
-  const { canRead, canCreate, canUpdate, canDelete, canPublish } = access;
-  const table: TablePermission = { tableId, canRead, canCreate, canUpdate, canDelete };
-  // Create uses createDocument. Only Update needs both bits for lazy body
-  // creation via replaceDocument(0), plus upload and existing blog configuration.
-  const document: DocumentPermission = { tableId, canRead, canCreate: canCreate || canUpdate, canUpdate,
-    canUpload: canUpdate, canReadHistory: false, canRestore: false };
-  const blog: BlogPermission = { tableId, canRead, canConfigure: canUpdate, canBuild: canPublish, canPublish, canRestore: false };
-  return { table, document, blog };
-}
-
+export type TableAccess = Record<typeof operations[number], boolean>;
+export const tableOperations = operations;
 export function getTableAccess(input: ApiKeyInput, tableId: string) {
   const table = input.permissions.find(p => p.tableId === tableId);
-  const document = input.documentPermissions?.find(p => p.tableId === tableId);
-  const blog = input.blogPermissions?.find(p => p.tableId === tableId);
-  const access: TableAccess = { canRead: table?.canRead ?? false, canCreate: table?.canCreate ?? false,
-    canUpdate: table?.canUpdate ?? false, canDelete: table?.canDelete ?? false, canPublish: blog?.canPublish ?? false };
-  const expected = tableAccessGrants(tableId, access);
-  const matches = (actual: object | undefined, target: object) => Object.entries(target).every(([key, value]) => key === "tableId" || Boolean((actual as Record<string, unknown> | undefined)?.[key]) === value);
-  return { access, legacy: !matches(table, expected.table) || !matches(document, expected.document) || !matches(blog, expected.blog) };
+  return { access: { canRead: table?.canRead ?? false, canCreate: table?.canCreate ?? false, canUpdate: table?.canUpdate ?? false, canDelete: table?.canDelete ?? false } };
 }
-
 export function setTableAccess(input: ApiKeyInput, tableId: string, access: TableAccess): ApiKeyInput {
-  const grants = tableAccessGrants(tableId, access);
-  const replace = <T extends { tableId: string }>(all: T[] = [], grant: T) => [
-    ...all.filter(p => p.tableId !== tableId),
-    ...(Object.entries(grant as Record<string, unknown>).some(([key, value]) => key !== "tableId" && value === true) ? [grant] : []),
-  ];
-  return { ...input, permissions: replace(input.permissions, grants.table),
-    documentPermissions: replace(input.documentPermissions, grants.document), blogPermissions: replace(input.blogPermissions, grants.blog) };
+  return { ...input, permissions: [...input.permissions.filter(p => p.tableId !== tableId), ...(operations.some(op => access[op]) ? [{ tableId, ...access }] : [])] };
 }
-
-export function authorizedTableIds(input: ApiKeyInput) {
-  return [...new Set([...input.permissions, ...(input.documentPermissions ?? []), ...(input.blogPermissions ?? [])]
-    .filter(grant => Object.entries(grant).some(([key, value]) => key !== "tableId" && value === true)).map(grant => grant.tableId))];
-}
+export function authorizedTableIds(input: ApiKeyInput) { return input.permissions.filter(grant => operations.some(op => grant[op])).map(grant => grant.tableId); }
 
 export type PermissionResource = { id: string; name: string; workspaceId: string; workspaceName: string };
 export function groupPermissionResources(tables: readonly ApiKeyTable[], calendars: readonly PermissionResource[], schedules: readonly PermissionResource[]) {

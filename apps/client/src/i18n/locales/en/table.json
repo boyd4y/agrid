@@ -394,5 +394,6 @@
     "saving": "Saving…",
     "loading": "Loading…",
     "failed": "Some changes could not be saved. Drafts retained."
-  }
+  },
+  "siteView": "Site view"
 }

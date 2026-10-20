@@ -1,9 +1,8 @@
+import { createViewSchema, updateViewSchema, ROW_ATTACHMENT_SCHEMAS, rowBodyCreateSchema, rowBodyWriteSchema } from "@tabdo/shared";
 import { OPEN_PREVIEW_SCHEMA } from "@tabdo/shared";
 import { getReport } from "../../reports/service.js";
 import { requireOrgId } from "../../tenant/scope.js";
 import { CREATE_CALENDAR_VIEW_SCHEMA, UPDATE_CALENDAR_VIEW_SCHEMA, QUERY_CALENDAR_VIEW_SCHEMA } from "@tabdo/shared";
-import { createBlogTools } from "./blogs.js";
-import { createDocumentTools } from "./documents.js";
 import { createCalendarTools } from "./calendar.js";
 import { createMailTools } from "./mail.js";
 import { createSiteTools } from "./sites.js";
@@ -57,14 +56,16 @@ export function createTableTools(
     return id;
   };
   return {
+    create_view: tool({ description: "为普通表创建站点视图，不发布。", inputSchema: zodSchema(createViewSchema), execute: async input => cmds.createView(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    update_view: tool({ description: "保存站点视图；publication仅用于用户明确要求的发布、撤下或单条撤回。源记录编辑不发布。", inputSchema: zodSchema(updateViewSchema), execute: async input => cmds.updateView(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    upload_row_attachment: tool({ description: "上传记录所属的正文附件。", inputSchema: zodSchema(ROW_ATTACHMENT_SCHEMAS.uploadRowAttachment), execute: async input => cmds.uploadRowAttachment(dependencies(), { ...input, ...org }, currentTransaction()) }),
+    get_row_attachment: tool({ description: "读取记录所属的私有附件。", inputSchema: zodSchema(ROW_ATTACHMENT_SCHEMAS.getRowAttachment), execute: async input => cmds.getRowAttachment(dependencies(), { ...input, ...org }, currentTransaction()) }),
     ...createReportTools(deps, organizationId, transaction),
     ...createMailTools(deps, organizationId),
     ...createSiteTools(deps, organizationId, actorId, transaction),
-    ...createBlogTools(deps, organizationId, actorId, transaction),
-    ...createDocumentTools(deps, organizationId, actorId, transaction),
     ...createCalendarTools(deps, organizationId, actorId, transaction),
     ...createBatchTools(deps, defaultTableId, organizationId, actorId, transaction),
-    get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid()})),execute:async input=>cmds.getRow(dependencies(), {...input,...org}, currentTransaction())}),
+    get_row: tool({description:"读取单条记录及字段，关联标签仅返回前20条，其余用 query_relation_records 分页。",inputSchema:zodSchema(z.object({rowId:z.string().uuid(),includeBody:z.boolean().optional(),bodyFormat:z.enum(["json","html"]).optional()})),execute:async input=>cmds.getRow(dependencies(), {...input,...org}, currentTransaction())}),
     query_relation_records: tool({description:"搜索关联字段的候选记录，或 mode=related 分页查看已关联记录。必须使用记录ID，不能把名称当ID。",inputSchema:zodSchema(z.object({columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()})),execute:async input=>cmds.queryRelationRecords(dependencies(), {...input,...org}, currentTransaction())}),
     set_relation: tool({description:"整体替换已有关联字段中的目标记录。此工具不创建字段；创建关联字段用 add_column(type=relation, relation={targetTableId,...})。传 expectedVersion 防止覆盖并发修改。清空传 recordIds=[]，不删除记录。",inputSchema:zodSchema(relationRecordSchema.extend({expectedVersion:z.number().int().optional()})),execute:async input=>cmds.setRelation(dependencies(), {...input,...org}, currentTransaction())}),
     add_relation: tool({description:"向已有的关联字段增量添加目标记录，幂等，不覆盖其他并发添加。此工具不创建关联字段或表格关系定义；创建单双向字段用 add_column(type=relation, relation={targetTableId,inverseName,...})。需要实际字段 UUID 和目标记录 UUID 数组。",inputSchema:zodSchema(relationRecordSchema),execute:async input=>cmds.addRelation(dependencies(), {...input,...org}, currentTransaction())}),
@@ -160,11 +161,13 @@ export function createTableTools(
       inputSchema: zodSchema(
         z.object({
           rowId: z.string().uuid(),
-          cells: z.record(z.string(), cellValueSchema),
+          cells: z.record(z.string(), cellValueSchema).optional(),
+          body: rowBodyWriteSchema.optional(),
+          idempotencyKey: z.string().min(1).max(200).optional(),
           expectedVersion: z.number().int().optional(),
         })
       ),
-      execute: async (input) => cmds.updateCells(dependencies(), { ...input, ...org }, currentTransaction()),
+      execute: async (input) => cmds.updateCells(dependencies(), { ...input, body: input.body as import("@tabdo/shared").RowBodyWrite | undefined, ...org }, currentTransaction()),
     }),
 
     add_row: tool({
@@ -173,12 +176,14 @@ export function createTableTools(
         z.object({
           tableId: z.string().uuid().optional().describe("默认用当前打开的表"),
           cells: z.record(z.string(), cellValueSchema).optional(),
+          body: rowBodyCreateSchema.optional(),
+          idempotencyKey: z.string().min(1).max(200).optional(),
         })
       ),
-      execute: async ({ tableId, cells }) => {
+      execute: async ({ tableId, cells, body, idempotencyKey }) => {
         const id = tableId || defaultTableId;
         if (!id) throw new Error("缺少 tableId");
-        return cmds.addRow(dependencies(), { tableId: id, cells, ...org }, currentTransaction());
+        return cmds.addRow(dependencies(), { tableId: id, cells, body: body as import("@tabdo/shared").RowBodyCreate, idempotencyKey, ...org }, currentTransaction());
       },
     }),
 

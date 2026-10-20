@@ -1,6 +1,5 @@
+import { createViewSchema, updateViewSchema, ROW_ATTACHMENT_SCHEMAS, rowBodyCreateSchema, rowBodyWriteSchema } from "@tabdo/shared";
 import { CREATE_CALENDAR_VIEW_SCHEMA, UPDATE_CALENDAR_VIEW_SCHEMA, QUERY_CALENDAR_VIEW_SCHEMA } from "@tabdo/shared";
-import { BLOG_TOOLS, BLOG_SCHEMAS } from "@tabdo/shared";
-import { DOCUMENT_TOOLS, DOCUMENT_SCHEMAS } from "@tabdo/shared";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { CALENDAR_TOOLS, CALENDAR_SCHEMAS, COLUMN_TYPES, MEMBER_LIST_SCHEMA, BATCH_TOOLS, batchToolResult, RENAME_VIEW_SCHEMA, SET_DEFAULT_VIEW_SCHEMA, UPDATE_BOARD_VIEW_SCHEMA, AUTOMATION_CREATE_SCHEMA, AUTOMATION_UPDATE_SCHEMA, AUTOMATION_LIST_SCHEMA, AUTOMATION_RUN_LIST_SCHEMA } from "@tabdo/shared";
@@ -47,18 +46,13 @@ export function createMcpServer(callCommand: (command: CommandName, input: Recor
     version: "0.1.0",
   });
 
-  for (const [name, definition] of Object.entries(BLOG_TOOLS)) {
-    server.registerTool(name, { description: definition.description, inputSchema: BLOG_SCHEMAS[definition.command].shape }, async (input: Record<string, unknown>) => {
-      try { return textResult(await callCommand(definition.command, BLOG_SCHEMAS[definition.command].parse(input))); }
-      catch (error) { return { ...textResult({ ok: false, error: { code: error instanceof z.ZodError ? "BAD_INPUT" : (error as { code?: string }).code ?? "REQUEST_FAILED", message: error instanceof Error ? error.message : "Blog request failed" } }), isError: true }; }
-    });
-  }
-
-  for (const [name, definition] of Object.entries(DOCUMENT_TOOLS)) {
-    server.registerTool(name, { description: definition.description, inputSchema: DOCUMENT_SCHEMAS[definition.command].shape }, async (input: Record<string, unknown>) => {
-      try { return textResult(await callCommand(definition.command, DOCUMENT_SCHEMAS[definition.command].parse(input))); }
-      catch (error) { return { ...textResult({ ok: false, error: { code: error instanceof z.ZodError ? "BAD_INPUT" : (error as { code?: string }).code ?? "REQUEST_FAILED", message: error instanceof Error ? error.message : "Document request failed" } }), isError: true }; }
-    });
+  for (const [name, command, schema, description] of [
+    ["create_view", "createView", createViewSchema, "为普通表创建站点视图，不发布。"],
+    ["update_view", "updateView", updateViewSchema, "保存站点视图；只有明确提供publication才发布、撤下或撤回选中记录。普通保存不发布。"],
+    ["upload_row_attachment", "uploadRowAttachment", ROW_ATTACHMENT_SCHEMAS.uploadRowAttachment, "上传记录正文附件，校验所属记录、版本和表Update权限。"],
+    ["get_row_attachment", "getRowAttachment", ROW_ATTACHMENT_SCHEMAS.getRowAttachment, "按表Read权限读取记录所属附件。"],
+  ] as const) {
+    server.registerTool(name, { description, inputSchema: schema.shape }, async (input: Record<string, unknown>) => textResult(await callCommand(command, input)));
   }
   for (const [name, definition] of Object.entries(CALENDAR_TOOLS)) {
     server.registerTool(name, { description: definition.description, inputSchema: CALENDAR_SCHEMAS[definition.command].shape }, async (input: Record<string, unknown>) => {
@@ -94,7 +88,7 @@ export function createMcpServer(callCommand: (command: CommandName, input: Recor
    server.registerTool(name,{description:"按记录ID替换/增量添加/解除关联，不删除记录。set使用版本检查防覆盖。",inputSchema:{rowId:z.string().uuid(),columnId:z.string().uuid(),recordIds:z.array(z.string().uuid()).max(1000),expectedVersion:z.number().int().optional()}},async input=>textResult(await callCommand(command,input)));
   }
   server.registerTool("query_relation_records",{description:"分页搜索关联候选或读取已关联记录",inputSchema:{columnId:z.string().uuid(),rowId:z.string().uuid().optional(),mode:z.enum(["candidates","related"]).optional(),search:z.string().optional(),cursor:z.string().nullable().optional(),limit:z.number().int().min(1).max(100).optional()}},async input=>textResult(await callCommand("queryRelationRecords",input)));
-  server.registerTool("get_row",{description:"读取单条记录和字段",inputSchema:{rowId:z.string().uuid()}},async input=>textResult(await callCommand("getRow",input)));
+  server.registerTool("get_row",{description:"读取单条记录和字段",inputSchema:{rowId:z.string().uuid(),includeBody:z.boolean().optional(),bodyFormat:z.enum(["json","html"]).optional()}},async input=>textResult(await callCommand("getRow",input)));
 
   server.registerTool(
     "list_tables",
@@ -185,7 +179,9 @@ export function createMcpServer(callCommand: (command: CommandName, input: Recor
       description: "批量更新同一行多个单元格（→ updateCells）",
       inputSchema: {
         rowId: z.string(),
-        cells: z.record(z.string(), cellValue),
+        cells: z.record(z.string(), cellValue).optional(),
+        body: rowBodyWriteSchema.optional(),
+        idempotencyKey: z.string().min(1).max(200).optional(),
         expectedVersion: z.number().int().optional(),
       },
     },
@@ -199,6 +195,8 @@ export function createMcpServer(callCommand: (command: CommandName, input: Recor
       inputSchema: {
         tableId: z.string(),
         cells: z.record(z.string(), cellValue).optional(),
+        body: rowBodyCreateSchema.optional(),
+        idempotencyKey: z.string().min(1).max(200).optional(),
       },
     },
     async (input) => textResult(await callCommand("addRow", input))

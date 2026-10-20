@@ -5,11 +5,10 @@ export const DEFAULT_DISABLED_PLATFORM_TOOLS = ["send_email", "reply_email"] as 
 
 /** Configurable platform wire IDs. Native tool availability belongs to the Harness. */
 export const PLATFORM_TOOL_IDS = [
+  "create_view", "update_view", "upload_row_attachment", "get_row_attachment",
   "list_mail_inboxes", "send_email", "reply_email", "get_message",
   "list_calendar_subscriptions", "get_calendar_subscription", "create_calendar_subscription", "update_calendar_subscription", "revoke_calendar_subscription", "rotate_calendar_subscription_secret", "list_calendar_deliveries", "get_calendar_delivery", "retry_calendar_delivery",
-  "create_blog", "start_blog_article", "get_blog_sources", "get_blog", "save_blog", "build_blog", "publish_blog", "withdraw_blog_article", "unpublish_blog", "restore_blog_revision", "create_blog_preview", "revoke_blog_previews",
   "query_scheduled_occurrences", "set_booking_reminders", "list_booking_reminders",
-  "get_document", "create_document", "replace_document", "render_document", "upload_document_image", "get_document_image",
   "list_calendars", "get_calendar", "create_calendar", "update_calendar", "archive_calendar", "list_calendar_members", "list_calendar_people", "get_calendar_person", "create_calendar_person", "update_calendar_person", "archive_calendar_person", "get_working_hours", "set_working_hours", "list_availability_exceptions", "set_availability_exception", "remove_availability_exception", "query_bookings", "get_booking", "create_booking", "reschedule_booking", "cancel_booking", "query_availability", "check_booking_conflicts", "batch_bookings",
   "list_sites", "get_site", "save_site", "publish_site", "unpublish_site",
   "batch_add_rows", "batch_update_rows", "batch_delete_rows",
@@ -127,7 +126,7 @@ const legacyBuiltinToolIds = [
   "webSearch",
   "write"
 ] as const;
-const retiredToolIds = ["list_document_revisions", "get_document_revision", "restore_document_revision", "read_skill", "get_task_state", "create_goal", "update_goal", "update_plan"] as const;
+const retiredToolIds = ["create_blog","start_blog_article","get_blog_sources","get_blog","save_blog","build_blog","publish_blog","withdraw_blog_article","unpublish_blog","restore_blog_revision","create_blog_preview","revoke_blog_previews","get_document","create_document","replace_document","render_document","upload_document_image","get_document_image", "list_document_revisions", "get_document_revision", "restore_document_revision", "read_skill", "get_task_state", "create_goal", "update_goal", "update_plan"] as const;
 const platformToolIds = new Set<string>(PLATFORM_TOOL_IDS);
 export const DISABLED_TOOLS_SCHEMA = z.array(z.enum([...PLATFORM_TOOL_IDS, ...legacyBuiltinToolIds, ...retiredToolIds]))
   .max(160).refine(ids => new Set(ids).size === ids.length, "工具名称不能重复")

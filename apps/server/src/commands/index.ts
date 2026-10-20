@@ -1,7 +1,5 @@
 export { createCalendarView, updateCalendarView, queryCalendarView } from "./calendar-views.js";
 import * as calendarViewCmds from "./calendar-views.js";
-export * from "./documents.js";
-import * as documentCommands from "./documents.js";
 export * from "./calendar.js";
 import * as calendarCommands from "./calendar.js";
 import * as implementation from "../business/commands/index.js";
@@ -9,6 +7,10 @@ import { commandDependencies, businessCall } from "../services/dependencies.js";
 
 type Arguments<F extends (...args: never[]) => unknown> = Parameters<F> extends [unknown, ...infer Rest] ? Rest : never;
 
+export const createView = (...args: Arguments<typeof implementation.createView>) => businessCall(() => implementation.createView(commandDependencies(), ...args));
+export const updateView = (...args: Arguments<typeof implementation.updateView>) => businessCall(() => implementation.updateView(commandDependencies(), ...args));
+export const uploadRowAttachment = (...args: Arguments<typeof implementation.uploadRowAttachment>) => businessCall(() => implementation.uploadRowAttachment(commandDependencies(), ...args));
+export const getRowAttachment = (...args: Arguments<typeof implementation.getRowAttachment>) => businessCall(() => implementation.getRowAttachment(commandDependencies(), ...args));
 export const listTables = (...args: Arguments<typeof implementation.listTables>) =>
   businessCall(() => implementation.listTables(commandDependencies(), ...args));
 export const getTable = (...args: Arguments<typeof implementation.getTable>) =>
@@ -94,7 +96,7 @@ import { recomputeAllFormulasForTable } from "./formulas.js";
 import * as viewCmds from "./views.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 export const commands = {
-  ...documentCommands,
+  createView, updateView, uploadRowAttachment, getRowAttachment,
   ...calendarCommands,
   batchSetRelations,
   batchAddRelations,

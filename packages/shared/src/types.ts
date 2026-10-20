@@ -253,6 +253,8 @@ export type ColumnDef = {
 };
 
 export type RowData = {
+  body?: import("./row-body.js").RowBody;
+  bodyVersion?: number;
   id: string;
   tableId: string;
   cells: Record<string, CellValue>;

@@ -43,15 +43,7 @@
   "applyLink": "Apply link",
   "removeLink": "Remove link",
   "closeRetry": "Close and reopen to retry",
-  "grantsTitle": "Record body permissions",
-  "grantsHint": "Separate from table CRUD. Does not grant publishing. Create alone does not grant body or history reads.",
   "documentScope": "{{count}} body grants",
-  "grants": {
-    "canRead": "Read body and images",
-    "canCreate": "Create body",
-    "canUpdate": "Replace body",
-    "canUpload": "Upload images"
-  },
   "errors": {
     "BAD_INPUT": "The body contains unsupported formatting or exceeds its limits. Reduce content or images and check Writing help and limits before retrying.",
     "NOT_FOUND": "Record, body or image not found within your authorized scope.",

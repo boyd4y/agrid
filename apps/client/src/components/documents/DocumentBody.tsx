@@ -4,14 +4,15 @@ import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@tabdo/ui/components/button";
 import { Skeleton } from "@tabdo/ui/components/skeleton";
-import { documentContentSchema, EMPTY_DOCUMENT, safeDocumentLink, type DocumentContent, type RecordDocument, type DocumentCommands } from "@tabdo/shared";
-import { documentCommand, DocumentApiError } from "@/lib/document-api";
+import { documentContentSchema, EMPTY_DOCUMENT, safeDocumentLink, type DocumentContent, type RowBody } from "@tabdo/shared";
+import { getRowBody, saveRowBody, rowCommand, RowBodyApiError } from "@/lib/row-body-api";
 import { workspaceCacheKey, workspaceUnloadApproved } from "@/lib/workspace-scope";
 
 export type DocumentState = { dirty: boolean; busy: boolean; status?: string };
 export type DocumentHandle = { flush(): Promise<boolean> };
 type Scope = { tableId: string; rowId: string; onStateChange?(state: DocumentState): void; ref?: Ref<DocumentHandle>; embedded?: boolean; onRefresh?(): void; refreshDisabled?: boolean };
-type PendingSave = DocumentCommands["replaceDocument"];
+type PendingSave = { tableId: string; rowId: string; content: DocumentContent; expectedVersion: number; idempotencyKey: string };
+type EditorBody = Pick<RowBody, "content" | "version"> & { updatedAt?: string };
 type Draft = { content: DocumentContent; baseVersion: number; pending?: PendingSave };
 const keyFor = (scope: Scope) => `tabdo.document-draft:${workspaceCacheKey()}:${scope.tableId}:${scope.rowId}`;
 function readDraft(key: string): Draft | null {
@@ -20,10 +21,10 @@ function readDraft(key: string): Draft | null {
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 export default function DocumentBody(scope: Scope) {
   const { t } = useTranslation("documents");
-  const [doc, setDoc] = useState<RecordDocument | null>(), [error, setError] = useState("");
+  const [doc, setDoc] = useState<EditorBody | null>(), [error, setError] = useState("");
   const [status, setStatus] = useState("loading"), [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0), [comparing, setComparing] = useState(false);
-  const [preview, setPreview] = useState<RecordDocument | null>(null);
+  const [preview, setPreview] = useState<EditorBody | null>(null);
   const [loadRevision, setLoadRevision] = useState(0);
   const [pasteNotice, setPasteNotice] = useState(false);
   const [images, setImages] = useState<Record<string, string>>({});
@@ -44,7 +45,7 @@ export default function DocumentBody(scope: Scope) {
   useEffect(() => {
     mounted.current = true;
     const controller = new AbortController();
-    void documentCommand("getDocument", identity, controller.signal).then(value => {
+    void getRowBody(identity, controller.signal).then(value => {
       if (!mounted.current || !editor) return;
       setDoc(value); setError("");
       const draft = readDraft(draftKey); version.current = draft?.baseVersion ?? value?.version ?? 0; content.current = draft?.content ?? value?.content ?? EMPTY_DOCUMENT; pending.current = draft?.pending; dirty.current = !!draft;
@@ -74,14 +75,14 @@ export default function DocumentBody(scope: Scope) {
     const sent = pending.current ?? { ...identity, content: structuredClone(content.current), expectedVersion: version.current, idempotencyKey: crypto.randomUUID() };
     pending.current = sent; retain(); inFlight.current = true; setStatus("saving"); setError("");
     try {
-      const saved = await documentCommand("replaceDocument", sent);
+      const saved = await saveRowBody(sent);
       if (!mounted.current) return false;
       version.current = saved.version; pending.current = undefined; dirty.current = !same(content.current, sent.content); failed.current = false;
       setDoc({ ...saved, content: sent.content as DocumentContent, updatedAt: new Date().toISOString() });
       setStatus(dirty.current ? "unsaved" : "saved"); retain(); return true;
     } catch (cause) {
       if (!mounted.current) return false;
-      conflicted.current = cause instanceof DocumentApiError && cause.code === "VERSION_CONFLICT"; failed.current = true; setStatus(conflicted.current ? "conflict" : "failed"); setError(cause instanceof Error ? cause.message : t("errors.REQUEST_FAILED")); retain(); return false;
+      conflicted.current = cause instanceof RowBodyApiError && cause.code === "VERSION_CONFLICT"; failed.current = true; setStatus(conflicted.current ? "conflict" : "failed"); setError(cause instanceof Error ? cause.message : t("errors.REQUEST_FAILED")); retain(); return false;
     } finally { inFlight.current = false; if (mounted.current) setTick(v => v + 1); }
   };
   const save = () => {
@@ -106,19 +107,19 @@ export default function DocumentBody(scope: Scope) {
     const ids = new Set<string>(), stack = [...(preview?.content ?? content.current).content];
     while (stack.length) { const node = stack.pop()!; if (node.type === "image") ids.add(String(node.attrs!.fileId)); stack.push(...node.content ?? []); }
     const controller = new AbortController();
-    for (const fileId of ids) if (!images[fileId]) void documentCommand("getDocumentImage", { ...identity, fileId }, controller.signal).then(image => {
+    for (const fileId of ids) if (!images[fileId]) void rowCommand("getRowAttachment", { ...identity, target: "body", fileId }, controller.signal).then(image => {
       if (!mounted.current) return;
       const bytes = Uint8Array.from(atob(image.base64), c => c.charCodeAt(0));
       setImages(previous => ({ ...previous, [fileId]: URL.createObjectURL(new Blob([bytes], { type: image.mimeType })) }));
     }).catch(cause => { if (mounted.current && cause.name !== "AbortError") setError(cause.message); });
     return () => controller.abort();
-  }, [doc?.id, tick, preview]);
+  }, [scope.rowId, tick, preview]);
   const imageUrls = useRef(images); imageUrls.current = images;
   useEffect(() => () => Object.values(imageUrls.current).forEach(url => URL.revokeObjectURL(url)), []);
   const viewServer = async () => {
     setComparing(true); setError("");
     try {
-      const value = await documentCommand("getDocument", identity);
+      const value = await getRowBody(identity);
       if (mounted.current && value) { setPreview(value); editor?.commands.setContent(value.content, { emitUpdate: false }); }
     } catch (cause) { if (mounted.current) setError((cause as Error).message); }
     finally { if (mounted.current) setComparing(false); }
@@ -135,15 +136,10 @@ export default function DocumentBody(scope: Scope) {
     if (file.size > 5 * 1024 * 1024) { setError(t("imageBudget")); return; }
     setBusy(true); inFlight.current = true; setError("");
     try {
-      if (!doc) {
-        const saved = await documentCommand("replaceDocument", { ...identity, content: EMPTY_DOCUMENT, expectedVersion: 0, idempotencyKey: crypto.randomUUID() });
-        version.current = saved.version;
-        if (!mounted.current) return;
-        setDoc({ ...saved, content: EMPTY_DOCUMENT, updatedAt: new Date().toISOString() });
-      }
       const buffer = new Uint8Array(await file.arrayBuffer()); let binary = ""; for (let i = 0; i < buffer.length; i += 8192) binary += String.fromCharCode(...buffer.subarray(i, i + 8192));
-      const image = await documentCommand("uploadDocumentImage", { ...identity, name: file.name, mimeType: file.type as "image/png", base64: btoa(binary), expectedVersion: version.current, idempotencyKey: crypto.randomUUID() });
+      const image = await rowCommand("uploadRowAttachment", { ...identity, target: "body", name: file.name, mimeType: file.type as "image/png", base64: btoa(binary), expectedVersion: version.current, idempotencyKey: crypto.randomUUID() });
       if (!mounted.current) return;
+      version.current = image.bodyVersion;
       setImages(previous => ({ ...previous, [image.fileId]: URL.createObjectURL(file) }));
       editor?.chain().focus().insertContent({ type: "image", attrs: { fileId: image.fileId, alt: file.name } }).run();
     } catch (cause) { if (mounted.current) setError((cause as Error).message); }
@@ -158,7 +154,7 @@ export default function DocumentBody(scope: Scope) {
     if (inFlight.current) return;
     exportDraft(); setBusy(true); inFlight.current = true;
     try {
-      const value = await documentCommand("getDocument", identity);
+      const value = await getRowBody(identity);
       if (!mounted.current || !value) return;
       content.current = value.content; version.current = value.version; dirty.current = false; pending.current = undefined; conflicted.current = false; failed.current = false; retain();
       editor?.commands.setContent(value.content, { emitUpdate: false }); setDoc(value); setPreview(null); setStatus("saved"); setError("");

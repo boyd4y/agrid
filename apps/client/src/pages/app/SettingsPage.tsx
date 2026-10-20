@@ -1,9 +1,10 @@
+import { AgentConnectionGuide } from "@/components/connections/AgentConnectionGuide";
 import { WebhookSettings } from "@/components/settings/WebhookSettings";
 import { workspaceCacheKey } from "@/lib/workspace-scope";
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AppPage, AppPageHeader } from "@/components/shell/AppPage";
-import { Moon, Sun, Monitor, Settings2, KeyRound, Mail, Webhook } from "lucide-react";
+import { Moon, Sun, Monitor, Settings2, KeyRound, Mail, Webhook, Plug } from "lucide-react";
 import { Card, CardTitle, CardDescription } from "@tabdo/ui/components/card";
 import { Field, FieldGroup, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
 import { Separator } from "@tabdo/ui/components/separator";
@@ -24,6 +25,7 @@ export function SettingsPage() {
   const tabs = [
     { id: "general", label: t("settings.tabs.general"), icon: Settings2 },
     ...(user && user.kind !== "agent" ? [{ id: "api-keys", label: t("settings.tabs.apiKeys"), icon: KeyRound }] : []),
+    { id: "connections", label: t("settings.tabs.connections"), icon: Plug },
     { id: "agentmail", label: "AgentMail", icon: Mail },
     { id: "webhook", label: "Webhook", icon: Webhook },
   ];
@@ -85,6 +87,7 @@ export function SettingsPage() {
           </FieldSet>
         </TabsContent>
         {user && user.kind !== "agent" && <TabsContent value="api-keys" className={paneClass}><ApiKeysSettings key={`${user.id}:${session?.activeOrganizationId ?? ""}`} /></TabsContent>}
+        <TabsContent value="connections" className={paneClass}><AgentConnectionGuide /></TabsContent>
         <TabsContent value="agentmail" className={paneClass}><IntegrationsPage key={`${user?.id ?? ""}:${session?.activeOrganizationId ?? ""}:agentmail`} kind="agentmail" /></TabsContent>
         <TabsContent value="webhook" className={paneClass}><WebhookSettings key={workspaceCacheKey()} direction={requestedTab === "calendar-events" ? "outbound" : searchParams.get("direction") === "outbound" ? "outbound" : "inbound"} onDirectionChange={direction => setSearchParams(current => {
           const next = new URLSearchParams(current);

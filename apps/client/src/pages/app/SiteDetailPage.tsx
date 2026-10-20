@@ -88,7 +88,7 @@ function SiteEditor({ siteId }: { siteId: string }) {
     setSelected("tabdo-config.js"); setDataDialog(false); setApiKey("");
   }
   if (!site) return <div className="flex h-full flex-col p-8">{error ? <ListErrorState title={t("loadFailed")} description={error} onRetry={() => void load()} /> : <p role="status" className="text-sm text-muted-foreground">{t("loading")}</p>}</div>;
-  if (site.kind === "blog") return <BlogEditor siteId={siteId} />;
+  if (site.kind === "blog") return <BlogEditor viewId={site.viewId!} />;
   const editor = <div className="flex h-full min-h-0 min-w-0 flex-col">
     <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-3"><span className="truncate text-xs font-medium">{active?.path}</span>{active && <div className="flex shrink-0 gap-1">
       <Button variant="ghost" size="icon" className="size-7" aria-label={t("downloadFile")} onClick={() => { const url = URL.createObjectURL(new Blob([active.content], { type: "text/plain;charset=utf-8" })); const link = document.createElement("a"); link.href = url; link.download = active.path.split("/").at(-1)!; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }}><Download /></Button>

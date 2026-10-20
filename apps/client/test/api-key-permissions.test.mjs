@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authorizedTableIds, getTableAccess, groupPermissionResources, groupPermissionTables, setTableAccess, summarizePermissions, tableAccessGrants } from '../src/components/settings/api-key-permissions.ts';
+import { authorizedTableIds, getTableAccess, groupPermissionResources, groupPermissionTables, setTableAccess, summarizePermissions } from '../src/components/settings/api-key-permissions.ts';
 
 const tables = [
   { id: 'a', name: 'Contacts', workspaceId: 'workspace-a', workspaceName: 'Team' },
@@ -25,73 +25,21 @@ test('editor groups by workspace ID and disambiguates equal names without rewrit
   assert.equal(groupPermissionTables([tables[0]])[0].name, 'Team');
 });
 
-const empty = () => ({ name: 'Test', permissions: [], documentPermissions: [], blogPermissions: [], calendarPermissions: [], schedulePermissions: [] });
-const access = (overrides = {}) => ({ canRead: false, canCreate: false, canUpdate: false, canDelete: false, canPublish: false, ...overrides });
-
-test('unified read includes private bodies/images and internal blog reads, never writes or public previews', () => {
-  const result = setTableAccess(empty(), 'a', access({ canRead: true }));
-  assert.deepEqual(result.permissions, [grant('a')]);
-  assert.deepEqual(result.documentPermissions, [{ tableId: 'a', canRead: true, canCreate: false, canUpdate: false, canUpload: false, canReadHistory: false, canRestore: false }]);
-  assert.deepEqual(result.blogPermissions, [{ tableId: 'a', canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }]);
-  assert.equal(getTableAccess(result, 'a').legacy, false);
+const empty = () => ({ name: 'Test', permissions: [], calendarPermissions: [], schedulePermissions: [] });
+const access = (bits = {}) => ({ canRead: false, canCreate: false, canUpdate: false, canDelete: false, ...bits });
+test('the table UI has exactly CRUD and saves only the original table grant', () => {
+  const initial = empty();
+  const granted = setTableAccess(initial, 'a', access({ canRead: true, canUpdate: true }));
+  assert.deepEqual(granted.permissions, [{ tableId: 'a', ...access({ canRead: true, canUpdate: true }) }]);
+  assert.deepEqual(getTableAccess(granted, 'a').access, access({ canRead: true, canUpdate: true }));
+  assert.deepEqual(authorizedTableIds(granted), ['a']);
+  assert(!('documentPermissions' in granted)); assert(!('blogPermissions' in granted));
+  assert.deepEqual(setTableAccess(granted, 'a', access()), initial);
 });
-
-test('create only grants first body creation, without body replacement, image upload or blog configuration', () => {
-  const { table, document, blog } = tableAccessGrants('a', access({ canCreate: true }));
-  assert.deepEqual(table, { tableId: 'a', canRead: false, canCreate: true, canUpdate: false, canDelete: false });
-  assert.deepEqual(document, { tableId: 'a', canRead: false, canCreate: true, canUpdate: false, canUpload: false, canReadHistory: false, canRestore: false });
-  assert.deepEqual(blog, { tableId: 'a', canRead: false, canConfigure: false, canBuild: false, canPublish: false, canRestore: false });
-  const result = setTableAccess(empty(), 'a', access({ canCreate: true }));
-  assert.deepEqual(result.blogPermissions, []);
-  assert.equal(getTableAccess(result, 'a').legacy, false);
-});
-
-test('update only supports existing body replacement, lazy body creation, images and draft configuration without adding rows or publishing', () => {
-  const { table, document, blog } = tableAccessGrants('a', access({ canUpdate: true }));
-  assert.deepEqual(table, { tableId: 'a', canRead: false, canCreate: false, canUpdate: true, canDelete: false });
-  assert.deepEqual(document, { tableId: 'a', canRead: false, canCreate: true, canUpdate: true, canUpload: true, canReadHistory: false, canRestore: false });
-  assert.deepEqual(blog, { tableId: 'a', canRead: false, canConfigure: true, canBuild: false, canPublish: false, canRestore: false });
-});
-
-test('only explicit publishing enables build and shared preview', () => {
-  const result = setTableAccess(empty(), 'a', access({ canPublish: true }));
-  assert.deepEqual(result.permissions, []); assert.deepEqual(result.documentPermissions, []);
-  assert.equal(result.blogPermissions[0].canBuild, true); assert.equal(result.blogPermissions[0].canPublish, true);
-  assert.deepEqual(authorizedTableIds(result), ['a']);
-  assert.equal(getTableAccess(result, 'a').legacy, false);
-});
-
-test('legacy read without body, write-only, preview-only, history/restore and independent document grants require explicit conversion', () => {
-  const legacyInputs = [
-    { ...empty(), permissions: [{ ...grant('a', false), canCreate: true }],
-      documentPermissions: [{ tableId: 'a', canRead: false, canCreate: true, canUpdate: true, canUpload: true }],
-      blogPermissions: [{ tableId: 'a', canConfigure: true }] },
-    { ...empty(), permissions: [grant('a')] },
-    { ...empty(), documentPermissions: [{ tableId: 'a', canRead: true }] },
-    { ...empty(), blogPermissions: [{ tableId: 'a', canBuild: true }] },
-    { ...empty(), documentPermissions: [{ tableId: 'a', canReadHistory: true, canRestore: true }] },
-    { ...empty(), blogPermissions: [{ tableId: 'a', canRestore: true }] },
-    { ...empty(), permissions: [{ ...grant('a'), canCreate: true }] },
-  ];
-  for (const input of legacyInputs) {
-    const snapshot = structuredClone(input);
-    assert.equal(getTableAccess(input, 'a').legacy, true);
-    getTableAccess(input, 'b');
-    assert.deepEqual(input, snapshot, 'opening or viewing never normalizes');
-    const other = setTableAccess(input, 'b', access({ canRead: true }));
-    for (const family of ['permissions', 'documentPermissions', 'blogPermissions']) assert.deepEqual(other[family].filter(p => p.tableId === 'a'), input[family]);
-    const converted = setTableAccess(input, 'a', getTableAccess(input, 'a').access);
-    assert.equal(getTableAccess(converted, 'a').legacy, false);
-  }
-});
-
-test('editing one table preserves every untouched resource and removal clears only that table bundle', () => {
-  const input = { ...setTableAccess(empty(), 'a', access({ canRead: true })),
-    documentPermissions: [{ tableId: 'a', canRead: true, canReadHistory: true }],
-    calendarPermissions: [{ calendarId: 'cal', canTriggerAgent: true }], schedulePermissions: [{ automationId: 'plan', canUpdate: true }] };
-  const added = setTableAccess(input, 'b', access({ canUpdate: true }));
-  const removed = setTableAccess(added, 'b', access());
-  assert.deepEqual(removed, input);
+test('editing a table keeps calendar, schedule and other-table access intact', () => {
+  const input = { ...empty(), permissions: [grant('a')], calendarPermissions: [{ calendarId: 'cal', canRead: true }], schedulePermissions: [{ automationId: 'plan', canUpdate: true }] };
+  const edited = setTableAccess(input, 'b', access({ canCreate: true }));
+  assert.deepEqual(setTableAccess(edited, 'b', access()), input);
 });
 
 test('workspace grouping includes calendars and plans in workspaces without tables', () => {

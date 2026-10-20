@@ -1,3 +1,4 @@
+import { createSiteViewFixture } from "./helpers/site-fixture.mjs";
 import assert from 'node:assert/strict';
 import { createBrowserFixture } from './fixture.mjs';
 
@@ -77,25 +78,25 @@ try {
   assert.equal(previews, before, 'unrelated refresh never regenerates sites');
   // A hidden cached blog still owns its close guard and configuration draft.
   const blogs = [];
-  for (const name of ['第一博客', '第二博客']) blogs.push(await command('createBlog', { name, idempotencyKey: crypto.randomUUID() }));
+  for (const name of ['第一博客', '第二博客']) blogs.push(await createSiteViewFixture(api, command, name));
   const visibleBlog = () => slot.locator('[data-preview-resource-id]:not([hidden])').getByTestId('blog-editor');
   for (const [index, blog] of blogs.entries()) {
     await open({ kind: 'site', siteId: blog.id }); await visibleBlog().waitFor();
-    await visibleBlog().getByRole('tab', { name: '配置', exact: true }).click();
-    await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).fill(`博客草稿 ${index}`);
+    await visibleBlog().getByRole('tab', { name: '设置', exact: true }).click();
+    await visibleBlog().getByRole('textbox', { name: '视图名称', exact: true }).fill(`博客草稿 ${index}`);
   }
   await open({ kind: 'site', siteId: sites[0].id });
   await header.getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
   await page.getByRole('dialog', { name: '仍有内容未保存' }).waitFor();
   await page.getByRole('button', { name: '继续编辑', exact: true }).first().click();
   await open({ kind: 'site', siteId: blogs[0].id });
-  assert.equal(await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).inputValue(), '博客草稿 0');
+  assert.equal(await visibleBlog().getByRole('textbox', { name: '视图名称', exact: true }).inputValue(), '博客草稿 0');
   // Simulate a concurrent save using the real service; failed save keeps the local draft.
-  const latest = await command('getBlog', { siteId: blogs[0].id });
-  await command('saveBlog', { siteId: latest.id, expectedVersion: latest.version, name: '远端名称', config: latest.config, idempotencyKey: crypto.randomUUID() });
+  const latest = await command('getView', { viewId: blogs[0].viewId });
+  await command('updateView', { viewId: latest.id, expectedVersion: latest.site.version, name: '远端名称', config: latest.config, idempotencyKey: crypto.randomUUID() });
   await visibleBlog().getByRole('button', { name: '保存配置', exact: true }).click();
   await visibleBlog().getByRole('alert').waitFor();
-  assert.equal(await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).inputValue(), '博客草稿 0');
+  assert.equal(await visibleBlog().getByRole('textbox', { name: '视图名称', exact: true }).inputValue(), '博客草稿 0');
   await open({ kind: 'site', siteId: sites[0].id });
   await header.getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
   for (let index = 0; index < 2; index++) {
@@ -105,8 +106,8 @@ try {
   await header.getByRole('tab', { name: '站点', exact: true }).waitFor({ state: 'hidden' });
   for (const [index, blog] of blogs.entries()) {
     await open({ kind: 'site', siteId: blog.id }); await visibleBlog().waitFor();
-    await visibleBlog().getByRole('tab', { name: '配置', exact: true }).click();
-    assert.equal(await visibleBlog().getByRole('textbox', { name: '博客名称', exact: true }).inputValue(), `博客草稿 ${index}`);
+    await visibleBlog().getByRole('tab', { name: '设置', exact: true }).click();
+    assert.equal(await visibleBlog().getByRole('textbox', { name: '视图名称', exact: true }).inputValue(), `博客草稿 ${index}`);
   }
   await header.getByRole('button', { name: '关闭站点 Tab', exact: true }).click();
   for (let index = 0; index < 2; index++) { await page.getByRole('dialog', { name: '仍有内容未保存' }).waitFor(); await page.getByRole('button', { name: '保留草稿并离开', exact: true }).click(); }

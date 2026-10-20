@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { sha256 } from "@tabdo/core/crypto";
-import { BLOG_SCHEMAS, BLOG_READ_COMMANDS, BLOG_LIMITS, type BlogCommand, type BlogResults, type BlogConfig, type BlogManifest, type BlogArticle, type BlogAsset, type DocumentContent, type DocumentNode, type BlogDetail, type BlogPermission } from "@tabdo/shared";
+import { BLOG_SCHEMAS, BLOG_READ_COMMANDS, BLOG_LIMITS, type BlogCommand, type BlogResults, type BlogConfig, type BlogManifest, type BlogArticle, type BlogAsset, type DocumentContent, type DocumentNode, type BlogDetail } from "@tabdo/shared";
 import { sites, siteRevisions, tables, columns, rows, member, user, recordDocuments, recordDocumentLinks, documentImages, fileObjects, blogAssetSnapshots, blogReceipts, blogPreviews, blogPublicationPermits } from "../db/schema.js";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
@@ -35,7 +35,7 @@ const publicationCommands = ["publishBlog", "withdrawBlogArticle", "unpublishBlo
 const intent = (command: string, input: Record<string, any>) => ({ command, siteId: input.siteId, expectedVersion: input.expectedVersion, expectedPublishedRevisionId: input.expectedPublishedRevisionId, buildId: input.buildId ?? null, rowId: input.rowId ?? null });
 
 /** All transports share this boundary, including a savepoint when called inside a host transaction. */
-export async function executeBlog<K extends BlogCommand>(deps: CommandDependencies, caller: BlogCaller, command: K, raw: unknown, transaction?: Transaction): Promise<BlogResults[K]> {
+export async function executeBlog<K extends BlogCommand>(deps: CommandDependencies, caller: BlogCaller, command: K, raw: unknown, transaction?: Transaction, options?: { ephemeralBuild?: boolean }): Promise<BlogResults[K]> {
   if (!transaction) await collectBlogStorage(deps);
   const parsed = BLOG_SCHEMAS[command].safeParse(raw);
   if (!parsed.success) fail(400, "BAD_INPUT", parsed.error.issues[0]?.message ?? "Invalid blog input");
@@ -61,17 +61,11 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
     } else workspaceId = (await requireWorkspace(deps, organizationId, tx)).id;
     if (!principal && workspaceId !== (await requireWorkspace(deps, organizationId, tx)).id) fail(404, "NOT_FOUND", "Blog not found");
     const tableId = site?.blogConfig?.tableId ?? input.config?.tableId ?? input.tableId;
-    const permission: keyof Omit<BlogPermission, "tableId"> = BLOG_READ_COMMANDS.includes(command) ? "canRead" : ["saveBlog", "createBlog", "startBlogArticle"].includes(command) ? "canConfigure" : command === "restoreBlogRevision" ? "canRestore" : publicationCommands.includes(command) || command === "authorizeBlogPublication" ? "canPublish" : "canBuild";
     if (principal) {
-      const grant = principal.blogPermissions.get(tableId);
-      if (!grant) fail(404, "NOT_FOUND", "Blog not found");
-      if (!grant[permission]) fail(403, "FORBIDDEN", "Blog operation is not granted");
-    }
-    if (principal && command === "startBlogArticle") {
       const grant = principal.permissions.get(tableId);
-      if (!grant || (input.rowId ? !grant.canRead || !grant.canUpdate : !grant.canCreate)) fail(403, "FORBIDDEN", "Independent content table write permission is required");
+      if (!grant) fail(404, "NOT_FOUND", "View not found");
+      if (!grant.canRead || !BLOG_READ_COMMANDS.includes(command) && !grant.canUpdate) fail(403, "FORBIDDEN", "Table Read and Update are required");
     }
-    if (command === "authorizeBlogPublication" && !human) fail(403, "FORBIDDEN", "Only a signed-in human can approve a publication");
     const publicUrl = (id: string) => new URL(`/s/${id}/`, capabilities(deps).publicOrigin).href;
     let receiptId: string | undefined;
     if (!BLOG_READ_COMMANDS.includes(command)) {
@@ -86,12 +80,6 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
     }
     const cas = (published = false) => {
       if (site!.version !== input.expectedVersion || published && site!.publishedRevisionId !== input.expectedPublishedRevisionId) fail(409, "VERSION_CONFLICT", "Blog changed; reload before continuing");
-    };
-    const approval = async () => {
-      if (principal) return; // Dedicated canPublish grant, never inherited from table/document keys.
-      if (!input.authorizationToken) fail(403, "PUBLICATION_APPROVAL_REQUIRED", "Confirm this publication in the blog editor first");
-      const [permit] = await tx.delete(blogPublicationPermits).where(and(eq(blogPublicationPermits.tokenHash, await sha256(input.authorizationToken)), eq(blogPublicationPermits.siteId, site!.id), gt(blogPublicationPermits.expiresAt, deps.now()))).returning();
-      if (!permit || permit.intentHash !== await hash(intent(command, input))) fail(403, "PUBLICATION_APPROVAL_REQUIRED", "Publication approval expired or does not match this operation");
     };
     const revision = async (id?: string) => {
       const [found] = await tx.select().from(siteRevisions).where(and(eq(siteRevisions.siteId, site!.id), id ? eq(siteRevisions.id, id) : eq(siteRevisions.version, site!.version)));
@@ -114,7 +102,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
       for (const article of [...manifest.articles].sort((a, b) => a.rowId.localeCompare(b.rowId))) {
         const [row] = await tx.select().from(rows).where(and(eq(rows.id, article.rowId), eq(rows.tableId, tableId))).for("share");
         const [doc] = await tx.select({ doc: recordDocuments }).from(recordDocumentLinks).innerJoin(recordDocuments, eq(recordDocuments.id, recordDocumentLinks.documentId)).where(and(eq(recordDocumentLinks.rowId, article.rowId), eq(recordDocumentLinks.tableId, tableId), eq(recordDocumentLinks.workspaceId, workspaceId))).for("share");
-        if (!row || row.version !== article.rowVersion || !doc || doc.doc.id !== article.documentId || doc.doc.version !== article.documentVersion) return false;
+        if (!row || row.version !== article.rowVersion || (article.documentVersion === 0 ? !!doc : !doc || doc.doc.id !== article.documentId || doc.doc.version !== article.documentVersion)) return false;
         await tx.select({ id: recordDocuments.id }).from(recordDocuments).where(eq(recordDocuments.id, article.documentId)).for("share");
         if (article.authorPeople?.length) {
           const people = await tx.select({ id: user.id, name: user.name }).from(member).innerJoin(user, eq(user.id, member.userId)).where(and(eq(member.organizationId, organizationId), inArray(user.id, article.authorPeople.map(p => p.id)))).orderBy(asc(user.id)).for("share");
@@ -152,6 +140,10 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
       const caps = capabilities(deps), driver = build.storageDriver!, storage = caps.storage(driver), assets: Record<string, string> = {};
       if (build.assets) return;
       const ensureStored = async (key: string, bytes: Uint8Array, mime: string) => {
+        if (options?.ephemeralBuild) {
+          if (!deps.afterRollback) fail(503, "STORAGE_UNAVAILABLE", "Transactional site storage unavailable");
+          deps.afterRollback(tx, `view-snapshot:${key}`, () => storage.remove(key));
+        }
         let existing: Uint8Array | undefined;
         try { existing = new Uint8Array(await new Response(await storage.open(key)).arrayBuffer()); } catch { /* A missing object is written below. */ }
         if (existing) {
@@ -194,7 +186,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           if (!row) fail(404, "NOT_FOUND", "Article not found");
           if (row.version !== input.expectedRowVersion) fail(409, "VERSION_CONFLICT", "Article changed; reload before writing");
         }
-        if (!row?.cells[mapping.slug]) {
+        if (mapping.slug && !row?.cells[mapping.slug]) {
           let slug: string;
           do { slug = `post-${deps.uuid().replaceAll("-", "")}`; }
           while ((await tx.select({ id: rows.id }).from(rows).where(and(eq(rows.tableId, tableId), sql`${rows.cells}->>${mapping.slug} = ${slug}`)).limit(1)).length);
@@ -204,6 +196,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           if (row) await updateCellsInTransaction(sourceDeps, tx, { ...identity, rowId: row.id, cells: { [mapping.slug]: slug }, expectedVersion: row.version });
           else row = await addRow(sourceDeps, { ...identity, tableId, cells: { [mapping.title]: input.title, [mapping.slug]: slug } }, tx);
         }
+        if (!row) fail(400, "BAD_INPUT", "Row is required");
         result = { tableId, rowId: row.id }; break;
       }
       case "getBlogSources": {
@@ -227,7 +220,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
       case "getBlog": result = await detail(input.revisionId ? await revision(input.revisionId) : undefined); break;
       case "saveBlog": {
         if (site) { cas(); if (input.config.tableId !== site.blogConfig!.tableId) fail(400, "BAD_INPUT", "Create another blog to change its content table"); }
-        if (!input.config.authorName) input.config.authorName = displayName;
+        if (!input.config.authorName) input.config.authorName = displayName && !/@/.test(displayName) ? displayName : "tabdo";
         if (!input.config.authorName || /@/.test(input.config.authorName)) fail(400, "BAD_INPUT", "Choose a public author name without an email address");
         await configColumns(input.config);
         if (!site) {
@@ -258,10 +251,10 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           const [row] = await tx.select().from(rows).where(and(eq(rows.id, selection.rowId), eq(rows.tableId, tableId))).for("share");
           if (!row) fail(404, "NOT_FOUND", "Selected article no longer exists");
           const [linked] = await tx.select({ id: recordDocumentLinks.documentId }).from(recordDocumentLinks).where(and(eq(recordDocumentLinks.rowId, row.id), eq(recordDocumentLinks.tableId, tableId), eq(recordDocumentLinks.workspaceId, workspaceId)));
-          if (!linked) fail(400, "BAD_INPUT", "Write and save the body of each selected article");
-          const [doc] = await tx.select().from(recordDocuments).where(eq(recordDocuments.id, linked.id)).for("share");
+          const [stored] = linked ? await tx.select().from(recordDocuments).where(eq(recordDocuments.id, linked.id)).for("share") : [];
+          const doc = stored ?? { id: row.id, version: 0, content: { type: "doc" as const, content: [{ type: "paragraph" }] } };
           const text = (key: keyof BlogConfig["mapping"], max: number) => { const id = config.mapping[key], v = id ? row.cells[id] : null; return typeof v === "string" ? v.trim().slice(0, max) : ""; };
-          const title = text("title", 200), slug = text("slug", 100).toLowerCase();
+          const title = text("title", 200), slug = (text("slug", 100) || row.id).toLowerCase();
           if (!title || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slugs.has(slug)) fail(400, "BAD_INPUT", "Articles need a title and unique lowercase URL slug"); slugs.add(slug);
           const label = (key: "category" | "tags") => {
             const id = config.mapping[key], field = fields.find(f => f.id === id), cell = id ? row.cells[id] : null;
@@ -278,7 +271,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
           if (/@/.test(author)) fail(400, "BAD_INPUT", "Choose a public author name without an email address");
           let date = text("date", 100); if (date) { if (!/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(date) || !Number.isFinite(Date.parse(date))) fail(400, "BAD_INPUT", "Invalid publication date"); date = date.slice(0, 10); }
           const approved = new Set(selection.imageIds), imagePaths = new Map<string, string>();
-          const selectedImages = approved.size ? await tx.select().from(documentImages).where(and(eq(documentImages.documentId, doc.id), inArray(documentImages.id, [...approved]))).for("share") : [];
+          const selectedImages = stored && approved.size ? await tx.select().from(documentImages).where(and(eq(documentImages.documentId, doc.id), inArray(documentImages.id, [...approved]))).for("share") : [];
           if (selectedImages.length !== approved.size) fail(400, "BAD_INPUT", "Selected image does not belong to this document");
           const publicMarks = (node: DocumentNode) => node.marks?.filter(mark => {
             if (mark.type !== "link") return true;
@@ -314,7 +307,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
         result = await detail(); break;
       }
       case "publishBlog": {
-        cas(true); await approval(); const build = await revision(input.buildId);
+        cas(true); const build = await revision(input.buildId);
         if (!build.blogManifest || build.version !== site!.version) fail(409, "VERSION_CONFLICT", "Build the current draft before publishing");
         if (!await sourceVersionsMatch(build.blogManifest)) fail(409, "SOURCE_CHANGED", "Source content changed; rebuild before publishing");
         await materialize(build);
@@ -322,7 +315,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
         await tx.delete(blogPreviews).where(eq(blogPreviews.siteId, site!.id)); result = await detail(); break;
       }
       case "withdrawBlogArticle": {
-        cas(true); await approval(); if (!site!.publishedRevisionId) fail(404, "NOT_FOUND", "Blog is not published");
+        cas(true); if (!site!.publishedRevisionId) fail(404, "NOT_FOUND", "Blog is not published");
         const published = await revision(site!.publishedRevisionId), old = published.blogManifest!;
         if (!old.articles.some(a => a.rowId === input.rowId)) fail(404, "NOT_FOUND", "Article is not published");
         const config = { ...site!.blogConfig!, articles: site!.blogConfig!.articles.filter(a => a.rowId !== input.rowId) };
@@ -342,7 +335,7 @@ export async function executeBlog<K extends BlogCommand>(deps: CommandDependenci
         await tx.delete(blogPreviews).where(eq(blogPreviews.siteId, site!.id)); result = await detail(); break;
       }
       case "unpublishBlog": {
-        cas(true); await approval(); [site] = await tx.update(sites).set({ publishedRevisionId: null, updatedAt: deps.now() }).where(eq(sites.id, site!.id)).returning();
+        cas(true); [site] = await tx.update(sites).set({ publishedRevisionId: null, updatedAt: deps.now() }).where(eq(sites.id, site!.id)).returning();
         await tx.delete(blogPreviews).where(eq(blogPreviews.siteId, site!.id)); result = await detail(); break;
       }
       case "restoreBlogRevision": {

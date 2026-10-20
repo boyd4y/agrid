@@ -19,7 +19,7 @@ const commandRequest = z.object({
 export async function dispatchCommand(deps: CommandDependencies, actor: Actor, value: unknown) {
   const body = commandRequest.parse(value);
   if (!actor.organizationId || !actor.memberId) throw new ServiceError(401, { message: "缺少组织上下文：请先加入或选择工作区" });
-  if (Object.hasOwn(body.input, "workspaceId") || Object.hasOwn(body.input, "skipAutomation") || Object.hasOwn(body.input, "actorId")) {
+  if (Object.hasOwn(body.input, "workspaceId") || Object.hasOwn(body.input, "skipAutomation") || Object.hasOwn(body.input, "actorId") || Object.hasOwn(body.input, "receiptPrincipalId")) {
     throw new ServiceError(400, { message: "内部执行选项不能通过 API 设置" });
   }
   const { organizationId: _ignored, ...safeInput } = body.input;

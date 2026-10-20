@@ -1,9 +1,9 @@
 export { createCalendarView, updateCalendarView, queryCalendarView } from "./calendar-views.js";
 import * as calendarViewCmds from "./calendar-views.js";
-import * as blogCommands from "./blogs.js";
-export * from "./blogs.js";
-import * as documentCommands from "./documents.js";
-export * from "./documents.js";
+import * as siteViewCommands from "./site-views.js";
+export * from "./site-views.js";
+import * as rowAttachmentCommands from "./row-attachments.js";
+export * from "./row-attachments.js";
 export * from "./calendar.js";
 import * as calendarCommands from "./calendar.js";
 /** Shared command registry. Implementations depend on modules, never on this registry. */
@@ -51,8 +51,8 @@ export { getRow, queryRelationRecords } from "./relations.js";
 import { getRow, queryRelationRecords } from "./relations.js";
 
 export const commands = {
-  ...blogCommands,
-  ...documentCommands,
+  ...siteViewCommands,
+  ...rowAttachmentCommands,
   ...calendarCommands,
   batchSetRelations,
   batchAddRelations,

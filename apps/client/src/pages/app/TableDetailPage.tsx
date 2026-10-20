@@ -1,12 +1,15 @@
+import { BlogEditor } from "@/components/sites/BlogEditor";
+import { BlogCreateDialog } from "@/components/sites/BlogCreateDialog";
 import { CalendarViewSettings } from "@/components/table/CalendarViewSettings";
 import { TableCalendarView } from "@/components/table/TableCalendarView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useOutletContext, useParams } from "react-router-dom";
+import { Link, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Columns3,
   CalendarDays,
   FileInput,
+  Globe,
   LayoutGrid,
   Loader2,
   Star,
@@ -39,6 +42,7 @@ import { useAppShell } from "@/context/AppShellContext";
 import { useTranslation } from "react-i18next";
 
 function viewIcon(type: string) {
+  if (type === "site") return Globe;
   if (type === "calendar") return CalendarDays;
   if (type === "board") return LayoutGrid;
   if (type === "form") return FileInput;
@@ -52,6 +56,8 @@ function viewLabel(type: string, name: string, t: (k: string) => string) {
 export function TableDetailPage() {
   const { t } = useTranslation("table");
   const { tableId } = useParams<{ tableId: string }>();
+  const [viewParams] = useSearchParams();
+  const requestedViewId = viewParams.get("view");
   const { setTables, getTableRefreshToken, notifyTableMutated, updateTableMetadata } =
     useOutletContext<AppOutletContext>();
   const tableRefreshToken = getTableRefreshToken(tableId);
@@ -61,7 +67,8 @@ export function TableDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [views, setViews] = useState<TableView[]>([]);
-  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [siteCreate, setSiteCreate] = useState(false);
+  const [activeViewId, setActiveViewId] = useState<string | null>(requestedViewId);
   const [formView, setFormView] = useState<ResolvedFormView | null>(null);
   const [viewsLoading, setViewsLoading] = useState(false);
   const [addingCalendar, setAddingCalendar] = useState(false);
@@ -104,10 +111,6 @@ export function TableDetailPage() {
       }
       if (version !== viewsRequest.current) return;
       setViews(list);
-      setActiveViewId((prev) => {
-        if (prev && list.some((v) => v.id === prev)) return prev;
-        return list.find((v) => v.isDefault)?.id ?? list[0]?.id ?? null;
-      });
     } catch (e) {
       if (version === viewsRequest.current) setError(e instanceof Error ? e.message : t("loadViewsFailed"));
     } finally {
@@ -116,8 +119,18 @@ export function TableDetailPage() {
   }, [tableId]);
 
   useEffect(() => {
+    setActiveViewId(requestedViewId);
+  }, [tableId, requestedViewId]);
+
+  useEffect(() => {
+    if (!views.length || views[0].tableId !== tableId) return;
+    // Validate route selection after loading; refreshes retain a valid manual choice.
+    setActiveViewId(current => current && views.some(view => view.id === current)
+      ? current : views.find(view => view.isDefault)?.id ?? views[0].id);
+  }, [views, activeViewId, tableId]);
+
+  useEffect(() => {
     setLoading(true);
-    setActiveViewId(null);
     setViews([]);
     setMenuViewId(null);
     setActiveTableId(tableId ?? null);
@@ -294,13 +307,15 @@ export function TableDetailPage() {
                     <Plus data-icon="inline-start" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-44" align="end" onCloseAutoFocus={event => { if (addingCalendar) event.preventDefault(); }}><DropdownMenuGroup>
+                <DropdownMenuContent className="w-44" align="end" onCloseAutoFocus={event => { if (addingCalendar || siteCreate) event.preventDefault(); }}><DropdownMenuGroup>
                   <DropdownMenuItem onSelect={() => void addView("grid")}><Columns3 />{t("gridView")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void addView("board")}><LayoutGrid />{t("boardView")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setAddingCalendar(true)}><CalendarDays />{t("calendarView.name")}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setSiteCreate(true)}><Globe />{t("siteView")}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void addView("form")}><FileInput />{t("formViewMenu")}</DropdownMenuItem>
                 </DropdownMenuGroup></DropdownMenuContent>
               </DropdownMenu>
+            <BlogCreateDialog open={siteCreate} onOpenChange={setSiteCreate} tableId={table.id} onCreated={created => { setViews(previous => [...previous, created]); setActiveViewId(created.id); }} />
             {addingCalendar && <CalendarViewSettings table={table} initiallyOpen onClose={() => setAddingCalendar(false)} onSaved={created => { setViews(previous => [...previous, created]); setActiveViewId(created.id); }} />}
             <DataRefreshButton onRefresh={() => notifyTableMutated(table.id)} />
           </div>
@@ -339,6 +354,8 @@ export function TableDetailPage() {
               {t("loadingForm")}
             </div>
           )
+        ) : activeView?.type === "site" ? (
+          <BlogEditor key={activeView.id} viewId={activeView.id} />
         ) : activeView?.type === "calendar" ? (
           <TableCalendarView key={activeView.id} table={table} view={activeView} refreshToken={tableRefreshToken} onUpdated={updated => setViews(previous => previous.map(view => view.id === updated.id ? updated : view))} />
         ) : isBoard ? (

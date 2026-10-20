@@ -6,6 +6,9 @@ const { page, api, frontend } = f;
 page.setDefaultTimeout(15000);
 page.on('dialog', dialog => dialog.accept());
 const command = async (command, input) => (await api('/commands', { command, input })).result;
+const rowBody = async input => (await command('getRow', { rowId: input.rowId, includeBody: true, bodyFormat: 'html' })).body;
+const saveBody = async input => { const result = await command('updateCells', { rowId: input.rowId, body: { content: input.content, expectedVersion: input.expectedVersion ?? 0 }, idempotencyKey: input.idempotencyKey }); return { version: result.bodyVersion }; };
+
 try {
   const table = await api('/tables', { name: '长文验收' });
   const title = (await api(`/tables/${table.id}`)).columns[0];
@@ -23,7 +26,7 @@ try {
   await body.fill(text); await page.keyboard.press('Meta+ArrowDown'); await page.keyboard.press('Enter');
   await page.keyboard.insertText('长文结束标记 LONGFORM_END');
   await modal.getByRole('status').filter({ hasText: '已保存' }).waitFor();
-  const saved = await command('getDocument', identity);
+  const saved = await rowBody( identity);
   const bytes = new TextEncoder().encode(JSON.stringify(saved.content)).length;
   assert(bytes > 32000 && bytes < 65536, `actual saved JSON bytes: ${bytes}`);
   assert(JSON.stringify(saved.content).includes(text));
@@ -40,7 +43,7 @@ try {
   await page.evaluate(() => localStorage.setItem('tabdo.locale', 'en')); await page.reload(); await open('Body');
   const englishBody = modal.getByRole('textbox', { name: 'Document body', exact: true });
   await englishBody.waitFor(); assert((await englishBody.innerText()).includes('LONGFORM_END'));
-  assert.equal((await command('getDocument', identity)).version, saved.version);
+  assert.equal((await rowBody( identity)).version, saved.version);
   assert.equal(await modal.getByRole('button', { name: 'Read', exact: true }).count(), 0);
   assert.equal(await englishBody.getAttribute('contenteditable'), 'true');
   await page.setViewportSize({ width: 390, height: 844 });

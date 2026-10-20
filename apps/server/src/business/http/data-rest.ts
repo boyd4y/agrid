@@ -3,10 +3,7 @@ import { siteQueryCalendarView } from "../data-api/calendar-views.js";
 import { BlogError } from "../blogs/errors.js";
 import { updateScheduledAutomation } from "../calendar/schedules.js";
 import { CALENDAR_READ_COMMANDS } from "@tabdo/shared";
-import { DOCUMENT_READ_COMMANDS, type DocumentCommand } from "@tabdo/shared";
-import { executeDocument } from "../documents/service.js";
 import { DocumentError } from "../documents/errors.js";
-import { isDocumentCommand, documentTransportInput } from "../documents/transport.js";
 import { executeCalendar } from "../calendar/service.js";
 import { CalendarError } from "../calendar/errors.js";
 import { isCalendarCommand, calendarTransportInput } from "../calendar/transport.js";
@@ -40,7 +37,9 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
       let body: Record<string, unknown> = {};
       try { body = raw ? z.record(z.string(), z.unknown()).parse(JSON.parse(raw)) : {}; }
       catch { throw new ServiceError(400, { message: "Invalid request data" }); }
-      const imageUpload = c.req.method === "POST" && (body.command === "uploadDocumentImage" && c.req.path.endsWith("/commands") || /\/document\/images$/.test(c.req.path));
+      const idempotencyHeader = c.req.header("Idempotency-Key");
+      if (idempotencyHeader && body.idempotencyKey !== undefined && body.idempotencyKey !== idempotencyHeader) throw new ServiceError(400, { message: "Idempotency-Key must match the input" });
+      const imageUpload = c.req.method === "POST" && (body.command === "uploadRowAttachment" && c.req.path.endsWith("/commands") || /\/attachments$/.test(c.req.path));
       if (new TextEncoder().encode(raw).byteLength > 128 * 1024 && !imageUpload) throw new ServiceError(413, { message: "Request body too large" });
       scope = await acquire(c.req.raw);
       const principal = await keys.resolveSiteKey(scope.commands.database, secret);
@@ -62,9 +61,9 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
     limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined, cursor: c.req.query("cursor"), includeTotal: c.req.query("includeTotal") === "true" || c.req.query("includeTotal") === "1",
   })));
   route.post("/tables/:id/rows/query", handle(false, ({ scope, context, c, body }) => data.siteRows(scope.commands, context, c.req.param("id")!, body)));
-  route.post("/tables/:id/rows", handle(true, ({ scope, context, c, body }) => data.siteCreateRow(scope.commands, context, c.req.param("id")!, body.cells), 201));
-  route.get("/tables/:id/rows/:rowId", handle(false, ({ scope, context, c }) => data.siteRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!)));
-  route.patch("/tables/:id/rows/:rowId", handle(true, ({ scope, context, c, body }) => data.siteUpdateRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!, body.cells, body.expectedVersion as number | undefined)));
+  route.post("/tables/:id/rows", handle(true, ({ scope, context, c, body }) => data.siteCreateRow(scope.commands, context, c.req.param("id")!, body.cells, { body: body.body as never, idempotencyKey: (body.idempotencyKey ?? c.req.header("Idempotency-Key")) as string }), 201));
+  route.get("/tables/:id/rows/:rowId", handle(false, ({ scope, context, c }) => data.siteRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!, { includeBody: c.req.query("include") === "body", bodyFormat: c.req.query("bodyFormat") as "json" | "html" })));
+  route.patch("/tables/:id/rows/:rowId", handle(true, ({ scope, context, c, body }) => data.siteUpdateRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!, body.cells, body.expectedVersion as number | undefined, { body: body.body as never, idempotencyKey: (body.idempotencyKey ?? c.req.header("Idempotency-Key")) as string })));
   route.delete("/tables/:id/rows/:rowId", handle(true, ({ scope, context, c }) => data.siteDeleteRow(scope.commands, context, c.req.param("id")!, c.req.param("rowId")!)));
   route.post("/commands", handle(true, async input => {
     return dispatchKeyCommand(input.scope.commands, input.context, input.body, input.c.req.header("Idempotency-Key"));
@@ -106,13 +105,13 @@ export function createDataRestRoutes(acquire: RequestScopeResolver, options: { p
   route.post("/calendars/:id/availability/query", calendar("queryAvailability", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
   route.post("/calendars/:id/conflicts/check", calendar("checkBookingConflicts", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
   route.post("/calendars/:id/bookings/batch", calendar("batchBookings", ({ c, body }) => ({ ...body, calendarId: c.req.param("id") })));
-  const document = (command: DocumentCommand, extra: (input: Input) => Record<string, unknown> = () => ({})) => handle(!DOCUMENT_READ_COMMANDS.includes(command), input => executeDocument(input.scope.commands, { kind: "key", secret: input.context.secret }, command, documentTransportInput(command, { ...input.body, ...extra(input), tableId: input.c.req.param("tableId"), rowId: input.c.req.param("rowId") }, input.c.req.header("Idempotency-Key"))));
-  const documentPath = "/tables/:tableId/rows/:rowId/document";
-  route.get(documentPath, document("getDocument"));
-  route.post(documentPath, document("createDocument"));
-  route.put(documentPath, document("replaceDocument"));
-  route.get(`${documentPath}/render`, document("renderDocument", ({ c }) => c.req.query("version") ? { version: Number(c.req.query("version")) } : {}));
-  route.post(`${documentPath}/images`, document("uploadDocumentImage"));
-  route.get(`${documentPath}/images/:fileId`, document("getDocumentImage", ({ c }) => ({ fileId: c.req.param("fileId") })));
+  const attachment = (command: "uploadRowAttachment" | "getRowAttachment") => handle(command === "uploadRowAttachment", async input => {
+    const result = await dispatchKeyCommand(input.scope.commands, input.context, { command, input: { ...input.body, tableId: input.c.req.param("tableId"), rowId: input.c.req.param("rowId"), target: input.body.target ?? "body", ...(command === "getRowAttachment" ? { fileId: input.c.req.param("fileId") } : {}) } }, input.c.req.header("Idempotency-Key"));
+    return result.result;
+  });
+  route.post("/tables/:tableId/rows/:rowId/attachments", attachment("uploadRowAttachment"));
+  route.get("/tables/:tableId/rows/:rowId/attachments/:fileId", attachment("getRowAttachment"));
+  route.all("/tables/:tableId/rows/:rowId/document/*", c => c.json({ error: "Retired API; use row body and attachments" }, 410));
+  route.all("/tables/:tableId/rows/:rowId/document", c => c.json({ error: "Retired API; use row body and attachments" }, 410));
   return route;
 }

@@ -1,3 +1,5 @@
+import { deleteSite } from "../sites/service.js";
+import { readRowBody, writeRowBody, withRowReceipt } from "./row-body.js";
 import { requireUnpublishedBlogSource } from "../blogs/source-deletion.js";
 import { workspaceMatches, requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
@@ -18,6 +20,7 @@ import {
   rows,
   tableRelations,
   rowRelations,
+  tableViews,
 } from "../db/schema.js";
 import {
   requireOrgId,
@@ -51,7 +54,7 @@ import {
 } from "./formulas.js";
 import { appendAutomationEvent } from "../automation/events.js";
 
-export type OrgScoped = { organizationId?: string; actorId?: string };
+export type OrgScoped = { organizationId?: string; actorId?: string; receiptPrincipalId?: string };
 
 /** Own-property column lookup — never resolve prototype keys (constructor, toString, __proto__). */
 function columnByIdMap<T extends { id: string; type: string }>(
@@ -125,8 +128,18 @@ export async function updateCell(deps: CommandDependencies, input: UpdateCellInp
   return updateCells(deps, { ...input, cells: { [input.columnId]: input.value } }, transaction);
 }
 
-export async function updateCells(deps: CommandDependencies, input: UpdateCellsInput & OrgScoped, transaction?: Transaction) {
-  return inTransaction(deps, transaction, (tx) => updateCellsInTransaction(deps, tx, input));
+export async function updateCells(deps: CommandDependencies, input: UpdateCellsInput & OrgScoped, transaction?: Transaction): Promise<Awaited<ReturnType<typeof updateCellsInTransaction>> & { bodyVersion?: number }> {
+  return inTransaction(deps, transaction, root => root.transaction(async tx => {
+    if (!input.body) return updateCellsInTransaction(deps, tx, input);
+    const hit = await import("../tenant/scope.js").then(m => m.requireRowInOrg(deps, input.rowId, input.organizationId, tx));
+    return withRowReceipt(tx, { workspaceId: hit.workspaceId, principalId: input.receiptPrincipalId ?? `user:${input.actorId ?? input.organizationId}` }, "updateCells", input, async () => {
+      const saved = await updateCellsInTransaction(deps, tx, { ...input, cells: input.cells ?? {} });
+      const bodyVersion = await writeRowBody(deps, tx, { id: input.rowId, tableId: hit.tableId, workspaceId: hit.workspaceId, organizationId: hit.organizationId }, input.body!);
+      // Body CAS is independent of cell CAS, but both modify the owning record.
+      const [touched] = await tx.update(rows).set({ updatedAt: deps.now() }).where(eq(rows.id, input.rowId)).returning({ updatedAt: rows.updatedAt });
+      return { ...saved, updatedAt: touched.updatedAt, bodyVersion, affectedTableIds: await affectedTables(deps, hit.tableId, tx) };
+    });
+  }));
 }
 export async function updateCellsInTransaction(
   deps: CommandDependencies,
@@ -147,7 +160,7 @@ export async function updateCellsInTransaction(
     throw new Error("行不存在或不属于该工作区");
   const cols = await loadTableColumns(deps, hit.row.tableId, tx),
     colMap = columnByIdMap(cols);
-  for (const [id, value] of Object.entries(input.cells)) {
+  for (const [id, value] of Object.entries(input.cells ?? {})) {
     const col = requireColumnFromMap(colMap, id);
     if (col.type === "formula" || col.type === "rollup")
       throw new Error(`计算列「${col.name}」只读`);
@@ -163,21 +176,21 @@ export async function updateCellsInTransaction(
     deps, tx,
     input.rowId,
     cols,
-    input.cells,
+    input.cells ?? {},
     mode,
   );
   const existing = locked.find((r) => r.id === input.rowId);
   if (!existing) throw new Error("记录已删除");
   const casVersion =
     input.expectedVersion ??
-    (mode === "set" ? hit.row.version : existing.version);
+    (mode === "set" && Object.keys(input.cells ?? {}).length ? hit.row.version : existing.version);
   if (existing.version !== casVersion)
     throw new Error(
       `版本冲突: expected ${casVersion}, got ${existing.version}`,
     );
   const before = (await readRow(deps, existing.id, cols, tx, true)).cells;
   const ordinary = Object.fromEntries(
-    Object.entries(input.cells).filter(
+    Object.entries(input.cells ?? {}).filter(
       ([id]) => colMap.get(id)?.type !== "relation",
     ),
   );
@@ -321,11 +334,15 @@ async function addRowInTransaction(
 }
 
 export async function addRow(deps: CommandDependencies, input: AddRowInput & OrgScoped, transaction?: Transaction) {
-  return inTransaction(deps, transaction, async (tx) => {
+  return inTransaction(deps, transaction, root => root.transaction(async tx => {
     const context = await prepareRowCreation(deps, tx, input, [input.cells]);
-    const rowId = await addRowInTransaction(deps, tx, input, context);
-    return { ...(await readRow(deps, rowId, context.cols, tx)), affectedTableIds: await affectedTables(deps, input.tableId, tx) };
-  });
+    const work = async () => {
+      const rowId = await addRowInTransaction(deps, tx, input, context);
+      const bodyVersion = input.body ? await writeRowBody(deps, tx, { id: rowId, tableId: input.tableId, workspaceId: context.table.workspaceId, organizationId: context.table.organizationId }, { ...input.body, expectedVersion: 0 }) : undefined;
+      return { ...(await readRow(deps, rowId, context.cols, tx)), ...(bodyVersion !== undefined ? { bodyVersion } : {}), affectedTableIds: await affectedTables(deps, input.tableId, tx) };
+    };
+    return input.body ? withRowReceipt(tx, { workspaceId: context.table.workspaceId, principalId: input.receiptPrincipalId ?? `user:${input.actorId ?? input.organizationId}` }, "addRow", input, work) : work();
+  }));
 }
 
 export async function batchAddRows(deps: CommandDependencies, input: BatchAddRowsInput & OrgScoped, transaction?: Transaction): Promise<BatchRowsResult> {
@@ -518,6 +535,9 @@ export async function deleteTable(deps: CommandDependencies, input: { tableId: s
       );
     if (dependencies.length)
       throw new Error("表格存在关联字段，请先删除关联字段，再删除表格");
+    const linked = await tx.select().from(tableViews).where(eq(tableViews.tableId, table.id));
+    await tx.delete(tableViews).where(eq(tableViews.tableId, table.id));
+    for (const view of linked) if (view.siteId) await deleteSite(deps, { siteId: view.siteId, organizationId: input.organizationId }, tx);
     await tx.delete(tables).where(eq(tables.id, table.id));
     return { ok: true as const };
   });
