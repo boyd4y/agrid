@@ -10,16 +10,23 @@ The maintained source is `apps/server/src/business/http/openapi.ts`. It uses ful
 
 GraphQL is available separately at `POST /api/graphql`; its full schema and calendar, document, and blog operations are outside this document. See [the data API guide](site-api.md).
 
-## Enable Grok Bot
+## Connect Grok Bot through remote MCP
 
 1. As a workspace owner or admin, open **Settings → API Key → Enable Grok Bot**.
-2. Select at least one table in the picker and confirm the listed table names. Selection starts empty. The action creates a `Grok Bot` key with **Read only** on the selected tables. Future tables are not granted automatically; edit the key later to expand access.
-3. Save the secret displayed once. The dialog includes copy controls for the secret, OpenAPI URL, and plugin manifest URL.
-4. Import the OpenAPI URL into your Grok Bot connector and paste the secret into its Bearer authentication field. When configuring a header manually, send `Authorization: Bearer tab_...`.
+2. Select at least one table and confirm the listed names. The selection starts empty. This creates a `Grok Bot` key with **Read only** access to those tables. New tables are not added automatically.
+3. Save the API key shown once. Copy the MCP server URL and configure the HTTP header as `Authorization` with value `Bearer <your API key>`; replace the placeholder with the saved key. Do not put the key in a chat message or URL.
+4. In Grok Bot, add a custom MCP server, choose **Remote HTTPS**, and enter the MCP URL. Use the Streamable HTTP transport. Set the `Authorization` header as described above, leave OAuth Client ID and Client Secret empty, and add the server.
+5. If Grok Bot does not install the server automatically, find it in **Connect apps** (or Marketplace in versions that use that label) and install it. In a conversation, type `@` and select the connector to attach it to the task.
 
-If an active key named exactly `Grok Bot` exists, the action shows its metadata and connection instructions without creating another key. Its secret cannot be retrieved. Use your saved secret, or revoke the old key and enable again. Review existing grants in the key editor; the enable action does not reset them. Add Create/Update there only if writes are needed, and avoid Delete unless required.
+For the tabdo deployment, the MCP URL is `https://tabdo.dev/mcp`. On another deployment, use that deployment's public HTTPS origin followed by `/mcp`. Grok Bot must be able to reach the URL over the public internet. For local development, expose the MCP server through a public tunnel and use the tunnel URL ending in `/mcp`.
 
-The public manifest at `GET /api/plugins/grok-bot` describes authentication, recommended permissions, and installation steps. Its OpenAPI URL uses the configured public origin (`BETTER_AUTH_URL`, then `APP_URL`), falling back to the request origin. `/docs` is its stable documentation entry. No connector is installed remotely by this action; finish configuration in Grok Bot.
+This API-key setup requires a Grok Bot version with a custom MCP server form that supports secure HTTP headers. If your version only offers OAuth and has no HTTP headers field, this static Bearer-key connection is unavailable in that version. Use a client that supports Bearer headers. The Grok Bot help documents Connect apps and attaching installed connectors with `@`; the custom server fields and separate install step can vary by version.
+
+If an active key named exactly `Grok Bot` already exists, the action reuses it and shows its metadata and connection instructions without creating another key. Its secret cannot be retrieved or shown again. Use your saved key, or revoke the old key and enable Grok Bot again to create a replacement. Review existing grants in the key editor because reusing the key does not reset its permissions. Add Create/Update there only if writes are needed, and avoid Delete unless required.
+
+The remote MCP connection uses `/mcp`; it does not import the OpenAPI document. The public OpenAPI document at `GET /api/openapi.json` remains available for clients that use the table REST API. The public JSON at `GET /api/plugins/grok-bot` is a tabdo connection guide: it includes `mcp_url`, `transport`, authentication guidance, and setup steps. It is not an official Grok registration protocol. Its `openapi_url` field is retained for compatibility and is not needed to connect Grok Bot through MCP. The guide uses the configured public origin (`BETTER_AUTH_URL`, then `APP_URL`), falling back to the request origin; `/docs` is its documentation entry.
+
+Grok Bot connector setup is documented in [Use the computer and apps](https://docs.x.ai/grok-bot/computer-and-apps) and [Settings and notifications](https://docs.x.ai/grok-bot/settings-and-notifications). The custom MCP network requirements are in [Custom MCP Server Tunneling](https://docs.x.ai/grok/connectors/custom-mcp-tunneling). The custom-header field sequence above was also checked against [Grok Bot's custom MCP setup guide](https://qbash.com/docs/mcp-servers/grok-bot); field availability can depend on the Grok Bot version.
 
 ## Authentication and security
 
