@@ -28,6 +28,7 @@ export function createCommandsRoute(acquire: (request: Request) => Promise<Comma
       const actor = await resolveActor(c.req.raw, scope.identity);
       if (!actor) return c.json({ error: "未授权：需要登录或 Agent API Key" }, 401);
       const body = await c.req.json();
+      if (body && typeof body.command === "string" && (isBlogCommand(body.command) || isDocumentCommand(body.command))) return c.json({ error: "Retired command; use row body, row attachments and table views" }, 410);
       if (body && typeof body.command === "string" && isCalendarCommand(body.command)) body.input = calendarTransportInput(body.command, body.input ?? {}, c.req.header("Idempotency-Key"));
       if (body && typeof body.command === "string" && isBlogCommand(body.command)) body.input = blogTransportInput(body.command, body.input ?? {}, c.req.header("Idempotency-Key"));
       if (body && typeof body.command === "string" && isDocumentCommand(body.command)) body.input = documentTransportInput(body.command, body.input ?? {}, c.req.header("Idempotency-Key"));

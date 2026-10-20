@@ -1,7 +1,8 @@
+import { tableViews } from "../db/schema.js";
 import { blogStorageKey, collectBlogStorage } from "../blogs/storage.js";
 import { BlogError } from "../blogs/errors.js";
 import { workspaceScope, requireWorkspace } from "../tenant/workspace.js";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { SITE_FILES_SCHEMA, SITE_SAVE_SCHEMA, type SiteConfig, type SiteDetail, type SiteSummary } from "@tabdo/shared";
 import { sites, siteRevisions, sitePreviews, blogStorageGarbage } from "../db/schema.js";
@@ -35,15 +36,17 @@ function summary(deps: CommandDependencies, site: typeof sites.$inferSelect, pub
 export async function listSites(deps: CommandDependencies, input: Scope, tx?: Transaction) {
   const records = await (tx ?? deps.database).select({ site: sites, publishedVersion: siteRevisions.version }).from(sites)
     .leftJoin(siteRevisions, eq(sites.publishedRevisionId, siteRevisions.id)).where(and(eq(sites.organizationId, org(input)), workspaceScope(deps, org(input), sites.workspaceId))).orderBy(desc(sites.updatedAt), desc(sites.id));
-  return records.map(record => summary(deps, record.site, record.publishedVersion));
+  const views = records.length ? await (tx ?? deps.database).select().from(tableViews).where(inArray(tableViews.siteId, records.map(record => record.site.id))) : [];
+  return records.map(record => { const view = views.find(view => view.siteId === record.site.id); return { ...summary(deps, record.site, record.publishedVersion), ...(view ? { viewId: view.id, tableId: view.tableId } : {}) }; });
 }
 export async function getSite(deps: CommandDependencies, input: Scope & { siteId: string; revisionId?: string; path?: string }, tx?: Transaction): Promise<SiteDetail> {
   const site = await owned(deps, input, tx), db = tx ?? deps.database;
+  const [view] = await db.select().from(tableViews).where(eq(tableViews.siteId, site.id));
   const revisionQuery = db.select().from(siteRevisions).where(and(eq(siteRevisions.siteId, site.id), input.revisionId ? eq(siteRevisions.id, uuid(input.revisionId)) : eq(siteRevisions.version, site.version)));
   const [revision] = await revisionQuery;
   if (!revision) throw new ServiceError(404, { message: "Site version not found" });
   const revisions = await db.select({ id: siteRevisions.id, version: siteRevisions.version, createdAt: siteRevisions.createdAt, createdByUserId: siteRevisions.createdByUserId }).from(siteRevisions).where(eq(siteRevisions.siteId, site.id)).orderBy(desc(siteRevisions.version));
-  return { ...summary(deps, site, revisions.find(item => item.id === site.publishedRevisionId)?.version ?? null),
+  return { ...(view ? { viewId: view.id, tableId: view.tableId } : {}), ...summary(deps, site, revisions.find(item => item.id === site.publishedRevisionId)?.version ?? null),
     files: input.path ? revision.files.filter(file => file.path === input.path) : revision.files, revisionId: revision.id,
     revisions: revisions.map(item => ({ ...item, createdAt: item.createdAt.toISOString() })) };
 }
@@ -54,7 +57,7 @@ export async function saveSite(deps: CommandDependencies, raw: Scope & Record<st
     let site;
     if (input.siteId) {
       site = await owned(deps, { siteId: input.siteId, organizationId }, tx, true);
-      if (site.kind === "blog") throw new ServiceError(400, { message: "Use blog commands for a blog site" });
+      if (site.kind === "blog") throw new ServiceError(400, { message: "Use updateView for a site view" });
       if (site.version !== input.expectedVersion) throw new ServiceError(409, { message: "Site version conflict; reload before saving" });
       [site] = await tx.update(sites).set({ name: input.name, version: site.version + 1, updatedAt: deps.now() }).where(eq(sites.id, site.id)).returning();
     } else [site] = await tx.insert(sites).values({ id: deps.uuid(), organizationId, workspaceId: (await requireWorkspace(deps, organizationId, tx)).id, name: input.name }).returning();
@@ -72,7 +75,7 @@ export async function publishSite(deps: CommandDependencies, input: Scope & { si
   const caps = capabilities(deps);
   return inTransaction(deps, transaction, async tx => {
     const site = await owned(deps, input, tx, true);
-    if (site.kind === "blog") throw new ServiceError(400, { message: "Use publishBlog for a blog site" });
+    if (site.kind === "blog") throw new ServiceError(400, { message: "Use updateView.publication for a site view" });
     const [revision] = await tx.select().from(siteRevisions).where(and(eq(siteRevisions.siteId, site.id), eq(siteRevisions.id, uuid(input.revisionId)))).for("update");
     if (!revision) throw new ServiceError(404, { message: "Site version not found" });
     if (!revision.assets) {
@@ -92,7 +95,7 @@ export async function publishSite(deps: CommandDependencies, input: Scope & { si
 export async function unpublishSite(deps: CommandDependencies, input: Scope & { siteId: string }, transaction?: Transaction) {
   return inTransaction(deps, transaction, async tx => {
     const site = await owned(deps, input, tx, true);
-    if (site.kind === "blog") throw new ServiceError(400, { message: "Use unpublishBlog for a blog site" });
+    if (site.kind === "blog") throw new ServiceError(400, { message: "Use updateView.publication for a site view" });
     await tx.update(sites).set({ publishedRevisionId: null, updatedAt: deps.now() }).where(eq(sites.id, site.id));
     return getSite(deps, input, tx);
   });
@@ -114,7 +117,7 @@ export async function deleteSite(deps: CommandDependencies, input: Scope & { sit
       const caps = capabilities(deps);
       await Promise.allSettled(revisions.flatMap(revision => revision.driver ? Object.values(revision.assets ?? {}).map(key => caps.storage(revision.driver!).remove(key)) : []));
     };
-    await tx.update(sites).set({ publishedRevisionId: null }).where(eq(sites.id, site.id));
+    if (site.kind !== "blog") await tx.update(sites).set({ publishedRevisionId: null }).where(eq(sites.id, site.id));
     await tx.delete(sites).where(eq(sites.id, site.id));
     deps.afterCommit?.(tx, `site-delete:${site.id}`, () => { void cleanup(); });
     return { id: site.id };
@@ -122,7 +125,7 @@ export async function deleteSite(deps: CommandDependencies, input: Scope & { sit
 }
 export async function previewSite(deps: CommandDependencies, input: Scope & { siteId: string; files: unknown; token?: string; generation?: number }) {
   const site = await owned(deps, input);
-  if (site.kind === "blog") throw new ServiceError(400, { message: "Use createBlogPreview for a blog site" });
+  if (site.kind === "blog") throw new ServiceError(400, { message: "Open the table site view" });
   const files = SITE_FILES_SCHEMA.parse(input.files), now = deps.now();
   await deps.database.delete(sitePreviews).where(and(eq(sitePreviews.siteId, input.siteId), lt(sitePreviews.expiresAt, now)));
   const expiresAt = new Date(now.getTime() + 2 * 3600_000), generation = input.generation ?? 1;

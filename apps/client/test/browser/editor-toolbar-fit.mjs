@@ -8,6 +8,9 @@ const f = await createBrowserFixture({ name: 'Editor layout and title padding', 
 const { page, api, frontend, artifact } = f;
 page.setDefaultTimeout(12000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
+const rowBody = async input => (await command('getRow', { rowId: input.rowId, includeBody: true, bodyFormat: 'html' })).body;
+const saveBody = async input => { const result = await command('updateCells', { rowId: input.rowId, body: { content: input.content, expectedVersion: input.expectedVersion ?? 0 }, idempotencyKey: input.idempotencyKey }); return { version: result.bodyVersion }; };
+
 const saved = root => root.getByRole('status').filter({ hasText: '全部更改已保存' }).waitFor();
 async function checkSurface(root, titleName, surface) {
   const title = root.getByRole('textbox', { name: titleName, exact: true }), toolbar = root.getByTestId('editor-toolbar');
@@ -55,8 +58,8 @@ try {
   // Export is restricted to recovery from an actual optimistic-concurrency conflict.
   const identity = { tableId: table.id, rowId: row.id }, body = panel.getByRole('textbox', { name: '正文内容', exact: true });
   await body.fill('First saved body'); await saved(panel);
-  const current = await command('getDocument', identity);
-  await command('replaceDocument', { ...identity, expectedVersion: current.version, idempotencyKey: crypto.randomUUID(), content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Server body' }] }] } });
+  const current = await rowBody( identity);
+  await saveBody( { ...identity, expectedVersion: current.version, idempotencyKey: crypto.randomUUID(), content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Server body' }] }] } });
   await body.fill('Unsaved conflicting draft'); await panel.getByRole('alert').waitFor();
   const download = page.waitForEvent('download'); await panel.getByRole('button', { name: '导出本地草稿', exact: true }).click(); assert.equal((await download).suggestedFilename(), 'document-draft.json');
   const recoveryDownload = page.waitForEvent('download'); await panel.getByRole('button', { name: '导出草稿并加载服务器内容', exact: true }).click(); await recoveryDownload; await saved(panel);

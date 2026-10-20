@@ -5,6 +5,9 @@ const f = await createBrowserFixture({ name: 'Focused writing controls' });
 const { page, api, frontend } = f;
 page.setDefaultTimeout(12000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
+const rowBody = async input => (await command('getRow', { rowId: input.rowId, includeBody: true, bodyFormat: 'html' })).body;
+const saveBody = async input => { const result = await command('updateCells', { rowId: input.rowId, body: { content: input.content, expectedVersion: input.expectedVersion ?? 0 }, idempotencyKey: input.idempotencyKey }); return { version: result.bodyVersion }; };
+
 const saved = root => root.getByRole('status').filter({ hasText: '全部更改已保存' }).waitFor();
 try {
   const table = await api('/tables', { name: '按需格式' }), title = (await api(`/tables/${table.id}`)).columns[0];
@@ -59,7 +62,7 @@ try {
   await panel.getByRole('alert').getByText(/容量超出/).waitFor();
   await panel.getByRole('button', { name: '重试保存', exact: true }).waitFor();
   await body.fill('容量错误后可以继续修改'); await saved(panel);
-  assert(JSON.stringify((await command('getDocument', identity)).content).includes('容量错误后可以继续修改'));
+  assert(JSON.stringify((await rowBody( identity)).content).includes('容量错误后可以继续修改'));
   await panel.getByRole('button', { name: '关闭记录', exact: true }).click(); await panel.waitFor({ state: 'hidden' });
   const touchRow = await api(`/tables/${table.id}/rows`, { cells: { [title.id]: "触屏直接写作" } });
   const touchIdentity = { tableId: table.id, rowId: touchRow.id };
@@ -74,7 +77,7 @@ try {
     await touchPanel.getByTestId('editor-toolbar').getByRole('button', { name: '结构', exact: true }).tap();
     await touch.getByRole('menuitem', { name: '无序列表', exact: true }).tap();
     assert.equal(await touchBody.locator('ul').innerText(), '触屏点击直接写作'); await saved(touchPanel);
-    assert(JSON.stringify((await command('getDocument', touchIdentity)).content).includes('触屏点击直接写作'));
+    assert(JSON.stringify((await rowBody( touchIdentity)).content).includes('触屏点击直接写作'));
     const touchToolbar = touchPanel.getByTestId('editor-toolbar');
     await assertToolbarFits(touchToolbar);
     await touchToolbar.getByRole('button', { name: '搜索与替换', exact: true }).tap();

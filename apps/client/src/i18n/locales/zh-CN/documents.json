@@ -43,15 +43,7 @@
   "applyLink": "应用链接",
   "removeLink": "移除链接",
   "closeRetry": "关闭后重新打开重试",
-  "grantsTitle": "记录正文权限",
-  "grantsHint": "独立于表格读写权限；不包含文章发布权。仅创建不会获得正文或历史读取权。",
   "documentScope": "{{count}} 个正文授权",
-  "grants": {
-    "canRead": "读取正文与图片",
-    "canCreate": "创建正文",
-    "canUpdate": "替换正文",
-    "canUpload": "上传图片"
-  },
   "errors": {
     "BAD_INPUT": "正文格式或容量超出支持范围。请精简内容或图片，在“写作帮助与容量”中查看限制后重试。",
     "NOT_FOUND": "记录、正文或图片不存在，或不在当前授权范围。",

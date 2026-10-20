@@ -4,6 +4,9 @@ const f = await createBrowserFixture({ name: 'Grid document entry' });
 const { page, api, frontend, artifact } = f;
 page.setDefaultTimeout(15000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
+const rowBody = async input => (await command('getRow', { rowId: input.rowId, includeBody: true, bodyFormat: 'html' })).body;
+const saveBody = async input => { const result = await command('updateCells', { rowId: input.rowId, body: { content: input.content, expectedVersion: input.expectedVersion ?? 0 }, idempotencyKey: input.idempotencyKey }); return { version: result.bodyVersion }; };
+
 try {
   const table = await api('/tables', { name: '普通文章表' });
   const title = (await api(`/tables/${table.id}`)).columns[0];
@@ -46,8 +49,8 @@ try {
   assert.equal(await body.innerText(), '第二行的独立正文，通过普通表格入口撰写。'); await close();
   await page.reload(); await target.click(); await body.waitFor();
   assert.equal(await body.innerText(), '第二行的独立正文，通过普通表格入口撰写。'); await close();
-  assert(JSON.stringify((await command('getDocument', { tableId: table.id, rowId: rows[2].id })).content).includes('第三行保持自己的正文'));
-  assert.equal(await command('getDocument', { tableId: table.id, rowId: rows[0].id }), null);
+  assert(JSON.stringify((await rowBody( { tableId: table.id, rowId: rows[2].id })).content).includes('第三行保持自己的正文'));
+  assert.equal((await rowBody({ rowId: rows[0].id })).version, 0);
   assert.equal((await command('getRow', { rowId: rows[1].id })).version, 1);
   // Bounded visual matrix also checks the sticky entry after horizontal scrolling.
   for (const width of [1440, 390]) for (const theme of ['light', 'dark']) {

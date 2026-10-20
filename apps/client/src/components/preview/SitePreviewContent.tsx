@@ -23,6 +23,6 @@ export function SitePreviewContent({ siteId, refreshToken, onHeaderChange }: Pre
     onHeaderChange?.({ title: site?.name, actions: site && <Button asChild variant="ghost" size="icon"><Link to={`/app/sites/${site.id}`} aria-label={t("openEditor")} title={t("openEditor")}><ExternalLink /></Link></Button> });
     return () => onHeaderChange?.(null);
   }, [site, onHeaderChange, t]);
-  if (site?.kind === "blog") return <BlogEditor siteId={site.id} onPreviewHeaderChange={onHeaderChange} />;
+  if (site?.kind === "blog") return <BlogEditor viewId={site.viewId!} onPreviewHeaderChange={onHeaderChange} />;
   return <div className="flex h-full min-h-0 flex-col">{error ? <p role="alert" className="p-4 text-sm text-destructive">{error}</p> : site ? <SitePreview siteId={site.id} files={site.files} toolbar="hidden" refreshToken={refreshToken} /> : <p role="status" className="p-4 text-sm text-muted-foreground">{t("loading")}</p>}</div>;
 }

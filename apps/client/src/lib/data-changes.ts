@@ -39,7 +39,7 @@ function rememberOwners(value: unknown, tableId?: string) {
 
 const writeCommands = new Set([
   "setRelation", "addRelation", "removeRelation", "updateCell", "updateCells", "addRow", "deleteRow", "addColumn", "deleteColumn", "updateColumn",
-  "reorderColumns", "renameView", "setDefaultView", "updateBoardView", "createCalendarView", "updateCalendarView", "deleteView", "createFormView", "updateFormView",
+  "reorderColumns", "createView", "updateView", "renameView", "setDefaultView", "updateBoardView", "createCalendarView", "updateCalendarView", "deleteView", "createFormView", "updateFormView",
   "setFormFields", "setFormSections", "reorderFormFields", "createGridView",
   "createBoardView", "setFormTheme", "setFormLayout", "setFormFieldSettings", "setFormChrome",
 ]);

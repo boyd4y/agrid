@@ -4,7 +4,7 @@ import type { ColumnDef, CellValue } from "./types.js";
 export const BLOG_LIMITS = { articles: 20, assets: 60, assetBytes: 5 * 1024 * 1024, totalAssetBytes: 30 * 1024 * 1024, textBytes: 4 * 1024 * 1024, builds: 100, pageSize: 10 } as const;
 const uuid = z.uuid(), version = z.number().int().positive();
 export const blogMappingSchema = z.strictObject({
-  title: uuid, slug: uuid, summary: uuid.optional(), author: uuid.optional(), date: uuid.optional(),
+  title: uuid, slug: uuid.optional(), summary: uuid.optional(), author: uuid.optional(), date: uuid.optional(),
   cover: uuid.optional(), category: uuid.optional(), tags: uuid.optional(),
 });
 export const blogConfigSchema = z.strictObject({
@@ -13,9 +13,6 @@ export const blogConfigSchema = z.strictObject({
     .refine(items => new Set(items.map(item => item.rowId)).size === items.length, "Duplicate article"),
 });
 export type BlogConfig = z.infer<typeof blogConfigSchema>;
-export const blogPermissionSchema = z.strictObject({ tableId: uuid, canRead: z.boolean(), canConfigure: z.boolean(), canBuild: z.boolean(), canPublish: z.boolean(), canRestore: z.boolean() })
-  .refine(p => p.canRead || p.canConfigure || p.canBuild || p.canPublish || p.canRestore);
-export type BlogPermission = z.infer<typeof blogPermissionSchema>;
 const write = { idempotencyKey: z.string().min(1).max(200) };
 const site = { siteId: uuid };
 const cas = { ...site, expectedVersion: version, expectedPublishedRevisionId: uuid.nullable(), ...write };
@@ -53,17 +50,3 @@ export type BlogResults = {
   createBlogPreview: { url: string; expiresAt: string }; revokeBlogPreviews: { revoked: true };
   authorizeBlogPublication: { authorizationToken: string; expiresAt: string };
 };
-export const BLOG_TOOLS = {
-  create_blog: { command: "createBlog", description: "在当前工作区事务创建博客及默认内容表/字段；仅成员身份，不支持表级Key，不发布。" },
-  start_blog_article: { command: "startBlogArticle", description: "在博客中创建文章记录或准备现有文章，缺失slug自动生成，正文首次保存时创建。不改变发布选择，不发布；Key需独立博客配置和表写授权。" },
-  get_blog_sources: { command: "getBlogSources", description: "分页读取可选文章属性、正文版本及可明确公开的图片清单；不读取关联记录。" },
-  get_blog: { command: "getBlog", description: "读取博客配置、不可变构建清单、真实发布状态和历史。" },
-  save_blog: { command: "saveBlog", description: "保存博客模板、显式文章与公开字段映射；不发布。最多20篇，图片须逐项选择。" },
-  build_blog: { command: "buildBlog", description: "从获权源生成固定版本静态快照，不发布；源修改后必须重新构建。" },
-  publish_blog: { command: "publishBlog", description: "仅在用户明确要求发布并提供本次操作的人类授权token时发布固定buildId；需当前站点版本和线上revision前提。" },
-  withdraw_blog_article: { command: "withdrawBlogArticle", description: "撤回单篇及旧版本所有公开路径；需本次操作的人类授权token。其他文章保留当前已发布副本。" },
-  unpublish_blog: { command: "unpublishBlog", description: "撤下整个博客及其预览；需本次操作的人类授权token，保留获权内部历史。" },
-  restore_blog_revision: { command: "restoreBlogRevision", description: "恢复历史配置为新草稿，不恢复公开状态；重新构建和显式发布。" },
-  create_blog_preview: { command: "createBlogPreview", description: "创建10分钟持链接可读的构建预览，noindex；可撤销，发布/撤下使旧预览失效。不可称为登录预览。" },
-  revoke_blog_previews: { command: "revokeBlogPreviews", description: "立即撤销本站全部分享预览。" },
-} as const satisfies Record<string, { command: BlogCommand; description: string }>;

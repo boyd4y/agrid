@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /** Table views (grid / board / form / calendar) — form config is view metadata over the same columns/rows. */
 
-export const VIEW_TYPES = ["grid", "board", "form", "calendar"] as const;
+export const VIEW_TYPES = ["grid", "board", "form", "calendar", "site"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
 
 export const FORM_LAYOUT_MODES = ["classic", "focus"] as const;
@@ -110,6 +110,7 @@ export type TableView = {
   type: ViewType | string;
   name: string;
   config: ViewConfig;
+  site?: SiteViewState;
   sortOrder: number;
   isDefault: boolean;
   createdAt: string | Date;
@@ -195,3 +196,18 @@ export type SetFormChromeInput = {
   welcome?: FormChromeBlock | null;
   ending?: FormChromeBlock | null;
 };
+
+// A site is a presentation of this table. Publishing is an explicit view patch.
+import { blogConfigSchema } from "./blogs.js";
+export const siteViewConfigSchema = blogConfigSchema.omit({ tableId: true }).extend({ template: z.literal("blog") });
+export type SiteViewConfig = z.infer<typeof siteViewConfigSchema>;
+export const createViewSchema = z.strictObject({ tableId: z.uuid(), type: z.literal("site"), name: VIEW_NAME_SCHEMA, config: siteViewConfigSchema, idempotencyKey: z.string().min(1).max(200) });
+export const viewPublicationSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("publish"), expectedPublishedRevisionId: z.uuid().nullable() }),
+  z.strictObject({ action: z.literal("unpublish"), expectedPublishedRevisionId: z.uuid().nullable() }),
+  z.strictObject({ action: z.literal("withdraw"), expectedPublishedRevisionId: z.uuid(), rowId: z.uuid() }),
+]);
+export const updateViewSchema = z.strictObject({ viewId: z.uuid(), name: VIEW_NAME_SCHEMA.optional(), config: siteViewConfigSchema.optional(), expectedVersion: z.number().int().positive(), idempotencyKey: z.string().min(1).max(200), publication: viewPublicationSchema.optional() });
+export type CreateViewInput = z.input<typeof createViewSchema>;
+export type UpdateViewInput = z.input<typeof updateViewSchema>;
+export type SiteViewState = { id: string; version: number; revisionId: string; publishedRevisionId: string | null; publicUrl: string; pendingChanges: boolean; publishedRows: { rowId: string; slug: string; title: string }[] };

@@ -7,6 +7,9 @@ const f = await createBrowserFixture({ name: 'Reference toolbar and slash', serv
 const { page, api, frontend, artifact } = f;
 page.setDefaultTimeout(12000);
 const command = async (command, input) => (await api('/commands', { command, input })).result;
+const rowBody = async input => (await command('getRow', { rowId: input.rowId, includeBody: true, bodyFormat: 'html' })).body;
+const saveBody = async input => { const result = await command('updateCells', { rowId: input.rowId, body: { content: input.content, expectedVersion: input.expectedVersion ?? 0 }, idempotencyKey: input.idempotencyKey }); return { version: result.bodyVersion }; };
+
 const saved = root => root.getByRole('status').filter({ hasText: '全部更改已保存' }).waitFor();
 try {
   const table = await api('/tables', { name: '完整编辑器' }), title = (await api(`/tables/${table.id}`)).columns[0];
@@ -55,7 +58,7 @@ try {
   await page.getByRole('menuitem', { name: '黄色', exact: true }).last().click();
   await toolbar.getByRole('button', { name: '对齐', exact: true }).click(); await page.getByRole('menuitem', { name: '居中对齐', exact: true }).click();
   await page.keyboard.press('ArrowRight'); await saved(panel);
-  let doc = await command('getDocument', identity), html = (await command('renderDocument', identity)).html;
+  let doc = await rowBody( identity), html = (await rowBody( identity)).html;
   assert(JSON.stringify(doc.content).includes('underline')); assert(JSON.stringify(doc.content).includes('#337ea9')); assert(JSON.stringify(doc.content).includes('#fdecc8')); assert(html.includes('text-align:center')); assert(html.includes('<u>'));
   await panel.getByRole('button', { name: '关闭记录', exact: true }).click(); await page.getByTestId(`open-grid-record-${row.id}`).click(); await body.locator('u').waitFor(); assert((await body.locator('mark').getAttribute('style')).includes('background-color'));
   // Actual browser paste parsing must strip unsupported style-only/empty textStyle spans.
@@ -64,7 +67,7 @@ try {
     const data = new DataTransfer(); data.setData('text/html', '<p><span style="font-size:14px">字号文本</span> <span style="color:red">命名颜色</span> <span style="color:#337ea9">安全颜色</span> <span style="background-image:url(https://evil.test/x)">无样式</span></p>');
     el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
   });
-  await saved(panel); const pasted = (await command('getDocument', identity)).content;
+  await saved(panel); const pasted = (await rowBody( identity)).content;
   assert(JSON.stringify(pasted).includes('字号文本')); assert(JSON.stringify(pasted).includes('命名颜色')); assert(JSON.stringify(pasted).includes('#337ea9'));
   assert(!JSON.stringify(pasted).includes('font-size')); assert(!JSON.stringify(pasted).includes('background-image')); assert(!JSON.stringify(pasted).includes('"color":null'));
   console.log('PASS paste span font-size, named color, safe hex and unknown style: no empty textStyle or autosave failure');
@@ -89,7 +92,7 @@ try {
   await body.fill('/image'); await menu.waitFor(); await item('image').waitFor();
   const picker = page.waitForEvent('filechooser'); await item('image').click(); const chooser = await picker;
   await chooser.setFiles({ name: 'slash.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVQIHWP4DwABAQEAG7buVgAAAABJRU5ErkJggg==', 'base64') });
-  await body.locator('img').waitFor(); await saved(panel); doc = await command('getDocument', identity);
+  await body.locator('img').waitFor(); await saved(panel); doc = await rowBody( identity);
   const findImage = node => node.type === 'image' ? node : node.content?.map(findImage).find(Boolean);
   const image = findImage(doc.content); assert.match(image.attrs.fileId, /^[0-9a-f-]{36}$/); assert(!JSON.stringify(doc.content).includes('/image')); assert(!JSON.stringify(doc.content).includes('data:image'));
   // Responsive menus stay in bounds at the actual caret, inside the record dialog.
@@ -106,7 +109,7 @@ try {
   await toolbar.getByRole('button', { name: '搜索与替换', exact: true }).press('Enter'); await search.waitFor();
   await page.keyboard.press('Escape'); await search.waitFor({ state: 'hidden' });
   await toolbar.getByRole('button', { name: '刷新记录', exact: true }).click();
-  await body.fill('直接关闭保存'); await panel.getByRole('button', { name: '关闭记录', exact: true }).click(); await panel.waitFor({ state: 'hidden' }); assert(JSON.stringify((await command('getDocument', identity)).content).includes('直接关闭保存'));
+  await body.fill('直接关闭保存'); await panel.getByRole('button', { name: '关闭记录', exact: true }).click(); await panel.waitFor({ state: 'hidden' }); assert(JSON.stringify((await rowBody( identity)).content).includes('直接关闭保存'));
   assert.deepEqual(f.errors, []);
   console.log('PASS reference editor: complete persistent toolbar; slash filters, keyboard/mouse/Escape, ordinary slashes, real IME; retained selection; persistent safe formats; search/replace and session undo; private image; close flush; desktop/390/320 light-dark.');
 } catch (error) { console.error(f.errors); console.error(await page.locator('.tiptap').evaluate(el => JSON.stringify({ selection: el.editor.state.selection.toJSON(), content: el.editor.getJSON(), canBold: el.editor.can().toggleBold() })).catch(()=>null)); console.error(await page.locator('[data-testid="document-editor"]').innerText().catch(() => '')); await page.screenshot({ path: artifact('reference-failure.png') }).catch(() => {}); throw error; }

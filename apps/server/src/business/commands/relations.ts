@@ -1,3 +1,4 @@
+import { readRowBody } from "./row-body.js";
 import { requireWorkspace } from "../tenant/workspace.js";
 import type { CommandDependencies } from "../dependencies.js";
 
@@ -527,12 +528,12 @@ export async function queryRelationRecords(deps: CommandDependencies, raw: Relat
         : null,
   };
 }
-export async function getRow(deps: CommandDependencies, input: { rowId: string } & Scope, transaction?: Transaction) {
+export async function getRow(deps: CommandDependencies, input: import("@tabdo/shared").GetRowInput & Scope, transaction?: Transaction) {
   const { row } = await requireRowInOrg(
     deps, uuid.parse(input.rowId),
     input.organizationId,
     transaction,
   );
   const cols = await loadTableColumns(deps, row.tableId, transaction);
-  return { ...(await readRow(deps, row.id, cols, transaction)), columns: cols };
+  return { ...(await readRow(deps, row.id, cols, transaction)), columns: cols, ...(input.includeBody ? { body: await readRowBody(transaction ?? deps.database, row.tableId, row.id, input.bodyFormat) } : {}) };
 }

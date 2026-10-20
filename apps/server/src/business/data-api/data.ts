@@ -1,3 +1,4 @@
+import { readRowBody } from "../commands/row-body.js";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { FILTER_OPS, decodeCursor, opsForType, isFilterConditionComplete, validateCell, type CellValue, type ColumnDef, type SiteTable, type SiteRow, type SiteFile, type ColumnType } from "@tabdo/shared";
@@ -91,16 +92,16 @@ export async function siteRows(deps: CommandDependencies, context: SiteContext, 
   const page = await queryRows({ ...deps, workspaceId: table.workspaceId }, { ...parsed, filters: parsed.filters?.map(filter => ({ ...filter, id: filter.id ?? filter.columnId })), tableId, organizationId: context.principal.organizationId });
   return { ...page, totalMatched: page.totalMatched ?? null, rows: await serializeRows(deps, context, tableId, cols, page.rows) };
 }
-export async function siteRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string) {
+export async function siteRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, projection: { includeBody?: boolean; bodyFormat?: "json" | "html" } = {}) {
   const { table, cols } = await tableColumns(deps.database, context.principal, tableId, "read");
   if (!z.uuid().safeParse(rowId).success) return null;
   const [hit] = await deps.database.select({ id: rows.id }).from(rows).where(and(eq(rows.id, rowId), eq(rows.tableId, tableId)));
   if (!hit) return null;
   const row = await readRow(deps, rowId, cols);
-  return (await serializeRows(deps, context, tableId, cols, [row]))[0];
+  return { ...(await serializeRows(deps, context, tableId, cols, [row]))[0], ...(projection.includeBody ? { body: await readRowBody(deps.database, tableId, rowId, projection.bodyFormat) } : {}) };
 }
-export async function siteCreateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rawCells: unknown) {
-  const cells = z.record(z.uuid(), cellSchema).parse(rawCells);
+export async function siteCreateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rawCells: unknown, options: { body?: import("@tabdo/shared").RowBodyCreate; idempotencyKey?: string } = {}) {
+  const cells = z.record(z.uuid(), cellSchema).parse(rawCells ?? {});
   return deps.database.transaction(async tx => {
     const principal = await resolveSiteKey(tx, context.secret, true);
     requireSiteTable(principal, tableId, "create");
@@ -114,8 +115,8 @@ export async function siteCreateRow(deps: CommandDependencies, context: SiteCont
       if (error) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
     }
     // Public visitors are not the key creator. No forged human actor is used.
-    const row = await addRow({ ...deps, workspaceId: table.workspaceId }, { tableId, cells, organizationId: principal.organizationId }, tx);
-    return { id: row.id, createdAt: new Date(row.createdAt).toISOString() };
+    const row = await addRow({ ...deps, workspaceId: table.workspaceId }, { tableId, cells, ...options, receiptPrincipalId: `key:${principal.id}`, organizationId: principal.organizationId }, tx);
+    return { id: row.id, createdAt: new Date(row.createdAt).toISOString(), ...(row.bodyVersion !== undefined ? { bodyVersion: row.bodyVersion } : {}) };
   });
 }
 export async function siteFileReference(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, columnId: string, fileId: string) {
@@ -130,8 +131,8 @@ export async function siteFileReference(deps: CommandDependencies, context: Site
 }
 
 /** Writes revalidate live grants and keep schema/record validation inside the transaction. */
-export async function siteUpdateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, rawCells: unknown, expectedVersion?: number) {
-  const cells = z.record(z.uuid(), cellSchema).parse(rawCells);
+export async function siteUpdateRow(deps: CommandDependencies, context: SiteContext, tableId: string, rowId: string, rawCells: unknown, expectedVersion?: number, options: { body?: import("@tabdo/shared").RowBodyWrite; idempotencyKey?: string } = {}) {
+  const cells = z.record(z.uuid(), cellSchema).parse(rawCells ?? {});
   if (expectedVersion !== undefined) z.number().int().min(1).parse(expectedVersion);
   return deps.database.transaction(async tx => {
     const principal = await resolveSiteKey(tx, context.secret, true);
@@ -146,8 +147,8 @@ export async function siteUpdateRow(deps: CommandDependencies, context: SiteCont
       if (validateCell(col.type, value, col.config.options)) throw new ServiceError(400, { message: `Invalid value for ${col.name}` });
     }
     try {
-      const saved = await updateCells({ ...deps, workspaceId: table.workspaceId }, { rowId, cells, expectedVersion, organizationId: principal.organizationId }, tx);
-      return { id: saved.id, updatedAt: new Date(saved.updatedAt).toISOString(), version: saved.version ?? 1 };
+      const saved = await updateCells({ ...deps, workspaceId: table.workspaceId }, { rowId, cells, expectedVersion, ...options, receiptPrincipalId: `key:${principal.id}`, organizationId: principal.organizationId }, tx);
+      return { id: saved.id, updatedAt: new Date(saved.updatedAt).toISOString(), version: saved.version ?? 1, ...(saved.bodyVersion !== undefined ? { bodyVersion: saved.bodyVersion } : {}) };
     } catch (error) {
       if (error instanceof Error && error.message.includes("版本冲突")) throw new ServiceError(409, { message: "Record changed; reload before updating" });
       throw error;

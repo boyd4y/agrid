@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { sha256 } from "@tabdo/core/crypto";
-import { DOCUMENT_SCHEMAS, DOCUMENT_READ_COMMANDS, DOCUMENT_LIMITS, type DocumentCommand, type DocumentResults, type DocumentContent, type DocumentPermission } from "@tabdo/shared";
+import { DOCUMENT_SCHEMAS, DOCUMENT_READ_COMMANDS, DOCUMENT_LIMITS, EMPTY_DOCUMENT, type DocumentCommand, type DocumentResults, type DocumentContent } from "@tabdo/shared";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
 import { inTransaction } from "../db/context.js";
@@ -35,11 +35,11 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
       const [current] = await tx.select({ id: member.id }).from(member).where(and(eq(member.organizationId, organizationId), eq(member.userId, caller.actorId))).for("share");
       if (!current) fail(403, "FORBIDDEN", "Current membership is required");
     }
-    const permission: keyof Omit<DocumentPermission, "tableId"> = command === "createDocument" ? "canCreate" : command === "replaceDocument" ? "canUpdate" : command === "uploadDocumentImage" ? "canUpload" : "canRead";
     if (principal) {
-      const grant = principal.documentPermissions.get(input.tableId);
-      if (!grant) fail(404, "NOT_FOUND", "Record document not found");
-      if (!grant[permission] || command === "replaceDocument" && input.expectedVersion === 0 && !grant.canCreate) fail(403, "FORBIDDEN", "This document operation is not granted");
+      const grant = principal.permissions.get(input.tableId);
+      if (!grant) fail(404, "NOT_FOUND", "Row not found");
+      const allowed = read ? grant.canRead : grant.canUpdate;
+      if (!allowed) fail(403, "FORBIDDEN", "Table operation is not granted");
     }
     const [table] = await tx.select().from(tables).where(and(eq(tables.id, input.tableId), eq(tables.organizationId, organizationId))).for("key share");
     if (!table) fail(404, "NOT_FOUND", "Record document not found");
@@ -63,8 +63,14 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
       }
       requestId = reservation.id;
     }
+    let allocated = false;
+    if (command === "uploadDocumentImage" && !doc && input.expectedVersion === 0) {
+      [doc] = await tx.insert(recordDocuments).values({ workspaceId: table.workspaceId, organizationId, sourceTableId: table.id, sourceRowId: row.id, content: EMPTY_DOCUMENT, updatedAt: deps.now() }).returning();
+      await tx.insert(recordDocumentLinks).values({ documentId: doc.id, rowId: row.id, tableId: table.id, workspaceId: table.workspaceId, organizationId });
+      allocated = true;
+    }
     if (command !== "createDocument" && command !== "getDocument" && !(command === "replaceDocument" && input.expectedVersion === 0) && !doc) fail(404, "NOT_FOUND", "Document is not enabled");
-    const cas = () => { if (doc!.version !== input.expectedVersion) fail(409, "VERSION_CONFLICT", "Document changed; retain your draft and reload"); };
+    const cas = () => { if (doc!.version !== input.expectedVersion && !allocated) fail(409, "VERSION_CONFLICT", "Document changed; retain your draft and reload"); };
     const assets = async (content: DocumentContent) => {
       const ids = documentImageIds(content);
       if (!ids.length) return [];
@@ -100,7 +106,7 @@ export async function executeDocument<K extends DocumentCommand>(deps: CommandDe
         deps.afterRollback(tx, `document-image:${id}`, () => storage.remove(key));
         try { await storage.put(key, bytes, input.mimeType); } catch { fail(503, "STORAGE_UNAVAILABLE", "Image storage failed"); }
         const [image] = await tx.insert(documentImages).values({ id, documentId: doc!.id, name: input.name.replace(/[\u0000-\u001f\u007f]/g, ""), mimeType: input.mimeType, size: bytes.length, storageDriver: driver, storageKey: key }).returning();
-        result = imageMeta(image); break;
+        result = { ...imageMeta(image), bodyVersion: doc!.version }; break;
       }
       case "getDocumentImage": {
         const [image] = await tx.select().from(documentImages).where(and(eq(documentImages.documentId, doc!.id), eq(documentImages.id, input.fileId)));

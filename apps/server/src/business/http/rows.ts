@@ -1,3 +1,4 @@
+import { rowBodyCreateSchema, rowBodyWriteSchema } from "@tabdo/shared";
 import { ServiceError } from "../errors.js";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
@@ -129,15 +130,27 @@ rowsRoute.post("/tables/:id/rows/query", async (c) => {
   }
 });
 
+rowsRoute.on("GET", ["/rows/:id", "/tables/:tableId/rows/:id"], async c => {
+  const scope = await requireActorOrg(c);
+  if (!scope.ok) return c.json({ error: scope.error }, scope.status);
+  try {
+    const row = await cmds.getRow(c.get("resources").commands, { rowId: c.req.param("id"), includeBody: c.req.query("include") === "body", bodyFormat: c.req.query("bodyFormat") === "html" ? "html" : "json", organizationId: scope.organizationId });
+    if (c.req.param("tableId") && c.req.param("tableId") !== row.tableId) return c.json({ error: "Record not found" }, 404);
+    return c.json(row);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Record not found" }, error instanceof ServiceError ? error.status as ContentfulStatusCode : 404);
+  }
+});
+
 rowsRoute.post("/tables/:id/rows", async (c) => {
   const scope = await requireActorOrg(c);
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const tableId = c.req.param("id");
   const body = z
-    .object({ cells: z.record(z.string(), cellValueSchema).optional() })
+    .object({ cells: z.record(z.string(), cellValueSchema).optional(), body: rowBodyCreateSchema.optional(), idempotencyKey: z.string().optional() })
     .parse(await c.req.json().catch(() => ({})));
   try {
-    const row = await cmds.addRow(c.get("resources").commands, { tableId, cells: body.cells, actorId: scope.actor.userId, organizationId: scope.organizationId });
+    const row = await cmds.addRow(c.get("resources").commands, { tableId, cells: body.cells, body: body.body as never, idempotencyKey: body.idempotencyKey ?? c.req.header("Idempotency-Key"), actorId: scope.actor.userId, organizationId: scope.organizationId });
     return c.json(row, 201);
   } catch (e) {
     if (e instanceof ServiceError) return c.json({ error: e.message }, e.status as ContentfulStatusCode);
@@ -145,12 +158,19 @@ rowsRoute.post("/tables/:id/rows", async (c) => {
   }
 });
 
-rowsRoute.patch("/rows/:id", async (c) => {
+rowsRoute.on("PATCH", ["/rows/:id", "/tables/:tableId/rows/:id"], async (c) => {
   const scope = await requireActorOrg(c);
   if (!scope.ok) return c.json({ error: scope.error }, scope.status);
   const id = c.req.param("id");
+  const tableId = c.req.param("tableId");
+  if (tableId) {
+    const row = await cmds.getRow(c.get("resources").commands, { rowId: id, organizationId: scope.organizationId });
+    if (row.tableId !== tableId) return c.json({ error: "Record not found" }, 404);
+  }
   const body = z
     .object({
+      body: rowBodyWriteSchema.optional(),
+      idempotencyKey: z.string().optional(),
       cells: z.record(z.string(), cellValueSchema).optional(),
       cell: z
         .object({ columnId: z.string().uuid(), value: cellValueSchema })
@@ -160,7 +180,7 @@ rowsRoute.patch("/rows/:id", async (c) => {
     .parse(await c.req.json());
 
   try {
-    if (body.cell) {
+    if (body.cell && !body.body) {
       return c.json(
         await cmds.updateCell(c.get("resources").commands, {
           rowId: id,
@@ -172,11 +192,13 @@ rowsRoute.patch("/rows/:id", async (c) => {
         })
       );
     }
-    if (body.cells) {
+    if (body.cells || body.body || body.cell) {
       return c.json(
         await cmds.updateCells(c.get("resources").commands, {
           rowId: id,
-          cells: body.cells,
+          cells: body.cell ? { ...body.cells, [body.cell.columnId]: body.cell.value } : body.cells,
+          body: body.body as never,
+          idempotencyKey: body.idempotencyKey ?? c.req.header("Idempotency-Key"),
           expectedVersion: body.expectedVersion,
           actorId: scope.actor.userId,
           organizationId: scope.organizationId,

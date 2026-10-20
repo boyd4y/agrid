@@ -1,3 +1,4 @@
+import { AgentConnectionGuide } from "@/components/connections/AgentConnectionGuide";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -45,6 +46,7 @@ export function DocsArticlePage() {
           <h1 className="text-3xl font-semibold tracking-tight">{page.title}</h1>
           <p className="mt-2 text-muted-foreground">{page.description}</p>
           <div className="mt-8">
+            {page.slug === "mcp" && <div className="mb-8"><AgentConnectionGuide publicMode /></div>}
             <DocsContent blocks={page.body} />
           </div>
 

@@ -139,36 +139,14 @@
     "tabs": {
       "label": "设置分类",
       "general": "常规",
-      "apiKeys": "API Key"
+      "apiKeys": "API Key",
+      "connections": "连接 Agent"
     },
     "appearance": "外观",
     "appearanceAria": "工作区外观",
     "language": "语言",
     "languageAria": "界面语言",
     "apiKeys": {
-      "grok": {
-        "none": "无",
-        "selected": "已选表格：{{tables}}",
-        "selectTables": "请至少选择一个表格以授予读取权限。",
-        "enable": "一键启用 Grok Bot",
-        "description": "通过远程 MCP 连接，仅可读取你选择的表格。",
-        "noTables": "请先创建至少一个数据表，再启用 Grok Bot。",
-        "title": "连接 Grok Bot",
-        "existing": "已存在 Grok Bot 密钥，无法再次显示完整密钥。请使用已保存的密钥，或撤销该密钥后重新启用。",
-        "secret": "API Key（仅显示一次）",
-        "copy": "复制{{label}}",
-        "step1": "在 Grok Bot 中添加名为 tabdo 的自定义 MCP 服务，地址填写上方 MCP 服务地址，类型选择 Remote HTTPS。",
-        "step2": "将 Authorization 请求头设为 Bearer、一个空格和 API Key。密钥只填入连接表单，不要放进聊天消息或 URL。",
-        "step3": "添加服务后，如有提示，在「连接应用」（Connect apps）中找到 tabdo 并安装。在对话中用 @ 选中它，再让它列出已授权的表格。",
-        "permissions": "新密钥仅可读取所选表格。可稍后编辑密钥以扩大权限，未来新增表格不会自动授权。",
-        "mcpUrl": "MCP 服务地址",
-        "headerName": "HTTP 请求头名称",
-        "headerValue": "HTTP 请求头值",
-        "keyPlaceholder": "<已保存的 API Key>",
-        "authentication": "传输协议：Streamable HTTP。OAuth Client ID 和 Client Secret 留空。复用密钥时，请将占位符替换为已保存的 API Key。",
-        "compatibility": "如果你的 Grok Bot 版本仅提供 OAuth，且没有安全的 HTTP headers 表单，该版本暂无法使用此 API Key 连接。请使用支持 Bearer 请求头的客户端。",
-        "reachability": "Grok Bot 需要可公开访问的 HTTPS 地址。本地开发时，请通过公共隧道访问此应用，并保留地址末尾的 /mcp。"
-      },
       "title": "API Key",
       "description": "点击名称查看或编辑逐表权限。",
       "create": "创建 API Key",
@@ -181,8 +159,8 @@
       "name": "名称",
       "permissions": "权限",
       "tables": "表格",
-      "tablesHint": "按工作区选择表格及操作。新增可创建正文，更新可修改正文和图片。允许发布会公开内容。",
-      "grantDescription": "只授权所需资源与操作；允许发布需单独开启。",
+      "tablesHint": "读取包含正文和记录附件；创建新增记录；更新编辑记录。读取 + 更新也可配置并显式发布站点视图，保存来源数据不会自动发布。",
+      "grantDescription": "仅授权所需的资源和数据操作。",
       "createdTitle": "API Key 已创建",
       "once": "请立即复制 Key，关闭后不会再次显示。",
       "key": "API Key",
@@ -207,26 +185,74 @@
         "canRead": "读取",
         "canCreate": "新增",
         "canUpdate": "更新",
-        "canDelete": "删除",
-        "canPublish": "允许发布"
+        "canDelete": "删除"
       },
-      "legacyPreserved": "保留原授权：此表的原有权限与下方统一选项不同。",
-      "legacyConversion": "修改将按所选操作替换此表原授权：新增可首次创建正文，更新可修改正文和上传图片。其他资源不变。",
-      "modifyTable": "修改此表授权",
-      "modifyTableNamed": "修改此表授权：{{name}}",
-      "recordFields": "标题与属性",
-      "recordBody": "正文与图片",
-      "publication": "内容发布",
-      "otherLegacyGrants": "另有原有授权保持不变",
-      "notGranted": "未授权",
       "granted": "已授权",
       "otherResources": "日历与定时计划 · 已授权 {{count}} 项",
       "otherResourcesNamed": "{{name}}：日历与定时计划",
       "calendarResource": "日历：{{name}}",
-      "scheduleResource": "定时计划：{{name}}",
-      "publishDescription": "允许通过发布或分享预览公开内容，也可撤下已发布的内容。"
+      "scheduleResource": "定时计划：{{name}}"
     },
-    "generalDescription": "调整外观和语言。"
+    "generalDescription": "调整外观和语言。",
+    "connections": {
+      "description": "通过 MCP 将外部 AI 客户端接入工作区。选择客户端，查看对应的配置步骤。",
+      "clientLabel": "AI 客户端",
+      "prepareTitle": "准备 API Key",
+      "prepare": "前往「设置 → API Key」，按需授权资源和操作后创建密钥，也可使用已保存的密钥。新密钥完整内容仅显示一次，请当场复制保存，再通过「连接 Agent」返回此处。",
+      "openWorkspace": "前往工作台连接 Agent",
+      "manageKeys": "管理 API Key",
+      "configuration": "~/.cursor/mcp.json",
+      "command": "终端命令",
+      "copyExample": "复制示例",
+      "copyField": "复制{{field}}",
+      "copied": "已复制",
+      "copyFailed": "复制失败，请选中文本手动复制。",
+      "serverName": "服务名称",
+      "transport": "传输方式",
+      "endpoint": "MCP 服务地址",
+      "headerName": "HTTP 请求头名称",
+      "headerValue": "HTTP 请求头值",
+      "verifyTitle": "在客户端检查",
+      "notChecked": "此向导不会检测连接状态。",
+      "reference": "官方接入说明",
+      "clients": {
+        "claude-code": {
+          "name": "Claude Code",
+          "setupTitle": "添加 HTTP 服务",
+          "setup": "将 tab_replace_with_your_key 替换为已保存的密钥，在已安装 Claude Code 的终端执行以下命令。",
+          "note": "此命令添加本地 Claude Code 连接配置。不要将密钥放入共享项目文件或代码仓库。",
+          "verify": "运行 claude mcp list，再打开 Claude Code，用 /mcp 检查 tabdo。请它列出密钥有权读取的表格。"
+        },
+        "claude-remote": {
+          "name": "Claude 网页 / 桌面端",
+          "setupTitle": "添加远程连接器",
+          "setup": "在 Claude 打开 Customize → Connectors → Add custom connector，填写下方服务名称和地址。Authentication 选择 No sign in，在 Request headers 中添加 Authorization 及其 Bearer 值。",
+          "note": "No sign in 表示不走 OAuth，仍需 Bearer 密钥。服务必须可通过公网 HTTPS 访问。Team 或 Enterprise 用户可能需所有者先在组织设置中添加连接器。如无 Request headers，请使用支持 Bearer 请求头的客户端。",
+          "verify": "完成添加后，在会话的 Connectors 中启用 tabdo，请它列出已授权的表格。"
+        },
+        "codex": {
+          "name": "Codex",
+          "setupTitle": "设置密钥并添加服务",
+          "setup": "将占位内容替换为已保存的密钥，确保启动 Codex 的环境中可读取 TABDO_MCP_KEY。在终端执行以下命令。",
+          "note": "服务配置引用环境变量。请妥善保管其值，不要写入共享文件或 shell 历史。",
+          "verify": "运行 codex mcp list，再打开 Codex，用 /mcp 检查 tabdo。请它列出密钥有权读取的表格。"
+        },
+        "cursor": {
+          "name": "Cursor",
+          "setupTitle": "保存远程服务配置",
+          "setup": "在个人 ~/.cursor/mcp.json 中添加以下配置，将占位内容替换为已保存的密钥，保存后重启 Cursor。已有其他服务时请合并配置。",
+          "note": "不要将真实密钥放入共享的 .cursor/mcp.json 文件或代码仓库。此连接使用 Streamable HTTP 和 Bearer 请求头。",
+          "verify": "在 Customize → MCPs 中启用 tabdo，检查聊天中的工具列表，请它列出已授权的表格。连接失败时查看 Output 面板中的 MCP Logs。"
+        },
+        "grok-bot": {
+          "name": "Grok Bot",
+          "setupTitle": "配置自定义 MCP 连接器",
+          "setup": "若你的 Grok 账号提供自定义 MCP 服务，使用下方地址添加 tabdo，类型选 Remote HTTPS（Streamable HTTP）。在安全的 HTTP 请求头表单填写 Authorization 及其 Bearer 值。OAuth Client ID 和 Client Secret 留空。",
+          "note": "如果当前版本仅提供 OAuth，没有安全的 HTTP 请求头表单，则无法使用此方式接入，请改用支持 Bearer 请求头的客户端。Grok Bot 需要公网 HTTPS 地址，切勿将密钥粘贴到聊天或 URL 中。",
+          "verify": "按提示在 Connect apps 中添加连接器，在任务中用 @ 挂载 tabdo，再请它列出已授权的表格。"
+        }
+      }
+    }
   },
   "directory": {
     "loadingLabel": "加载{{label}}",

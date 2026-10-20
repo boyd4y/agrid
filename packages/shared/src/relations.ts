@@ -21,7 +21,7 @@ export type RelationQueryResult = {
   hasMore: boolean;
   total?: number;
 };
-export type GetRowInput = { rowId: string };
+export type GetRowInput = { rowId: string; includeBody?: boolean; bodyFormat?: "json" | "html" };
 export type RelationCommands = {
   setRelation: RelationWriteInput;
   addRelation: RelationWriteInput;

@@ -22,11 +22,10 @@ import { createCommandsRoute } from "../../src/business/http/commands.js";
 import { createSiteKey, updateSiteKey } from "../../src/business/data-api/keys.js";
 import { deleteRow, deleteTable, batchDeleteRows } from "../../src/business/commands/rows.js";
 import { saveSite, publishSite, deleteSite } from "../../src/business/sites/service.js";
-import { createBlogTools } from "../../src/business/agent/tools/blogs.js";
 import { createClient } from "@tabdo/sdk";
 import type { CommandDependencies } from "../../src/business/dependencies.js";
 import type { Actor } from "../../src/business/auth/actor.js";
-import type { BlogCommand, BlogCommands, BlogConfig, BlogDetail, BlogPermission, DocumentContent } from "@tabdo/shared";
+import type { BlogCommand, BlogCommands, BlogConfig, BlogDetail, DocumentContent } from "@tabdo/shared";
 const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(url, process.env.DATABASE_URL_UNPOOLED);
 const resource = createDatabase({ connectionString: url, poolMax: 8 }), other = createDatabase({ connectionString: url, poolMax: 4 });
@@ -101,7 +100,7 @@ test("explicit snapshots produce readable HTML, metadata and topics, with no tab
   });
   assert.equal((await resource.db.select().from(rows).where(eq(rows.id, unpublished.id))).length, 1, "a caught host error must not delete the preceding unpublished row");
   const generic = await app.request(`http://blog.test/api/sites/${blog.id}/preview`, { method: "POST", body: JSON.stringify({ files: [{ path: "index.html", content: "bypass" }] }), headers: { "Content-Type": "application/json" } }); assert.equal(generic.status, 401);
-  await assert.rejects(publishSite(a, { organizationId: org, siteId: blog.id, revisionId: blog.revisionId }), /publishBlog/);
+  await assert.rejects(publishSite(a, { organizationId: org, siteId: blog.id, revisionId: blog.revisionId }), /updateView.publication/);
 });
 
 test("blog pagination and generated output budgets are enforced before creating a build", async () => {
@@ -279,47 +278,6 @@ test("real process death and a deferred COMMIT failure retain a recoverable unpu
   await rm(file);
 });
 
-test("dedicated grants cover REST/GraphQL/SDK while table/read keys and native execution cannot publish", async () => {
-  const { saved } = await fixture(1), built = await build(saved);
-  const grant = (overrides: Partial<BlogPermission> = {}): BlogPermission => ({ tableId, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false, ...overrides });
-  const readKey = await createSiteKey(a, actor, { name: "Reader", permissions: [], documentPermissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }], blogPermissions: [grant()] });
-  const fetcher: typeof fetch = async (input, init) => app.request(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, init);
-  const sdk = createClient({ url: "http://blog.test", key: readKey.secret, fetch: fetcher });
-  assert.equal((await sdk.blogs.getBlog({ siteId: saved.id })).revisionId, built.revisionId);
-  const input = { siteId: saved.id, buildId: built.revisionId, expectedVersion: built.version, expectedPublishedRevisionId: null, idempotencyKey: k() };
-  await assert.rejects(sdk.blogs.publishBlog(input), /granted|permission/i);
-  const result = await app.request("http://blog.test/api/commands", { method: "POST", headers: { Authorization: `Bearer ${readKey.secret}`, "Content-Type": "application/json" }, body: JSON.stringify({ command: "publishBlog", input }) }); assert.equal(result.status, 403);
-  const tools = createBlogTools(a, org, uid); const count = (await resource.db.select().from(blogReceipts).where(eq(blogReceipts.workspaceId, workspaceId))).length;
-  await resource.db.transaction(async tx => {
-    const native = createBlogTools(a, org, uid, tx); const output = await native.publish_blog.execute!(input, { toolCallId: k(), messages: [], context: {} }); assert.equal((output as any).error.code, "PUBLICATION_APPROVAL_REQUIRED");
-    await tx.execute(sql`select 1`);
-  });
-  assert.equal((await resource.db.select().from(blogReceipts).where(eq(blogReceipts.workspaceId, workspaceId))).length, count); assert(!tools.authorize_blog_publication);
-  await updateSiteKey(a, actor, readKey.key.id, { name: "Publisher", permissions: [], blogPermissions: [grant({ canPublish: true })], documentPermissions: readKey.key.documentPermissions });
-  assert.equal((await sdk.blogs.publishBlog(input)).publishedRevisionId, built.revisionId);
-  await updateSiteKey(a, actor, readKey.key.id, { name: "Reader again", permissions: [], blogPermissions: [grant()], documentPermissions: readKey.key.documentPermissions });
-  await assert.rejects(sdk.blogs.unpublishBlog({ siteId: saved.id, expectedVersion: built.version, expectedPublishedRevisionId: built.revisionId, idempotencyKey: k() }), /granted|permission/i);
-  assert((await sdk.documents.getDocument({ tableId, rowId: built.manifest!.articles[0].rowId }))?.content);
-  const tableKey = await createSiteKey(a, actor, { name: "Old table key", permissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false }] });
-  await assert.rejects(call("getBlog", { siteId: saved.id }, a, { kind: "key", secret: tableKey.secret }), isCode("NOT_FOUND"));
-});
-
-test("scope, approval expiry and mismatched intent cannot bypass publication", async () => {
-  const { saved } = await fixture(1), built = await build(saved), foreign = k();
-  await resource.db.insert(workspaces).values({ id: foreign, organizationId: org, name: "Other workspace" });
-  await assert.rejects(call("getBlog", { siteId: built.id }, { ...a, workspaceId: foreign }), isCode("NOT_FOUND"));
-  const input = { siteId: built.id, expectedVersion: built.version, expectedPublishedRevisionId: null, buildId: built.revisionId, idempotencyKey: k() };
-  const approval = await call("authorizeBlogPublication", { ...input, action: "unpublishBlog" });
-  await assert.rejects(call("publishBlog", { ...input, idempotencyKey: k(), authorizationToken: approval.authorizationToken }), isCode("PUBLICATION_APPROVAL_REQUIRED"));
-  const permit = await call("authorizeBlogPublication", { ...input, action: "publishBlog", idempotencyKey: k() }); now = new Date(now.getTime() + 6 * 60_000);
-  await assert.rejects(call("publishBlog", { ...input, idempotencyKey: k(), authorizationToken: permit.authorizationToken }), isCode("PUBLICATION_APPROVAL_REQUIRED"));
-  const untrusted = await resource.db.insert(user).values({ id: k(), kind: "agent", name: "Agent", email: `${k()}@local.test` }).returning();
-  try {
-    await resource.db.insert(member).values({ id: k(), userId: untrusted[0].id, organizationId: org, role: "owner" });
-    await assert.rejects(call("authorizeBlogPublication", { ...input, action: "publishBlog", idempotencyKey: k() }, a, { kind: "member", organizationId: org, actorId: untrusted[0].id }), isCode("FORBIDDEN"));
-  } finally { await resource.db.delete(user).where(eq(user.id, untrusted[0].id)); }
-});
-
 test("internal restore is a draft and ordinary code site history remains compatible", async () => {
   const { saved } = await fixture(1); const published = await publish(await build(saved));
   const restored = await call("restoreBlogRevision", { siteId: saved.id, revisionId: saved.revisionId, expectedVersion: published.version, idempotencyKey: k() });
@@ -338,118 +296,6 @@ test("delete retains durable garbage plans on storage failure and retries collec
   await collectBlogStorage(failing); assert((await resource.db.select().from(blogStorageGarbage)).length > 0);
   await collectBlogStorage(a); assert.equal((await resource.db.select().from(blogStorageGarbage)).length, 0);
   await assert.rejects(a.sites!.storage("local").open(await blogStorageKey(built.revisionId, "index.html")));
-});
-
-test("default blog and direct writing are transactional, retry safe and do not select or publish data", async () => {
-  const input = { name: "中文写作", language: "zh-CN" as const, idempotencyKey: k() };
-  const [blog, replay] = await Promise.all([call("createBlog", input), call("createBlog", input, b)]);
-  assert.deepEqual(replay, blog); assert.equal(blog.publishedRevisionId, null); assert.deepEqual(blog.config.articles, []);
-  assert.equal((await resource.db.select().from(columns).where(eq(columns.tableId, blog.config.tableId))).length, 2);
-  const start = { siteId: blog.id, expectedVersion: blog.version, title: "不用翻译标题", idempotencyKey: k() };
-  const article = await call("startBlogArticle", start), again = await call("startBlogArticle", start, b);
-  assert.deepEqual(again, article);
-  const [row] = await resource.db.select().from(rows).where(eq(rows.id, article.rowId));
-  assert.match(String(row.cells[blog.config.mapping.slug]), /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-  assert.equal(row.cells[blog.config.mapping.title], start.title);
-  assert.equal(await executeDocument(a, who as any, "getDocument", article), null);
-  assert.deepEqual((await call("getBlog", { siteId: blog.id })).config.articles, []);
-  const opened = await call("startBlogArticle", { ...start, rowId: row.id, expectedRowVersion: row.version, idempotencyKey: k() }); assert.equal(opened.rowId, row.id);
-  assert.deepEqual((await resource.db.select().from(rows).where(eq(rows.id, row.id)))[0], row, "nonempty URL and metadata remain unchanged on reopen");
-  const parallel = await Promise.all([call("startBlogArticle", { ...start, idempotencyKey: k() }), call("startBlogArticle", { ...start, idempotencyKey: k() }, b)]);
-  assert.notEqual(parallel[0].rowId, parallel[1].rowId);
-  const sources = await call("getBlogSources", { tableId: blog.config.tableId });
-  assert.equal(new Set(sources.items.map(r => r.cells[blog.config.mapping.slug])).size, 3);
-  const before = (await resource.db.select().from(tables).where(eq(tables.workspaceId, workspaceId))).length;
-  await assert.rejects(resource.db.transaction(async tx => { await executeBlog(a, who, "createBlog", { ...input, idempotencyKey: k() }, tx); throw new Error("late default rollback"); }), /late default rollback/);
-  assert.equal((await resource.db.select().from(tables).where(eq(tables.workspaceId, workspaceId))).length, before);
-  const beforeRows = sources.items.length;
-  await assert.rejects(resource.db.transaction(async tx => { await executeBlog(a, who, "startBlogArticle", { ...start, idempotencyKey: k() }, tx); throw new Error("late article rollback"); }), /late article rollback/);
-  assert.equal((await call("getBlogSources", { tableId: blog.config.tableId })).items.length, beforeRows);
-  const configured = await call("saveBlog", { siteId: blog.id, expectedVersion: blog.version, name: blog.name, config: { ...blog.config, articles: [{ rowId: row.id, imageIds: [] }] }, idempotencyKey: k() });
-  await assert.rejects(call("startBlogArticle", { ...start, idempotencyKey: k() }), isCode("VERSION_CONFLICT"));
-  await executeDocument(a, who as any, "replaceDocument", { tableId: article.tableId, rowId: article.rowId, expectedVersion: 0, content: body("同一正文"), idempotencyKey: k() });
-  const published = await publish(await build(configured));
-  assert((await (await page(published, `articles/${row.cells[blog.config.mapping.slug]}.html`)).text()).includes("同一正文"));
-});
-
-test("direct writing preserves existing content fields and enforces table/blog/document grants across SDK and native tools", async () => {
-  const blog = await call("createBlog", { name: "Scope test", idempotencyKey: k() }), tid = blog.config.tableId;
-  const [field] = await resource.db.insert(columns).values({ tableId: tid, name: "内容", type: "text" }).returning();
-  const [row] = await resource.db.insert(rows).values({ tableId: tid, cells: { [blog.config.mapping.title]: "旧记录", [field.id]: "不要搬迁或删除" } }).returning();
-  const start = { siteId: blog.id, expectedVersion: blog.version, rowId: row.id, expectedRowVersion: 1, title: "旧记录", idempotencyKey: k() };
-  const grant: BlogPermission = { tableId: tid, canRead: true, canConfigure: true, canBuild: false, canPublish: false, canRestore: false };
-  const key = await createSiteKey(a, actor, { name: "Blog alone", permissions: [], blogPermissions: [grant] });
-  const fetcher: typeof fetch = async (input, init) => app.request(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, init);
-  const sdk = createClient({ url: "http://blog.test", key: key.secret, fetch: fetcher });
-  await assert.rejects(sdk.blogs.createBlog({ name: "Denied workspace resource", idempotencyKey: k() }), /membership/i);
-  await assert.rejects(sdk.blogs.startBlogArticle(start), /permission/i);
-  const permissions = [{ tableId: tid, canRead: true, canCreate: true, canUpdate: true, canDelete: false }];
-  await updateSiteKey(a, actor, key.key.id, { name: "Table and blog", permissions, blogPermissions: [grant] });
-  await sdk.blogs.startBlogArticle(start);
-  const [updated] = await resource.db.select().from(rows).where(eq(rows.id, row.id));
-  assert.equal(updated.cells[field.id], "不要搬迁或删除"); assert.equal(updated.version, 2);
-  await assert.rejects(call("startBlogArticle", { ...start, idempotencyKey: k() }), isCode("VERSION_CONFLICT"));
-  await assert.rejects(sdk.documents.replaceDocument({ tableId: tid, rowId: row.id, expectedVersion: 0, content: body("forbidden"), idempotencyKey: k() }), /not found|granted/i);
-  await updateSiteKey(a, actor, key.key.id, { name: "Table grant removed", permissions: [], blogPermissions: [grant] });
-  await assert.rejects(sdk.blogs.startBlogArticle(start), /permission/i, "revoked table grant is checked before an old successful receipt");
-  await updateSiteKey(a, actor, key.key.id, { name: "Table alone", permissions, blogPermissions: [] });
-  await assert.rejects(sdk.blogs.startBlogArticle(start), /not found/i);
-  const foreign = k(); await resource.db.insert(workspaces).values({ id: foreign, organizationId: org, name: "Foreign writing" });
-  await assert.rejects(call("startBlogArticle", { ...start, expectedRowVersion: 2, idempotencyKey: k() }, { ...a, workspaceId: foreign }), isCode("NOT_FOUND"));
-  const tools = createBlogTools(a, org, uid);
-  const created = await tools.create_blog.execute!({ name: "Native blog", idempotencyKey: k() }, { toolCallId: k(), messages: [], context: {} }) as BlogDetail;
-  assert(created.id); assert.equal(created.publishedRevisionId, null);
-});
-
-test("granted Key SDK writes use the non-default blog workspace rather than ambient command scope", async () => {
-  const targetWorkspaceId = k();
-  await resource.db.insert(workspaces).values({ id: targetWorkspaceId, organizationId: org, name: "Granted writing workspace" });
-  const targetDeps = { ...a, workspaceId: targetWorkspaceId };
-  const blog = await call("createBlog", { name: "Non-default writing", idempotencyKey: k() }, targetDeps);
-  const tid = blog.config.tableId, titleId = blog.config.mapping.title, slugId = blog.config.mapping.slug;
-  const grant: BlogPermission = { tableId: tid, canRead: true, canConfigure: true, canBuild: false, canPublish: false, canRestore: false };
-  const permissions = [{ tableId: tid, canRead: true, canCreate: true, canUpdate: true, canDelete: false }];
-  const key = await createSiteKey(a, actor, { name: "Non-default writer", permissions, blogPermissions: [grant] });
-  for (const ambientWorkspaceId of [undefined, workspaceId]) {
-    const bound = { ...a, workspaceId: ambientWorkspaceId };
-    const route = new Hono().route("/api", createSiteApiRoutes(async () => ({ commands: bound, identity: { database: bound.database, resolveSession: async () => null }, siteRateLimit: async () => {}, async close() {} })));
-    const fetcher: typeof fetch = async (input, init) => route.request(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, init);
-    const sdk = createClient({ url: "http://blog.test", key: key.secret, fetch: fetcher });
-    assert.equal((await sdk.blogs.getBlog({ siteId: blog.id })).id, blog.id);
-    const start = { siteId: blog.id, expectedVersion: blog.version, title: "非默认工作区文章", idempotencyKey: k() };
-    const created = await sdk.blogs.startBlogArticle(start);
-    assert.equal(created.tableId, tid);
-    assert.deepEqual(await sdk.blogs.startBlogArticle(start), created);
-    const [createdRow] = await resource.db.select().from(rows).where(eq(rows.id, created.rowId));
-    assert.equal(createdRow.tableId, tid); assert.equal(createdRow.cells[titleId], start.title);
-    assert.match(String(createdRow.cells[slugId]), /^post-[a-f0-9]{32}$/);
-    assert.equal(await executeDocument(targetDeps, who as any, "getDocument", created), null);
-
-    const [existing] = await resource.db.insert(rows).values({ tableId: tid, cells: { [titleId]: "缺少网址的旧记录" } }).returning();
-    const prepare = { ...start, rowId: existing.id, expectedRowVersion: existing.version, idempotencyKey: k() };
-    assert.equal((await sdk.blogs.startBlogArticle(prepare)).rowId, existing.id);
-    const [prepared] = await resource.db.select().from(rows).where(eq(rows.id, existing.id));
-    assert.equal(prepared.version, existing.version + 1); assert.equal(prepared.cells[titleId], existing.cells[titleId]);
-    assert.match(String(prepared.cells[slugId]), /^post-[a-f0-9]{32}$/);
-    assert.deepEqual(await sdk.blogs.startBlogArticle(prepare), { tableId: tid, rowId: existing.id });
-    await assert.rejects(sdk.blogs.startBlogArticle({ ...prepare, idempotencyKey: k() }), /changed/i);
-    await sdk.blogs.startBlogArticle({ ...prepare, expectedRowVersion: prepared.version, idempotencyKey: k() });
-    assert.deepEqual((await resource.db.select().from(rows).where(eq(rows.id, existing.id)))[0], prepared, "reopen keeps the established URL and row version");
-
-    await updateSiteKey(a, actor, key.key.id, { name: "Table grant removed", permissions: [], blogPermissions: [grant] });
-    await assert.rejects(sdk.blogs.startBlogArticle(start), /permission/i, "revocation defeats successful receipts even in a non-default workspace");
-    await updateSiteKey(a, actor, key.key.id, { name: "Non-default writer", permissions, blogPermissions: [grant] });
-    const before = (await resource.db.select().from(rows).where(eq(rows.tableId, tid))).length;
-    await assert.rejects(resource.db.transaction(async tx => {
-      await executeBlog(bound, { kind: "key", secret: key.secret }, "startBlogArticle", { ...start, idempotencyKey: k() }, tx);
-      throw new Error("late scoped article rollback");
-    }), /late scoped article rollback/);
-    assert.equal((await resource.db.select().from(rows).where(eq(rows.tableId, tid))).length, before);
-    await assert.rejects(call("startBlogArticle", { ...start, idempotencyKey: k() }, bound), isCode("NOT_FOUND"), "member calls keep their selected/default workspace boundary");
-    const [foreignRow] = await resource.db.insert(rows).values({ tableId }).returning();
-    await assert.rejects(sdk.blogs.startBlogArticle({ ...prepare, rowId: foreignRow.id, expectedRowVersion: 1, idempotencyKey: k() }), /not found/i);
-  }
-  assert.deepEqual((await call("getBlog", { siteId: blog.id }, targetDeps)).config.articles, []);
 });
 
 test("formatted documents survive blog preview and explicit publication without widening image or link access", async () => {

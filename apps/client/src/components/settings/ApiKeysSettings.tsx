@@ -4,7 +4,7 @@ import { ChevronRight, Copy, LoaderCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ApiKeyInfo, ApiKeyInput, CalendarPermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
-import { enableGrokBot } from "@/components/settings/grok-bot";
+import { Link } from "react-router-dom";
 import { Button } from "@tabdo/ui/components/button";
 import { DataRefreshButton } from "@/components/controls/data-refresh-button";
 import { Input } from "@tabdo/ui/components/input";
@@ -22,7 +22,7 @@ import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
 import { authorizedTableIds, getTableAccess, groupPermissionResources, setTableAccess, summarizePermissions, tableOperations, type ApiKeyTable, type PermissionResource } from "@/components/settings/api-key-permissions";
 
-const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], schedulePermissions: [], documentPermissions: [], blogPermissions: [] });
+const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], schedulePermissions: [] });
 
 export function ApiKeysSettings() {
   const { t } = useTranslation(["app", "common"]);
@@ -36,11 +36,6 @@ export function ApiKeysSettings() {
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
   const [secret, setSecret] = useState(""), [saving, setSaving] = useState(false), [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<ApiKeyInfo | null>(null);
-  const [grok, setGrok] = useState<{ key: ApiKeyInfo; secret?: string } | null>(null);
-  const [enablingGrok, setEnablingGrok] = useState(false);
-  const [grokPicker, setGrokPicker] = useState(false);
-  const [grokTableIds, setGrokTableIds] = useState<string[]>([]);
-  const grokBusy = useRef(false);
   const busy = useRef(false);
   const pagination = useArrayPagination(keys);
   useEffect(() => {
@@ -60,7 +55,7 @@ export function ApiKeysSettings() {
   }, [revision]);
 
   function edit(key?: ApiKeyInfo) {
-    setInput(key ? { blogPermissions: (key.blogPermissions ?? []).map(p => ({ ...p })), documentPermissions: (key.documentPermissions ?? []).map(p => ({ ...p })), schedulePermissions: (key.schedulePermissions ?? []).map(p => ({ ...p })), name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })) } : blank());
+    setInput(key ? { schedulePermissions: (key.schedulePermissions ?? []).map(p => ({ ...p })), name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })) } : blank());
     setSecret(""); setFormError(""); setEditor({ key });
   }
   function close() { if (busy.current) return; setEditor(null); setSecret(""); setFormError(""); }
@@ -83,32 +78,6 @@ export function ApiKeysSettings() {
     try { await navigator.clipboard.writeText(value); toast.success(text("copied")); }
     catch { toast.error(text("copyFailed")); }
   }
-  async function startGrok() {
-    if (!canManage || grokBusy.current) return;
-    grokBusy.current = true; setEnablingGrok(true);
-    try {
-      const current = await api.listApiKeys();
-      setKeys(current.keys); setTables(current.tables);
-      const existing = current.keys.find(key => key.name === "Grok Bot");
-      if (existing) { setGrok({ key: existing }); return; }
-      if (!current.tables.length) { toast.error(text("grok.noTables")); return; }
-      setGrokTableIds([]); setGrokPicker(true);
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
-    finally { grokBusy.current = false; setEnablingGrok(false); }
-  }
-  async function enableGrok() {
-    if (!canManage || grokBusy.current) return;
-    grokBusy.current = true; setEnablingGrok(true);
-    try {
-      const saved = await enableGrokBot({ ...api, createApiKey: input => api.createApiKey(input.permissions.reduce(
-        (current, grant) => setTableAccess(current, grant.tableId, { ...grant, canPublish: false }), input,
-      )) }, grokTableIds);
-      if (!saved) { toast.error(text("grok.selectTables")); return; }
-      setKeys(current => [saved.key, ...current.filter(key => key.id !== saved.key.id)]); pagination.resetPage();
-      setGrokPicker(false); setGrok(saved);
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text("saveFailed")); }
-    finally { grokBusy.current = false; setEnablingGrok(false); }
-  }
   function toggleCalendar(calendarId: string, operation: typeof calendarOperations[number], checked: boolean) {
     setInput(current => {
       const grant: CalendarPermission = { calendarId, canRead: false, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, ...current.calendarPermissions?.find(p => p.calendarId === calendarId), [operation]: checked };
@@ -116,81 +85,23 @@ export function ApiKeysSettings() {
     });
   }
   function permissionRow(tableId: string, name: string, label: string) {
-    const { access, legacy } = getTableAccess(input, tableId);
-    const legacySummary = () => {
-      const summary = (grant: object | undefined, namespace: string) => Object.entries(grant ?? {})
-        .filter(([key, value]) => key !== "tableId" && value === true)
-        .map(([key]) => t(`${namespace}.${key}`)).join("、") || text("notGranted");
-      const document = input.documentPermissions?.find(p => p.tableId === tableId);
-      const blog = input.blogPermissions?.find(p => p.tableId === tableId);
-      return [
-        `${text("recordFields")}: ${summary(input.permissions.find(p => p.tableId === tableId), "app:settings.apiKeys.operations")}`,
-        `${text("recordBody")}: ${summary(document && { canRead: document.canRead, canCreate: document.canCreate, canUpdate: document.canUpdate, canUpload: document.canUpload }, "documents:grants")}`,
-        `${text("publication")}: ${summary(blog && { canRead: blog.canRead, canConfigure: blog.canConfigure, canBuild: blog.canBuild, canPublish: blog.canPublish }, "blogs:grants")}`,
-        ...([document?.canReadHistory, document?.canRestore, blog?.canRestore].some(Boolean) ? [text("otherLegacyGrants")] : []),
-      ].join("；");
-    };
+    const { access } = getTableAccess(input, tableId);
     return <FieldSet key={tableId} className="min-w-0 gap-2 border-b py-3 last:border-b-0" data-testid={`table-access-${tableId}`}>
       <FieldLegend variant="label" className="mb-0 break-words">{name}</FieldLegend>
-      {legacy ? <>
-        <FieldDescription>{text("legacyPreserved")}</FieldDescription>
-        <p className="break-words text-xs text-muted-foreground">{legacySummary()}</p>
-        <FieldDescription>{text("legacyConversion")}</FieldDescription>
-        <Button type="button" variant="outline" size="sm" className="self-start" disabled={saving} aria-label={text("modifyTableNamed", { name: label })} onClick={() => setInput(current => setTableAccess(current, tableId, getTableAccess(current, tableId).access))}>{text("modifyTable")}</Button>
-      </> : <FieldGroup className="flex flex-row flex-wrap gap-x-4 gap-y-1">
+      <FieldGroup className="flex flex-row flex-wrap gap-x-4 gap-y-1">
         {tableOperations.map(op => <Field key={op} orientation="horizontal" className="w-auto min-h-8" data-disabled={saving}>
-          <Checkbox id={`${id}-${tableId}-${op}`} aria-label={`${label} · ${text(`operations.${op}`)}`} aria-describedby={op === "canPublish" ? `${id}-publish-description` : undefined} disabled={saving} checked={access[op]} onCheckedChange={checked => setInput(current => setTableAccess(current, tableId, { ...getTableAccess(current, tableId).access, [op]: checked === true }))} />
+          <Checkbox id={`${id}-${tableId}-${op}`} aria-label={`${label} · ${text(`operations.${op}`)}`} disabled={saving} checked={access[op]} onCheckedChange={checked => setInput(current => setTableAccess(current, tableId, { ...getTableAccess(current, tableId).access, [op]: checked === true }))} />
           <FieldLabel htmlFor={`${id}-${tableId}-${op}`}>{text(`operations.${op}`)}</FieldLabel>
         </Field>)}
-      </FieldGroup>}
+      </FieldGroup>
     </FieldSet>;
   }
   const create = canManage && <Button size="sm" disabled={!tables.length && !calendars.length && !schedules.length} onClick={() => edit()}><Plus className="hidden sm:block" data-icon="inline-start" />{text("create")}</Button>;
   return <section className="flex min-w-0 flex-col gap-6" data-testid="api-keys-settings">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-2"><CardTitle>{text("title")}</CardTitle><CardDescription>{text("description")}</CardDescription></div>
-      <div className="flex items-center gap-2"><DataRefreshButton label={t("common:refresh")} disabled={loading} onRefresh={() => setRevision(value => value + 1)} />{!loading && !error && keys.length > 0 && create}</div>
+      <div className="flex flex-wrap items-center gap-2"><Button asChild variant="outline" size="sm"><Link to="/app/settings?tab=connections">{t("settings.tabs.connections")}</Link></Button><DataRefreshButton label={t("common:refresh")} disabled={loading} onRefresh={() => setRevision(value => value + 1)} />{!loading && !error && keys.length > 0 && create}</div>
     </header>
-    {!loading && !error && canManage && <div className="flex flex-wrap items-center justify-between gap-3 border-y py-4">
-      <div className="flex min-w-0 flex-col gap-1"><h3 className="text-sm font-medium">Grok Bot</h3><p className="text-sm text-muted-foreground">{text("grok.description")}</p></div>
-      <Button variant="outline" size="sm" disabled={enablingGrok} onClick={() => void startGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
-    </div>}
-    <Dialog open={grokPicker} onOpenChange={open => { if (!grokBusy.current) setGrokPicker(open); }}>
-      <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
-        <DialogHeader><DialogTitle>{text("grok.enable")}</DialogTitle><DialogDescription>{text("grok.selectTables")}</DialogDescription></DialogHeader>
-        <FieldSet>
-          <FieldLegend variant="label">{text("permissions")} · {text("operations.canRead")}</FieldLegend>
-          <FieldGroup className="max-h-64 overflow-y-auto rounded-md border p-3">
-            {tables.map(table => <Field key={table.id} orientation="horizontal" data-disabled={enablingGrok}>
-              <Checkbox id={`${id}-grok-table-${table.id}`} disabled={enablingGrok} checked={grokTableIds.includes(table.id)} onCheckedChange={checked => setGrokTableIds(current => checked === true ? [...current, table.id] : current.filter(value => value !== table.id))} />
-              <FieldLabel htmlFor={`${id}-grok-table-${table.id}`} className="min-w-0 break-words">{table.workspaceName} / {table.name}</FieldLabel>
-            </Field>)}
-          </FieldGroup>
-          <FieldDescription>{text("grok.selected", { tables: tables.filter(table => grokTableIds.includes(table.id)).map(table => `${table.workspaceName} / ${table.name}`).join(", ") || text("grok.none") })}</FieldDescription>
-        </FieldSet>
-        <Button disabled={enablingGrok || !grokTableIds.length} onClick={() => void enableGrok()}>{enablingGrok && <LoaderCircle className="animate-spin motion-reduce:animate-none" data-icon="inline-start" />}{text("grok.enable")}</Button>
-      </DialogContent>
-    </Dialog>
-    <Dialog open={grok !== null} onOpenChange={open => { if (!open) setGrok(null); }}>
-      <DialogContent closeLabel={t("common:close")} className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
-        <DialogHeader><DialogTitle>{text("grok.title")}</DialogTitle><DialogDescription>{text(grok?.secret ? "once" : "grok.existing")}</DialogDescription></DialogHeader>
-        {grok && <div className="flex min-w-0 flex-col gap-4">
-          <p className="break-words text-sm">{grok.key.name} · {grok.key.prefix}… · {new Date(grok.key.createdAt).toLocaleString()} · {text("tableCount", { count: grok.key.permissions.length })}</p>
-          <FieldGroup>
-            {[...(grok.secret ? [{ label: text("grok.secret"), value: grok.secret }] : []), { label: text("grok.mcpUrl"), value: `${window.location.origin}/mcp` }, { label: text("grok.headerName"), value: "Authorization" }, { label: text("grok.headerValue"), value: `Bearer ${grok.secret ?? text("grok.keyPlaceholder")}` }].map((item, index) => <Field key={item.label}>
-              <FieldLabel htmlFor={`${id}-grok-${index}`}>{item.label}</FieldLabel>
-              <div className="flex min-w-0 gap-2"><Input id={`${id}-grok-${index}`} readOnly value={item.value} autoComplete="off" spellCheck={false} /><Button variant="outline" size="icon" aria-label={text("grok.copy", { label: item.label })} onClick={() => void copy(item.value)}><Copy data-icon="inline-start" /></Button></div>
-            </Field>)}
-          </FieldGroup>
-          <p className="text-sm text-muted-foreground">{text("grok.authentication")}</p>
-          <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">{["step1", "step2", "step3"].map(step => <li key={step}>{text(`grok.${step}`)}</li>)}</ol>
-          <p className="text-sm text-muted-foreground">{text("grok.compatibility")}</p>
-          <p className="text-sm text-muted-foreground">{text("grok.reachability")}</p>
-          <p className="text-sm text-muted-foreground">{text("grok.permissions")}</p>
-          <Button variant="outline" onClick={() => { const key = grok.key; setGrok(null); edit(key); }}>{text("edit")}</Button>
-        </div>}
-      </DialogContent>
-    </Dialog>
     {loading ? <p role="status" className="py-5 text-sm text-muted-foreground">{t("common:loading")}</p>
       : error ? <ListErrorState title={text("loadFailed")} onRetry={() => setRevision(value => value + 1)} />
       : !canManage ? <p className="py-5 text-sm text-muted-foreground">{text("adminOnly")}</p>
@@ -228,7 +139,6 @@ export function ApiKeysSettings() {
           <FieldGroup>
             <Field><FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel><Input id={`${id}-name`} value={input.name} maxLength={100} autoComplete="off" disabled={saving} required onChange={event => setInput(current => ({ ...current, name: event.target.value }))} /></Field>
             <FieldDescription>{text("tablesHint")}</FieldDescription>
-            <p id={`${id}-publish-description`} className="sr-only">{text("publishDescription")}</p>
             {groupPermissionResources(tables, calendars, schedules).map(group => <FieldSet key={group.workspaceId} className="min-w-0 gap-3" aria-label={group.name}>
               <FieldLegend>{group.name}</FieldLegend>
               <div className="min-w-0 border-y">
@@ -256,7 +166,7 @@ export function ApiKeysSettings() {
             {authorizedTableIds(input).filter(tableId => !tables.some(table => table.id === tableId)).map(tableId => permissionRow(tableId, `${text("removedTable")} (${tableId})`, `${text("removedTable")} (${tableId})`))}
           </FieldGroup>
           {formError && <FieldError role="alert">{formError}</FieldError>}
-          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length && !input.documentPermissions?.length && !input.blogPermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : text("create")}</Button></div>
         </form>}
       </DialogContent>
     </Dialog>

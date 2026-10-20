@@ -82,16 +82,13 @@ export const DOCUMENT_SCHEMAS = {
   createDocument: z.strictObject({ ...scope, ...write, content: documentContentSchema }),
   replaceDocument: z.strictObject({ ...scope, ...write, expectedVersion: z.number().int().nonnegative(), content: documentContentSchema }),
   renderDocument: z.strictObject(scope),
-  uploadDocumentImage: z.strictObject({ ...scope, ...write, expectedVersion: version, name: z.string().min(1).max(255), mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]), base64: z.string().min(4).max(Math.ceil(DOCUMENT_LIMITS.imageBytes / 3) * 4).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }),
+  uploadDocumentImage: z.strictObject({ ...scope, ...write, expectedVersion: z.number().int().nonnegative(), name: z.string().min(1).max(255), mimeType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]), base64: z.string().min(4).max(Math.ceil(DOCUMENT_LIMITS.imageBytes / 3) * 4).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }),
   getDocumentImage: z.strictObject({ ...scope, fileId: z.uuid() }),
 } as const;
 export const DOCUMENT_COMMANDS = ["getDocument", "createDocument", "replaceDocument", "renderDocument", "uploadDocumentImage", "getDocumentImage"] as const;
 export type DocumentCommand = typeof DOCUMENT_COMMANDS[number];
 export const DOCUMENT_READ_COMMANDS: readonly DocumentCommand[] = ["getDocument", "renderDocument", "getDocumentImage"];
 export type DocumentCommands = { [K in DocumentCommand]: z.input<typeof DOCUMENT_SCHEMAS[K]> };
-// Legacy history flags remain parseable for persisted API Keys; no command consumes them.
-export const documentPermissionSchema = z.strictObject({ tableId: z.uuid(), canRead: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canReadHistory: z.boolean().default(false), canRestore: z.boolean().default(false), canUpload: z.boolean() }).refine(v => v.canRead || v.canCreate || v.canUpdate || v.canReadHistory || v.canRestore || v.canUpload);
-export type DocumentPermission = z.infer<typeof documentPermissionSchema>;
 export type DocumentReceipt = { id: string; version: number; schemaVersion: 1; tableId: string; rowId: string };
 export type RecordDocument = DocumentReceipt & { content: DocumentContent; updatedAt: string };
 export type DocumentImage = { fileId: string; name: string; mimeType: string; size: number };
@@ -100,14 +97,6 @@ export type DocumentResults = {
   createDocument: DocumentReceipt;
   replaceDocument: DocumentReceipt;
   renderDocument: { html: string; assets: DocumentImage[]; version: number; schemaVersion: 1 };
-  uploadDocumentImage: DocumentImage;
+  uploadDocumentImage: DocumentImage & { bodyVersion: number };
   getDocumentImage: DocumentImage & { base64: string };
 };
-export const DOCUMENT_TOOLS = {
-  get_document: { command: "getDocument", description: "按tableId和rowId按需读取独立正文（不存在为null），不通过query_rows读取全文。" },
-  create_document: { command: "createDocument", description: "为记录创建唯一正文；schemaVersion=1，受限Tiptap JSON（含underline、textStyle.color/ highlight.color六位hex、paragraph/heading的textAlign:left/center/right/justify或null）。最多64KiB/4000节点/12层/20图片。带幂等key，仅返回版本回执，不隐含读取权限。" },
-  replace_document: { command: "replaceDocument", description: "以expectedVersion整篇替换正文；0仅在不存在时创建（另需canCreate）；409时保留草稿并重新读取，绝不覆盖。未知节点/属性及危险链接拒绝。" },
-  render_document: { command: "renderDocument", description: "读取当前正文的安全静态HTML与私有图片清单。相对document-assets路径需获权读取图片后解析，不能公开私有下载凭证。" },
-  upload_document_image: { command: "uploadDocumentImage", description: "上传正文专属PNG/JPEG/WebP/GIF，base64不含data前缀；单图5MiB、每正文累计40文件/50MiB。需正文版本、幂等key和上传权。返回稳定fileId，无登录token。" },
-  get_document_image: { command: "getDocumentImage", description: "按当前正文归属读取私有图片base64，不开放全局文件目录。需正文读取权。" },
-} as const satisfies Record<string, { command: DocumentCommand; description: string }>;

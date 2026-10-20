@@ -1,3 +1,4 @@
+import { sites } from "./sites-schema.js";
 import { workspaces, workspaceColumn } from "./workspaces-schema.js";
 export { workspaces } from "./workspaces-schema.js";
 import { user, session, account, verification, organization, member, invitation, userApiKeys } from "@tabdo/auth/schema";
@@ -189,7 +190,7 @@ export const reports = pgTable("reports", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [index("reports_org_created_idx").on(t.organizationId, t.createdAt), index("reports_workspace_created_idx").on(t.workspaceId, t.createdAt)]);
 
-export const VIEW_TYPES = ["grid", "board", "form", "calendar"] as const;
+export const VIEW_TYPES = ["grid", "board", "form", "calendar", "site"] as const;
 export type ViewType = (typeof VIEW_TYPES)[number];
 
 export type FormFieldConfigJson = {
@@ -230,6 +231,7 @@ export const tableViews = pgTable(
     tableId: uuid("table_id")
       .notNull()
       .references(() => tables.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id").references(() => sites.id, { onDelete: "restrict" }),
     type: text("type").notNull(),
     name: text("name").notNull(),
     config: jsonb("config").$type<ViewConfigJson>().default({}).notNull(),
@@ -239,6 +241,7 @@ export const tableViews = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
+    uniqueIndex("table_views_site_idx").on(t.siteId),
     uniqueIndex("table_views_one_default_idx").on(t.tableId).where(sql`${t.isDefault} = true`),
     index("table_views_table_idx").on(t.tableId, t.sortOrder),
     index("table_views_table_type_idx").on(t.tableId, t.type),

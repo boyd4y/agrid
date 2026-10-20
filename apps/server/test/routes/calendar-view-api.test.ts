@@ -81,18 +81,16 @@ test("native configuration/query and real MCP HTTP use the same scoped record pr
   const result = await invoke("query_calendar_view", { viewId: native.id, ...range });
   assert.equal(result.items[0].rowId, rowId);
   // Shared entry-point merges must retain all five read surfaces and their grants.
-  await commands.createDocument(deps, { ...scope, actorId: uid, tableId, rowId, content: EMPTY_DOCUMENT, idempotencyKey: randomUUID() });
+  await commands.updateCells(deps, { ...scope, actorId: uid, rowId, body: { content: EMPTY_DOCUMENT, expectedVersion: 0 }, idempotencyKey: randomUUID() });
   const calendar = await commands.createCalendar(deps, { ...scope, actorId: uid, name: "Coexisting calendar", timeZone: "UTC", idempotencyKey: randomUUID() });
   const mixed = await createSiteKey(deps, actor, { name: "Combined reads",
     permissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canDelete: false }],
-    documentPermissions: [{ tableId, canRead: true, canCreate: false, canUpdate: false, canReadHistory: false, canRestore: false, canUpload: false }],
-    blogPermissions: [{ tableId, canRead: true, canConfigure: false, canBuild: false, canPublish: false, canRestore: false }],
     calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, canSubscribe: true, canReadDeliveries: true, canManageSubscriptions: false }],
   });
   const sdk = createClient({ url: "http://fixture.test", key: mixed.secret, fetch: async (url, options) => app.request(String(url), options) });
   assert.equal((await sdk.queryCalendarView({ viewId, ...range })).items[0].rowId, rowId);
-  assert.deepEqual((await sdk.documents.getDocument({ tableId, rowId }))!.content, EMPTY_DOCUMENT);
-  assert((await sdk.blogs.getBlogSources({ tableId })).items.some(item => item.rowId === rowId));
+  assert.deepEqual((await sdk.table(tableId).get(rowId, { includeBody: true }))!.body!.content, EMPTY_DOCUMENT);
+  assert((await sdk.table(tableId).list()).rows.some(item => item.id === rowId));
   assert.equal((await sdk.calendar.getCalendar({ calendarId: calendar.id })).id, calendar.id);
   const subscription = await sdk.calendar.createCalendarSubscription({ calendarId: calendar.id, name: "Coexisting subscription", endpoint: "https://receiver.example.test/read-matrix", eventTypes: ["booking.created"], idempotencyKey: randomUUID() });
   assert(subscription.secret);

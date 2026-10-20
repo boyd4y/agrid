@@ -1,6 +1,4 @@
 import type { CreateCalendarViewInput, UpdateCalendarViewInput, QueryCalendarViewInput, CalendarViewResult } from "./calendar-view.js";
-import { BLOG_COMMANDS, type BlogCommands, type BlogResults } from "./blogs.js";
-import { DOCUMENT_COMMANDS, type DocumentCommands, type DocumentResults } from "./documents.js";
 import { CALENDAR_COMMANDS, type CalendarCommands, type CalendarResults } from "./calendar.js";
 import type { SiteCommands, SiteResults } from "./sites.js";
 import type { BatchAddColumnsInput, BatchUpdateColumnsInput, BatchDeleteColumnsInput, BatchColumnsResult, BatchDeleteColumnsResult } from "./batch-columns.js";
@@ -44,8 +42,7 @@ import type {
 /** Shared command names — UI and Agent tools both map here */
 export const COMMANDS = [
   ...CALENDAR_COMMANDS,
-  ...DOCUMENT_COMMANDS,
-  ...BLOG_COMMANDS,
+  "createView", "updateView", "uploadRowAttachment", "getRowAttachment",
   "getWorkspace", "listWorkspaces", "createWorkspace", "listMembers",
   "listSites", "getSite", "saveSite", "restoreSiteRevision", "publishSite", "unpublishSite", "deleteSite",
   "batchAddColumns", "batchUpdateColumns", "batchDeleteColumns", "batchSetRelations", "batchAddRelations", "batchRemoveRelations",
@@ -112,12 +109,16 @@ export type UpdateCellInput = {
 };
 export type UpdateCellsInput = {
   rowId: string;
-  cells: Record<string, CellValue>;
+  cells?: Record<string, CellValue>;
+  body?: import("./row-body.js").RowBodyWrite;
+  idempotencyKey?: string;
   expectedVersion?: number;
   skipAutomation?: boolean;
 };
 export type AddRowInput = {
   tableId: string;
+  body?: import("./row-body.js").RowBodyCreate;
+  idempotencyKey?: string;
   cells?: Record<string, CellValue>;
   skipAutomation?: boolean;
 };
@@ -171,7 +172,7 @@ export type ReorderColumnsInput = {
 
 export type Workspace = { id: string; organizationId: string; name: string; isDefault: boolean; createdAt: string | Date };
 
-export type CommandInputMap = BlogCommands & DocumentCommands & CalendarCommands & SiteCommands & RelationCommands & {
+export type CommandInputMap = import("./row-body.js").RowAttachmentCommands & CalendarCommands & SiteCommands & RelationCommands & {
   listWorkspaces: Record<string, never>;
   createWorkspace: { name: string };
   batchAddColumns: BatchAddColumnsInput;
@@ -201,6 +202,8 @@ export type CommandInputMap = BlogCommands & DocumentCommands & CalendarCommands
   updateAutomation: UpdateAutomationInput;
   deleteAutomation: DeleteAutomationInput;
   listAutomationRuns: ListAutomationRunsInput;
+  createView: import("./views.js").CreateViewInput;
+  updateView: import("./views.js").UpdateViewInput;
   listViews: ListViewsInput;
   getView: GetViewInput;
   deleteView: DeleteViewInput;
@@ -225,7 +228,7 @@ export type CommandInputMap = BlogCommands & DocumentCommands & CalendarCommands
   setFormChrome: SetFormChromeInput;
 };
 
-export type CommandResultMap = BlogResults & DocumentResults & CalendarResults & SiteResults & RelationResults & {
+export type CommandResultMap = import("./row-body.js").RowAttachmentResults & CalendarResults & SiteResults & RelationResults & {
   listWorkspaces: Workspace[];
   createWorkspace: Workspace;
   batchAddColumns: BatchColumnsResult;
@@ -255,6 +258,8 @@ export type CommandResultMap = BlogResults & DocumentResults & CalendarResults &
   updateAutomation: AutomationRule;
   deleteAutomation: { ok: true };
   listAutomationRuns: AutomationRun[];
+  createView: TableView;
+  updateView: TableView;
   listViews: TableView[];
   getView: TableView | ResolvedFormView;
   deleteView: { ok: true };
