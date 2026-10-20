@@ -7,9 +7,18 @@ import { DocsMobileNav, DocsSidebar } from "./DocsSidebar";
 import { DocsContent } from "./DocsContent";
 import { SeoHead } from "@/components/seo/SeoHead";
 
+const retiredDocRoutes: Record<string, string> = {
+  "record-documents": "/docs/tables",
+  "document-api": "/docs/rest",
+  blogging: "/docs/views",
+  "blog-api": "/docs/sites",
+};
+
 export function DocsArticlePage() {
   const { t, i18n } = useTranslation("docs");
   const { slug } = useParams();
+  const redirect = slug && Object.hasOwn(retiredDocRoutes, slug) ? retiredDocRoutes[slug] : undefined;
+  if (redirect) return <Navigate to={redirect} replace />;
   const pages = listDocsPages(i18n.language);
   const page = slug ? getDoc(slug, i18n.language) : undefined;
   if (!page) return <Navigate to="/docs" replace />;
