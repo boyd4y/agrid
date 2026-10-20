@@ -15,21 +15,37 @@ also serves the built React app. PostgreSQL and private S3 storage remain on Neo
 - The deployed services set `NODE_ENV=production`, `TABDO_ENV=production`,
   `AUTH_REQUIRED=true`, and `QUEUE_PREFIX=tabdo-production`.
 
-## First deployment
+## Release ownership and one-time setup
 
-1. Run `railway login`, then inspect `railway list` and link the intended project
-   and production environment with `railway link`.
-2. Set production secrets on **both** application services before starting them.
-   Use `railway variable set KEY --stdin --service api --skip-deploys` (and worker)
-   to avoid putting secret values in shell history. Never print variable-list JSON.
-3. Review `railway config plan`, then apply the reviewed configuration. Existing
-   resources must be retained; do not confirm deletion of unrelated services.
-4. Deploy current source from the repository root with `railway up --service api`
-   and `railway up --service worker`. Alternatively, push the reviewed version to
-   the configured GitHub branch for automatic deployment.
-5. Create an API domain with `railway domain --service api`. Set `APP_URL`,
-   `BETTER_AUTH_URL`, and optionally `WEBHOOK_PUBLIC_URL` to its HTTPS origin on
-   both services, then redeploy. The worker needs no public domain.
+Production application deployments are owned by the confirmed-version-tag release
+workflow. Do not deploy application source with `railway up`, apply this source
+configuration to production, or rely on a GitHub `master` autodeploy. An
+administrator must disable the existing `master` autodeploy for both application
+services and image auto updates once, clear their old migration pre-deploy hook,
+configure the GitHub `tabdo / production` Environment, verify the Neon and
+Railway targets, and enable the repository bootstrap guard only after those
+checks pass. Applying `.railway/railway.ts` does not perform these remote changes.
+See [the release guide](../docs/releases.md) for the exact
+secrets, variables and confirmation flow. The remote release path is not active
+until that setup is completed.
+
+The administrator must verify that `ghcr.io/boyd4y/agrid` exists and is publicly
+pullable on the current Railway Hobby plan. Its existence and visibility have not
+been verified. If it does not exist, create it with a one-time image push from a
+confirmed source commit as described in [the release guide](../docs/releases.md);
+keep `RELEASE_BOOTSTRAP_READY=false` and do not create a release tag during this
+initialization. The release workflow checks anonymous digest access before
+changing service image sources. API and worker must receive the same immutable
+image digest. Do not put secrets or production configuration in the image.
+
+Create active GitHub tag rulesets for `v*`: allow only designated release
+maintainers to create tags, and configure a separate update/deletion rule with no
+bypass actors so existing release tags cannot be rebound or deleted. If an
+emergency exception is needed, require an administrator to change the rules
+deliberately and retain an audit trail. GitHub Environment required reviewers can
+be enabled as optional additional protection. The confirmed and pushed `vX.Y.Z`
+tag is the normal release approval; do not require a duplicate approval by
+default.
 
 Shared production variables:
 

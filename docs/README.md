@@ -37,6 +37,7 @@
 
 - [本地 Node 部署](local-node.md)：同源前端/API、独立 worker、隔离基础服务与实际流程检查。
 - [Railway 部署](railway.md)：API、worker、PostgreSQL、Redis、S3 与远程 Agent Sandbox。
+- [生产发布](releases.md)：确认版本 tag、一次性启用、自动发布与失败恢复。
 - [贡献指南](../AGENTS.md)：目录结构、命令与提交约定。
 - [测试指南](testing.md)：单元、集成、队列与浏览器回归，以及隔离环境。
 - [shadcn CLI](shadcn-cli.md)：多包工作区的组件命令。
