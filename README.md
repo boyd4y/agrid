@@ -63,7 +63,7 @@ React + Vite + **shadcn/ui** 前端，Hono + Drizzle + PostgreSQL 后端。
 本地使用 `pnpm dev` 启动 Vite、Node API 和后台 worker；线上使用 Railway 的同一套 Node 服务，保留 PostgreSQL 与 Redis/BullMQ。智能体沿用官方 Vercel Harness SDK，不引入 Sandbox Agent/ACP 执行层。详见[架构说明](docs/architecture/node-harness.md)。
 
 使用构建后的前端、Node API 和后台 worker 在本机同源运行，见 [本地 Node 部署](docs/local-node.md)。
-项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`、`apps/mcp`，公共契约位于 `packages/shared`，共享界面位于 `packages/ui`（`@tabdo/ui`，含独立 Storybook）。包之间通过 `workspace:*` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
+项目使用 pnpm workspace：应用位于 `apps/client`、`apps/server`，公共契约位于 `packages/shared`，共享界面位于 `packages/ui`（`@tabdo/ui`，含独立 Storybook）。包之间通过 `workspace:*` 引用。根目录 `pnpm dev` 先构建 shared，再并行启动应用；应用启动不重复清理 shared 的编译产物。
 
 ```bash
 cd /workspace/tabdo
@@ -143,15 +143,9 @@ pnpm db:smoke:perf          # 验证 cursor / filter / kanban window / 单格 pa
 ## 文档 · MCP · Skill（人机同源）
 
 - **公开文档**：http://localhost:5173/docs — 概念、命令层 API、MCP、Skill（Marketing 顶栏「文档」）
-- **MCP 包**：[`apps/mcp/`](./apps/mcp) → `@tabdo/mcp`，tools 与 `COMMANDS` 1:1，经 `POST /api/commands`
+- **远程 MCP**：`https://tabdo.dev/mcp`，使用支持 Streamable HTTP 的客户端并在 `Authorization` 请求头中配置 Bearer API Key；见[公开 MCP 指南](http://localhost:5173/docs/mcp)
 - **开发工具 Skill 适配**：[Grok / Claude / Codex](./docs/contributor-skills.md)
 - **Agent Skill**：[`skills/table-ops/SKILL.md`](./.agents/skills/table-ops/SKILL.md)
-
-```bash
-# MCP（需 API 在跑；Agent key 可选）
-TABDO_API_URL=http://localhost:3001 TABDO_API_KEY=agt_… \
-  pnpm --filter @tabdo/mcp start
-```
 
 工作台 `/app` **不含博客**；博客仅公开站。
 
@@ -192,7 +186,7 @@ TABDO_API_URL=http://localhost:3001 TABDO_API_KEY=agt_… \
 # 使用已有 PostgreSQL 时无需重新创建它
 docker compose up -d redis
 pnpm db:migrate
-pnpm dev                 # API + 一个后台 automation 进程、client、MCP
+pnpm dev                 # API + 一个后台 automation 进程、client
 # 仅已有 API 进程需要补启 worker 时：
 pnpm dev:queue
 pnpm --filter @tabdo/server queue:status
@@ -206,7 +200,7 @@ Compose 样例见 `docker-compose.workers.yml`；生产 Redis 使用专用持久
 
 关联与汇总已实现，详见 [关联与汇总](docs/table-relations.md)。新增迁移 `0012_table_relations`，本地执行 `pnpm db:migrate`。
 
-Workspace 包统一为 `@tabdo/client`、`@tabdo/server`、`@tabdo/shared`、`@tabdo/mcp`；根包名称为 `tabdo`。
+Workspace 包统一为 `@tabdo/client`、`@tabdo/server`、`@tabdo/shared`；根包名称为 `tabdo`。
 
 ### 轻站点接入
 

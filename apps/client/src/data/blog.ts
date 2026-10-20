@@ -44,7 +44,7 @@ export const blogPosts: BlogPost[] = [
     coverImage: "/blog-covers/same-command-layer.svg",
     body: [
       "Most “AI-native” products bolt a chatbot onto a human UI. The agent then scrapes DOM, invents REST shapes, or gets a narrow sidecar API that drifts.",
-      "tabdo does the opposite. Every mutation — updateCell, addRow, setStatus — is a named command. The React table, assistant-ui tools, @tabdo/mcp, and agt_ keys are shells over that list.",
+      "tabdo does the opposite. Every mutation — updateCell, addRow, setStatus — is a named command. The table interface, built-in AI tools, remote MCP connection, and API keys use that same command surface.",
       "That means an agent cannot do something a human cannot authorize, and a human cannot do something the agent cannot call. Docs for both audiences describe one surface.",
     ],
   },
@@ -120,7 +120,7 @@ export const blogPosts: BlogPost[] = [
     slug: "mcp-five-minutes",
     title: "How-to: Wire tabdo MCP in Five Minutes",
     excerpt:
-      "Create an agent member, drop the key into Cursor, list tables, and move a board card.",
+      "Connect a compatible MCP client to tabdo over HTTPS with a scoped API key.",
     date: "2026-09-01",
     author: "tabdo Team",
     category: "How-to",
@@ -128,8 +128,8 @@ export const blogPosts: BlogPost[] = [
     cover: "mcp-five-minutes",
     coverImage: "/blog-covers/mcp-five-minutes.svg",
     body: [
-      "In Members, create an Agent and copy the one-time agt_ key.",
-      "Add the @tabdo/mcp server to your MCP config with TABDO_API_URL and TABDO_API_KEY.",
+      "In tabdo, open Settings → API Key and create a key with the access your integration needs. Copy it when it is shown and keep it private.",
+      "In an MCP client that supports remote HTTP servers and custom headers, add https://tabdo.dev/mcp and set Authorization to Bearer followed by the key. No local process is needed.",
       "Ask the agent: list tables → get_table → query_rows → set_status. That is the whole happy path.",
     ],
   },

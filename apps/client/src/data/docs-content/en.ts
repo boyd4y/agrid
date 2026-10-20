@@ -111,8 +111,37 @@ export const docsPages: DocsPage[] = [
         items: [
           { title: "Choose a model and run mode", description: "Review available options and what to do if one is unavailable.", href: "/docs/harness", badge: "Reference" },
           { title: "Workspace members", description: "Learn about role permissions and inviting members.", href: "/docs/members", badge: "Members" },
+          { title: "Connect an AI client with MCP", description: "Connect securely to the remote MCP endpoint with an API key.", href: "/docs/mcp", badge: "MCP" },
         ],
       },
+    ],
+  },
+  {
+    slug: "mcp",
+    sectionId: "agents",
+    title: "Connect an AI client with MCP",
+    description: "Connect a remote MCP client to tabdo over HTTPS with a scoped API key.",
+    body: [
+      { type: "p", text: "Connect an MCP client to tabdo without installing or running a local service. The remote endpoint is https://tabdo.dev/mcp and uses Streamable HTTP. Every request must include an API key in the Authorization header." },
+      { type: "h2", text: "Create and protect an API key" },
+      { type: "ol", items: [
+        "In tabdo, open Settings → API Key and create a key with only the permissions your integration needs. A workspace owner or admin can manage keys.",
+        "Copy the key when it is shown and keep it in your MCP client's secure settings. The full key is shown once; do not put it in a shared file, browser code, or a public repository.",
+        "In your MCP client, add a remote HTTP server at https://tabdo.dev/mcp and set the Authorization header to Bearer followed by your key.",
+      ] },
+      { type: "code", lang: "json", code: `{"mcpServers":{"tabdo":{"type":"http","url":"https://tabdo.dev/mcp","headers":{"Authorization":"Bearer tab_replace_with_your_key"}}}}` },
+      { type: "p", text: "This example uses a placeholder; exact configuration fields vary by client. In Claude, open Settings → Connectors → Add custom connector, enter the URL, and add the Authorization request header. See https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp for Claude's current steps. A client's “No sign in” setting means no OAuth login flow; this endpoint still requires the Bearer key." },
+      { type: "h2", text: "Choose a key that matches the work" },
+      { type: "p", text: "The connection exposes tools for table and record access, views, relations, automations, calendars, documents, and blogs. The available tool list does not mean every key can run every tool. A tab_ data key is limited by its configured resource grants; for example, it cannot manage workspace members or create tables and columns. Some member- or schema-level commands require an agt_ agent key and its workspace permissions. Grant only what the integration needs." },
+      { type: "p", text: "For legacy agt_ agent keys, an optional X-Workspace-Id header selects a workspace the agent can access. A tab_ key follows its existing resource grants across workspaces; if you send X-Workspace-Id, it must belong to the key's organization. Leave the header out unless your client needs a workspace selector." },
+      { type: "h2", text: "Troubleshoot a connection" },
+      { type: "table", headers: ["Result", "What to check"], rows: [
+        ["401 Unauthorized", "Add Authorization: Bearer <API key>; check that the key is current and has not been revoked."],
+        ["403 Forbidden", "The key lacks access to the requested resource, or the selected workspace is outside its organization."],
+        ["Tool returns an error", "Check the key's resource permissions and the inputs required by that tool."],
+        ["Client asks for OAuth", "OAuth is not provided by this endpoint. Use a client that supports remote HTTP MCP with a static Authorization header."],
+      ] },
+      { type: "callout", tone: "info", text: "The endpoint uses stateless Streamable HTTP. It does not require a local process or OAuth sign-in. Keep the key private and revoke it in Settings → API Key if it is exposed." },
     ],
   },
   {

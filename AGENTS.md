@@ -6,7 +6,7 @@ This pnpm workspace contains:
 
 - `apps/client`: React, Vite, and TypeScript UI; assets in `public/`, translations in `src/i18n/locales/`.
 - `apps/server`: Hono API, business operations in `src/commands/`, harness adapters, and BullMQ workers. PostgreSQL migrations live in `drizzle/`; bundled skills live in `skills/`.
-- `apps/mcp`: MCP server exposing authenticated platform commands.
+- Remote MCP is served by the platform at `/mcp`; there is no local stdio MCP app.
 - `packages/shared`: shared types and validation schemas.
 - `packages/ui`: shared shadcn components, theme tokens, and Storybook.
 
@@ -17,7 +17,7 @@ Tests live in each package’s `test/` directory. Guides live in `docs/`.
 Run with pnpm 9.15.0:
 
 - `pnpm install`: install workspace dependencies.
-- `pnpm dev`: build shared contracts and start client, server, worker, and MCP development processes.
+- `pnpm dev`: build shared contracts and start client, server, and worker development processes.
 - `pnpm build`: build workspace packages.
 - `pnpm typecheck` and `pnpm typecheck:test`: validate application and test types.
 - `pnpm test`: run package tests; server integration tests require an isolated database.

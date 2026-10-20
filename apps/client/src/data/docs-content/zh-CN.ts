@@ -111,8 +111,37 @@ export const docsPages: DocsPage[] = [
         items: [
           { title: "选择模型与运行方式", description: "查看可用选项和不可用时的处理方法。", href: "/docs/harness", badge: "参考" },
           { title: "工作区成员", description: "查看角色权限与邀请成员的步骤。", href: "/docs/members", badge: "成员" },
+          { title: "通过 MCP 连接 AI 客户端", description: "使用 API Key 安全连接远程 MCP 端点。", href: "/docs/mcp", badge: "MCP" },
         ],
       },
+    ],
+  },
+  {
+    slug: "mcp",
+    sectionId: "agents",
+    title: "通过 MCP 连接 AI 客户端",
+    description: "使用受限 API Key，通过 HTTPS 将远程 MCP 客户端连接到 tabdo。",
+    body: [
+      { type: "p", text: "连接 MCP 客户端时无需安装或运行本地服务。远程端点为 https://tabdo.dev/mcp，使用 Streamable HTTP。每个请求都必须在 Authorization 请求头中携带 API Key。" },
+      { type: "h2", text: "创建并妥善保管 API Key" },
+      { type: "ol", items: [
+        "在 tabdo 中打开「设置 → API Key」，创建权限范围符合集成需要的 Key。只有工作区 owner 或 admin 可以管理 Key。",
+        "Key 显示时立即复制，并保存在 MCP 客户端的安全设置中。完整 Key 只显示一次；不要放入共享文件、浏览器代码或公开仓库。",
+        "在 MCP 客户端中添加远程 HTTP 服务 https://tabdo.dev/mcp，并将 Authorization 请求头设为 Bearer 加上你的 Key。",
+      ] },
+      { type: "code", lang: "json", code: `{"mcpServers":{"tabdo":{"type":"http","url":"https://tabdo.dev/mcp","headers":{"Authorization":"Bearer tab_replace_with_your_key"}}}}` },
+      { type: "p", text: "示例中的 Key 是占位值，不同客户端的配置字段可能不同。在 Claude 中，打开 Settings → Connectors → Add custom connector，填写 URL 并添加 Authorization 请求头。Claude 的具体步骤见 https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp。客户端中的「无需登录」仅表示不走 OAuth 登录流程；此端点仍要求 Bearer Key。" },
+      { type: "h2", text: "按任务选择 Key" },
+      { type: "p", text: "连接提供表格与记录、视图、关联、自动化、日历、正文和博客等工具。工具列表不表示每种 Key 都能调用全部工具。tab_ 数据 Key 受其配置的资源权限限制，例如不能管理工作区成员，也不能创建表或字段。部分成员或表结构级命令需要 agt_ 智能体 Key 和相应工作区权限。只授予集成所需的权限。" },
+      { type: "p", text: "旧版 agt_ 智能体 Key 可选用 X-Workspace-Id 请求头选择智能体有权访问的工作区。tab_ Key 按已有资源授权访问不同工作区；如果发送 X-Workspace-Id，该工作区必须属于此 Key 所属组织。不需要选择工作区时可省略该请求头。" },
+      { type: "h2", text: "连接问题排查" },
+      { type: "table", headers: ["结果", "检查方式"], rows: [
+        ["401 Unauthorized", "添加 Authorization: Bearer <API Key>；检查 Key 是否有效且未被撤销。"],
+        ["403 Forbidden", "Key 没有目标资源的权限，或所选工作区不属于其组织。"],
+        ["工具返回错误", "检查 Key 的资源权限和该工具要求的输入。"],
+        ["客户端要求 OAuth", "此端点不提供 OAuth。请使用支持远程 HTTP MCP 与静态 Authorization 请求头的客户端。"],
+      ] },
+      { type: "callout", tone: "info", text: "端点使用无状态 Streamable HTTP，无需本地进程或 OAuth 登录。请妥善保管 Key；如果 Key 泄露，请在「设置 → API Key」中撤销。" },
     ],
   },
   {

@@ -13,9 +13,9 @@ read or mutate workspace tables.
 
 ## Preferred surfaces
 
-1. **MCP** (`@tabdo/mcp`) — tools named `list_tables`, `get_table`, `query_rows`, …
+1. **Remote MCP** — connect to `https://tabdo.dev/mcp` using Streamable HTTP and an `Authorization: Bearer <API key>` request header. No local process is required.
 2. **HTTP** — `POST {TABDO_API_URL}/api/commands` with body `{ "command", "input" }`
-3. Auth: session cookie (human) **or** `Authorization: Bearer agt_…` (agent)
+3. MCP requires a Bearer API key. A `tab_` data key can use only its configured resource grants; it cannot run member- or schema-only commands. Some commands require an `agt_` agent key and its workspace permissions. Do not assume every listed MCP tool is available to every key.
 
 Never invent a second write path. REST routes under `/api/tables` call the same
 server commands.
@@ -66,19 +66,17 @@ curl -s "$TABDO_API_URL/api/commands" \
   -d '{"command":"queryRows","input":{"tableId":"…","limit":50}}'
 ```
 
-## Example (MCP env)
+## Example (remote MCP)
 
-```
-TABDO_API_URL=http://localhost:3001
-TABDO_API_KEY=agt_…
+```json
+{"mcpServers":{"tabdo":{"type":"http","url":"https://tabdo.dev/mcp","headers":{"Authorization":"Bearer tab_replace_with_your_key"}}}}
 ```
 
-Run: `pnpm --filter @tabdo/mcp start` from the monorepo root.
+For legacy `agt_` keys, add `X-Workspace-Id` only when you need to select a workspace the agent can access. A `tab_` key follows its existing resource grants across workspaces; any supplied workspace selector must belong to that key's organization. OAuth is not supported by this endpoint; use an MCP client that accepts a static Authorization header.
 
 ## Docs
 
-Public site: `/docs` (no login). Start at `/docs/introduction`, API at
-`/docs/commands`, MCP at `/docs/mcp`.
+Public site: `/docs` (no login). See [remote MCP connection guide](https://tabdo.dev/docs/mcp).
 
 ## 公式列
 
