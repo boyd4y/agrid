@@ -50,7 +50,9 @@ default.
 Shared production variables:
 
 - `DATABASE_URL`: Neon pooled connection; `DATABASE_URL_UNPOOLED`: direct endpoint
-  used by the API's pre-deploy migration command.
+  used to verify the production database target. The release workflow runs the
+  migrator separately in the release image with `RELEASE_DATABASE_URL`; Railway
+  application services must not have a pre-deploy migration hook.
 - `REDIS_URL`: the Railway Redis private reference, shared queue prefix.
 - `BETTER_AUTH_SECRET` and `INTEGRATION_ENCRYPTION_KEY`: stable independent secrets;
   never reuse development secrets or rotate an existing encryption key casually.

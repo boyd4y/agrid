@@ -18,17 +18,34 @@
 2. 在同一 Environment 中设置项目变量：`RAILWAY_PROJECT_ID`、`RAILWAY_ENVIRONMENT_ID`、`RAILWAY_API_SERVICE_ID`、`RAILWAY_WORKER_SERVICE_ID`、`NEON_PROJECT_ID`、`NEON_BRANCH_ID`、`RELEASE_PUBLIC_URL`。这些 ID 和 URL 必须指向预期的生产资源；公开地址必须是无路径、query、凭证的 HTTPS origin。管理员应核对两个 Railway 服务的 `DATABASE_URL` / `DATABASE_URL_UNPOOLED` 指向与 `RELEASE_DATABASE_URL` 相同的数据库，并确认 API `APP_URL` / `BETTER_AUTH_URL` 与 `RELEASE_PUBLIC_URL` 一致，`NODE_ENV=production`、`TABDO_ENV=production`、`AUTH_REQUIRED=true`、`QUEUE_PREFIX=tabdo-production`。ID 不能依赖开发者本机 Railway CLI 的 link 状态。
 3. 确认 GitHub Container Registry 中的 `ghcr.io/boyd4y/agrid` 包存在且设为公开。目前包是否存在、是否公开尚未核实。若包不存在，管理员可从已经确认的源码提交一次性构建并推送镜像；首次 push 会创建 GHCR 包。这个初始化只准备镜像，不会部署服务；在完成其余配置和验证前，`RELEASE_BOOTSTRAP_READY` 必须保持 `false`，不要创建生产版本 tag。
 
-   在已确认的源码提交上执行以下命令。先把 `SOURCE_COMMIT` 替换为该提交的完整 SHA。使用仅具备 `write:packages` 权限的 GitHub token；从密码管理器注入环境变量，不要把 token 写入命令行参数或 shell 历史。`bootstrap-sha-...` tag 专用于初始化，正常发布 workflow 使用另一个 `sha-...` tag；生产部署使用构建输出的 digest，不使用可变 tag。
+   在项目根目录的 Bash/Zsh 中执行以下命令。先把 `SOURCE_COMMIT` 替换为已确认、已合入 master 的完整 commit SHA。脚本以 `set -Eeuo pipefail` 遇错即停，在临时全新 clone 中核对 SHA、master 祖先关系和干净状态；任一检查、登录或 builder 创建失败都会在 push 前终止。Docker 凭证也写入临时隔离目录并在退出时清除。使用仅具备 `write:packages` 权限的 GitHub token；从密码管理器注入环境变量，不要把 token 写入命令行参数或 shell 历史。`bootstrap-sha-...` tag 专用于初始化，正常发布 workflow 使用另一个 `sha-...` tag；生产部署使用构建输出的 digest，不使用可变 tag。
 
    ```sh
-   git fetch origin master
+   set -Eeuo pipefail
+   BUILD_ROOT=$(mktemp -d "$PWD/.ghcr-bootstrap.XXXXXX")
+   BUILD_DIR="$BUILD_ROOT/source"
+   DOCKER_CONFIG="$BUILD_ROOT/docker"
+   export DOCKER_CONFIG
+   export BUILD_ROOT
+   cleanup() {
+     status=$?
+     trap - EXIT
+     docker logout ghcr.io >/dev/null 2>&1 || true
+     python3 -c 'import os, shutil; shutil.rmtree(os.environ["BUILD_ROOT"], ignore_errors=True)' || true
+     exit "$status"
+   }
+   trap cleanup EXIT
+   git clone https://github.com/boyd4y/agrid.git "$BUILD_DIR"
+   cd "$BUILD_DIR"
+   git fetch --no-tags origin +refs/heads/master:refs/remotes/origin/master
    SOURCE_COMMIT=replace-with-confirmed-commit-sha
+   [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+   git merge-base --is-ancestor "$SOURCE_COMMIT" refs/remotes/origin/master
    git switch --detach "$SOURCE_COMMIT"
    test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
-   git merge-base --is-ancestor "$SOURCE_COMMIT" origin/master
+   test -z "$(git status --porcelain --untracked-files=all)"
    SOURCE_SHA=$(git rev-parse HEAD)
    printf '%s' "$GHCR_WRITE_PACKAGES_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-   trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
    docker buildx create --use
    docker buildx build --platform linux/amd64 --provenance=false \
      --label "org.opencontainers.image.revision=$SOURCE_SHA" \
