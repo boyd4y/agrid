@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { requireRelease, ReleaseError, databaseIdentity } from "./guards.mjs";
 import { migrationPlan } from "./database.mjs";
-import { createNeon } from "./platforms.mjs";
+import { createNeon, poll } from "./neon.mjs";
 
 const execute = promisify(execFile);
 
@@ -14,14 +14,18 @@ export function predeployConfig(env) {
     const actual = env[`RAILWAY_${key === "API_SERVICE_ID" ? "SERVICE_ID" : key}`];
     requireRelease(expected && expected === actual, "predeploy_railway_target_mismatch");
   }
-  requireRelease(env.RAILWAY_DEPLOYMENT_ID && env.NODE_ENV === "production" && env.TABDO_ENV === "production", "predeploy_production_runtime_required");
   requireRelease(!env.MIGRATION_ALLOW_ORPHAN_DELETE && !env.MIGRATION_ORPHAN_ORG_ID, "special_migration_plan_required");
   requireRelease(env.NEON_API_KEY && [env.NEON_PROJECT_ID, env.NEON_BRANCH_ID].every(value => typeof value === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(value)), "predeploy_neon_config_required");
+  return { ...runtimeDatabase(env), neonProjectId: env.NEON_PROJECT_ID, neonBranchId: env.NEON_BRANCH_ID };
+}
+
+export function runtimeDatabase(env) {
+  requireRelease(env.RAILWAY_DEPLOYMENT_ID && env.NODE_ENV === "production" && env.TABDO_ENV === "production", "predeploy_production_runtime_required");
   let url;
   try { url = new URL(env.DATABASE_URL_UNPOOLED); } catch { throw new ReleaseError("direct_neon_database_required"); }
   requireRelease(["postgres:", "postgresql:"].includes(url.protocol) && url.hostname.endsWith(".neon.tech") && !url.hostname.includes("-pooler.") && url.pathname.length > 1 && url.searchParams.get("sslmode") === "require", "direct_neon_database_required");
   requireRelease(databaseIdentity(env.DATABASE_URL) === databaseIdentity(url.href), "database_target_mismatch");
-  return { databaseUrl: url.href, neonProjectId: env.NEON_PROJECT_ID, neonBranchId: env.NEON_BRANCH_ID };
+  return { databaseUrl: url.href };
 }
 
 export async function migrate(databaseUrl, run = execute) {
@@ -62,14 +66,35 @@ export async function runPredeploy({ env, ports, save = () => {} }) {
   return result;
 }
 
+export async function runWorkerWait({ env, migrationPlan: plan = migrationPlan, save = () => {}, pollOptions = {} }) {
+  const result = { status: "failed", stage: "wait_for_migrations" };
+  try {
+    const { databaseUrl } = runtimeDatabase(env);
+    // Native GitHub pushes deploy services independently. The worker only
+    // observes the existing ledger; the API alone owns backup and migration.
+    await poll(() => plan(databaseUrl), pending => pending.length === 0, { attempts: 216, ...pollOptions });
+    result.status = "success";
+    result.stage = "complete";
+  } catch (error) {
+    result.error = error instanceof ReleaseError ? error.code : "worker_schema_wait_failed_details_suppressed";
+  }
+  save(result);
+  return result;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const save = result => console.log(JSON.stringify({ releasePredeploy: result }));
   // A platform timeout also applies, but bound our entire process independently.
   const deadline = setTimeout(() => { save({ status: "failed", error: "predeploy_timeout_outcome_unknown" }); process.exit(1); }, 1080000);
   try {
-    const config = predeployConfig(process.env);
-    const ports = { ...createNeon(process.env, config), migrationPlan, migrate };
-    const result = await runPredeploy({ env: process.env, ports, save });
+    requireRelease(process.argv.length === 2 || (process.argv.length === 3 && process.argv[2] === "--wait"), "invalid_predeploy_mode");
+    let result;
+    if (process.argv[2] === "--wait") result = await runWorkerWait({ env: process.env, save });
+    else {
+      const config = predeployConfig(process.env);
+      const ports = { ...createNeon(process.env, config), migrationPlan, migrate };
+      result = await runPredeploy({ env: process.env, ports, save });
+    }
     if (result.status !== "success") process.exitCode = 1;
   } catch (error) {
     save({ status: "failed", error: error instanceof ReleaseError ? error.code : "predeploy_configuration_failed_details_suppressed" });

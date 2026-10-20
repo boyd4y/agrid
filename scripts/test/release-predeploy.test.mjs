@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { predeployConfig, runPredeploy, migrate } from "../release/predeploy.mjs";
-import { createNeon } from "../release/platforms.mjs";
+import { predeployConfig, runPredeploy, migrate, runWorkerWait } from "../release/predeploy.mjs";
+import { createNeon } from "../release/neon.mjs";
 
 const databaseUrl = "postgresql://owner:private@ep-demo.eu-central-1.aws.neon.tech/db?sslmode=require";
 const env = {
@@ -47,6 +47,34 @@ test("no pending migrations skips snapshot and migrator", async () => {
   const f = fixture({ pending: [] });
   assert.equal((await f.run()).status, "success");
   assert.deepEqual(f.calls, ["target", "plan"]);
+});
+
+test("worker waits read-only for API ledger without any Neon management configuration", async () => {
+  const workerEnv = { NODE_ENV: "production", TABDO_ENV: "production", RAILWAY_DEPLOYMENT_ID: "worker-deployment", DATABASE_URL: env.DATABASE_URL, DATABASE_URL_UNPOOLED: databaseUrl };
+  for (const pending of [[], [["0034_safe"], ["0034_safe"], []]]) {
+    const values = pending.length ? pending : [[]];
+    let reads = 0;
+    const result = await runWorkerWait({ env: workerEnv, migrationPlan: async url => {
+      assert.equal(url, databaseUrl);
+      return values[reads++];
+    }, pollOptions: { attempts: 3, intervalMs: 0 } });
+    assert.equal(result.status, "success");
+    assert.equal(reads, values.length);
+  }
+});
+
+test("worker fails closed on pending timeout, database errors or nonproduction configuration", async () => {
+  for (const mode of ["pending", "database", "environment"]) {
+    let reads = 0;
+    const result = await runWorkerWait({ env: { ...env, ...(mode === "environment" ? { NODE_ENV: "development" } : {}) }, migrationPlan: async () => {
+      reads++;
+      if (mode === "database") throw new Error("private connection secret");
+      return ["0034_safe"];
+    }, pollOptions: { attempts: 2, intervalMs: 0 } });
+    assert.equal(result.status, "failed");
+    assert.doesNotMatch(JSON.stringify(result), /private|connection|secret/);
+    assert.equal(reads, mode === "pending" ? 2 : mode === "database" ? 1 : 0);
+  }
 });
 
 test("target, plan and backup failures block migration, all failures remain sanitized", async () => {
