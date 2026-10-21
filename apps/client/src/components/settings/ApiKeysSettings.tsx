@@ -9,17 +9,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Separator } from "@tabdo/ui/components/separator";
 import { Skeleton } from "@tabdo/ui/components/skeleton";
 import { Input } from "@tabdo/ui/components/input";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@tabdo/ui/components/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@tabdo/ui/components/tabs";
 import { Checkbox } from "@tabdo/ui/components/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@tabdo/ui/components/dialog";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSet, FieldLegend } from "@tabdo/ui/components/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldSet } from "@tabdo/ui/components/field";
+import { useWorkspace } from "@/context/WorkspaceContext";
+import { APP_NAVIGATION } from "@/components/shell/app-navigation";
+import { TableIcon } from "@/components/table/TableIcon";
+import { NiGrid } from "@/components/icons";
 import { DeleteConfirmation } from "@/components/controls/delete-confirmation";
 import { ListPagination } from "@/components/controls/list-pagination";
 import { useArrayPagination } from "@/hooks/useListPagination";
 import { ListErrorState } from "@/components/shell/ListErrorState";
 import { AppEmptyState } from "@/components/shell/AppEmptyState";
 import { NOTIOLY } from "@/components/illustrations/NotiolyImage";
-import { getTableAccess, groupPermissionResources, setTableAccess, summarizeKeyPermissions, tableOperations, type ApiKeyTable, type PermissionResource } from "@/components/settings/api-key-permissions";
+import { getTableAccess, groupPermissionResources, setTableAccess, summarizeKeyPermissions, summarizeWorkspaceGrants, tableOperations, type ApiKeyTable, type PermissionResource } from "@/components/settings/api-key-permissions";
 
 const blank = (): ApiKeyInput => ({ name: "", permissions: [], calendarPermissions: [], schedulePermissions: [], automationPermissions: [], workspacePermissions: [] });
 
@@ -27,6 +32,8 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
   const { t } = useTranslation(["app", "common"]);
   const text = (key: string, values?: Record<string, string | number>) => t(`settings.apiKeys.${key}`, values);
   const id = useId();
+  const { current: currentWorkspace } = useWorkspace();
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]), [tables, setTables] = useState<ApiKeyTable[]>([]);
   const [calendars, setCalendars] = useState<PermissionResource[]>([]);
   const [automations, setAutomations] = useState<PermissionResource[]>([]);
@@ -65,6 +72,7 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
 
   function edit(key?: ApiKeyInfo, name = "") {
     setInput(key ? { automationPermissions: (key.automationPermissions ?? []).map(p => ({ ...p })), workspacePermissions: (key.workspacePermissions ?? []).map(p => ({ ...p })), schedulePermissions: (key.schedulePermissions ?? []).map(p => ({ ...p })), name: key.name, permissions: key.permissions.map(p => ({ ...p })), calendarPermissions: (key.calendarPermissions ?? []).map(p => ({ ...p })) } : { ...blank(), name });
+    setSelectedWorkspaceId(groups.find(group => group.workspaceId === currentWorkspace.id)?.workspaceId ?? groups[0]?.workspaceId ?? "");
     setFormError(""); setEditor({ key });
   }
   function close() { if (busy.current) return; setEditor(null); setFormError(""); }
@@ -106,22 +114,26 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
     });
   }
   const groups = groupPermissionResources(tables, calendars, schedules, automations, workspaces);
+  const selectedGroup = groups.find(group => group.workspaceId === selectedWorkspaceId);
   const categories = ["tables", "automations", "calendars", "schedules"] as const;
+  const categoryIcons = { tables: APP_NAVIGATION.tables.icon, automations: APP_NAVIGATION.automations.icon, calendars: APP_NAVIGATION.calendar.icon, schedules: APP_NAVIGATION.schedules.icon };
   function resourceMatrix(category: typeof categories[number]) {
+    const group = selectedGroup;
+    if (!group) return null;
+    const ResourceIcon = categoryIcons[category];
     const operations = category === "tables" ? tableOperations : category === "calendars" ? calendarOperations : ["canRead", "canUpdate", "canDelete"] as const;
     const style = { gridTemplateColumns: `minmax(220px, 1fr) repeat(${operations.length}, minmax(${category === "calendars" ? 76 : 100}px, 1fr))` };
-    return <div className={category === "calendars" ? "min-w-[1040px]" : "min-w-[620px]"}>
+    return <div className={category === "calendars" ? "min-w-[1100px]" : "min-w-[620px]"}>
       <div className="sticky top-0 grid items-center gap-2 border-b bg-background px-3 py-3 text-xs text-muted-foreground" style={style} aria-hidden>
         <span>{text("resource")}</span>{operations.map(operation => <span className="text-center" key={operation}>{category === "calendars" ? t(`calendar:grants.${operation}`) : text(`operations.${operation}`)}</span>)}
       </div>
-      {groups.map(group => <FieldSet key={group.workspaceId} className="min-w-0 gap-0 border-b last:border-b-0" aria-label={group.name}>
-        <FieldLegend variant="label" className="mb-0 w-full truncate bg-muted/40 px-3 py-2" title={group.name}>{group.name}</FieldLegend>
+      <FieldSet key={group.workspaceId} className="min-w-0 gap-0" aria-label={group.name}>
         {(category === "automations" || category === "schedules") && <Field orientation="horizontal" className="min-h-11 px-3" data-disabled={saving}>
           <Checkbox id={`${id}-${category}-${group.workspaceId}-create`} disabled={saving} checked={input.workspacePermissions?.find(p => p.workspaceId === group.workspaceId)?.[category === "automations" ? "canCreateAutomations" : "canCreateSchedules"] ?? false} onCheckedChange={checked => toggleCreation(group.workspaceId, category === "automations" ? "canCreateAutomations" : "canCreateSchedules", checked === true)} />
           <FieldLabel htmlFor={`${id}-${category}-${group.workspaceId}-create`}>{text("createInWorkspace")}</FieldLabel>
         </Field>}
-        {group[category].length === 0 ? <p className="px-3 py-4 text-sm text-muted-foreground">{text("emptyResources")}</p> : group[category].map(resource => <div key={resource.id} className="grid min-h-12 items-center gap-2 border-t px-3 py-2" style={style} data-testid={`resource-access-${resource.id}`}>
-          <span className="truncate text-sm" title={resource.name}>{resource.name}</span>
+        {group[category].length === 0 ? <p role="status" className="px-3 py-4 text-sm text-muted-foreground">{text(`emptyCategories.${category}`)}</p> : group[category].map(resource => <div key={resource.id} className="grid min-h-12 items-center gap-2 border-t px-3 py-2" style={style} data-testid={`resource-access-${resource.id}`}>
+          <span className="flex min-w-0 items-center gap-2 text-sm" title={resource.name}><span aria-hidden className="shrink-0 text-muted-foreground [&_svg]:size-4">{category === "tables" ? <TableIcon name={(resource as ApiKeyTable).icon} /> : <ResourceIcon />}</span><span className="truncate">{resource.name}</span></span>
           {operations.map(operation => {
             const checked = category === "tables" ? getTableAccess(input, resource.id).access[operation as typeof tableOperations[number]] : category === "calendars" ? input.calendarPermissions?.find(p => p.calendarId === resource.id)?.[operation as typeof calendarOperations[number]] ?? false : input[category === "automations" ? "automationPermissions" : "schedulePermissions"]?.find(p => p.automationId === resource.id)?.[operation as "canRead" | "canUpdate" | "canDelete"] ?? false;
             const label = `${group.name} / ${resource.name} · ${category === "calendars" ? t(`calendar:grants.${operation}`) : text(`operations.${operation}`)}`;
@@ -135,7 +147,7 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
             </Field>;
           })}
         </div>)}
-      </FieldSet>)}
+      </FieldSet>
     </div>;
   }
   return <section className="flex min-w-0 flex-col gap-5" data-testid="api-keys-settings">
@@ -168,18 +180,31 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
         </div>{pagination.totalPages > 1 && <ListPagination page={pagination.page} hasNext={pagination.hasNext} totalPages={pagination.totalPages} onPageChange={pagination.setPage} />}</>}
     </section>
     <Dialog open={editor !== null} onOpenChange={open => { if (!open) close(); }}>
-      <DialogContent closeLabel={t("common:close")} className="flex max-h-[calc(100dvh-3rem)] flex-col overflow-hidden sm:max-w-[min(1180px,calc(100vw-4rem))]">
-        <DialogHeader><DialogTitle>{text(editor?.key ? "edit" : "create")}</DialogTitle><DialogDescription>{text("grantDescription")}</DialogDescription></DialogHeader>
+      <DialogContent closeLabel={t("common:close")} className="flex h-[min(800px,calc(100dvh-3rem))] flex-col overflow-hidden sm:max-w-[min(1180px,calc(100vw-4rem))]">
+        <DialogHeader className="shrink-0"><DialogTitle>{text(editor?.key ? "edit" : "create")}</DialogTitle><DialogDescription>{text("grantDescription")}</DialogDescription></DialogHeader>
         <form noValidate onSubmit={save} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <FieldGroup className="shrink-0">
             <Field><FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel><Input id={`${id}-name`} value={input.name} maxLength={100} autoComplete="off" disabled={saving} required onChange={event => setInput(current => ({ ...current, name: event.target.value }))} /></Field>
             <FieldDescription>{text("tablesHint")}</FieldDescription>
           </FieldGroup>
+          <Field className="w-96 max-w-full shrink-0">
+            <FieldLabel htmlFor={`${id}-workspace`}>{text("workspace")}</FieldLabel>
+            <Select value={selectedWorkspaceId} onValueChange={setSelectedWorkspaceId} disabled={saving}>
+              <SelectTrigger id={`${id}-workspace`} className="[&_svg]:size-4"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectGroup>{groups.map(group => {
+                const grants = summarizeWorkspaceGrants(input, group);
+                return <SelectItem key={group.workspaceId} value={group.workspaceId} textValue={group.name}>
+                  <NiGrid aria-hidden /><span className="min-w-0 flex-1 truncate" title={group.name}>{group.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{text("grantedResources", { count: grants.resourceCount })}{grants.canCreate && ` · ${text("creationGranted")}`}</span>
+                </SelectItem>;
+              })}</SelectGroup></SelectContent>
+            </Select>
+          </Field>
           <Tabs defaultValue="tables" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <TabsList className="shrink-0" aria-label={text("permissionTabs")}>
-              {categories.map(category => <TabsTrigger key={category} value={category}>{text(`categories.${category}`)}</TabsTrigger>)}
+            <TabsList className="shrink-0 self-start" aria-label={text("permissionTabs")}>
+              {categories.map(category => { const Icon = categoryIcons[category]; return <TabsTrigger key={category} value={category}><Icon aria-hidden />{text(`categories.${category}`)}</TabsTrigger>; })}
             </TabsList>
-            {categories.map(category => <TabsContent key={category} value={category} className="min-h-0 max-h-[48dvh] overflow-auto rounded-md border" data-testid={`permissions-${category}`}>{resourceMatrix(category)}</TabsContent>)}
+            {categories.map(category => <TabsContent key={`${category}-${selectedWorkspaceId}`} value={category} className="relative min-h-0 overflow-auto overscroll-contain rounded-md border" data-testid={`permissions-${category}`}>{resourceMatrix(category)}</TabsContent>)}
           </Tabs>
           <div className="flex shrink-0 flex-col gap-3 border-t pt-4">
             {formError && <FieldError role="alert">{formError}</FieldError>}

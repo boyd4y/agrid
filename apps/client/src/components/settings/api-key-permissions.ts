@@ -76,3 +76,12 @@ export function groupPermissionResources(tables: readonly ApiKeyTable[], calenda
   for (const group of groups.values()) counts.set(group.name, (counts.get(group.name) ?? 0) + 1);
   return [...groups.values()].map(group => ({ ...group, name: counts.get(group.name)! > 1 ? `${group.name} (${group.workspaceId})` : group.name }));
 }
+
+/** Summarize the whole workspace draft, independently of the visible category. */
+export function summarizeWorkspaceGrants(input: ApiKeyInput, group: ReturnType<typeof groupPermissionResources>[number]) {
+  const summary = summarizeKeyPermissions(input, group.tables, group.calendars, group.schedules, group.automations);
+  // Exclude targets outside this workspace, including unavailable resources.
+  const resourceCount = summary.tableCount + summary.calendarCount + summary.automationCount + summary.scheduleCount - summary.unavailableCount;
+  const canCreate = input.workspacePermissions?.some(grant => grant.workspaceId === group.workspaceId && (grant.canCreateAutomations || grant.canCreateSchedules)) ?? false;
+  return { resourceCount, canCreate };
+}
