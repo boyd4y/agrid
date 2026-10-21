@@ -1,0 +1,3 @@
+ALTER TABLE "api_key_calendars" DROP CONSTRAINT "api_key_calendars_capability";--> statement-breakpoint
+ALTER TABLE "api_key_calendars" ADD COLUMN "crud_permissions" jsonb;--> statement-breakpoint
+ALTER TABLE "api_key_calendars" ADD CONSTRAINT "api_key_calendars_capability" CHECK ("api_key_calendars"."crud_permissions" IS NOT NULL OR "api_key_calendars"."can_read" OR "api_key_calendars"."can_read_availability" OR "api_key_calendars"."can_create" OR "api_key_calendars"."can_update" OR "api_key_calendars"."can_cancel" OR "api_key_calendars"."can_manage" OR "api_key_calendars"."can_trigger_agent" OR "api_key_calendars"."can_subscribe" OR "api_key_calendars"."can_read_deliveries" OR "api_key_calendars"."can_manage_subscriptions");

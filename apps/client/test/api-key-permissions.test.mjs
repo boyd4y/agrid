@@ -75,3 +75,10 @@ test('workspace picker counts draft resources across categories, excluding false
     ['empty', { resourceCount: 0, canCreate: true }], ['workspace-a', { resourceCount: 3, canCreate: false }], ['workspace-b', { resourceCount: 2, canCreate: false }],
   ]);
 });
+
+test('partial calendar grants count as authorized resources even without a full CRUD group', () => {
+  const calendars = [{ id: 'cal', name: 'Calendar', workspaceId: 'workspace-a', workspaceName: 'Team' }];
+  const input = { ...empty(), calendarPermissions: [{ calendarId: 'cal', ...access(), partialOperations: ['canRead'] }] };
+  assert.equal(summarizeKeyPermissions(input, [], calendars, [], []).calendarCount, 1);
+  assert.deepEqual(summarizeWorkspaceGrants(input, groupPermissionResources([], calendars, [], [])[0]), { resourceCount: 1, canCreate: false });
+});

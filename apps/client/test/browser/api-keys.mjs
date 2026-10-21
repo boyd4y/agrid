@@ -78,6 +78,22 @@ try {
       assert(Math.abs(boxes.tabs.x - boxes.viewport.x) <= 1, 'tabs align with viewport left edge');
       if (reference) for (const name of Object.keys(boxes)) for (const dimension of ['x', 'y', 'width', 'height']) assert(Math.abs(boxes[name][dimension] - reference[name][dimension]) <= 1, `${width}x${height} ${category} ${name}.${dimension} shifted`);
       reference = boxes;
+      for (const control of [dialog.getByRole('textbox', { name: '名称', exact: true }), tabs.getByRole('tab', { name: label, exact: true })]) {
+        await control.focus();
+        await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab');
+        assert(await control.evaluate(el => el.matches(':focus-visible')), 'uses real keyboard focus');
+        const clipped = await control.evaluate(el => {
+          const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
+          const radius = Math.max(...[...css.boxShadow.matchAll(/(?:^|,)\s*(?:rgba?\([^)]*\)|[^ ]+)\s+0px\s+0px\s+0px\s+(\d+)px/g)].map(m => Number(m[1])), 3);
+          const clipping = [];
+          for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+            const style = getComputedStyle(parent), box = parent.getBoundingClientRect();
+            if (/(hidden|auto|scroll|clip)/.test(style.overflowX) && (rect.left - radius < box.left - 1 || rect.right + radius > box.right + 1) || /(hidden|auto|scroll|clip)/.test(style.overflowY) && (rect.top - radius < box.top - 1 || rect.bottom + radius > box.bottom + 1)) clipping.push(parent.className);
+          }
+          return clipping;
+        });
+        assert.deepEqual(clipped, [], 'focus ring has room inside clipping ancestors');
+      }
       geometry.push({ width, height, theme, category, boxes });
       if (width === 1440 && height === 1000 || width === 1100 && height === 800) await page.screenshot({ path: artifact(`agent-key-${width}x${height}-${theme}-${category}.png`), animations: 'disabled' });
     }
@@ -90,13 +106,11 @@ try {
   await chooseWorkspace('Second workspace');
   await tabs.getByRole('tab', { name: '日历', exact: true }).click();
   const calendarMatrix = dialog.getByTestId(`resource-access-${calendar.id}`);
-  assert.equal(await calendarMatrix.getByRole('checkbox').count(), 10, 'keeps the original ten calendar operations');
+  assert.equal(await calendarMatrix.getByRole('checkbox').count(), 4);
+  assert.deepEqual(await calendarMatrix.getByRole('checkbox').evaluateAll(els => els.map(el => el.getAttribute('aria-label').split(' · ')[1])), ['读取', '更新', '删除', '创建']);
   const calendarViewport = dialog.getByTestId('permissions-calendars');
-  assert(await calendarViewport.evaluate(el => el.scrollWidth > el.clientWidth), 'wide calendar permissions scroll inside viewport');
-  await calendarViewport.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-  const lastCalendarGrant = calendarMatrix.getByRole('checkbox').last();
-  await lastCalendarGrant.check(); await lastCalendarGrant.uncheck();
-  await dialog.getByRole('checkbox', { name: 'Second workspace / Team calendar · 详情', exact: true }).check();
+  assert(await calendarViewport.evaluate(el => el.scrollWidth <= el.clientWidth + 1), 'four columns fit the calendar viewport');
+  await dialog.getByRole('checkbox', { name: 'Second workspace / Team calendar · 读取', exact: true }).check();
   await tabs.getByRole('tab', { name: '定时任务', exact: true }).click();
   assert.equal(await dialog.getByText('Event rule', { exact: true }).count(), 0);
   await dialog.getByRole('checkbox', { name: 'Second workspace / Scheduled rule · 删除', exact: true }).check();
@@ -116,7 +130,7 @@ try {
   const saved = (await api('/user/api-keys')).keys[0];
   assert.equal(saved.permissions.length, 2); assert.equal(saved.automationPermissions[0].automationId, rule.id);
   assert.equal(saved.schedulePermissions[0].automationId, plan.id); assert.equal(saved.schedulePermissions[0].canDelete, true); assert.equal(saved.schedulePermissions[0].grantVersion, 2);
-  assert.equal(saved.calendarPermissions[0].calendarId, calendar.id); assert.equal(saved.workspacePermissions[0].workspaceId, empty.id);
+  assert.deepEqual(saved.calendarPermissions, [{ calendarId: calendar.id, canRead: true, canUpdate: false, canDelete: false, canCreate: false }]); assert.equal(saved.workspacePermissions[0].workspaceId, empty.id);
   assert.equal(saved.workspacePermissions[0].canCreateSchedules, true); assert.equal(saved.workspacePermissions[0].canCreateAutomations, true);
   assert(!JSON.stringify(saved).includes(secret));
   const scope = await settings.getByTestId(`api-key-${saved.id}`).innerText();

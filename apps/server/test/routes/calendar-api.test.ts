@@ -39,7 +39,7 @@ const call = <K extends CalendarCommand>(command: K, input: CalendarCommands[K])
 const publicCall = (command: CalendarCommand, input: unknown, headers: Record<string, string> = {}) => app.request("http://fixture.test/api/commands", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}`, ...headers }, body: JSON.stringify({ command, input }) });
 const range = { rangeStart: "2030-01-07T00:00:00Z", rangeEnd: "2030-01-08T00:00:00Z" };
 const time = (hour: number) => ({ start: `2030-01-07T${String(hour).padStart(2, "0")}:00:00Z`, end: `2030-01-07T${String(hour).padStart(2, "0")}:30:00Z`, timeZone: "UTC" });
-const grants = () => [{ calendarId, canRead: true, canReadAvailability: true, canCreate: true, canUpdate: true, canCancel: true, canManage: true, canSubscribe: true, canReadDeliveries: true, canManageSubscriptions: true }];
+const grants = () => [{ calendarId, canRead: true, canUpdate: true, canDelete: true, canCreate: true }];
 before(async () => {
   await resource.db.insert(organization).values({ id: org, name: "Calendar API test", slug: org });
   await resource.db.insert(user).values({ id: uid, name: actor.name, email: actor.email });

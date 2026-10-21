@@ -162,6 +162,43 @@ test("independent grants, key ownership and durable permission narrowing prevent
   await revoke(memberSub);
 });
 
+test("CRUD subscriptions use Create/Read/Update/Delete and revoking Create durably stops pending deliveries", async () => {
+  const grant = { calendarId, canRead: false, canUpdate: false, canDelete: false, canCreate: true };
+  const createOnly = await createSiteKey(deps, actor, { name: "Create without Read", permissions: [], calendarPermissions: [grant] });
+  await assert.rejects(subscribe("no-read", ["booking.created"], { kind: "key", secret: createOnly.secret }), code("FORBIDDEN"));
+  const saved = await createSiteKey(deps, actor, { name: "CRUD subscriber", permissions: [], calendarPermissions: [{ ...grant, canRead: true }] });
+  const who: CalendarCaller = { kind: "key", secret: saved.secret };
+  const subscription = await subscribe("crud", ["booking.created"], who);
+  await call("getCalendarSubscription", { calendarId, subscriptionId: subscription.id }, who);
+  await assert.rejects(call("rotateCalendarSubscriptionSecret", { calendarId, subscriptionId: subscription.id, expectedVersion: 1, idempotencyKey: k() }, who), code("FORBIDDEN"));
+  await assert.rejects(call("revokeCalendarSubscription", { calendarId, subscriptionId: subscription.id, expectedVersion: 1, idempotencyKey: k() }, who), code("FORBIDDEN"));
+  await booking();
+  await updateSiteKey(deps, actor, saved.key.id, { name: "Read only", permissions: [], calendarPermissions: [{ ...grant, canCreate: false, canRead: true }] });
+  assert.equal((await call("getCalendarSubscription", { calendarId, subscriptionId: subscription.id }, who)).status, "paused");
+  assert.equal((await call("listCalendarDeliveries", { calendarId, subscriptionId: subscription.id }, who)).items[0].lastError, "authorization_revoked");
+  await updateSiteKey(deps, actor, saved.key.id, { name: "Restore", permissions: [], calendarPermissions: [{ ...grant, canRead: true, canUpdate: true }] });
+  await dispatchCalendarDeliveries(deps);
+  assert.equal(received.filter(v => v.path === "/crud").length, 0);
+  const current = await call("getCalendarSubscription", { calendarId, subscriptionId: subscription.id }, who);
+  await call("updateCalendarSubscription", { calendarId, subscriptionId: subscription.id, name: current.name, endpoint: current.endpoint, eventTypes: current.eventTypes, status: "active", expectedVersion: current.version, idempotencyKey: k() }, who);
+  const rotated = await call("rotateCalendarSubscriptionSecret", { calendarId, subscriptionId: subscription.id, expectedVersion: current.version + 1, idempotencyKey: k() }, who);
+  assert(rotated.secret); secrets.set("/crud", rotated.secret);
+  await assert.rejects(call("revokeCalendarSubscription", { calendarId, subscriptionId: subscription.id, expectedVersion: rotated.subscription.version, idempotencyKey: k() }, who), code("FORBIDDEN"));
+  await updateSiteKey(deps, actor, saved.key.id, { name: "Delete only", permissions: [], calendarPermissions: [{ ...grant, canDelete: true, canCreate: false }] });
+  const readRevoked = await createSiteKey(deps, actor, { name: "Read revocation", permissions: [], calendarPermissions: [{ ...grant, canRead: true }] });
+  const readCaller: CalendarCaller = { kind: "key", secret: readRevoked.secret };
+  const readSubscription = await subscribe("crud-read", ["booking.created"], readCaller);
+  await booking();
+  await updateSiteKey(deps, actor, readRevoked.key.id, { name: "Read removed", permissions: [], calendarPermissions: [grant] });
+  await updateSiteKey(deps, actor, readRevoked.key.id, { name: "Read restored", permissions: [], calendarPermissions: [{ ...grant, canRead: true }] });
+  await dispatchCalendarDeliveries(deps);
+  assert.equal(received.filter(v => v.path === "/crud-read").length, 0);
+  assert.equal((await call("getCalendarSubscription", { calendarId, subscriptionId: readSubscription.id }, readCaller)).status, "paused");
+  await deleteSiteKey(deps, actor, readRevoked.key.id);
+  const latest = await call("getCalendarSubscription", { calendarId, subscriptionId: subscription.id });
+  assert.equal((await call("revokeCalendarSubscription", { calendarId, subscriptionId: subscription.id, expectedVersion: latest.version, idempotencyKey: k() }, who)).status, "revoked");
+});
+
 test("a late journal/outbox failure rolls back booking, event and receipt together", async () => {
   const subscription = await subscribe("late-failure");
   const functionName = `reject_delivery_${k().replaceAll("-", "")}`;

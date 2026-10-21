@@ -56,7 +56,7 @@ export function summarizeKeyPermissions(key: ApiKeyInput, tables: readonly ApiKe
     return new Set(ids).size;
   }
   const tableCount = count(authorizedTableIds(key), tables);
-  const calendarCount = count((key.calendarPermissions ?? []).filter(p => Object.entries(p).some(([name, value]) => name.startsWith("can") && value === true)).map(p => p.calendarId), calendars);
+  const calendarCount = count((key.calendarPermissions ?? []).filter(p => p.partialOperations?.length || Object.entries(p).some(([name, value]) => name.startsWith("can") && value === true)).map(p => p.calendarId), calendars);
   const automationCount = count((key.automationPermissions ?? []).filter(p => p.canRead || p.canUpdate || p.canDelete).map(p => p.automationId), automations);
   const scheduleCount = count((key.schedulePermissions ?? []).filter(p => p.canRead || p.canUpdate || p.canDelete).map(p => p.automationId), schedules);
   const creationWorkspaces = new Set((key.workspacePermissions ?? []).filter(p => p.canCreateAutomations || p.canCreateSchedules).map(p => p.workspaceId));

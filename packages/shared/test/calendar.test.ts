@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { randomUUID } from "node:crypto";
-import { CALENDAR_SCHEMAS, CALENDAR_COMMANDS, CALENDAR_TOOLS, COMMANDS, PLATFORM_TOOL_IDS, calendarPermissionSchema } from "../src/index.js";
+import { CALENDAR_SCHEMAS, CALENDAR_COMMANDS, CALENDAR_TOOLS, COMMANDS, PLATFORM_TOOL_IDS, CALENDAR_PERMISSION_OPERATIONS, calendarPermissionSchema } from "../src/index.js";
 const calendarId = randomUUID(), personId = randomUUID();
 test("calendar contracts reject forged scope, naive dates, invalid days and incomplete writes", () => {
   assert(!CALENDAR_SCHEMAS.createBooking.safeParse({ calendarId, personId, title: "Visit", time: { start: "2030-01-07T09:00:00", end: "2030-01-07T09:30:00", timeZone: "UTC" }, idempotencyKey: "1" }).success);
@@ -55,4 +55,12 @@ test("member events accept opaque user IDs, require one identity and share the b
   assert(!CALENDAR_SCHEMAS.createBooking.safeParse({ ...input, userId: "agent", schedulingMode: "member" }).success);
   assert(CALENDAR_SCHEMAS.batchBookings.safeParse({ calendarId, idempotencyKey: "batch", operations: [{ kind: "create", userId: "agent", title: input.title, time: input.time }] }).success);
   assert(!CALENDAR_SCHEMAS.batchBookings.safeParse({ calendarId, idempotencyKey: "batch", operations: [{ kind: "create", personId, userId: "agent", title: input.title, time: input.time }] }).success);
+});
+
+test("calendar grants expose exactly four CRUD operations and optional partial-access metadata", () => {
+  assert.deepEqual(CALENDAR_PERMISSION_OPERATIONS, ["canRead", "canUpdate", "canDelete", "canCreate"]);
+  const grant = { calendarId, canRead: true, canUpdate: false, canDelete: false, canCreate: false };
+  assert.deepEqual(calendarPermissionSchema.parse(grant), grant);
+  assert(calendarPermissionSchema.safeParse({ ...grant, canRead: false, partialOperations: ["canRead"] }).success);
+  for (const extra of ["canReadAvailability", "canCancel", "canManage", "canTriggerAgent", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"]) assert(!calendarPermissionSchema.safeParse({ ...grant, [extra]: true }).success);
 });

@@ -161,6 +161,7 @@
       "tables": "表格",
       "tablesHint": "授权适用于本企业内的各工作区。规则权限不会授予其表格数据权限；创建需勾选工作区权限，外部规则支持表格记录动作。",
       "grantDescription": "按资源选择允许的操作，Key 仅可调用已授权的能力。",
+      "partialCalendarHint": "混合状态表示旧 Key 仍有该组的部分权限。点击可清除该组，再次勾选才会授予完整权限。",
       "createdTitle": "API Key 已创建",
       "once": "请立即复制 Key，关闭后不会再次显示。",
       "key": "API Key",
@@ -183,7 +184,7 @@
       "noAuthorizedTables": "已无可访问的表格",
       "operations": {
         "canRead": "读取",
-        "canCreate": "新增",
+        "canCreate": "创建",
         "canUpdate": "更新",
         "canDelete": "删除"
       },

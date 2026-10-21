@@ -382,7 +382,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "Scheduled plans appear on the calendar by default, alongside events. Predicted times are previews and recorded points show runs; neither reserves event time. Select a plan point to review it, or open the scheduled plan to edit its rule. Plan visibility requires separate read access to each selected plan.",
       ] },
       { type: "h2", text: "Connect with the REST API" },
-      { type: "p", text: "A workspace owner/admin can create a key under Settings → Connect agents and grant access to each calendar separately. Event detail, create, update, cancel, calendar management, and triggering an agent reminder are separate grants. Create access does not include event detail. Reading the member directory requires at least one of calendar read, create, update, or manage access. Reminder setup requires both event update and trigger-agent access. Scheduled plan projections use separate per-plan read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
+      { type: "p", text: "A workspace owner/admin can create a key under Settings → Connect agents and grant access to each calendar separately. Calendar permissions are Read, Update, Delete, and Create. Read covers queries, including availability, members, subscriptions, and delivery history. Create covers new events, people, time-off entries, and subscriptions; it does not include reading event details. Update covers edits, working hours, reminder setup, subscription configuration, secret rotation, and delivery retries. Delete covers cancellation, revocation, archiving, time-off removal, and clearing reminders. Older keys retain their original restrictions until you explicitly change a permission; a mixed checkbox indicates limited older access and clicking it removes that group. Scheduled plan projections use separate per-plan read grants. Select only the permissions an integration needs. New keys have no calendar grants by default. The full key is shown once. The host, key, and UUIDs below are fictional placeholders." },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
@@ -428,8 +428,8 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/r
   -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
 
 # Only confirmed events can have reminders. The update above returns version 2.
-# Reminder setup requires booking update and the "trigger agent" grant. An empty
-# reminders array removes reminders that have not been accepted.
+# Reminder setup requires Update. An empty reminders array requires Delete
+# and removes reminders that have not been accepted.
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -451,7 +451,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/c
       { type: "ul", items: [
         "Workspace members can view and manage events according to their workspace access. Only owners/admins can manage calendars. API keys only access calendars you grant; creating an event does not grant access to event details. Calendar grants do not grant access to scheduled plans.",
         "Events are isolated by workspace, but overlaps are checked across calendars in the same workspace. One member or agent can have only one event at a time. Events can be confirmed or cancelled. Recurring events, guest self-service, payments, and external calendar sync are not available.",
-        "The member directory returns active human members and agents, up to 500 entries, as a complete list. A workspace with more than 500 active members returns QUERY_LIMIT. A key needs calendar read, create, update, or manage access to read the directory.",
+        "The member directory returns active human members and agents, up to 500 entries, as a complete list. A workspace with more than 500 active members returns QUERY_LIMIT. A key needs calendar Read to read the directory.",
         "Legacy personId bookings continue to use working hours and time-off rules. Their old person and schedule APIs remain available; new userId events do not use those rules. Historical events keep their original person and schedule behavior.",
         "Event queries cover up to 93 days and 500 items. Results do not use a cursor; exceeding a query budget returns an explicit error rather than silently truncating results.",
         "Updating, cancelling, and schedule changes require the current expectedVersion. On VERSION_CONFLICT, reload the event or plan and review the latest version. On RESOURCE_CONFLICT, choose another time. OUTSIDE_AVAILABILITY applies to legacy personId bookings; query availability again for those bookings.",
@@ -538,7 +538,7 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
       { type: "p", text: "Outbound event subscriptions send calendar changes from a granted calendar to your HTTPS receiver. The app shows calendar bookings as events, while existing subscription event types such as booking.created and person.updated retain their names for compatibility. Use subscriptions to let your own application know when something changes in tabdo. They are not two-way sync with Google, Outlook, or another calendar, and they do not send email or text messages." },
       { type: "h2", text: "Set up permissions and a receiver" },
       { type: "ol", items: [
-        "Create or edit an API key under Settings → Connect agents. An owner/admin grants subscription, delivery-read, and subscription-management permissions separately for the target calendar. Creating a subscription also requires read access to that calendar. New keys have none of these grants by default.",
+        "Create or edit an API key under Settings → Connect agents. An owner/admin selects Read, Update, Delete, and Create for the target calendar. Create with Read allows new subscriptions; Read allows subscription and delivery queries; Update allows configuration, secret rotation, and retries; Delete allows revocation. New keys have none of these grants by default.",
         "Prepare a publicly reachable HTTPS receiver on the standard port 443. The URL cannot include a username, password, or fragment. Your receiver must retain the original request bytes to verify the signature.",
         "Create a subscription with POST /api/calendars/{calendarId}/subscriptions. Choose a name, receiver URL, and event types. The successful response displays a signing secret once; save it securely because its plaintext cannot be read again.",
       ] },
@@ -567,15 +567,15 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions" \\
       { type: "p", text: "Events include only event, calendar, workspace, and target-record IDs, type, version, and occurrence time. They do not include an event title, customer details, member or agent name, or reminder prompt. Use a separately authorized calendar API to read details. Deduplicate by deliveryId or eventId and process possible out-of-order events by aggregateVersion. Versions may have gaps when you filter event types." },
       { type: "h2", text: "Manage subscriptions and deliveries" },
       { type: "table", headers: ["Operation", "REST path", "Permission"], rows: [
-        ["Create subscription (POST)", "/api/calendars/:calendarId/subscriptions", "Subscribe + calendar read"],
-        ["List subscriptions (POST)", "/api/calendars/:calendarId/subscriptions/query", "Subscribe"],
-        ["Read / update (GET / PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Subscribe / manage subscription"],
-        ["Pause / resume (PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Manage subscription"],
-        ["Rotate secret (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/rotate-secret", "Manage subscription"],
-        ["Revoke (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/revoke", "Manage subscription"],
-        ["Query deliveries (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/query", "Read deliveries"],
-        ["Read delivery and attempts (GET)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId", "Read deliveries"],
-        ["Retry a failed delivery (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "Manage subscription + calendar read + subscribe"],
+        ["Create subscription (POST)", "/api/calendars/:calendarId/subscriptions", "Create + Read"],
+        ["List subscriptions (POST)", "/api/calendars/:calendarId/subscriptions/query", "Read"],
+        ["Read / update (GET / PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Read / Update"],
+        ["Pause / resume (PATCH)", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "Update"],
+        ["Rotate secret (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/rotate-secret", "Update"],
+        ["Revoke (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/revoke", "Delete"],
+        ["Query deliveries (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/query", "Read"],
+        ["Read delivery and attempts (GET)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId", "Read"],
+        ["Retry a failed delivery (POST)", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "Update"],
       ] },
       { type: "code", lang: "bash", code: `# Explicitly retry a deadletter delivery for the current active subscription version
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCRIPTION_ID/deliveries/$DELIVERY_ID/retry" \\
@@ -596,7 +596,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   -d '{"expectedVersion":2,"idempotencyKey":"calendar-subscription-revoke-001"}'
 
 ` },
-      { type: "p", text: "An API key can access only the subscriptions it created. Provide an idempotency key for writes such as create, update, revoke, rotate, and retry. Update, revoke, rotate, and retry also require the latest expectedVersion. Creating a subscription requires subscribe and calendar-read grants; retry also requires manage-subscription. Delivery-history access is a separate grant; subscription management does not include it automatically. POST /api/commands accepts the matching command names, such as createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and listCalendarDeliveries. GraphQL queries are listCalendarSubscriptions, getCalendarSubscription, listCalendarDeliveries, and getCalendarDelivery; mutations are createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and retryCalendarDelivery. Each takes a JSON input. A connected, authorized MCP client can use the snake_case calendar subscription tools. The new JavaScript SDK methods have not been published to npm/CDN; use REST, GraphQL, or an already configured MCP connection." },
+      { type: "p", text: "An API key can access only the subscriptions it created. Provide an idempotency key for writes such as create, update, revoke, rotate, and retry. Update, revoke, rotate, and retry also require the latest expectedVersion. Creating a subscription requires Create and Read; retry requires Update; delivery-history queries require Read. Revoking Create or Read stops further deliveries from subscriptions created by that key. POST /api/commands accepts the matching command names, such as createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and listCalendarDeliveries. GraphQL queries are listCalendarSubscriptions, getCalendarSubscription, listCalendarDeliveries, and getCalendarDelivery; mutations are createCalendarSubscription, updateCalendarSubscription, revokeCalendarSubscription, rotateCalendarSubscriptionSecret, and retryCalendarDelivery. Each takes a JSON input. A connected, authorized MCP client can use the snake_case calendar subscription tools. The new JavaScript SDK methods have not been published to npm/CDN; use REST, GraphQL, or an already configured MCP connection." },
       { type: "h2", text: "Delivery status, limits, and troubleshooting" },
       { type: "ul", items: [
         "Supported events are booking.created, booking.rescheduled, booking.cancelled, booking.reminders_changed, calendar.updated, calendar.archived, person.created, person.updated, person.archived, working_hours.updated, availability_exception.created, availability_exception.updated, and availability_exception.removed. Booking events go to subscriptions on their calendar; shared staff and schedule changes may notify related calendars in the workspace.",
@@ -604,7 +604,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
         "Delivery records can be pending, delivering, succeeded, deadletter, or skipped. Details list each attempt, completion time, and HTTP status; they do not expose the receiver response body or signing secret.",
         "Events are not backfilled while a subscription is paused. Updating its configuration, rotating its secret, or revoking it skips unfinished deliveries for the old configuration. Resuming does not replay events from the paused period. A request already processed by your receiver cannot be recalled.",
         "A calendar can have up to 100 non-revoked subscriptions. Lists default to 25 items per page and allow up to 100; continue with nextCursor. The receiver URL must resolve publicly to an HTTPS service. Private-network addresses, IP literals, and redirects are not supported.",
-        "If create or retry returns FORBIDDEN, ask an owner/admin to check that the key has both subscribe and calendar-read grants; retry also needs manage-subscription. Querying delivery history requires the separate delivery-read grant. If a secret is lost, rotate it and save the new one. For deadletter deliveries, check receiver availability and the HTTP status before retrying a delivery for the current active subscription version.",
+        "If create or retry returns FORBIDDEN, ask an owner/admin to check Create and Read for subscription creation, Update for retries, and Read for delivery-history queries. If a secret is lost, rotate it and save the new one. For deadletter deliveries, check receiver availability and the HTTP status before retrying a delivery for the current active subscription version.",
       ] },
       { type: "cards", items: [
         { title: "Calendars and events", description: "Create events for workspace members and agents.", href: "/docs/calendar-booking", badge: "Calendar" },

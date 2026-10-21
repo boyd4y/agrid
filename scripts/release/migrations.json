@@ -3,5 +3,10 @@
     "sha256": "5cdd193f20be19e263d7665aeb453e794aa6d62b21bab1a3a1c62493bd62c68d",
     "compatibility": "backward-compatible",
     "requiresWriterDrain": false
+  },
+  "0043_calendar_key_crud": {
+    "sha256": "30fb5180c451013e711077b3be7009bbd287af435f2cfc98d3d1aae7b75fe192",
+    "compatibility": "backward-compatible",
+    "requiresWriterDrain": false
   }
 }

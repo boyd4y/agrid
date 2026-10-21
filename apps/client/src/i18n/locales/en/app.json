@@ -161,6 +161,7 @@
       "tables": "Table",
       "tablesHint": "Grants apply across workspaces in this organization. Rule permissions do not grant access to their table data. Creation requires a workspace grant; external rules support table record actions.",
       "grantDescription": "Choose operations for each resource. Only granted operations are available to this key.",
+      "partialCalendarHint": "A mixed checkbox preserves limited access from an older key. Click it to remove that group; select it again to grant the full operation.",
       "createdTitle": "API key created",
       "once": "Copy the key now. It will not be displayed again.",
       "key": "API key",

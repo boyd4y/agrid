@@ -24,7 +24,7 @@ import { createCommandsRoute } from "../../src/business/http/commands.js";
 import { createCalendarTools } from "../../src/business/agent/tools/calendar.js";
 import { acceptBookingReminder, dispatchDueBookingReminders, readBookingReminders } from "../../src/business/calendar/reminders.js";
 import type { Actor } from "../../src/business/auth/actor.js";
-import { EMPTY_DOCUMENT, type ApiKeyInput, type CalendarCommand, type CalendarCommands, type AutomationRule } from "@tabdo/shared";
+import { EMPTY_DOCUMENT, type CalendarCommand, type CalendarCommands, type AutomationRule } from "@tabdo/shared";
 const url = process.env.DATABASE_URL!;
 assert(new URL(url).pathname.endsWith("_agent_test")); assert.equal(process.env.DATABASE_URL_UNPOOLED, url);
 const resource = createDatabase({ connectionString: url, poolMax: 8 });
@@ -61,7 +61,7 @@ test("unified table grants coexist with independent calendar and schedule grants
   const [table] = await resource.db.insert(tables).values({ organizationId: org, workspaceId: deps.workspaceId!, name: "Combined capabilities" }).returning();
   const [row] = await resource.db.insert(rows).values({ tableId: table.id }).returning();
   const rule = await createAutomation(deps, { ...identity, name: "Combined plan", source: { kind: "schedule", cron: "0 10 * * *", timeZone: "UTC" }, trigger: { type: "schedule_due" }, actions: [{ type: "run_agent", agentUserId: aid, prompt: "Private" }] });
-  const input: ApiKeyInput = { name: "Combined", permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canDelete: false }], calendarPermissions: grants(), schedulePermissions: [{ automationId: rule.id, canRead: true, canUpdate: true }] };
+  const input = { name: "Combined", permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: true, canDelete: false }], calendarPermissions: grants(), schedulePermissions: [{ automationId: rule.id, canRead: true, canUpdate: true, canDelete: false, grantVersion: 1 as const }] };
   const saved = await createSiteKey(deps, actor, input), client = sdk(saved.secret);
   await client.table(table.id).update(row.id, {}, { body: { content: EMPTY_DOCUMENT, expectedVersion: 0 }, idempotencyKey: key() });
   assert.deepEqual((await client.table(table.id).get(row.id, { includeBody: true }))!.body!.content, EMPTY_DOCUMENT);
@@ -70,7 +70,8 @@ test("unified table grants coexist with independent calendar and schedule grants
   for (const capability of ["canSubscribe", "canReadDeliveries", "canManageSubscriptions"] as const) {
     const next = { ...input, calendarPermissions: [{ ...input.calendarPermissions![0], [capability]: true }] };
     const edited = await updateSiteKey(deps, actor, saved.key.id, next);
-    for (const family of ["permissions", "schedulePermissions", "calendarPermissions"] as const) assert.deepEqual(edited.key[family], next[family]);
+    for (const family of ["permissions", "schedulePermissions"] as const) assert.deepEqual(edited.key[family], next[family]);
+    assert.deepEqual(Object.keys(edited.key.calendarPermissions![0]).sort(), ["calendarId", "canRead", "canUpdate", "canDelete", "canCreate", "partialOperations"].sort());
     assert(!("documentPermissions" in edited.key)); assert(!("blogPermissions" in edited.key));
   }
 });
@@ -141,6 +142,24 @@ test("reminder Key trigger permission is explicit and rechecked at durable accep
   const rejection = await resource.db.transaction(tx => acceptBookingReminder(deps, tx, run.id as string, uid)); assert.equal(rejection?.status, "failed");
   assert.equal((await resource.db.select().from(bookingReminderIntents).where(eq(bookingReminderIntents.id, intent.id)))[0].acceptedAt, null);
   now = new Date("2030-03-08T00:00:00Z");
+});
+test("CRUD reminder configuration uses Update, clearing uses Delete, and background acceptance rechecks revoked Update", async () => {
+  const b = await booking("2030-04-06");
+  const grant = { calendarId, canRead: false, canUpdate: true, canDelete: false, canCreate: false };
+  const saved = await createSiteKey(deps, actor, { name: "CRUD reminders", permissions: [], calendarPermissions: [grant] });
+  const client = sdk(saved.secret);
+  await client.calendar.setBookingReminders({ calendarId, bookingId: b.id, expectedVersion: 1, reminders: [reminder], idempotencyKey: key() });
+  await assert.rejects(client.calendar.listBookingReminders({ calendarId, bookingId: b.id }), (e: any) => e.code === "FORBIDDEN");
+  await assert.rejects(client.calendar.setBookingReminders({ calendarId, bookingId: b.id, expectedVersion: 2, reminders: [], idempotencyKey: key() }), (e: any) => e.code === "FORBIDDEN");
+  now = new Date("2030-04-06T09:35:00Z"); await dispatchDueBookingReminders(deps);
+  const [intent] = await resource.db.select().from(bookingReminderIntents).where(eq(bookingReminderIntents.bookingId, b.id));
+  const [run] = await resource.db.select().from(automationRuns).where(eq(automationRuns.eventId, intent.eventId!));
+  await updateSiteKey(deps, actor, saved.key.id, { name: "Delete only", permissions: [], calendarPermissions: [{ ...grant, canUpdate: false, canDelete: true }] });
+  const rejection = await resource.db.transaction(tx => acceptBookingReminder(deps, tx, run.id, uid));
+  assert.equal(rejection?.status, "failed");
+  assert.equal((await resource.db.select().from(bookingReminderIntents).where(eq(bookingReminderIntents.id, intent.id)))[0].acceptedAt, null);
+  await assert.rejects(client.calendar.setBookingReminders({ calendarId, bookingId: b.id, expectedVersion: 2, reminders: [reminder], idempotencyKey: key() }), (e: any) => e.code === "FORBIDDEN");
+  assert.equal((await client.calendar.setBookingReminders({ calendarId, bookingId: b.id, expectedVersion: 2, reminders: [], idempotencyKey: key() })).version, 3);
 });
 test("calendar events require an explicit matching workspace and generic rule editing cannot bypass reminder lifecycle", async () => {
   const b = await booking("2030-03-17"); await call("setBookingReminders", { calendarId, bookingId: b.id, expectedVersion: 1, reminders: [reminder], idempotencyKey: key() });

@@ -145,7 +145,7 @@ try {
   assert(!("documentPermissions" in updatedKey));
   assert.deepEqual(updatedKey.permissions, [{ ...oldTableGrants[0], canUpdate: true }]);
   assert(!("blogPermissions" in updatedKey));
-  assert.deepEqual(updatedKey.calendarPermissions, oldCalendarGrants);
+  assert.deepEqual(updatedKey.calendarPermissions, key.key.calendarPermissions);
   assert.deepEqual(updatedKey.schedulePermissions, scheduleGrants);
   await page.reload(); await page.getByRole('button', { name: '编辑 Document MCP renamed', exact: true }).click();
   assert(await page.getByRole('dialog').getByRole('checkbox', { name: /文章 · 更新$/ }).isChecked());

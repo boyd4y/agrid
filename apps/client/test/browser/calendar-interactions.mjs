@@ -99,7 +99,7 @@ try {
   const tableRead = dialog.getByRole('checkbox', { name: `${workspace.name} / 旧表授权 · 读取`, exact: true }); await tableRead.check();
   const tabs = dialog.getByRole('tablist', { name: '资源权限', exact: true });
   await tabs.getByRole('tab', { name: '日历', exact: true }).click();
-  await dialog.getByRole('checkbox', { name: `${calendarLabel} · 空档`, exact: true }).check();
+  await dialog.getByRole('checkbox', { name: `${calendarLabel} · 读取`, exact: true }).check();
   await dialog.getByRole('button', { name: '生成接入配置', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
   await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制接入说明', exact: true }).waitFor();
@@ -110,12 +110,12 @@ try {
   await settings.getByRole('button', { name: '编辑 日历授权测试', exact: true }).click();
   assert(await tableRead.isChecked());
   await tabs.getByRole('tab', { name: '日历', exact: true }).click();
-  assert(await dialog.getByRole('checkbox', { name: `${calendarLabel} · 空档`, exact: true }).isChecked());
+  assert(await dialog.getByRole('checkbox', { name: `${calendarLabel} · 读取`, exact: true }).isChecked());
   await dialog.getByRole('checkbox', { name: `${calendarLabel} · 创建`, exact: true }).check();
   await dialog.getByRole('button', { name: '保存', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
   const saved = (await api('/user/api-keys')).keys[0];
   assert.equal(saved.permissions[0].tableId, table.id); assert(saved.permissions[0].canRead);
-  assert(saved.calendarPermissions[0].canReadAvailability && saved.calendarPermissions[0].canCreate); assert.equal(saved.calendarPermissions[0].canRead, false);
+  assert.deepEqual(saved.calendarPermissions, [{ calendarId: calendar.id, canRead: true, canUpdate: false, canDelete: false, canCreate: true }]);
   assert.deepEqual(fixture.errors, []);
   console.log('PASS: real pointer drag conflict rollback with preserved form, pending feedback, successful drag/resize through versioned commands, calendar grants UI persists without dropping table grants.');
 } catch (error) { await page.screenshot({ path: fixture.artifact('calendar-interactions-failure.png'), fullPage: true, mask: [page.getByTestId('connection-recipe')] }); throw error; }

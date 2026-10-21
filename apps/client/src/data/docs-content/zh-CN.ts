@@ -397,7 +397,7 @@ curl -s -X DELETE "$TABDO_API_URL/api/tables/tbl_example/rows/row_example" \\
         "定时计划默认显示在日历中，与事件同时查看。预计时间是预览，已记录的时间点表示运行记录；两者都不会占用事件时段。选择计划时间点可查看详情；要修改计划规则，请打开对应定时计划。查看计划还需单独获得所选计划的读取权限。",
       ] },
       { type: "h2", text: "通过 REST API 接入" },
-      { type: "p", text: "工作区 owner/admin 可在「设置 → 连接 Agent」创建 Key，并为每个日历单独授权。事件详情、新建、更新、取消、日历管理和触发智能体提醒是不同权限；新建权限不包含事件详情读取。读取成员目录需要日历读取、新建、更新或管理权限中的至少一项。设置提醒还需要事件更新权和触发智能体权。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
+      { type: "p", text: "工作区 owner/admin 可在「设置 → 连接 Agent」创建 Key，并为每个日历单独授权。日历权限统一为读取、更新、删除、创建。读取覆盖详情、空档、成员、订阅和投递记录查询；创建覆盖新增事件、人员、临时休息和订阅，不包含事件详情读取。更新覆盖编辑、排班、设置提醒、订阅配置、轮换密钥和重试投递；删除覆盖取消、撤销、归档、移除临时休息和清空提醒。旧 Key 在明确修改权限前保留原有限制，混合状态表示保留的部分旧权限，点击可清除该组。定时计划投影需单独授予对应计划的读取权限。只选择集成所需权限。新 Key 默认没有日历授权。完整 Key 只显示一次。下面的主机、Key 与 UUID 均为虚构占位值。" },
       { type: "code", lang: "bash", code: `export TABDO_API_URL="https://your-tabdo-host.example"
 export TABDO_API_KEY="tab_replace_with_your_key"
 export CALENDAR_ID="00000000-0000-4000-8000-000000000001"
@@ -442,7 +442,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/r
   -d '{"time":{"start":"2026-10-21T10:00:00+08:00","end":"2026-10-21T10:30:00+08:00","timeZone":"Asia/Shanghai"},"expectedVersion":1,"idempotencyKey":"booking-reschedule-demo-001"}'
 
 # 只有已确认事件可以设置提醒。上面的更新成功后返回版本 2。
-# 设置提醒需要预约更新权与「触发智能体」权；空 reminders 可撤销未接受的提醒
+# 设置提醒需要更新权限；空 reminders 需要删除权限，可撤销未接受的提醒
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/reminders" \\
   -H "Authorization: Bearer $TABDO_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -464,7 +464,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/bookings/BOOKING_ID/c
       { type: "ul", items: [
         "工作区成员可按其工作区权限查看和管理事件；只有 owner/admin 可管理日历。API Key 只能访问明确授权的日历；创建事件不会同时授予事件详情读取权。日历授权不会自动授予定时计划读取权。",
         "事件按工作区隔离，但同一工作区不同日历间也会检查时间重叠。每位成员或智能体同一时段只能有一个事件。事件支持已确认和已取消状态；暂不支持重复事件、访客自助预约、支付或外部日历同步。",
-        "成员目录完整返回当前活跃的 human 成员和智能体，最多 500 项；工作区活跃成员超过 500 人时会返回 QUERY_LIMIT。API Key 至少需要日历读取、新建、更新或管理权限之一才能读取目录。",
+        "成员目录完整返回当前活跃的 human 成员和智能体，最多 500 项；工作区活跃成员超过 500 人时会返回 QUERY_LIMIT。API Key 需要日历读取权限才能读取目录。",
         "旧 personId 预约继续按工作时间和临时休息规则校验。对应的旧人员与排班 API 仍可使用；新 userId 事件不受这些排班规则限制，历史事件保留原人员和规则。",
         "事件查询范围最长 93 天、最多 500 项；结果没有游标分页，超过查询预算会明确报错，不会静默截断。",
         "更新、取消与计划变更需要提交当前 expectedVersion。收到 VERSION_CONFLICT 时重新读取事件或计划并确认最新版本；收到 RESOURCE_CONFLICT 时换一个时间。OUTSIDE_AVAILABILITY 仅适用于旧 personId 预约，可重新查询其空档。",
@@ -551,7 +551,7 @@ curl -s -X POST "$TABDO_API_URL/api/views/$VIEW_ID/calendar/query" \\
       { type: "p", text: "出站事件订阅会把获权日历的变更发送到你的 HTTPS 接收地址。应用界面将日历 booking 显示为事件，但现有订阅事件类型（例如 booking.created、person.updated）为兼容而保留原名称。它适合让自己的应用及时获知 tabdo 中发生的变化；不是 Google、Outlook 或其他日历的双向同步，也不会发送邮件或短信。" },
       { type: "h2", text: "准备权限和接收地址" },
       { type: "ol", items: [
-        "在「设置 → 连接 Agent」创建或编辑 Key，由 owner/admin 为目标日历分别授予订阅、投递记录读取和订阅管理权限。创建订阅还需要该日历的读取权限。新 Key 默认没有这些授权。",
+        "在「设置 → 连接 Agent」创建或编辑 Key，由 owner/admin 为目标日历选择读取、更新、删除、创建。新增订阅需要创建和读取，读取用于查询订阅和投递，更新用于配置、轮换和重试，删除用于撤销。新 Key 默认没有这些授权。",
         "准备一个公开可访问的 HTTPS 接收地址，使用标准 443 端口。地址不能带用户名、密码或 URL 片段；接收服务应在处理请求时保留原始请求字节，以便验证签名。",
         "使用 POST /api/calendars/{calendarId}/subscriptions 创建订阅。选择名称、接收地址和要监听的事件。成功响应会显示签名密钥；立即安全保存，因为之后无法再次读取明文。",
       ] },
@@ -580,15 +580,15 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions" \\
       { type: "p", text: "事件仅提供事件、日历、工作区和目标记录的 ID、类型、版本与发生时间，不包含事件标题、客户资料、成员或智能体姓名、提醒正文。需要详情时，使用另行授权的日历 API 查询。按 deliveryId 或 eventId 去重，并按 aggregateVersion 处理可能乱序的事件；筛选事件类型后，同一对象的版本号可能不连续。" },
       { type: "h2", text: "管理订阅和投递" },
       { type: "table", headers: ["操作", "REST 路径", "权限"], rows: [
-        ["创建订阅（POST）", "/api/calendars/:calendarId/subscriptions", "订阅 + 日历读取"],
-        ["列出订阅（POST）", "/api/calendars/:calendarId/subscriptions/query", "订阅"],
-        ["读取 / 更新（GET / PATCH）", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "订阅 / 管理订阅"],
-        ["暂停 / 恢复（PATCH）", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "管理订阅"],
-        ["轮换密钥（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/rotate-secret", "管理订阅"],
-        ["撤销（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/revoke", "管理订阅"],
-        ["查询投递（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/query", "读取投递记录"],
-        ["读取投递和尝试（GET）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId", "读取投递记录"],
-        ["重试失败投递（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "管理订阅 + 日历读取 + 订阅"],
+        ["创建订阅（POST）", "/api/calendars/:calendarId/subscriptions", "创建 + 读取"],
+        ["列出订阅（POST）", "/api/calendars/:calendarId/subscriptions/query", "读取"],
+        ["读取 / 更新（GET / PATCH）", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "读取 / 更新"],
+        ["暂停 / 恢复（PATCH）", "/api/calendars/:calendarId/subscriptions/:subscriptionId", "更新"],
+        ["轮换密钥（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/rotate-secret", "更新"],
+        ["撤销（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/revoke", "删除"],
+        ["查询投递（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/query", "读取"],
+        ["读取投递和尝试（GET）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId", "读取"],
+        ["重试失败投递（POST）", "/api/calendars/:calendarId/subscriptions/:subscriptionId/deliveries/:deliveryId/retry", "更新"],
       ] },
       { type: "code", lang: "bash", code: `# 显式重试当前启用订阅版本的 deadletter 投递
 curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCRIPTION_ID/deliveries/$DELIVERY_ID/retry" \\
@@ -609,7 +609,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
   -d '{"expectedVersion":2,"idempotencyKey":"calendar-subscription-revoke-001"}'
 
 ` },
-      { type: "p", text: "API Key 只能访问由该 Key 创建的订阅。创建、更新、撤销、轮换和重试等写入应提供幂等键；更新、撤销、轮换和重试还要带最近读取的 expectedVersion。创建订阅需要订阅和日历读取权限；重试还需管理订阅权限。投递记录读取是单独授权，订阅管理权不会自动包含它。POST /api/commands 可用 createCalendarSubscription、updateCalendarSubscription、revokeCalendarSubscription、rotateCalendarSubscriptionSecret、listCalendarDeliveries 等同名命令。GraphQL 查询为 listCalendarSubscriptions、getCalendarSubscription、listCalendarDeliveries、getCalendarDelivery；变更为 createCalendarSubscription、updateCalendarSubscription、revokeCalendarSubscription、rotateCalendarSubscriptionSecret、retryCalendarDelivery，均使用 JSON input。已连接并获权的 MCP 客户端可使用 snake_case 日历订阅工具。此次新增的 JavaScript SDK 方法尚未在 npm/CDN 发布，请使用上述 REST、GraphQL 或已配置的 MCP 接入。" },
+      { type: "p", text: "API Key 只能访问由该 Key 创建的订阅。创建、更新、撤销、轮换和重试等写入应提供幂等键；更新、撤销、轮换和重试还要带最近读取的 expectedVersion。创建订阅需要创建和读取权限，重试需要更新权限，查询投递记录需要读取权限。撤销 Key 的创建或读取权限会停止该 Key 所建订阅的后续投递。POST /api/commands 可用 createCalendarSubscription、updateCalendarSubscription、revokeCalendarSubscription、rotateCalendarSubscriptionSecret、listCalendarDeliveries 等同名命令。GraphQL 查询为 listCalendarSubscriptions、getCalendarSubscription、listCalendarDeliveries、getCalendarDelivery；变更为 createCalendarSubscription、updateCalendarSubscription、revokeCalendarSubscription、rotateCalendarSubscriptionSecret、retryCalendarDelivery，均使用 JSON input。已连接并获权的 MCP 客户端可使用 snake_case 日历订阅工具。此次新增的 JavaScript SDK 方法尚未在 npm/CDN 发布，请使用上述 REST、GraphQL 或已配置的 MCP 接入。" },
       { type: "h2", text: "投递状态、限制与排错" },
       { type: "ul", items: [
         "支持 booking.created、booking.rescheduled、booking.cancelled、booking.reminders_changed、calendar.updated、calendar.archived、person.created、person.updated、person.archived、working_hours.updated、availability_exception.created、availability_exception.updated 和 availability_exception.removed。预约事件发往所属日历订阅；共享人员和排班变更可通知工作区内相关日历。",
@@ -617,7 +617,7 @@ curl -s -X POST "$TABDO_API_URL/api/calendars/$CALENDAR_ID/subscriptions/$SUBSCR
         "投递记录可能处于 pending、delivering、succeeded、deadletter 或 skipped 状态。详情会列出每次尝试、完成时间和 HTTP 状态；不会提供接收端的响应正文或签名密钥。",
         "暂停期间不会补发事件。更改订阅配置、轮换密钥或撤销会跳过尚未完成的旧配置投递；恢复订阅也不会补发暂停期间事件。已被接收端处理的请求无法撤回。",
         "每个日历最多有 100 个未撤销订阅。列表默认每页 25 项，最多 100 项，可使用 nextCursor 继续读取。接收端地址须通过公开 DNS 指向公网 HTTPS 服务；不支持私网地址、IP 字面量或重定向。",
-        "若创建或重试返回 FORBIDDEN，请 owner/admin 检查对应 Key 是否同时有订阅和日历读取权限；重试还需管理订阅权限。查询投递记录需要单独的投递记录读取权限。若密钥遗失，轮换并保存新密钥。若投递为 deadletter，先检查接收服务的可用性与 HTTP 状态，再重试当前启用订阅版本的记录。",
+        "若创建或重试返回 FORBIDDEN，请 owner/admin 检查创建订阅所需的创建和读取权限、重试所需的更新权限，以及查询投递所需的读取权限。若密钥遗失，轮换并保存新密钥。若投递为 deadletter，先检查接收服务的可用性与 HTTP 状态，再重试当前启用订阅版本的记录。",
       ] },
       { type: "cards", items: [
         { title: "日历与事件", description: "为工作区成员和智能体创建事件。", href: "/docs/calendar-booking", badge: "日历" },

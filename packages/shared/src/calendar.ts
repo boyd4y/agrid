@@ -71,7 +71,9 @@ export type CalendarCommand = typeof CALENDAR_COMMANDS[number];
 export type CalendarCommands = { [K in CalendarCommand]: z.input<typeof CALENDAR_SCHEMAS[K]> };
 export type CalendarParsed<K extends CalendarCommand> = z.output<typeof CALENDAR_SCHEMAS[K]>;
 export const CALENDAR_READ_COMMANDS: readonly CalendarCommand[] = [...CALENDAR_SUBSCRIPTION_READ_COMMANDS, "listCalendars", "getCalendar", "listCalendarMembers", "listCalendarPeople", "getCalendarPerson", "getWorkingHours", "listAvailabilityExceptions", "queryBookings", "getBooking", "queryAvailability", "checkBookingConflicts", "queryScheduledOccurrences", "listBookingReminders"];
-export const calendarPermissionSchema = z.strictObject({ calendarId: id, canRead: z.boolean(), canReadAvailability: z.boolean(), canCreate: z.boolean(), canUpdate: z.boolean(), canCancel: z.boolean(), canManage: z.boolean(), canTriggerAgent: z.boolean().optional(), canSubscribe: z.boolean().optional(), canReadDeliveries: z.boolean().optional(), canManageSubscriptions: z.boolean().optional() }).refine(v => v.canRead || v.canReadAvailability || v.canCreate || v.canUpdate || v.canCancel || v.canManage || v.canTriggerAgent || v.canSubscribe || v.canReadDeliveries || v.canManageSubscriptions);
+/** Public calendar grants. partialOperations is read-only compatibility metadata, round-tripped on edits. */
+export const CALENDAR_PERMISSION_OPERATIONS = ["canRead", "canUpdate", "canDelete", "canCreate"] as const;
+export const calendarPermissionSchema = z.strictObject({ calendarId: id, canRead: z.boolean(), canUpdate: z.boolean(), canDelete: z.boolean(), canCreate: z.boolean(), partialOperations: z.array(z.enum(CALENDAR_PERMISSION_OPERATIONS)).max(4).optional() });
 export type CalendarPermission = z.infer<typeof calendarPermissionSchema>;
 export type Calendar = { id: string; workspaceId: string; name: string; timeZone: string; version: number; archived: boolean };
 export type CalendarMember = { userId: string; name: string; kind: "human" | "agent" };
@@ -124,7 +126,7 @@ export const CALENDAR_TOOLS = {
   set_availability_exception: { command: "setAvailabilityException", description: "新增或编辑某日期的临时休息；整日用00:00至24:00，编辑需版本。" },
   remove_availability_exception: { command: "removeAvailabilityException", description: "撤销临时休息，需版本和管理权。" },
   query_bookings: { command: "queryBookings", description: "按重叠范围查询事件详情（可按userId或旧personId筛选），最多93天/500项；超过上限明确报错，绝不静默截断。" },
-  get_booking: { command: "getBooking", description: "读取事件详情；需要详情读取权。" },
+  get_booking: { command: "getBooking", description: "读取事件详情；需要日历读取权。" },
   create_booking: { command: "createBooking", description: "创建事件：userId选择当前活跃human/agent，无需排班；与旧personId二选一，旧personId仍检查排班。带offset的start/end和IANA timeZone，事务重验跨日历容量1。重试使用原idempotencyKey，返回安全回执。" },
   reschedule_booking: { command: "rescheduleBooking", description: "编辑事件时间/可选title，member事件还可传userId换成员；旧预约保留排班规则。需expectedVersion和幂等key；冲突原子回滚，保留原时段。" },
   cancel_booking: { command: "cancelBooking", description: "取消事件释放时段，需版本和幂等key；取消后不能直接恢复。" },
