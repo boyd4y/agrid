@@ -102,9 +102,11 @@ try {
   await dialog.getByRole('checkbox', { name: `${calendarLabel} · 空档`, exact: true }).check();
   await dialog.getByRole('button', { name: '生成接入配置', exact: true }).click();
   await dialog.waitFor({ state: 'hidden' });
-  await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制完整配置', exact: true }).waitFor();
+  await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制接入说明', exact: true }).waitFor();
+  assert(!(await settings.getByTestId('connection-text').innerText()).includes('tab_replace_with_your_key'), 'generated instructions contain the new key');
   await page.reload();
-  await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制模板', exact: true }).waitFor();
+  await settings.getByTestId('connection-recipe').getByRole('button', { name: '复制接入说明', exact: true }).waitFor();
+  assert((await settings.getByTestId('connection-text').innerText()).includes('tab_replace_with_your_key'), 'refresh clears the key and restores the template');
   await settings.getByRole('button', { name: '编辑 日历授权测试', exact: true }).click();
   assert(await tableRead.isChecked());
   await tabs.getByRole('tab', { name: '日历', exact: true }).click();

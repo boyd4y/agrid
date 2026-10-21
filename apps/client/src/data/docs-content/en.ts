@@ -122,8 +122,8 @@ export const docsPages: DocsPage[] = [
     title: "Connect an AI client with MCP",
     description: "Connect an external MCP client to tabdo from your workspace settings.",
     body: [
-      { type: "p", text: "Open Settings → Connect agents and choose your client. Select Create configuration, choose the resources and operations it can use, then copy the full configuration generated on the same page and follow the client’s setup steps." },
-      { type: "p", text: "The generated configuration contains your new key. Copy it before leaving the page; the full key cannot be read again. If you already saved a key, fill it into the template instead. Switching clients reuses the new key and keeps its permissions. Keep the configuration in the client's secure credential settings." },
+      { type: "p", text: "Open Settings → Connect agents. Select Create configuration, choose the resources and operations it can use, then copy the connection instructions from the same page to your agent. The agent can configure and verify the connection for its environment." },
+      { type: "p", text: "The instructions contain your new key. Copy them before leaving or refreshing the page; the full key cannot be shown again. If you already saved a key, replace the placeholder in the instructions. Only share instructions containing a key with an agent you trust." },
       { type: "p", text: "MCP tools follow the same permissions as REST and GraphQL. Table Read/Create/Update/Delete permissions govern records, bodies and attachments. API keys cannot read site configuration, configure or publish sites, or generate reports. Manage sites in the signed-in app; see Tables and the REST API reference for supported data operations." },
       { type: "cards", items: [
         { title: "Tables and records", description: "Learn how table fields, record properties, and record bodies fit together.", href: "/docs/tables", badge: "Data" },
