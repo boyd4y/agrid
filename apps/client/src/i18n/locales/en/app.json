@@ -213,7 +213,16 @@
       "unavailableResources": "{{count}} resources are no longer available",
       "noGrants": "No resources authorized",
       "actions": "Actions",
-      "scheduleCount": "{{count}} scheduled tasks"
+      "scheduleCount": "{{count}} scheduled tasks",
+      "workspace": "Workspace",
+      "grantedResources": "{{count}} granted",
+      "creationGranted": "Can create",
+      "emptyCategories": {
+        "tables": "No tables in this workspace",
+        "automations": "No automations in this workspace",
+        "calendars": "No calendars in this workspace",
+        "schedules": "No scheduled tasks in this workspace"
+      }
     },
     "generalDescription": "Adjust appearance and language.",
     "connections": {

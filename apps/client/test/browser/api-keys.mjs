@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
 import { createBrowserFixture, frontend, artifact, postgres, databaseUrl } from './fixture.mjs';
 const fixture = await createBrowserFixture({ name: 'Agent connection permission settings' });
 const { page, api, errors, ctx, base } = fixture;
@@ -7,9 +8,10 @@ page.setDefaultTimeout(15000);
 try {
   const current = (await api('/commands', { command: 'getWorkspace' })).result.workspace;
   const table = await api('/tables', { name: 'Permissions fixture' });
+  await api('/tables/' + table.id, { icon: 'Rocket' }, 'PATCH');
   const tableDetails = await api('/tables/' + table.id);
   const second = (await api('/commands', { command: 'createWorkspace', input: { name: 'Second workspace' } })).result;
-  const empty = (await api('/commands', { command: 'createWorkspace', input: { name: 'Empty workspace' } })).result;
+  const empty = (await api('/commands', { command: 'createWorkspace', input: { name: '测试' } })).result;
   const scopedApi = async (path, data, workspaceId) => {
     const response = await ctx.request.post(base + '/api' + path, { headers: { Origin: frontend, 'X-Workspace-Id': workspaceId }, data });
     assert(response.ok(), await response.text()); return response.json();
@@ -30,42 +32,82 @@ try {
   await dialog.getByRole('textbox', { name: '名称', exact: true }).fill('Cross workspace');
   const tabs = dialog.getByRole('tablist', { name: '资源权限', exact: true });
   assert.deepEqual(await tabs.getByRole('tab').allTextContents(), ['表格', '自动化', '日历', '定时任务']);
+  const workspace = dialog.getByRole('combobox', { name: '工作区', exact: true });
+  const chooseWorkspace = async name => {
+    await workspace.click();
+    await page.getByRole('option').filter({ has: page.getByText(name, { exact: true }) }).click();
+  };
+  assert((await workspace.innerText()).includes(current.name), 'defaults to current application workspace');
+  assert.equal(await dialog.getByTestId(`resource-access-${table.id}`).locator('svg.lucide-rocket').count(), 1, 'uses table metadata icon');
+  assert.equal(await tabs.getByRole('tab').locator('svg').count(), 4);
   const tableLabel = `${current.name} / Permissions fixture`;
   await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).check();
   const tableBLabel = 'Second workspace / Second table';
+  await chooseWorkspace('Second workspace');
+  assert.equal(await dialog.getByTestId(`resource-access-${table.id}`).count(), 0);
   await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).check();
-  await dialog.getByRole('group', { name: 'Empty workspace', exact: true }).getByText('此工作区暂无资源', { exact: true }).waitFor();
+  await chooseWorkspace('测试');
+  for (const label of ['表格', '自动化', '日历', '定时任务']) {
+    await tabs.getByRole('tab', { name: label, exact: true }).click();
+    await dialog.getByText(`此工作区暂无${label}`, { exact: true }).waitFor();
+  }
+  await dialog.getByRole('checkbox', { name: '在此工作区创建', exact: true }).check();
+  await tabs.getByRole('tab', { name: '自动化', exact: true }).click();
+  await dialog.getByRole('checkbox', { name: '在此工作区创建', exact: true }).check();
+  await chooseWorkspace(current.name);
+  await tabs.getByRole('tab', { name: '表格', exact: true }).click();
   const scroller = dialog.getByTestId('permissions-tables');
   assert(await scroller.evaluate(el => el.scrollHeight > el.clientHeight));
   const footer = dialog.getByRole('button', { name: '生成接入配置', exact: true });
-  const bounded = async () => {
-    const bounds = await dialog.boundingBox(), button = await footer.boundingBox();
-    assert(bounds.y >= 0 && bounds.y + bounds.height <= 1000, JSON.stringify(bounds));
-    assert(button.y >= bounds.y && button.y + button.height <= bounds.y + bounds.height);
-    assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
-    assert.equal(await dialog.evaluate(el => getComputedStyle(el).overflowY), 'hidden');
-  };
-  for (const theme of ['light', 'dark']) {
+  const geometry = [];
+  for (const width of [1440, 1100]) for (const height of [1000, 800]) for (const theme of ['light', 'dark']) {
+    await page.setViewportSize({ width, height });
     await page.emulateMedia({ colorScheme: theme });
     await page.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
-    await page.waitForTimeout(220);
-    await scroller.evaluate(el => { el.scrollTop = el.scrollHeight; });
-    await bounded();
-    await page.screenshot({ path: artifact(`agent-key-dialog-${theme}.png`), animations: 'disabled' });
+    let reference;
+    for (const [category, label] of [['tables', '表格'], ['automations', '自动化'], ['calendars', '日历'], ['schedules', '定时任务']]) {
+      await chooseWorkspace(category === 'calendars' || category === 'schedules' ? 'Second workspace' : current.name);
+      await tabs.getByRole('tab', { name: label, exact: true }).click();
+      const boxes = {};
+      for (const [name, locator] of Object.entries({ dialog, title: dialog.getByRole('heading'), name: dialog.getByRole('textbox', { name: '名称', exact: true }), workspace, tabs, footer, viewport: dialog.getByTestId(`permissions-${category}`) })) boxes[name] = await locator.boundingBox();
+      const bounds = boxes.dialog, button = boxes.footer;
+      assert(bounds.y >= 0 && bounds.y + bounds.height <= height, JSON.stringify(boxes));
+      assert(button.y >= bounds.y && button.y + button.height <= bounds.y + bounds.height);
+      assert.equal(await dialog.evaluate(el => getComputedStyle(el).overflowY), 'hidden');
+      assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1), JSON.stringify({ width, height, theme, category, boxes, ownSize: await dialog.evaluate(el => ({ scroll: el.scrollWidth, client: el.clientWidth })), sizes: await dialog.evaluate(el => [...el.querySelectorAll('*')].filter(node => node.scrollWidth > node.clientWidth + 1).map(node => ({ tag: node.tagName, cls: node.className, client: node.clientWidth, scroll: node.scrollWidth }))) }));
+      assert(Math.abs(boxes.tabs.x - boxes.viewport.x) <= 1, 'tabs align with viewport left edge');
+      if (reference) for (const name of Object.keys(boxes)) for (const dimension of ['x', 'y', 'width', 'height']) assert(Math.abs(boxes[name][dimension] - reference[name][dimension]) <= 1, `${width}x${height} ${category} ${name}.${dimension} shifted`);
+      reference = boxes;
+      geometry.push({ width, height, theme, category, boxes });
+      if (width === 1440 && height === 1000 || width === 1100 && height === 800) await page.screenshot({ path: artifact(`agent-key-${width}x${height}-${theme}-${category}.png`), animations: 'disabled' });
+    }
   }
+  await writeFile(artifact('permission-geometry.json'), JSON.stringify(geometry, null, 2));
+  await chooseWorkspace(current.name);
   await tabs.getByRole('tab', { name: '自动化', exact: true }).click();
   await dialog.getByRole('checkbox', { name: `${current.name} / Event rule · 更新`, exact: true }).check();
   assert.equal(await dialog.getByText('Scheduled rule', { exact: true }).count(), 0);
-  await dialog.getByRole('group', { name: 'Empty workspace', exact: true }).getByRole('checkbox', { name: '在此工作区创建', exact: true }).check();
+  await chooseWorkspace('Second workspace');
   await tabs.getByRole('tab', { name: '日历', exact: true }).click();
+  const calendarMatrix = dialog.getByTestId(`resource-access-${calendar.id}`);
+  assert.equal(await calendarMatrix.getByRole('checkbox').count(), 10, 'keeps the original ten calendar operations');
+  const calendarViewport = dialog.getByTestId('permissions-calendars');
+  assert(await calendarViewport.evaluate(el => el.scrollWidth > el.clientWidth), 'wide calendar permissions scroll inside viewport');
+  await calendarViewport.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+  const lastCalendarGrant = calendarMatrix.getByRole('checkbox').last();
+  await lastCalendarGrant.check(); await lastCalendarGrant.uncheck();
   await dialog.getByRole('checkbox', { name: 'Second workspace / Team calendar · 详情', exact: true }).check();
   await tabs.getByRole('tab', { name: '定时任务', exact: true }).click();
   assert.equal(await dialog.getByText('Event rule', { exact: true }).count(), 0);
   await dialog.getByRole('checkbox', { name: 'Second workspace / Scheduled rule · 删除', exact: true }).check();
   await dialog.getByRole('checkbox', { name: 'Second workspace / Scheduled rule · 更新', exact: true }).check();
   await tabs.getByRole('tab', { name: '表格', exact: true }).click();
-  assert(await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).isChecked());
   assert(await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).isChecked());
+  await chooseWorkspace(current.name);
+  assert(await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).isChecked());
+  await workspace.click();
+  for (const [name, count] of [[current.name, 2], ['Second workspace', 3]]) assert((await page.getByRole('option').filter({ has: page.getByText(name, { exact: true }) }).innerText()).includes(`已授权 ${count} 项`));
+  await page.keyboard.press('Escape');
   const createdResponse = page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/user/api-keys' && r.ok());
   await footer.click();
   const secret = (await (await createdResponse).json()).secret;
@@ -75,12 +117,41 @@ try {
   assert.equal(saved.permissions.length, 2); assert.equal(saved.automationPermissions[0].automationId, rule.id);
   assert.equal(saved.schedulePermissions[0].automationId, plan.id); assert.equal(saved.schedulePermissions[0].canDelete, true); assert.equal(saved.schedulePermissions[0].grantVersion, 2);
   assert.equal(saved.calendarPermissions[0].calendarId, calendar.id); assert.equal(saved.workspacePermissions[0].workspaceId, empty.id);
+  assert.equal(saved.workspacePermissions[0].canCreateSchedules, true); assert.equal(saved.workspacePermissions[0].canCreateAutomations, true);
   assert(!JSON.stringify(saved).includes(secret));
   const scope = await settings.getByTestId(`api-key-${saved.id}`).innerText();
   for (const text of ['3 个工作区', '2 张表', '1 个自动化', '1 个日历', '1 个定时任务']) assert(scope.includes(text), text);
   assert(!scope.includes('0 张表') && !scope.includes('0 个日历'));
   await settings.getByRole('button', { name: '编辑 Cross workspace', exact: true }).click();
   assert.equal(await dialog.getByRole('textbox', { name: 'API Key', exact: true }).count(), 0);
+  let editReference;
+  for (const [category, label] of [['tables', '表格'], ['automations', '自动化'], ['calendars', '日历'], ['schedules', '定时任务']]) {
+    await chooseWorkspace(category === 'calendars' || category === 'schedules' ? 'Second workspace' : current.name);
+    await tabs.getByRole('tab', { name: label, exact: true }).click();
+    const boxes = {};
+    for (const [name, locator] of Object.entries({ dialog, workspace, tabs, footer: dialog.getByRole('button', { name: '保存', exact: true }), viewport: dialog.getByTestId(`permissions-${category}`) })) boxes[name] = await locator.boundingBox();
+    if (editReference) assert.deepEqual(boxes, editReference, 'editing category/workspace switches preserve geometry');
+    editReference = boxes;
+    geometry.push({ mode: 'edit', width: 1100, height: 800, theme: 'dark', category, boxes });
+  }
+  await writeFile(artifact('permission-geometry.json'), JSON.stringify(geometry, null, 2));
+  await page.screenshot({ path: artifact('agent-key-edit-dark.png'), animations: 'disabled' });
+  await tabs.getByRole('tab', { name: '表格', exact: true }).click();
+  await chooseWorkspace('Second workspace');
+  await workspace.focus(); await page.keyboard.press('Enter');
+  await page.getByRole('option').filter({ has: page.getByText('测试', { exact: true }) }).waitFor();
+  await page.keyboard.press('End');
+  const lastOption = page.getByRole('option').last();
+  const lastWorkspaceName = await lastOption.locator('[title]').getAttribute('title');
+  await lastOption.and(page.locator(':focus')).waitFor();
+  await page.keyboard.press('Enter');
+  await workspace.filter({ hasText: lastWorkspaceName }).waitFor();
+  await chooseWorkspace('Second workspace');
+  await tabs.getByRole('tab', { name: '表格', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  await tabs.getByRole('tab', { name: '自动化', exact: true }).and(page.locator('[aria-selected=true]')).waitFor();
+  await page.keyboard.press('ArrowLeft');
+  await tabs.getByRole('tab', { name: '表格', exact: true }).and(page.locator('[aria-selected=true]')).waitFor();
   const failSave = route => route.fulfill({ status: 503, json: { message: 'Fixture save failure' } });
   await page.route('**/api/user/api-keys/*', failSave);
   await dialog.getByRole('button', { name: '保存', exact: true }).click();
@@ -88,6 +159,8 @@ try {
   assert(await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).isChecked());
   await page.unroute('**/api/user/api-keys/*', failSave);
   await dialog.getByRole('button', { name: '保存', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });
+  const edited = (await api('/user/api-keys')).keys.find(key => key.id === saved.id);
+  for (const family of ['permissions', 'calendarPermissions', 'automationPermissions', 'schedulePermissions', 'workspacePermissions']) assert.deepEqual(edited[family], saved[family], `editing preserves ${family}`);
   const guide = page.getByTestId('agent-connection-guide'); await guide.waitFor();
   assert.equal(new URL(page.url()).searchParams.get('client'), 'codex');
   assert((await guide.innerText()).includes(secret), 'editing preserves the current generated configuration');
@@ -98,14 +171,28 @@ try {
   // Current workspace selection changes the surrounding app, not the key's grant universe.
   await page.goto(frontend + '/app/settings?tab=api-keys&workspace=' + second.id); await settings.waitFor();
   await settings.getByRole('button', { name: '编辑 Cross workspace', exact: true }).click();
-  assert(await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).isChecked());
   assert(await dialog.getByRole('checkbox', { name: `${tableBLabel} · 更新`, exact: true }).isChecked());
+  await chooseWorkspace(current.name);
+  assert(await dialog.getByRole('checkbox', { name: `${tableLabel} · 读取`, exact: true }).isChecked());
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
   await settings.getByRole('button', { name: 'Cross workspace 的更多操作', exact: true }).click();
   await page.getByRole('menuitem', { name: '删除 Cross workspace', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: '确认删除', exact: true }).click();
   await settings.getByText('创建你的第一个 API Key', { exact: true }).waitFor();
   const revoked = await ctx.request.get(base + '/api/tables', { headers: { Authorization: `Bearer ${secret}` } }); assert.equal(revoked.status(), 401);
+  await page.getByRole('tab', { name: '常规', exact: true }).click();
+  await page.getByLabel('English', { exact: true }).click();
+  await page.getByRole('tab', { name: 'Connect agents', exact: true }).click();
+  await settings.getByRole('button', { name: 'Create configuration', exact: true }).click();
+  const englishWorkspace = dialog.getByRole('combobox', { name: 'Workspace', exact: true });
+  await englishWorkspace.click();
+  await page.getByRole('option').filter({ has: page.getByText('测试', { exact: true }) }).click();
+  for (const [label, message] of [['Tables', 'No tables in this workspace'], ['Automations', 'No automations in this workspace'], ['Calendars', 'No calendars in this workspace'], ['Scheduled tasks', 'No scheduled tasks in this workspace']]) {
+    await dialog.getByRole('tab', { name: label, exact: true }).click();
+    await dialog.getByText(message, { exact: true }).waitFor();
+  }
+  await page.screenshot({ path: artifact('agent-key-english-empty.png'), animations: 'disabled' });
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.deepEqual(errors, []);
   console.log('PASS agent connection: four tabs, cross-workspace grants, empty workspace, bounded light/dark dialog, save retry, once-only secret and legacy URLs');
-} finally { await db.end(); await fixture.close(); }
+} catch (error) { await page.screenshot({ path: artifact('api-keys-failure.png'), animations: 'disabled' }); throw error; } finally { await db.end(); await fixture.close(); }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { authorizedTableIds, getTableAccess, groupPermissionResources, groupPermissionTables, setTableAccess, summarizeKeyPermissions, summarizePermissions } from '../src/components/settings/api-key-permissions.ts';
+import { authorizedTableIds, getTableAccess, groupPermissionResources, groupPermissionTables, setTableAccess, summarizeKeyPermissions, summarizeWorkspaceGrants, summarizePermissions } from '../src/components/settings/api-key-permissions.ts';
 
 const tables = [
   { id: 'a', name: 'Contacts', workspaceId: 'workspace-a', workspaceName: 'Team' },
@@ -62,4 +62,16 @@ test('scope summary includes every family, creation-only workspaces and unavaila
     automationPermissions: [{ automationId: 'rule', canUpdate: true }], schedulePermissions: [{ automationId: 'plan', canDelete: true }],
     workspacePermissions: [{ workspaceId: 'empty', canCreateSchedules: true }, { workspaceId: 'off', canCreateSchedules: false }] };
   assert.deepEqual(summarizeKeyPermissions(input, tables, [resource('cal', 'workspace-b')], [resource('plan', 'workspace-b')], [resource('rule', 'workspace-a')]), { workspaceCount: 3, tableCount: 2, calendarCount: 1, automationCount: 1, scheduleCount: 1, creationCount: 1, unavailableCount: 1 });
+});
+
+
+test('workspace picker counts draft resources across categories, excluding false and other-workspace grants', () => {
+  const resource = (id, workspaceId) => ({ id, workspaceId, name: id, workspaceName: workspaceId });
+  const groups = groupPermissionResources(tables, [resource('cal', 'workspace-a')], [resource('plan', 'workspace-b')], [resource('rule', 'workspace-a')], [{ id: 'empty', name: '测试' }]);
+  const input = { ...empty(), permissions: [grant('a'), grant('b'), grant('c', false), grant('gone')],
+    calendarPermissions: [{ calendarId: 'cal', canSubscribe: true }], automationPermissions: [{ automationId: 'rule', canDelete: true }],
+    schedulePermissions: [{ automationId: 'plan', canUpdate: true }], workspacePermissions: [{ workspaceId: 'empty', canCreateSchedules: true }] };
+  assert.deepEqual(groups.map(group => [group.workspaceId, summarizeWorkspaceGrants(input, group)]), [
+    ['empty', { resourceCount: 0, canCreate: true }], ['workspace-a', { resourceCount: 3, canCreate: false }], ['workspace-b', { resourceCount: 2, canCreate: false }],
+  ]);
 });

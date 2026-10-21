@@ -210,7 +210,16 @@
       "unavailableResources": "其中 {{count}} 项资源已不可用",
       "noGrants": "未授权任何资源",
       "actions": "操作",
-      "scheduleCount": "{{count}} 个定时任务"
+      "scheduleCount": "{{count}} 个定时任务",
+      "workspace": "工作区",
+      "grantedResources": "已授权 {{count}} 项",
+      "creationGranted": "可创建",
+      "emptyCategories": {
+        "tables": "此工作区暂无表格",
+        "automations": "此工作区暂无自动化",
+        "calendars": "此工作区暂无日历",
+        "schedules": "此工作区暂无定时任务"
+      }
     },
     "generalDescription": "调整外观和语言。",
     "connections": {
