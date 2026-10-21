@@ -1,10 +1,11 @@
+import { calendarGrantAllows, calendarCommandOperation, type LegacyCalendarPermission } from "./permissions.js";
 import { subscriptionCommand, appendCalendarEvent } from "./subscriptions.js";
 import { CALENDAR_SUBSCRIPTION_COMMANDS, type CalendarEventType } from "@tabdo/shared";
 import { queryScheduledOccurrences } from "./schedules.js";
 import { replaceBookingReminders, readBookingReminders, syncBookingReminders } from "./reminders.js";
 import { and, asc, eq, gt, inArray, lt } from "drizzle-orm";
 import { sha256 } from "@tabdo/core/crypto";
-import { CALENDAR_SCHEMAS, CALENDAR_READ_COMMANDS, type CalendarCommand, type CalendarCommands, type CalendarResults, type CalendarPermission } from "@tabdo/shared";
+import { CALENDAR_SCHEMAS, CALENDAR_READ_COMMANDS, type CalendarCommand, type CalendarCommands, type CalendarResults } from "@tabdo/shared";
 import type { CommandDependencies } from "../dependencies.js";
 import type { Transaction } from "../db/types.js";
 import { inTransaction } from "../db/context.js";
@@ -81,18 +82,18 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
       }
     } else if (principal && command === "listCalendars") {
       // Each returned calendar is an explicitly granted target; no workspace busy data is joined.
-      return page((await tx.select().from(calendars).where(and(eq(calendars.organizationId, organizationId), inArray(calendars.id, [...principal.calendarPermissions.keys()]), input.includeArchived ? undefined : eq(calendars.archived, false))).orderBy(asc(calendars.id)).limit(501)).map(publicCalendar));
+      return page((await tx.select().from(calendars).where(and(eq(calendars.organizationId, organizationId), inArray(calendars.id, [...principal.calendarPermissions.values()].filter(g => calendarGrantAllows(g, "canRead", () => true)).map(g => g.calendarId)), input.includeArchived ? undefined : eq(calendars.archived, false))).orderBy(asc(calendars.id)).limit(501)).map(publicCalendar));
     } else {
       if (principal) fail(403, "FORBIDDEN", "API keys cannot create unscoped calendars");
       workspaceId = (await requireWorkspace(deps, organizationId, tx)).id;
     }
-    const authorize = (permission: keyof Omit<CalendarPermission, "calendarId">) => {
+    const authorize = (permission: keyof Omit<LegacyCalendarPermission, "calendarId">) => {
       if (principal) {
         if (!calendar || !principal.calendarPermissions.has(calendar.id)) fail(404, "NOT_FOUND", "Calendar not found");
-        if (!principal.calendarPermissions.get(calendar!.id)![permission]) fail(403, "FORBIDDEN", "This calendar operation is not granted");
+        if (!calendarGrantAllows(principal.calendarPermissions.get(calendar!.id), calendarCommandOperation(command, input), g => !!g[permission])) fail(403, "FORBIDDEN", "This calendar operation is not granted");
       } else if (["canManage", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"].includes(permission) && !manager) fail(403, "FORBIDDEN", "Only owners and admins can manage calendars and working hours");
     };
-    const permissions: Partial<Record<CalendarCommand, keyof Omit<CalendarPermission, "calendarId">>> = {
+    const permissions: Partial<Record<CalendarCommand, keyof Omit<LegacyCalendarPermission, "calendarId">>> = {
       createCalendarSubscription: "canSubscribe", listCalendarSubscriptions: "canSubscribe", getCalendarSubscription: "canSubscribe",
       listCalendarDeliveries: "canReadDeliveries", getCalendarDelivery: "canReadDeliveries",
       updateCalendarSubscription: "canManageSubscriptions", revokeCalendarSubscription: "canManageSubscriptions", rotateCalendarSubscriptionSecret: "canManageSubscriptions", retryCalendarDelivery: "canManageSubscriptions",
@@ -105,16 +106,24 @@ export async function executeCalendar<K extends CalendarCommand>(deps: CommandDe
     if (command === "listCalendarMembers" && principal) {
       const grant = principal.calendarPermissions.get(calendar!.id);
       if (!grant) fail(404, "NOT_FOUND", "Calendar not found");
-      if (!grant.canRead && !grant.canCreate && !grant.canUpdate && !grant.canManage) fail(403, "FORBIDDEN", "Reading event members is not granted");
+      if (!calendarGrantAllows(grant, "canRead", g => g.canRead || g.canCreate || g.canUpdate || g.canManage)) fail(403, "FORBIDDEN", "Reading event members is not granted");
     } else if (configurationRead && principal) {
       const grant = principal.calendarPermissions.get(calendar!.id);
       if (!grant) fail(404, "NOT_FOUND", "Calendar not found");
-      if (!grant.canRead && !grant.canReadAvailability && !grant.canManage) fail(403, "FORBIDDEN", "Reading service configuration is not granted");
+      if (!calendarGrantAllows(grant, "canRead", g => g.canRead || g.canReadAvailability || g.canManage)) fail(403, "FORBIDDEN", "Reading service configuration is not granted");
     } else if (command !== "listCalendars" && command !== "batchBookings") authorize(permission);
-    if (command === "createCalendarSubscription" || command === "retryCalendarDelivery") { authorize("canRead"); authorize("canSubscribe"); }
+    if (command === "createCalendarSubscription" || command === "retryCalendarDelivery") {
+      authorize("canRead"); authorize("canSubscribe");
+      if (command === "createCalendarSubscription" && principal && !calendarGrantAllows(principal.calendarPermissions.get(calendar!.id), "canRead", g => g.canRead)) fail(403, "FORBIDDEN", "Creating a subscription requires calendar read permission");
+    }
     if (command === "setBookingReminders" && principal) authorize("canTriggerAgent");
-    const serializePerson = (person: Person) => ({ ...publicPerson(person), userId: principal && !principal.calendarPermissions.get(calendar!.id)?.canRead && !principal.calendarPermissions.get(calendar!.id)?.canManage ? null : person.userId });
-    if (command === "batchBookings") for (const operation of input.operations) authorize(operation.kind === "create" ? "canCreate" : operation.kind === "reschedule" ? "canUpdate" : "canCancel");
+    const serializePerson = (person: Person) => ({ ...publicPerson(person), userId: principal && !calendarGrantAllows(principal.calendarPermissions.get(calendar!.id), "canRead", g => g.canRead || g.canManage) ? null : person.userId });
+    if (command === "batchBookings") for (const operation of input.operations) {
+      const crud = operation.kind === "create" ? "canCreate" : operation.kind === "reschedule" ? "canUpdate" : "canDelete";
+      const legacy = operation.kind === "create" ? "canCreate" : operation.kind === "reschedule" ? "canUpdate" : "canCancel";
+      if (principal && !principal.calendarPermissions.has(calendar!.id)) fail(404, "NOT_FOUND", "Calendar not found");
+      if (principal && !calendarGrantAllows(principal.calendarPermissions.get(calendar!.id), crud, g => g[legacy])) fail(403, "FORBIDDEN", "This calendar operation is not granted");
+    }
 
     // Unique INSERT reserves absent keys, waits for concurrent requests and rolls back on failure.
     // Every replay rechecks current membership/grants before it can return a receipt.

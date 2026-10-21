@@ -1,8 +1,9 @@
+import { legacyCalendarPermissionSchema, publicCalendarPermission, storedCalendarPermission, canDeliverCalendar, type CalendarGrant } from "../calendar/permissions.js";
 import { suspendKeySubscriptions, lockSubscriptionCalendarsForKey } from "../calendar/subscriptions.js";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sha256 } from "@tabdo/core/crypto";
-import { schedulePermissionSchema, calendarPermissionSchema, type CalendarPermission, type ApiKeyInfo, type TablePermission, type AutomationPermission, type ApiKeyWorkspacePermission } from "@tabdo/shared";
+import { schedulePermissionSchema, calendarPermissionSchema, type ApiKeyInfo, type TablePermission, type AutomationPermission, type ApiKeyWorkspacePermission } from "@tabdo/shared";
 import type { Actor } from "../auth/actor.js";
 import type { RuntimeDependencies } from "../dependencies.js";
 import type { Database, Transaction } from "../db/types.js";
@@ -13,15 +14,16 @@ const permission = z.strictObject({ tableId: z.uuid(), canRead: z.boolean(), can
   .refine(p => p.canRead || p.canCreate || p.canUpdate || p.canDelete, "Choose at least one operation per table");
 const automationPermission = z.strictObject({ automationId: z.uuid(), canRead: z.boolean(), canUpdate: z.boolean(), canDelete: z.boolean().default(false) }).refine(p => p.canRead || p.canUpdate || p.canDelete);
 const workspacePermission = z.strictObject({ workspaceId: z.uuid(), canCreateAutomations: z.boolean(), canCreateSchedules: z.boolean() }).refine(p => p.canCreateAutomations || p.canCreateSchedules);
-export const siteKeyInput = z.strictObject({ name: z.string().trim().min(1).max(100),
+const siteKeyFields = z.strictObject({ name: z.string().trim().min(1).max(100),
   permissions: z.array(permission).max(100).refine(all => new Set(all.map(p => p.tableId)).size === all.length),
   automationPermissions: z.array(automationPermission).max(100).refine(all => new Set(all.map(p => p.automationId)).size === all.length).default([]),
   workspacePermissions: z.array(workspacePermission).max(100).refine(all => new Set(all.map(p => p.workspaceId)).size === all.length).default([]),
   schedulePermissions: z.array(schedulePermissionSchema).max(100).refine(all => new Set(all.map(p => p.automationId)).size === all.length).default([]),
-  calendarPermissions: z.array(calendarPermissionSchema).max(100).refine(all => new Set(all.map(p => p.calendarId)).size === all.length).default([]),
-}).refine(input => input.permissions.length + input.calendarPermissions.length + input.schedulePermissions.length + input.automationPermissions.length + input.workspacePermissions.length > 0, "Choose at least one grant");
+  calendarPermissions: z.array(z.union([calendarPermissionSchema, legacyCalendarPermissionSchema])).max(100).refine(all => new Set(all.map(p => p.calendarId)).size === all.length).default([]),
+});
+export const siteKeyInput = siteKeyFields.refine(input => input.permissions.length + input.calendarPermissions.length + input.schedulePermissions.length + input.automationPermissions.length + input.workspacePermissions.length > 0, "Choose at least one grant");
 export type Operation = "read" | "create" | "update" | "delete";
-export type SitePrincipal = Readonly<{ id: string; userId?: string | null; organizationId: string; automationPermissions?: ReadonlyMap<string, AutomationPermission>; workspacePermissions?: ReadonlyMap<string, ApiKeyWorkspacePermission>; schedulePermissions?: ReadonlyMap<string, import("@tabdo/shared").SchedulePermission>; tableIds: ReadonlySet<string>; permissions: ReadonlyMap<string, TablePermission>; calendarPermissions: ReadonlyMap<string, CalendarPermission> }>;
+export type SitePrincipal = Readonly<{ id: string; userId?: string | null; organizationId: string; automationPermissions?: ReadonlyMap<string, AutomationPermission>; workspacePermissions?: ReadonlyMap<string, ApiKeyWorkspacePermission>; schedulePermissions?: ReadonlyMap<string, import("@tabdo/shared").SchedulePermission>; tableIds: ReadonlySet<string>; permissions: ReadonlyMap<string, TablePermission>; calendarPermissions: ReadonlyMap<string, CalendarGrant> }>;
 export type SiteRateLimit = (input: { keyId: string; ip: string; kind: "read" | "create" }) => Promise<void>;
 export const isApiKey = (secret: string) => /^tab_(?:pub_)?[A-Za-z0-9_-]{43}$/.test(secret);
 export function requestApiKey(request: Request) {
@@ -55,7 +57,7 @@ async function summaries(database: Database, organizationId: string): Promise<Ap
     automationPermissions: automationGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
     workspacePermissions: workspaceGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
     schedulePermissions: scheduleGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
-    calendarPermissions: calendarGrants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant),
+    calendarPermissions: calendarGrants.filter(g => g.keyId === key.id).map(publicCalendarPermission),
     permissions: grants.filter(g => g.keyId === key.id).map(({ keyId: _, ...grant }) => grant) }));
 }
 export async function listSiteKeys(deps: RuntimeDependencies, actor: Actor) { manager(actor); return deps.database.transaction(async tx => { await currentManager(tx, actor); return { workspaces: await tx.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).where(eq(workspaces.organizationId, actor.organizationId)).orderBy(asc(workspaces.createdAt), asc(workspaces.id)),
@@ -111,12 +113,13 @@ export async function createSiteKey(deps: RuntimeDependencies, actor: Actor, raw
     await saveNewGrants(tx, saved.id, input);
     if (input.permissions.length) await tx.insert(apiKeyTables).values(input.permissions.map(grant => ({ keyId: saved.id, ...grant })));
     if (input.schedulePermissions.length) await tx.insert(apiKeySchedules).values(input.schedulePermissions.map(grant => ({ keyId: saved.id, ...grant })));
-    if (input.calendarPermissions.length) await tx.insert(apiKeyCalendars).values(input.calendarPermissions.map(grant => ({ keyId: saved.id, ...grant })));
+    if (input.calendarPermissions.length) await tx.insert(apiKeyCalendars).values(input.calendarPermissions.map(grant => ({ keyId: saved.id, ...storedCalendarPermission(grant) })));
     return { key: (await summaries(tx, actor.organizationId)).find(key => key.id === saved.id)!, secret };
   });
 }
 export async function updateSiteKey(deps: RuntimeDependencies, actor: Actor, keyId: string, raw: unknown) {
-  manager(actor); id(keyId); const input = siteKeyInput.parse(raw);
+  // Existing keys may be made inert when their last grant is revoked. New keys still require a grant.
+  manager(actor); id(keyId); const input = siteKeyFields.parse(raw);
   return deps.database.transaction(async tx => {
     const [key] = await tx.select().from(userApiKeys).where(and(eq(userApiKeys.id, keyId), eq(userApiKeys.organizationId, actor.organizationId), isNull(userApiKeys.revokedAt))).for("update");
     if (!key) throw new ServiceError(404, { message: "API key not found" });
@@ -131,9 +134,11 @@ export async function updateSiteKey(deps: RuntimeDependencies, actor: Actor, key
     if (input.schedulePermissions.length) await tx.insert(apiKeySchedules).values(input.schedulePermissions.map(grant => ({ keyId, ...grant })));
     await tx.delete(apiKeyTables).where(eq(apiKeyTables.keyId, keyId));
     if (input.permissions.length) await tx.insert(apiKeyTables).values(input.permissions.map(grant => ({ keyId, ...grant })));
-    await suspendKeySubscriptions(deps, tx, keyId, input.calendarPermissions.filter(g => g.canRead && g.canSubscribe).map(g => g.calendarId));
+    const previousCalendarGrants = await tx.select().from(apiKeyCalendars).where(eq(apiKeyCalendars.keyId, keyId));
+    const calendarGrants = input.calendarPermissions.map(grant => storedCalendarPermission(grant, previousCalendarGrants.find(g => g.calendarId === grant.calendarId)));
+    await suspendKeySubscriptions(deps, tx, keyId, calendarGrants.filter(canDeliverCalendar).map(g => g.calendarId));
     await tx.delete(apiKeyCalendars).where(eq(apiKeyCalendars.keyId, keyId));
-    if (input.calendarPermissions.length) await tx.insert(apiKeyCalendars).values(input.calendarPermissions.map(grant => ({ keyId, ...grant })));
+    if (input.calendarPermissions.length) await tx.insert(apiKeyCalendars).values(calendarGrants.map(grant => ({ keyId, ...grant })));
     return { key: (await summaries(tx, actor.organizationId)).find(key => key.id === keyId)! };
   });
 }
@@ -164,7 +169,7 @@ export async function resolveSiteKeyId(database: Database, keyId: string, lock =
   await currentManager(database, { organizationId: key.organizationId, userId: key.userId });
   const grants = await database.select({ tableId: tables.id, canRead: apiKeyTables.canRead, canCreate: apiKeyTables.canCreate, canUpdate: apiKeyTables.canUpdate, canDelete: apiKeyTables.canDelete }).from(apiKeyTables).innerJoin(tables, eq(tables.id, apiKeyTables.tableId))
     .where(and(eq(apiKeyTables.keyId, key.id), eq(tables.organizationId, key.organizationId)));
-  const calendarGrants = await database.select({ calendarId: calendars.id, canRead: apiKeyCalendars.canRead, canReadAvailability: apiKeyCalendars.canReadAvailability, canCreate: apiKeyCalendars.canCreate, canUpdate: apiKeyCalendars.canUpdate, canCancel: apiKeyCalendars.canCancel, canManage: apiKeyCalendars.canManage, canTriggerAgent: apiKeyCalendars.canTriggerAgent, canSubscribe: apiKeyCalendars.canSubscribe, canReadDeliveries: apiKeyCalendars.canReadDeliveries, canManageSubscriptions: apiKeyCalendars.canManageSubscriptions }).from(apiKeyCalendars).innerJoin(calendars, eq(calendars.id, apiKeyCalendars.calendarId)).where(and(eq(apiKeyCalendars.keyId, key.id), eq(calendars.organizationId, key.organizationId)));
+  const calendarGrants = await database.select({ calendarId: calendars.id, crudPermissions: apiKeyCalendars.crudPermissions, canRead: apiKeyCalendars.canRead, canReadAvailability: apiKeyCalendars.canReadAvailability, canCreate: apiKeyCalendars.canCreate, canUpdate: apiKeyCalendars.canUpdate, canCancel: apiKeyCalendars.canCancel, canManage: apiKeyCalendars.canManage, canTriggerAgent: apiKeyCalendars.canTriggerAgent, canSubscribe: apiKeyCalendars.canSubscribe, canReadDeliveries: apiKeyCalendars.canReadDeliveries, canManageSubscriptions: apiKeyCalendars.canManageSubscriptions }).from(apiKeyCalendars).innerJoin(calendars, eq(calendars.id, apiKeyCalendars.calendarId)).where(and(eq(apiKeyCalendars.keyId, key.id), eq(calendars.organizationId, key.organizationId)));
   const scheduleGrants = await database.select({ grant: apiKeySchedules }).from(apiKeySchedules).innerJoin(automations, eq(automations.id, apiKeySchedules.automationId)).where(and(eq(apiKeySchedules.keyId, key.id), eq(automations.organizationId, key.organizationId), isNull(automations.deletedAt), sql`${automations.source}->>'kind' = 'schedule'`));
   const automationGrants = await database.select({ grant: apiKeyAutomations }).from(apiKeyAutomations).innerJoin(automations, eq(automations.id, apiKeyAutomations.automationId)).where(and(eq(apiKeyAutomations.keyId, key.id), eq(automations.organizationId, key.organizationId), isNull(automations.deletedAt), sql`${automations.source}->>'kind' NOT IN ('schedule', 'calendar')`));
   const workspaceGrants = await database.select({ grant: apiKeyWorkspaces }).from(apiKeyWorkspaces).innerJoin(workspaces, eq(workspaces.id, apiKeyWorkspaces.workspaceId)).where(and(eq(apiKeyWorkspaces.keyId, key.id), eq(workspaces.organizationId, key.organizationId)));

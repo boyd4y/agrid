@@ -1,3 +1,4 @@
+import { canRunCalendarReminder } from "./permissions.js";
 import { and, asc, desc, eq, inArray, isNull, lte } from "drizzle-orm";
 import type { BookingReminder, AutomationRule, BookingReminderIntent } from "@tabdo/shared";
 import type { CommandDependencies, RuntimeDependencies } from "../dependencies.js";
@@ -127,7 +128,7 @@ export async function acceptBookingReminder(deps: RuntimeDependencies, tx: Trans
   if (reminder?.keyId) {
     const [key] = await tx.select().from(userApiKeys).where(eq(userApiKeys.id, reminder.keyId)).for("share");
     const [grant] = await tx.select().from(apiKeyCalendars).where(and(eq(apiKeyCalendars.keyId, reminder.keyId), eq(apiKeyCalendars.calendarId, source.calendarId)));
-    authorized = authorized && !!key && !key.revokedAt && key.userId === actorId && key.organizationId === event.organizationId && !!grant?.canTriggerAgent && !!grant.canUpdate;
+    authorized = authorized && !!key && !key.revokedAt && key.userId === actorId && key.organizationId === event.organizationId && canRunCalendarReminder(grant);
   }
   const [owner] = await tx.select().from(member).where(and(eq(member.organizationId, event!.organizationId), eq(member.userId, actorId))).for("share");
   const [agent] = reminder ? await tx.select({ id: member.id }).from(member).innerJoin(agentProfile, eq(agentProfile.memberId, member.id))

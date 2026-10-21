@@ -25,7 +25,7 @@ try {
     await dialog.waitFor({ state: 'hidden' }); return secret;
   };
   const content = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Private body' }] }] };
-  const creator = await createKey('Create-only', ['新增']);
+  const creator = await createKey('Create-only', ['创建']);
   const created = await call(creator, 'addRow', { tableId: table.id, body: { content }, idempotencyKey: crypto.randomUUID() });
   assert(!JSON.stringify(created).includes('Private body'));
   await call(creator, 'getRow', { rowId: created.id, includeBody: true }, 403);

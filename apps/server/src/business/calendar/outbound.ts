@@ -1,3 +1,4 @@
+import { canDeliverCalendar } from "./permissions.js";
 import { calendarEventSchema } from "@tabdo/shared";
 import { and, asc, eq, lte, or, sql } from "drizzle-orm";
 import type { CommandDependencies } from "../dependencies.js";
@@ -33,7 +34,7 @@ async function lockedDelivery(deps: CommandDependencies, tx: Transaction, candid
   if (initial.keyId) {
     const [key] = await tx.select().from(userApiKeys).where(eq(userApiKeys.id, initial.keyId)).for("share");
     const [grant] = key ? await tx.select().from(apiKeyCalendars).where(and(eq(apiKeyCalendars.keyId, key.id), eq(apiKeyCalendars.calendarId, initial.calendarId))) : [];
-    authorized = !!key && !key.revokedAt && key.organizationId === scope.organizationId && key.userId === initial.createdByUserId && !!grant?.canRead && !!grant.canSubscribe;
+    authorized = !!key && !key.revokedAt && key.organizationId === scope.organizationId && key.userId === initial.createdByUserId && canDeliverCalendar(grant);
   }
   const [creator] = await tx.select().from(member).where(and(eq(member.organizationId, scope.organizationId), eq(member.userId, initial.createdByUserId))).for("share");
   authorized &&= !!creator && (initial.keyId !== null || ["owner", "admin"].includes(creator.role));

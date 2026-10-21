@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LoaderCircle, MoreHorizontal, Trash2 } from "lucide-react";
-import type { ApiKeyInfo, ApiKeyInput, CalendarPermission } from "@tabdo/shared";
+import { LoaderCircle, Minus, MoreHorizontal, Trash2 } from "lucide-react";
+import { CALENDAR_PERMISSION_OPERATIONS, type ApiKeyInfo, type ApiKeyInput, type CalendarPermission } from "@tabdo/shared";
 import { api } from "@/lib/api";
 import { Button } from "@tabdo/ui/components/button";
 import { AgentConnectionGuide } from "@/components/connections/AgentConnectionGuide";
@@ -39,7 +39,7 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
   const [automations, setAutomations] = useState<PermissionResource[]>([]);
   const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([]);
   const [schedules, setSchedules] = useState<PermissionResource[]>([]);
-  const calendarOperations = ["canRead", "canReadAvailability", "canCreate", "canUpdate", "canCancel", "canManage", "canTriggerAgent", "canSubscribe", "canReadDeliveries", "canManageSubscriptions"] as const;
+  const calendarOperations = CALENDAR_PERMISSION_OPERATIONS;
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [canManage, setCanManage] = useState(false), [revision, setRevision] = useState(0);
   const [editor, setEditor] = useState<{ key?: ApiKeyInfo } | null>(null), [input, setInput] = useState<ApiKeyInput>(blank);
   const [credential, setCredential] = useState<{ keyId: string; secret: string } | null>(null);
@@ -97,8 +97,8 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
   }
   function toggleCalendar(calendarId: string, operation: typeof calendarOperations[number], checked: boolean) {
     setInput(current => {
-      const grant: CalendarPermission = { calendarId, canRead: false, canReadAvailability: false, canCreate: false, canUpdate: false, canCancel: false, canManage: false, ...current.calendarPermissions?.find(p => p.calendarId === calendarId), [operation]: checked };
-      return { ...current, calendarPermissions: [...(current.calendarPermissions ?? []).filter(p => p.calendarId !== calendarId), ...(calendarOperations.some(op => grant[op]) ? [grant] : [])] };
+      const grant: CalendarPermission = { calendarId, canRead: false, canUpdate: false, canDelete: false, canCreate: false, ...current.calendarPermissions?.find(p => p.calendarId === calendarId), [operation]: checked, partialOperations: current.calendarPermissions?.find(p => p.calendarId === calendarId)?.partialOperations?.filter(op => op !== operation) };
+      return { ...current, calendarPermissions: [...(current.calendarPermissions ?? []).filter(p => p.calendarId !== calendarId), ...((calendarOperations.some(op => grant[op]) || grant.partialOperations?.length) ? [grant] : [])] };
     });
   }
   function toggleRule(kind: "automationPermissions" | "schedulePermissions", automationId: string, operation: "canRead" | "canUpdate" | "canDelete", checked: boolean) {
@@ -122,10 +122,10 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
     if (!group) return null;
     const ResourceIcon = categoryIcons[category];
     const operations = category === "tables" ? tableOperations : category === "calendars" ? calendarOperations : ["canRead", "canUpdate", "canDelete"] as const;
-    const style = { gridTemplateColumns: `minmax(220px, 1fr) repeat(${operations.length}, minmax(${category === "calendars" ? 76 : 100}px, 1fr))` };
-    return <div className={category === "calendars" ? "min-w-[1100px]" : "min-w-[620px]"}>
+    const style = { gridTemplateColumns: `minmax(220px, 1fr) repeat(${operations.length}, minmax(100px, 1fr))` };
+    return <div className="min-w-[620px]">
       <div className="sticky top-0 grid items-center gap-2 border-b bg-background px-3 py-3 text-xs text-muted-foreground" style={style} aria-hidden>
-        <span>{text("resource")}</span>{operations.map(operation => <span className="text-center" key={operation}>{category === "calendars" ? t(`calendar:grants.${operation}`) : text(`operations.${operation}`)}</span>)}
+        <span>{text("resource")}</span>{operations.map(operation => <span className="text-center" key={operation}>{text(`operations.${operation}`)}</span>)}
       </div>
       <FieldSet key={group.workspaceId} className="min-w-0 gap-0" aria-label={group.name}>
         {(category === "automations" || category === "schedules") && <Field orientation="horizontal" className="min-h-11 px-3" data-disabled={saving}>
@@ -136,14 +136,18 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
           <span className="flex min-w-0 items-center gap-2 text-sm" title={resource.name}><span aria-hidden className="shrink-0 text-muted-foreground [&_svg]:size-4">{category === "tables" ? <TableIcon name={(resource as ApiKeyTable).icon} /> : <ResourceIcon />}</span><span className="truncate">{resource.name}</span></span>
           {operations.map(operation => {
             const checked = category === "tables" ? getTableAccess(input, resource.id).access[operation as typeof tableOperations[number]] : category === "calendars" ? input.calendarPermissions?.find(p => p.calendarId === resource.id)?.[operation as typeof calendarOperations[number]] ?? false : input[category === "automations" ? "automationPermissions" : "schedulePermissions"]?.find(p => p.automationId === resource.id)?.[operation as "canRead" | "canUpdate" | "canDelete"] ?? false;
-            const label = `${group.name} / ${resource.name} · ${category === "calendars" ? t(`calendar:grants.${operation}`) : text(`operations.${operation}`)}`;
+            const partial = category === "calendars" && input.calendarPermissions?.find(p => p.calendarId === resource.id)?.partialOperations?.includes(operation as typeof calendarOperations[number]);
+            const label = `${group.name} / ${resource.name} · ${text(`operations.${operation}`)}`;
             return <Field key={operation} orientation="horizontal" className="justify-center" data-disabled={saving}>
-              <Checkbox aria-label={label} checked={checked} disabled={saving} onCheckedChange={value => {
-                const enabled = value === true;
-                if (category === "tables") setInput(current => setTableAccess(current, resource.id, { ...getTableAccess(current, resource.id).access, [operation]: enabled }));
-                else if (category === "calendars") toggleCalendar(resource.id, operation as typeof calendarOperations[number], enabled);
-                else toggleRule(category === "automations" ? "automationPermissions" : "schedulePermissions", resource.id, operation as "canRead" | "canUpdate" | "canDelete", enabled);
-              }} />
+              <span className="relative flex items-center justify-center">
+                <Checkbox aria-label={label} aria-describedby={partial ? `${id}-partial-calendar` : undefined} className="data-[state=indeterminate]:[&_svg]:invisible" checked={partial ? "indeterminate" : checked} disabled={saving} onCheckedChange={value => {
+                  const enabled = value === true;
+                  if (category === "tables") setInput(current => setTableAccess(current, resource.id, { ...getTableAccess(current, resource.id).access, [operation]: enabled }));
+                  else if (category === "calendars") toggleCalendar(resource.id, operation as typeof calendarOperations[number], partial ? false : enabled);
+                  else toggleRule(category === "automations" ? "automationPermissions" : "schedulePermissions", resource.id, operation as "canRead" | "canUpdate" | "canDelete", enabled);
+                }} />
+                {partial && <Minus aria-hidden className="pointer-events-none absolute size-3" />}
+              </span>
             </Field>;
           })}
         </div>)}
@@ -182,7 +186,7 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
     <Dialog open={editor !== null} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent closeLabel={t("common:close")} className="flex h-[min(800px,calc(100dvh-3rem))] flex-col overflow-hidden sm:max-w-[min(1180px,calc(100vw-4rem))]">
         <DialogHeader className="shrink-0"><DialogTitle>{text(editor?.key ? "edit" : "create")}</DialogTitle><DialogDescription>{text("grantDescription")}</DialogDescription></DialogHeader>
-        <form noValidate onSubmit={save} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        <form noValidate onSubmit={save} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden -m-1 p-1">
           <FieldGroup className="shrink-0">
             <Field><FieldLabel htmlFor={`${id}-name`}>{text("name")}</FieldLabel><Input id={`${id}-name`} value={input.name} maxLength={100} autoComplete="off" disabled={saving} required onChange={event => setInput(current => ({ ...current, name: event.target.value }))} /></Field>
             <FieldDescription>{text("tablesHint")}</FieldDescription>
@@ -200,15 +204,15 @@ export function ApiKeysSettings({ canManageKeys = true }: { canManageKeys?: bool
               })}</SelectGroup></SelectContent>
             </Select>
           </Field>
-          <Tabs defaultValue="tables" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Tabs defaultValue="tables" className="flex min-h-0 flex-1 flex-col overflow-hidden -m-1 p-1">
             <TabsList className="shrink-0 self-start" aria-label={text("permissionTabs")}>
               {categories.map(category => { const Icon = categoryIcons[category]; return <TabsTrigger key={category} value={category}><Icon aria-hidden />{text(`categories.${category}`)}</TabsTrigger>; })}
             </TabsList>
-            {categories.map(category => <TabsContent key={`${category}-${selectedWorkspaceId}`} value={category} className="relative min-h-0 overflow-auto overscroll-contain rounded-md border" data-testid={`permissions-${category}`}>{resourceMatrix(category)}</TabsContent>)}
+            {categories.map(category => <TabsContent key={`${category}-${selectedWorkspaceId}`} value={category} className="relative min-h-0 overflow-auto overscroll-contain rounded-md border" data-testid={`permissions-${category}`}>{category === "calendars" && input.calendarPermissions?.some(grant => grant.partialOperations?.length) && <p id={`${id}-partial-calendar`} className="px-3 py-2 text-sm text-muted-foreground">{text("partialCalendarHint")}</p>}{resourceMatrix(category)}</TabsContent>)}
           </Tabs>
           <div className="flex shrink-0 flex-col gap-3 border-t pt-4">
             {formError && <FieldError role="alert">{formError}</FieldError>}
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length && !input.automationPermissions?.length && !input.workspacePermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : t("settings.connections.generateConfiguration")}</Button></div>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={saving} onClick={close}>{t("common:cancel")}</Button><Button type="submit" disabled={saving || !input.name.trim() || !editor?.key && !input.permissions.length && !input.calendarPermissions?.length && !input.schedulePermissions?.length && !input.automationPermissions?.length && !input.workspacePermissions?.length}>{saving && <LoaderCircle className="animate-spin" data-icon="inline-start" />}{saving ? text("saving") : editor?.key ? t("common:save") : t("settings.connections.generateConfiguration")}</Button></div>
           </div>
         </form>
       </DialogContent>

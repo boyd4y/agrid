@@ -87,14 +87,14 @@ try {
   const record = await api('/user/api-keys', { name: 'Plan grants', permissions: [{ tableId: table.id, canRead: true, canCreate: false, canUpdate: false, canDelete: false }], calendarPermissions: [{ calendarId: calendar.id, canRead: true, canReadAvailability: false, canCreate: false, canUpdate: true, canCancel: false, canManage: false, canTriggerAgent: true }], schedulePermissions: [{ automationId: rule.id, canRead: false, canUpdate: true }] });
   await page.goto(frontend + '/app/settings?tab=api-keys');
   await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: /: calendars and schedules$/ }).click();
-  const readPlan = page.getByRole('checkbox', { name: /已编辑原计划 · Read plan$/ });
+  await page.getByRole('dialog').getByRole('tab', { name: 'Scheduled tasks', exact: true }).click();
+  const readPlan = page.getByRole('checkbox', { name: /已编辑原计划 · Read$/ });
   await readPlan.check();
   await page.getByRole('dialog').getByRole('button', { name: 'Save', exact: true }).click(); await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const keyRecord = (await api('/user/api-keys')).keys.find(item => item.id === record.key.id);
-  assert.deepEqual(keyRecord.schedulePermissions, [{ automationId: rule.id, canRead: true, canUpdate: true }]);
+  assert.deepEqual(keyRecord.schedulePermissions, [{ automationId: rule.id, canRead: true, canUpdate: true, canDelete: false, grantVersion: 1 }]);
   assert(!("documentPermissions" in keyRecord));
-  assert(keyRecord.calendarPermissions[0].canTriggerAgent); assert.equal(keyRecord.permissions[0].tableId, table.id); assert(keyRecord.permissions[0].canRead);
+  assert.deepEqual(keyRecord.calendarPermissions, record.key.calendarPermissions); assert.equal(keyRecord.permissions[0].tableId, table.id); assert(keyRecord.permissions[0].canRead);
   await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
   const keyDialog = page.getByRole('dialog');
   await keyDialog.getByRole('checkbox', { name: /Reminder key table · Update$/ }).check();
@@ -106,7 +106,7 @@ try {
   for (const family of ['calendarPermissions', 'schedulePermissions']) assert.deepEqual(afterDocumentEdit[family], keyRecord[family]);
   await page.reload(); await page.getByRole('button', { name: 'Edit Plan grants', exact: true }).click();
   assert(await keyDialog.getByRole('checkbox', { name: /Reminder key table · Update$/ }).isChecked());
-  await keyDialog.getByRole('button', { name: /: calendars and schedules$/ }).click();
+  await keyDialog.getByRole('tab', { name: 'Scheduled tasks', exact: true }).click();
   await readPlan.scrollIntoViewIfNeeded();
   await page.screenshot({ path: f.artifact('schedule-key-grants-dark-en.png'), fullPage: false });
   assert.deepEqual(f.errors, []);
